@@ -138,24 +138,33 @@ test("grupos da barra lateral abrem e fecham com animação", async ({ page }, i
 
 test("reordena a página pelo teclado e a prévia acompanha", async ({ page }) => {
   await abrirSecao(page, "inicio")
+  // Bebidas começa abaixo da dobra: a alça precisa ser medida depois de entrar na tela.
+  const posicaoDeBebidas = () =>
+    page.evaluate(() => {
+      const salvo = JSON.parse(localStorage.getItem("clickpedido-admin") ?? "{}")
+      const blocos = (salvo.state?.config?.inicio?.blocos ?? []) as { id: string }[]
+      return blocos.findIndex((bloco) => bloco.id === "categoria:bebidas")
+    })
+  // A ordem das alças na tela é a ordem dos blocos.
+  const nomesDasAlcas = await page
+    .getByTestId("wireframe")
+    .getByRole("button", { name: /^Mover / })
+    .evaluateAll((alcas) => alcas.map((alca) => alca.getAttribute("aria-label") ?? ""))
+  const inicial = nomesDasAlcas.findIndex((nome) => nome.startsWith("Mover Bebidas"))
+  expect(inicial, "Bebidas está na lista").toBeGreaterThanOrEqual(5)
   const alca = page.getByRole("button", { name: /^Mover Bebidas/ })
   await alca.focus()
   await page.keyboard.press("Space")
+  // As setas só valem depois que o arraste começa (o anúncio para leitor de tela confirma).
+  await expect(page.locator("[id^=DndLiveRegion]")).toHaveText(/Bebidas/)
   for (let passo = 0; passo < 5; passo += 1) {
     await page.keyboard.press("ArrowUp")
     await page.waitForTimeout(120)
   }
   await page.keyboard.press("Space")
 
-  await expect
-    .poll(() =>
-      page.evaluate(() => {
-        const blocos = JSON.parse(localStorage.getItem("clickpedido-admin") ?? "{}").state.config
-          .inicio.blocos as { id: string }[]
-        return blocos.findIndex((bloco) => bloco.id === "categoria:bebidas")
-      }),
-    )
-    .toBeLessThan(8)
+  // Cinco toques na seta para cima sobem exatamente cinco posições.
+  await expect.poll(posicaoDeBebidas).toBe(inicial - 5)
 
   const regiao = await previa(page)
   const categorias = regiao.getByRole("navigation", { name: "Categorias" }).getByRole("listitem")
@@ -166,7 +175,8 @@ test("reordena a página pelo teclado e a prévia acompanha", async ({ page }) =
       (bloco: { id: string; ativo: boolean }) => bloco.id.startsWith("categoria:") && bloco.ativo,
     )
     .map((bloco: { id: string }) => bloco.id)
-  expect(ordemSalva.indexOf("categoria:bebidas")).toBeLessThan(5)
+  // Bebidas era a última categoria e passou por cima de cinco.
+  expect(ordemSalva.indexOf("categoria:bebidas")).toBe(ordemSalva.length - 6)
   expect(nomes).toHaveLength(ordemSalva.length)
   expect(nomes.indexOf("Bebidas")).toBe(ordemSalva.indexOf("categoria:bebidas"))
 })

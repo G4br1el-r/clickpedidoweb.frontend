@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test"
 import {
   abrirCardapio,
   caixa,
+  esperarAnimacoes,
   verificarAcessibilidade,
   verificarSemRolagemHorizontal,
 } from "./apoio"
@@ -113,5 +114,60 @@ test.describe("cabeçalho e barra", () => {
       ].map((elemento) => (elemento ? getComputedStyle(elemento).cursor : "ausente")),
     )
     expect(cursores).toEqual(["pointer", "pointer", "pointer"])
+  })
+
+  test("trocar categorias pela busca não mexe em nada: tudo no mesmo eixo", async ({ page }) => {
+    await abrirCardapio(page)
+    await page.evaluate(() => window.scrollTo(0, 900))
+    const barra = page.getByTestId("barra-navegacao")
+    await expect(barra).toHaveAttribute("data-grudada", "true")
+    await esperarAnimacoes(page)
+    const centro = (medida: { y: number; height: number }) => medida.y + medida.height / 2
+
+    const barraAntes = await caixa(barra)
+    const trilho = await caixa(barra.locator('[aria-current="true"]').locator(".."))
+    const lupa = await caixa(barra.getByRole("button", { name: "Abrir busca" }))
+    expect(
+      Math.abs(centro(trilho) - centro(lupa)),
+      "categorias no eixo dos botões",
+    ).toBeLessThanOrEqual(1)
+    expect(trilho.y, "categorias dentro da barra").toBeGreaterThanOrEqual(barraAntes.y)
+    expect(trilho.y + trilho.height, "categorias dentro da barra").toBeLessThanOrEqual(
+      barraAntes.y + barraAntes.height,
+    )
+
+    await barra.getByRole("button", { name: "Abrir busca" }).click()
+    const campo = barra.getByRole("searchbox", { name: "Buscar no cardápio" })
+    await expect(campo).toBeVisible()
+    await esperarAnimacoes(page)
+
+    const barraDepois = await caixa(barra)
+    const fechar = await caixa(barra.getByRole("button", { name: "Fechar busca" }))
+    expect(barraDepois.height, "a barra não muda de altura").toBe(barraAntes.height)
+    expect(Math.abs(centro(fechar) - centro(lupa)), "os botões não se mexem").toBeLessThanOrEqual(1)
+    expect(
+      Math.abs(centro(await caixa(campo)) - centro(trilho)),
+      "busca no eixo das categorias",
+    ).toBeLessThanOrEqual(1)
+  })
+
+  test("ao desgrudar, a marca e as ações saem sem criar rolagem lateral", async ({ page }) => {
+    await abrirCardapio(page)
+    await page.evaluate(() => window.scrollTo(0, 900))
+    const barra = page.getByTestId("barra-navegacao")
+    await expect(barra).toHaveAttribute("data-grudada", "true")
+    await esperarAnimacoes(page)
+
+    // Volta ao topo e mede quadro a quadro, durante a saída animada.
+    const maiorSobra = await page.evaluate(async () => {
+      window.scrollTo({ top: 0, behavior: "instant" })
+      let maior = 0
+      for (let quadro = 0; quadro < 45; quadro += 1) {
+        await new Promise(requestAnimationFrame)
+        maior = Math.max(maior, document.documentElement.scrollWidth - window.innerWidth)
+      }
+      return maior
+    })
+    expect(maiorSobra, "a página não fica mais larga que a tela").toBeLessThanOrEqual(0)
   })
 })

@@ -5,7 +5,17 @@
 export const segmentos = {
   pizzaria: {
     nome: "Pizzaria",
-    tiposProduto: ["pizza", "calzone", "bebida"],
+    tiposProduto: [
+      "pizza",
+      "combo",
+      "calzone",
+      "esfiha",
+      "massa",
+      "entrada",
+      "porcao",
+      "sobremesa",
+      "bebida",
+    ],
     tiposOpcao: ["sabor", "borda"],
   },
 } as const

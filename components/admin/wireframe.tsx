@@ -131,6 +131,11 @@ function LinhaBloco({ bloco }: { bloco: Bloco }) {
         type="button"
         {...attributes}
         {...listeners}
+        // Entra na tela na hora, sem a rolagem suave da página: o arraste pelo teclado
+        // mede as posições logo em seguida e erraria o alvo no meio da animação.
+        onFocus={(evento) =>
+          evento.currentTarget.scrollIntoView({ block: "nearest", behavior: "instant" })
+        }
         aria-label={`Mover ${nome}. Use espaço e as setas para mudar a posição.`}
         className="grid w-7 shrink-0 cursor-grab touch-none place-items-center rounded-lg text-muted-foreground outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 active:cursor-grabbing"
       >
@@ -203,7 +208,11 @@ export function Wireframe() {
   const definirTela = usePrevia((estado) => estado.definirTela)
   const sensores = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    // Rolagem instantânea a cada passo: com a suave, as setas mediam o bloco no meio do caminho.
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+      scrollBehavior: "instant",
+    }),
   )
 
   function soltar({ active, over }: DragEndEvent) {

@@ -1,6 +1,8 @@
 "use client"
 
 import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
   EllipsisIcon,
   MoonIcon,
   ReceiptTextIcon,
@@ -31,6 +33,7 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { clienteAtual } from "@/lib/cliente"
 import { compartilharLoja } from "@/lib/compartilhar"
+import { distanciaDaSeta, setasDaRolagem } from "@/lib/rolagem"
 import type { Categoria, Produto } from "@/lib/tipos"
 import { cn } from "@/lib/utils"
 
@@ -113,6 +116,36 @@ export function BarraNavegacao({
     [],
   )
 
+  // Quais setas fazem sentido agora: medido ao rolar, ao mudar o tamanho e ao trocar as categorias.
+  const [setas, setSetas] = useState({ anterior: false, proxima: false })
+  function medirSetas() {
+    const lista = refCategorias.current
+    if (!lista) return
+    const novas = setasDaRolagem({
+      posicao: lista.scrollLeft,
+      total: lista.scrollWidth,
+      visivel: lista.clientWidth,
+    })
+    setSetas((atuais) =>
+      atuais.anterior === novas.anterior && atuais.proxima === novas.proxima ? atuais : novas,
+    )
+  }
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mede de novo quando as categorias mudam ou a busca fecha.
+  useEffect(() => {
+    const lista = refCategorias.current
+    if (!lista) return
+    medirSetas()
+    const observador = new ResizeObserver(medirSetas)
+    observador.observe(lista)
+    return () => observador.disconnect()
+  }, [categorias, buscaAberta])
+
+  function rolarCategorias(direcao: 1 | -1) {
+    const lista = refCategorias.current
+    if (!lista) return
+    lista.scrollBy({ left: direcao * distanciaDaSeta(lista.clientWidth), behavior: "smooth" })
+  }
+
   useEffect(() => {
     const lista = refCategorias.current
     const chip = ativa ? refChips.current.get(ativa) : null
@@ -140,7 +173,7 @@ export function BarraNavegacao({
         data-testid="barra-navegacao"
         data-grudada={grudada || undefined}
         className={cn(
-          "sticky top-0 z-30 mt-3 border-b py-2.5 transition-[background-color,box-shadow,border-color,backdrop-filter] duration-300 md:mt-5",
+          "sticky top-0 z-30 mt-3 overflow-x-clip border-b py-2.5 transition-[background-color,box-shadow,border-color,backdrop-filter] duration-300 md:mt-5",
           grudada
             ? "border-border bg-background/85 shadow-[0_14px_32px_-22px_rgb(14_26_43/0.55)] backdrop-blur-xl backdrop-saturate-150"
             : "border-transparent bg-transparent",
@@ -229,67 +262,87 @@ export function BarraNavegacao({
                   exit={{ opacity: 0, transition: { duration: 0.15 } }}
                   transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
                 >
-                  <div
-                    ref={refCategorias}
-                    // A rolagem horizontal também corta na vertical: a folga deixa a sombra e o foco inteiros.
-                    className="sem-barra relative -my-3 -ml-1 flex min-w-0 overflow-x-auto py-3 pr-1 pl-1 md:justify-center-safe"
-                  >
-                    {/* Trilho: as categorias ganham uma superfície em vez de flutuar soltas. */}
-                    <div className="flex w-max shrink-0 gap-1 rounded-full bg-card/80 p-1 shadow-[0_10px_28px_-18px_rgb(14_26_43/0.45)] ring-1 ring-border/70 dark:bg-card/60 dark:shadow-[0_10px_28px_-18px_rgb(0_0_0/0.9)]">
-                      {categorias.map((categoria) => {
-                        const selecionada = ativa === categoria.id
-                        // A ativa ganha a foto do primeiro produto: dá cara à categoria em qualquer
-                        // segmento. Só ela, porque seis fotos não cabem na coluna central.
-                        const capa = selecionada ? categoria.produtos?.[0]?.imagem : undefined
-                        return (
-                          <motion.button
-                            key={categoria.id}
-                            ref={(elemento) => {
-                              if (elemento) refChips.current.set(categoria.id, elemento)
-                              else refChips.current.delete(categoria.id)
-                            }}
-                            // A ativa alarga com a foto; as vizinhas deslizam em vez de pular.
-                            layout="position"
-                            transition={{ type: "spring", duration: 0.32, bounce: 0.12 }}
-                            type="button"
-                            aria-current={selecionada ? "true" : undefined}
-                            onClick={() => aoEscolher(categoria.id)}
-                            className={cn(
-                              "group relative flex h-11 shrink-0 items-center gap-2 rounded-full text-sm font-semibold whitespace-nowrap outline-none transition-[color,background-color,transform] duration-150 ease-saida focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
-                              capa ? "pr-4 pl-1.5" : "px-4",
-                              selecionada
-                                ? "text-primary-foreground"
-                                : "text-foreground/70 hover:bg-muted hover:text-foreground",
-                            )}
-                          >
-                            {selecionada && (
-                              <motion.span
-                                layoutId="categoria-ativa"
-                                className="absolute inset-0 rounded-full bg-primary shadow-lg shadow-primary/35 ring-1 ring-white/15 ring-inset"
-                                transition={{ type: "spring", duration: 0.32, bounce: 0.12 }}
-                              />
-                            )}
-                            {capa && (
-                              <motion.span
-                                aria-hidden="true"
-                                className="relative size-8 shrink-0 overflow-hidden rounded-full ring-2 ring-white/45"
-                                initial={{ opacity: 0, scale: 0.6, rotate: -20 }}
-                                animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                                transition={{ type: "spring", duration: 0.4, bounce: 0.25 }}
-                              >
-                                <Image
-                                  src={capa}
-                                  alt=""
-                                  fill
-                                  sizes="32px"
-                                  className="object-cover"
+                  <div className="flex min-w-0 md:justify-center">
+                    <div className="relative flex max-w-full min-w-0">
+                      {/*
+                       * Trilho: as categorias ganham uma superfície em vez de flutuar soltas. Ele mesmo
+                       * rola de lado, então termina sempre arredondado dentro da coluna. Tem a altura
+                       * do campo de busca (44 px): trocar um pelo outro não mexe em nada.
+                       * A ponta que ainda tem categorias some num degradê, para mostrar que continua.
+                       */}
+                      <motion.div
+                        // A pílula e as vizinhas animam dentro de um trilho que rola: o motion
+                        // precisa medir essa rolagem, senão a pílula volta no meio do caminho.
+                        layoutScroll
+                        ref={refCategorias}
+                        onScroll={medirSetas}
+                        style={{
+                          maskImage: mascaraDoTrilho(setas),
+                          WebkitMaskImage: mascaraDoTrilho(setas),
+                        }}
+                        className="sem-barra flex h-11 max-w-full min-w-0 gap-1 overflow-x-auto overscroll-x-contain rounded-full bg-card/80 shadow-[0_10px_28px_-18px_rgb(14_26_43/0.45)] ring-1 ring-border/70 ring-inset dark:bg-card/60 dark:shadow-[0_10px_28px_-18px_rgb(0_0_0/0.9)]"
+                      >
+                        {categorias.map((categoria) => {
+                          const selecionada = ativa === categoria.id
+                          // A ativa ganha a foto do primeiro produto: dá cara à categoria em qualquer
+                          // segmento. Só ela, porque seis fotos não cabem na coluna central.
+                          const capa = selecionada ? categoria.produtos?.[0]?.imagem : undefined
+                          return (
+                            <button
+                              key={categoria.id}
+                              ref={(elemento) => {
+                                if (elemento) refChips.current.set(categoria.id, elemento)
+                                else refChips.current.delete(categoria.id)
+                              }}
+                              type="button"
+                              aria-current={selecionada ? "true" : undefined}
+                              onClick={() => aoEscolher(categoria.id)}
+                              className={cn(
+                                "group relative flex h-11 shrink-0 items-center gap-2 rounded-full text-sm font-semibold whitespace-nowrap outline-none transition-[color,background-color,transform] duration-150 ease-saida focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:scale-[0.96]",
+                                capa ? "pr-4 pl-1.5" : "px-4",
+                                selecionada
+                                  ? "text-primary-foreground"
+                                  : "text-foreground/70 hover:bg-muted hover:text-foreground",
+                              )}
+                            >
+                              {selecionada && (
+                                <motion.span
+                                  layoutId="categoria-ativa"
+                                  className="absolute inset-0 rounded-full bg-primary shadow-lg shadow-primary/35 ring-1 ring-white/15 ring-inset"
+                                  transition={{ type: "spring", duration: 0.32, bounce: 0.12 }}
                                 />
-                              </motion.span>
-                            )}
-                            <span className="relative">{categoria.nome}</span>
-                          </motion.button>
-                        )
-                      })}
+                              )}
+                              {capa && (
+                                <motion.span
+                                  aria-hidden="true"
+                                  className="relative size-8 shrink-0 overflow-hidden rounded-full ring-2 ring-white/45"
+                                  initial={{ opacity: 0, scale: 0.6, rotate: -20 }}
+                                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                                  transition={{ type: "spring", duration: 0.4, bounce: 0.25 }}
+                                >
+                                  <Image
+                                    src={capa}
+                                    alt=""
+                                    fill
+                                    sizes="32px"
+                                    className="object-cover"
+                                  />
+                                </motion.span>
+                              )}
+                              {/* Só a pílula viaja entre as categorias: os botões não animam a posição. Duas animações de
+                                layout aninhadas faziam a pílula começar deslocada e voltar no meio. */}
+                              <span className="relative">{categoria.nome}</span>
+                            </button>
+                          )
+                        })}
+                      </motion.div>
+                      {/* Setas só com mouse: no toque, a pessoa arrasta o trilho com o dedo. */}
+                      {setas.anterior && (
+                        <SetaDoTrilho lado="anterior" aoClicar={() => rolarCategorias(-1)} />
+                      )}
+                      {setas.proxima && (
+                        <SetaDoTrilho lado="proxima" aoClicar={() => rolarCategorias(1)} />
+                      )}
                     </div>
                   </div>
                 </motion.div>
@@ -385,6 +438,34 @@ export function BarraNavegacao({
         </Entrada>
       </nav>
     </>
+  )
+}
+
+/** Degradê nas pontas do trilho que ainda têm categorias escondidas. */
+function mascaraDoTrilho({ anterior, proxima }: { anterior: boolean; proxima: boolean }) {
+  if (!anterior && !proxima) return undefined
+  const inicio = anterior ? "transparent 0, transparent 28px, #000 64px" : "#000 0"
+  const fim = proxima
+    ? "#000 calc(100% - 64px), transparent calc(100% - 28px), transparent 100%"
+    : "#000 100%"
+  return `linear-gradient(to right, ${inicio}, ${fim})`
+}
+
+/** Seta sobre a ponta do trilho, do mesmo tamanho dele. Só existe para quem usa mouse. */
+function SetaDoTrilho({ lado, aoClicar }: { lado: "anterior" | "proxima"; aoClicar: () => void }) {
+  const anterior = lado === "anterior"
+  return (
+    <button
+      type="button"
+      aria-label={anterior ? "Ver categorias anteriores" : "Ver próximas categorias"}
+      onClick={aoClicar}
+      className={cn(
+        "absolute top-0 hidden size-11 place-items-center rounded-full bg-card text-foreground shadow-md ring-1 ring-border/70 transition-[background-color,transform] duration-150 ease-saida outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] pointer-fine:grid [&_svg]:size-5",
+        anterior ? "left-0" : "right-0",
+      )}
+    >
+      {anterior ? <ChevronLeftIcon /> : <ChevronRightIcon />}
+    </button>
   )
 }
 
