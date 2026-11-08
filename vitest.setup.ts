@@ -32,6 +32,9 @@ Object.assign(globalThis, {
   ResizeObserver: ObservadorFalso,
 })
 
+// jsdom não rola elementos; a barra de categorias centraliza a ativa com scrollTo.
+Element.prototype.scrollTo ??= () => {}
+
 // next/font só funciona dentro do build do Next.
 vi.mock("next/font/google", () => {
   const fonte = (opcoes?: { variable?: string }) => ({

@@ -31,9 +31,10 @@ import {
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import { clienteAtual } from "@/lib/cliente"
 import { compartilharLoja } from "@/lib/compartilhar"
+import type { Categoria, Produto } from "@/lib/tipos"
 import { cn } from "@/lib/utils"
 
-type CategoriaNav = { id: string; nome: string }
+type CategoriaNav = Pick<Categoria, "id" | "nome"> & { produtos?: Pick<Produto, "imagem">[] }
 
 const ESPERA_RECOLHER_MS = 3000
 
@@ -231,38 +232,65 @@ export function BarraNavegacao({
                   <div
                     ref={refCategorias}
                     // A rolagem horizontal também corta na vertical: a folga deixa a sombra e o foco inteiros.
-                    className="sem-barra relative -my-3 -ml-1 flex min-w-0 gap-1 overflow-x-auto py-3 pr-1 pl-1 md:justify-center-safe"
+                    className="sem-barra relative -my-3 -ml-1 flex min-w-0 overflow-x-auto py-3 pr-1 pl-1 md:justify-center-safe"
                   >
-                    {categorias.map((categoria) => {
-                      const selecionada = ativa === categoria.id
-                      return (
-                        <button
-                          key={categoria.id}
-                          ref={(elemento) => {
-                            if (elemento) refChips.current.set(categoria.id, elemento)
-                            else refChips.current.delete(categoria.id)
-                          }}
-                          type="button"
-                          aria-current={selecionada ? "true" : undefined}
-                          onClick={() => aoEscolher(categoria.id)}
-                          className={cn(
-                            "relative h-11 shrink-0 rounded-full px-4 text-sm font-semibold whitespace-nowrap outline-none transition-[color,background-color,transform] duration-150 ease-saida focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
-                            selecionada
-                              ? "text-primary-foreground"
-                              : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                          )}
-                        >
-                          {selecionada && (
-                            <motion.span
-                              layoutId="categoria-ativa"
-                              className="absolute inset-0 rounded-full bg-primary shadow-md shadow-primary/30"
-                              transition={{ type: "spring", duration: 0.32, bounce: 0.12 }}
-                            />
-                          )}
-                          <span className="relative">{categoria.nome}</span>
-                        </button>
-                      )
-                    })}
+                    {/* Trilho: as categorias ganham uma superfície em vez de flutuar soltas. */}
+                    <div className="flex w-max shrink-0 gap-1 rounded-full bg-card/80 p-1 shadow-[0_10px_28px_-18px_rgb(14_26_43/0.45)] ring-1 ring-border/70 dark:bg-card/60 dark:shadow-[0_10px_28px_-18px_rgb(0_0_0/0.9)]">
+                      {categorias.map((categoria) => {
+                        const selecionada = ativa === categoria.id
+                        // A ativa ganha a foto do primeiro produto: dá cara à categoria em qualquer
+                        // segmento. Só ela, porque seis fotos não cabem na coluna central.
+                        const capa = selecionada ? categoria.produtos?.[0]?.imagem : undefined
+                        return (
+                          <motion.button
+                            key={categoria.id}
+                            ref={(elemento) => {
+                              if (elemento) refChips.current.set(categoria.id, elemento)
+                              else refChips.current.delete(categoria.id)
+                            }}
+                            // A ativa alarga com a foto; as vizinhas deslizam em vez de pular.
+                            layout="position"
+                            transition={{ type: "spring", duration: 0.32, bounce: 0.12 }}
+                            type="button"
+                            aria-current={selecionada ? "true" : undefined}
+                            onClick={() => aoEscolher(categoria.id)}
+                            className={cn(
+                              "group relative flex h-11 shrink-0 items-center gap-2 rounded-full text-sm font-semibold whitespace-nowrap outline-none transition-[color,background-color,transform] duration-150 ease-saida focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-[0.96]",
+                              capa ? "pr-4 pl-1.5" : "px-4",
+                              selecionada
+                                ? "text-primary-foreground"
+                                : "text-foreground/70 hover:bg-muted hover:text-foreground",
+                            )}
+                          >
+                            {selecionada && (
+                              <motion.span
+                                layoutId="categoria-ativa"
+                                className="absolute inset-0 rounded-full bg-primary shadow-lg shadow-primary/35 ring-1 ring-white/15 ring-inset"
+                                transition={{ type: "spring", duration: 0.32, bounce: 0.12 }}
+                              />
+                            )}
+                            {capa && (
+                              <motion.span
+                                aria-hidden="true"
+                                className="relative size-8 shrink-0 overflow-hidden rounded-full ring-2 ring-white/45"
+                                initial={{ opacity: 0, scale: 0.6, rotate: -20 }}
+                                animate={{ opacity: 1, scale: 1, rotate: 0 }}
+                                transition={{ type: "spring", duration: 0.4, bounce: 0.25 }}
+                              >
+                                <Image
+                                  src={capa}
+                                  alt=""
+                                  fill
+                                  sizes="32px"
+                                  className="object-cover"
+                                />
+                              </motion.span>
+                            )}
+                            <span className="relative">{categoria.nome}</span>
+                          </motion.button>
+                        )
+                      })}
+                    </div>
                   </div>
                 </motion.div>
               )}
