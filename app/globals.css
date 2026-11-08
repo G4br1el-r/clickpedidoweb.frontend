@@ -1,0 +1,208 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@theme inline {
+  --font-heading: var(--fonte-titulo);
+  --font-sans: var(--fonte-texto);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --color-marca-texto: var(--marca-texto);
+  --color-marca-acento: var(--marca-acento);
+  --color-marca-acento-texto: var(--marca-acento-texto);
+  --color-marca-acento-sobre: var(--marca-acento-sobre);
+  --color-sucesso: var(--sucesso);
+  /* Sidebar do painel administrativo: reaproveita as superfícies do tema. */
+  --color-sidebar: var(--card);
+  --color-sidebar-foreground: var(--card-foreground);
+  --color-sidebar-primary: var(--primary);
+  --color-sidebar-primary-foreground: var(--primary-foreground);
+  --color-sidebar-accent: var(--muted);
+  --color-sidebar-accent-foreground: var(--foreground);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--ring);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+  --ease-saida: cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --radius: 0.75rem;
+  --destructive: #b42318;
+  --sucesso: #0f6b3a;
+  color-scheme: light;
+  /* As cores da splash ficam em lib/splash.ts, embutidas no HTML. */
+}
+
+.dark {
+  --destructive: #ff8a7a;
+  --sucesso: #4ade80;
+  color-scheme: dark;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+    -webkit-tap-highlight-color: transparent;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    overscroll-behavior-y: none;
+  }
+
+  h1,
+  h2,
+  h3 {
+    @apply font-heading;
+    text-wrap: balance;
+  }
+
+  /* Tudo o que é clicável mostra a mãozinha, inclusive os cartões de escolha e os menus. */
+  button:not(:disabled),
+  a[href],
+  summary,
+  select:not(:disabled),
+  label:has(button:not(:disabled), input:not(:disabled)),
+  [role="button"]:not([aria-disabled="true"]),
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="radio"]:not([aria-disabled="true"]),
+  [role="checkbox"]:not([aria-disabled="true"]),
+  [role="switch"]:not([aria-disabled="true"]),
+  [role="option"]:not([aria-disabled="true"]),
+  [role="menuitem"]:not([data-disabled]) {
+    cursor: pointer;
+  }
+
+  /* As buscas já têm o próprio botão de apagar. */
+  input[type="search"]::-webkit-search-cancel-button {
+    appearance: none;
+  }
+}
+
+@utility sem-barra {
+  scrollbar-width: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  .animate-ping {
+    animation: none;
+  }
+}
+
+/* Com um painel aberto, o toast continua clicável: é onde fica o "Desfazer". */
+[data-sonner-toast] {
+  pointer-events: auto;
+}
+
+@utility sombra-flutuante {
+  box-shadow:
+    0 1px 2px rgb(14 26 43 / 0.08),
+    0 16px 40px -16px rgb(14 26 43 / 0.28);
+
+  /* No escuro, sombra quase não aparece: um fio de luz na borda separa a superfície. */
+  &:where(.dark *) {
+    box-shadow:
+      0 0 0 1px rgb(255 255 255 / 0.06),
+      0 16px 40px -16px rgb(0 0 0 / 0.7);
+  }
+}
+
+/*
+ * Entrada da página em CSS puro: roda na primeira pintura, sem esperar o JavaScript.
+ * O componente <Entrada> só define as variáveis: qual animação, espera e duração.
+ */
+@keyframes entrada-baixo {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+@keyframes entrada-cima {
+  from {
+    opacity: 0;
+    transform: translateY(-14px);
+  }
+}
+
+@keyframes entrada-direita {
+  from {
+    opacity: 0;
+    transform: translateX(40px);
+  }
+}
+
+@keyframes entrada-zoom {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+}
+
+@keyframes entrada-desfoque {
+  from {
+    filter: blur(8px);
+  }
+}
+
+@keyframes entrada-foto {
+  from {
+    transform: scale(1.14);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .entrada {
+    animation-name: var(--entrada, entrada-baixo);
+    animation-duration: var(--entrada-duracao, 0.7s);
+    animation-delay: var(--entrada-atraso, 0s);
+    animation-timing-function: var(--entrada-curva, var(--ease-saida));
+    animation-fill-mode: both;
+  }
+
+  /* Abaixo da dobra: espera chegar à tela para entrar. */
+  .entrada-guardada {
+    opacity: 0;
+  }
+
+  .entrada-foto {
+    animation: entrada-foto 1.4s var(--ease-saida) both;
+  }
+}

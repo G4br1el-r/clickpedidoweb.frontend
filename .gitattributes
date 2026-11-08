@@ -1,0 +1,7 @@
+# Biome formata com LF: o git mantém LF no repositório e na cópia de trabalho, também no Windows.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.webp binary
+*.wasm binary
+*.lottie binary

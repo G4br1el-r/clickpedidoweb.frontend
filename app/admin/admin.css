@@ -1,0 +1,163 @@
+/* Efeitos do painel administrativo: brilho do plano Pro e amostras da prévia. */
+
+@property --angulo-pro {
+  syntax: "<angle>";
+  inherits: false;
+  initial-value: 0deg;
+}
+
+/* Opção Pro liberada: contorno dourado girando e um brilho que passa uma vez ao liberar. */
+.opcao-pro {
+  position: relative;
+  isolation: isolate;
+  box-shadow:
+    0 0 0 1px rgb(245 183 0 / 0.28),
+    0 10px 28px -16px rgb(245 140 0 / 0.55);
+}
+
+.opcao-pro::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1.5px;
+  background: conic-gradient(
+    from var(--angulo-pro),
+    transparent 0deg,
+    #f5b700 70deg,
+    #ff7a59 130deg,
+    transparent 200deg,
+    transparent 360deg
+  );
+  mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+.opcao-pro::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgb(255 226 140 / 0.45) 50%,
+    transparent 65%
+  );
+  background-size: 260% 100%;
+  background-position: 130% 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.selo-pro[data-pro-liberada] {
+  border: 0;
+  color: #2a1700;
+  background: linear-gradient(110deg, #f5b700, #ffb26b, #f5b700);
+  background-size: 200% 100%;
+}
+
+/* Botão de ação no estilo "Brilho": um reflexo passa de tempos em tempos. */
+.botao-brilho {
+  position: relative;
+  overflow: hidden;
+}
+
+.botao-brilho::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    transparent 30%,
+    rgb(255 255 255 / 0.45) 50%,
+    transparent 70%
+  );
+  background-size: 250% 100%;
+  background-position: 130% 0;
+  pointer-events: none;
+}
+
+/* Card com destaque "Contorno": reflexo ao passar o mouse. */
+.card-brilho {
+  position: relative;
+  overflow: hidden;
+}
+
+.card-brilho::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(
+    105deg,
+    transparent 35%,
+    rgb(255 255 255 / 0.35) 50%,
+    transparent 65%
+  );
+  background-size: 250% 100%;
+  background-position: 130% 0;
+  pointer-events: none;
+  transition: background-position 0s;
+}
+
+.card-brilho:hover::after,
+.card-brilho[data-demo]::after {
+  background-position: -30% 0;
+  transition: background-position 0.9s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .opcao-pro::after {
+    animation: giro-pro 4.5s linear infinite;
+  }
+
+  .opcao-pro::before {
+    animation: varrer-pro 1.3s cubic-bezier(0.23, 1, 0.32, 1) 0.1s 1 both;
+  }
+
+  .selo-pro[data-pro-liberada] {
+    animation: brilho-selo 3s linear infinite;
+  }
+
+  .botao-brilho::after {
+    animation: varrer-botao 2.8s ease-in-out infinite;
+  }
+}
+
+@keyframes giro-pro {
+  to {
+    --angulo-pro: 360deg;
+  }
+}
+
+@keyframes varrer-pro {
+  0% {
+    opacity: 1;
+    background-position: 130% 0;
+  }
+  100% {
+    opacity: 1;
+    background-position: -30% 0;
+  }
+}
+
+@keyframes brilho-selo {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes varrer-botao {
+  0%,
+  55% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -30% 0;
+  }
+}
