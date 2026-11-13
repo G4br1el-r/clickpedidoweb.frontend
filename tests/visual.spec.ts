@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { abrirCardapio } from "./apoio"
+import { abrirCardapio, abrirSoOEsqueleto } from "./apoio"
 
 /**
  * Referências visuais: mudança de estilo só depois de existir a imagem do antes.
@@ -21,6 +21,21 @@ test.describe("visual", () => {
 
       await expect(barra).toHaveScreenshot(`barra-categorias-${tema}.png`, {
         animations: "disabled",
+      })
+    })
+
+    test(`esqueleto do cardápio, tema ${tema === "light" ? "claro" : "escuro"}`, async ({
+      page,
+    }) => {
+      await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+      await abrirSoOEsqueleto(page)
+      const esqueleto = page.getByRole("status", { name: "Carregando cardápio" })
+      await expect(esqueleto).toBeVisible()
+
+      await expect(esqueleto).toHaveScreenshot(`esqueleto-cardapio-${tema}.png`, {
+        animations: "disabled",
+        // O esqueleto é todo em tons próximos: com a tolerância padrão (0,2) nenhuma mudança aparece.
+        threshold: 0.02,
       })
     })
   }

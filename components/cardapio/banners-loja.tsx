@@ -17,13 +17,30 @@ type BannersLojaProps = {
   aoEscolher: (banner: Banner) => void
 }
 
+/**
+ * Geometria do mosaico, compartilhada com o esqueleto: o que carrega ocupa exatamente o
+ * lugar do que chega. Mudou aqui, muda nos dois.
+ */
+export const MOSAICO = {
+  secao: "px-4 md:px-6",
+  grade:
+    "grid grid-cols-2 gap-3 md:h-[380px] md:grid-cols-4 md:grid-rows-2 md:gap-4 lg:h-[440px] xl:h-[480px] 2xl:h-[540px]",
+  celulaGrande: "col-span-2 md:row-span-2",
+  celulaLarga: "col-span-2",
+  peca: "relative isolate flex size-full overflow-hidden rounded-3xl",
+  grande: "aspect-square sm:aspect-[16/9] md:aspect-auto",
+  quadrado: "aspect-square flex-col p-4 md:aspect-auto md:p-5",
+  largo: "h-44 md:h-full",
+} as const
+
 /** Base comum: o banner inteiro é um botão, com foco visível e um leve afundar ao toque. */
 function Peca({ className, ...props }: ComponentProps<"button">) {
   return (
     <button
       type="button"
       className={cn(
-        "group relative isolate flex size-full overflow-hidden rounded-3xl text-left outline-none transition-transform duration-150 ease-saida focus-visible:ring-3 focus-visible:ring-ring/60 active:scale-[0.985]",
+        MOSAICO.peca,
+        "group text-left outline-none transition-transform duration-150 ease-saida focus-visible:ring-3 focus-visible:ring-ring/60 active:scale-[0.985]",
         className,
       )}
       {...props}
@@ -52,7 +69,7 @@ function BannerFoto({ banner, aoEscolher }: { banner: Banner; aoEscolher: () => 
     <Peca
       onClick={aoEscolher}
       data-testid={`banner-${banner.id}`}
-      className="aspect-square bg-neutral-900 text-white sm:aspect-[16/9] md:aspect-auto"
+      className={cn(MOSAICO.grande, "bg-neutral-900 text-white")}
     >
       <Image
         src={banner.imagem}
@@ -109,7 +126,7 @@ function BannerCor({
       onClick={aoEscolher}
       data-testid={`banner-${banner.id}`}
       className={cn(
-        "aspect-square flex-col p-4 md:aspect-auto md:p-5",
+        MOSAICO.quadrado,
         tom === "acento"
           ? "bg-marca-acento text-marca-acento-sobre"
           : "bg-primary text-primary-foreground",
@@ -155,7 +172,7 @@ function BannerOferta({
     <Peca
       onClick={aoEscolher}
       data-testid={`banner-${banner.id}`}
-      className="h-44 bg-card ring-1 ring-border ring-inset md:h-full"
+      className={cn(MOSAICO.largo, "bg-card ring-1 ring-border ring-inset")}
     >
       <span className="relative z-10 flex w-[60%] flex-col items-start justify-center gap-1.5 p-4 md:p-6">
         {banner.selo && <Badge variant="destructive">{banner.selo}</Badge>}
@@ -202,9 +219,9 @@ export function BannersLoja({ banners, produtoDoBanner, aoEscolher }: BannersLoj
   if (!grande) return null
 
   return (
-    <section aria-label="Destaques da casa" data-testid="banners-loja" className="px-4 md:px-6">
-      <div className="grid grid-cols-2 gap-3 md:h-[380px] md:grid-cols-4 md:grid-rows-2 md:gap-4 lg:h-[440px] xl:h-[480px] 2xl:h-[540px]">
-        <Entrada atraso={0} duracao={0.8} className="col-span-2 md:row-span-2">
+    <section aria-label="Destaques da casa" data-testid="banners-loja" className={MOSAICO.secao}>
+      <div className={MOSAICO.grade}>
+        <Entrada atraso={0} duracao={0.8} className={MOSAICO.celulaGrande}>
           <BannerFoto banner={grande} aoEscolher={() => aoEscolher(grande)} />
         </Entrada>
         {primeiro && (
@@ -218,7 +235,7 @@ export function BannersLoja({ banners, produtoDoBanner, aoEscolher }: BannersLoj
           </Entrada>
         )}
         {largo && (
-          <Entrada atraso={0.2} duracao={0.8} className="col-span-2">
+          <Entrada atraso={0.2} duracao={0.8} className={MOSAICO.celulaLarga}>
             <BannerOferta
               banner={largo}
               produto={produtoDoBanner(largo)}

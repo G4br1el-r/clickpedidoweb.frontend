@@ -1,11 +1,30 @@
 import AxeBuilder from "@axe-core/playwright"
-import { expect, type Locator, type Page } from "@playwright/test"
+import { expect, type Locator, type Page, type Route } from "@playwright/test"
 
 /** Abre o cardápio e espera os produtos aparecerem e a entrada da página terminar. */
 export async function abrirCardapio(page: Page) {
   await page.goto("/")
   await expect(page.getByTestId("produto-calabresa")).toBeVisible()
   await esperarAnimacoes(page)
+}
+
+/**
+ * Abre o cardápio só com o HTML do servidor, que é o esqueleto: os scripts da página ficam
+ * segurados até chamar a função devolvida. Assim dá para medir e fotografar o esqueleto parado.
+ */
+export async function abrirSoOEsqueleto(page: Page) {
+  const segurados: Route[] = []
+  const ehScript = (url: URL) => url.pathname.startsWith("/_next/") && url.pathname.endsWith(".js")
+  await page.route(ehScript, (rota) => {
+    segurados.push(rota)
+  })
+  await page.goto("/", { waitUntil: "commit" })
+  await expect(page.getByRole("status", { name: "Carregando cardápio" })).toBeVisible()
+  return async function soltarScripts() {
+    // Solta os segurados antes de tirar a interceptação: ao tirá-la, o Playwright os trataria sozinho.
+    for (const rota of segurados) await rota.continue()
+    await page.unroute(ehScript)
+  }
 }
 
 /**

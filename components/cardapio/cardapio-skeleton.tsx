@@ -1,7 +1,34 @@
 import { Skeleton } from "@/components/ui/skeleton"
+import { cn } from "@/lib/utils"
+import { MOSAICO } from "./banners-loja"
 
 const LINHAS = ["linha-1", "linha-2", "linha-3"]
 const CARTOES = ["cartao-1", "cartao-2", "cartao-3"]
+
+/** Peça do mosaico carregando: só o bloco, na mesma geometria do banner que vai chegar. */
+const PECA = cn(MOSAICO.peca, "animate-pulse bg-muted")
+
+/** Mosaico dos banners carregando: cada peça no lugar exato do banner real. */
+function BannersSkeleton() {
+  return (
+    <div className={MOSAICO.secao}>
+      <div className={MOSAICO.grade}>
+        <div className={MOSAICO.celulaGrande}>
+          <div data-testid="esqueleto-banner-grande" className={cn(PECA, MOSAICO.grande)} />
+        </div>
+        <div>
+          <div data-testid="esqueleto-banner-primeiro" className={cn(PECA, MOSAICO.quadrado)} />
+        </div>
+        <div>
+          <div data-testid="esqueleto-banner-segundo" className={cn(PECA, MOSAICO.quadrado)} />
+        </div>
+        <div className={MOSAICO.celulaLarga}>
+          <div data-testid="esqueleto-banner-largo" className={cn(PECA, MOSAICO.largo)} />
+        </div>
+      </div>
+    </div>
+  )
+}
 
 /** Mesmo formato do cardápio, para a tela não pular quando os dados chegam. */
 export function CardapioSkeleton() {
@@ -9,9 +36,11 @@ export function CardapioSkeleton() {
     <div
       role="status"
       aria-label="Carregando cardápio"
-      className="flex flex-col gap-5 px-4 pt-4 md:px-6 md:pt-6"
+      // Os mesmos espaços do cardápio carregado: o primeiro bloco começa no mesmo lugar.
+      className="flex flex-col gap-8 pt-6 md:gap-10 md:pt-8"
     >
-      <div className="flex flex-col gap-3">
+      <BannersSkeleton />
+      <div className="flex flex-col gap-3 px-4 md:px-6">
         <Skeleton className="h-6 w-36" />
         <div className="flex gap-3 overflow-hidden">
           {CARTOES.map((chave) => (
@@ -24,7 +53,7 @@ export function CardapioSkeleton() {
           ))}
         </div>
       </div>
-      <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-4 px-4 md:px-6">
         <Skeleton className="h-7 w-40" />
         <div className="grid gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3">
           {LINHAS.map((chave) => (
