@@ -18,10 +18,12 @@ type PassosProps = {
   /** Até onde a pessoa já chegou; dá para voltar a qualquer passo até ali. */
   alcancado: number
   aoIr: (indice: number) => void
+  /** Nome de um passo que muda no segmento (no salão, a entrega é o horário). */
+  rotulos?: Partial<Record<PassoId, string>>
 }
 
 /** Barras que enchem a cada passo, com o nome de cada um logo abaixo. */
-export function Passos({ atual, alcancado, aoIr }: PassosProps) {
+export function Passos({ atual, alcancado, aoIr, rotulos }: PassosProps) {
   return (
     <nav aria-label="Passos para finalizar o pedido">
       <ol className="grid grid-cols-4 gap-1.5 md:gap-2">
@@ -71,7 +73,7 @@ export function Passos({ atual, alcancado, aoIr }: PassosProps) {
                       </motion.span>
                     )}
                   </AnimatePresence>
-                  <span className="truncate">{passo.nome}</span>
+                  <span className="truncate">{rotulos?.[passo.id] ?? passo.nome}</span>
                   {feito && <span className="sr-only">(feito)</span>}
                 </span>
               </button>

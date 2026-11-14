@@ -68,7 +68,9 @@ export function BotaoAdicionar({
   // O anel só existe durante a animação: ampliado e invisível, ele alargaria a página.
   const [pulso, setPulso] = useState<number | null>(null)
 
-  const temOpcoes = Boolean(produto.grupos?.length)
+  // Corte por quilo: o "+" abre a ficha para escolher o peso, como um produto com opções.
+  const porQuilo = produto.unidade === "kg"
+  const temOpcoes = Boolean(produto.grupos?.length) || porQuilo
   const doProduto = hidratada ? itens.filter((item) => item.produtoId === produto.id) : []
   const quantidade = doProduto.reduce((soma, item) => soma + item.quantidade, 0)
   // Diminuir e repetir mexem na montagem mais recente, que é a que a pessoa acabou de ver.
@@ -197,11 +199,13 @@ export function BotaoAdicionar({
           onClick={aoPressionarMais}
           data-testid={`adicionar-${produto.id}`}
           aria-label={
-            temOpcoes && !ultimo
-              ? `Escolher opções de ${produto.nome}`
-              : ativo
-                ? `Aumentar quantidade de ${produto.nome}`
-                : `Adicionar ${produto.nome}`
+            porQuilo && !ultimo
+              ? `Escolher o peso de ${produto.nome}`
+              : temOpcoes && !ultimo
+                ? `Escolher opções de ${produto.nome}`
+                : ativo
+                  ? `Aumentar quantidade de ${produto.nome}`
+                  : `Adicionar ${produto.nome}`
           }
           whileTap={{ scale: 0.82 }}
           transition={TOQUE}

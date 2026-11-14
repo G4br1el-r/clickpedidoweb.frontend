@@ -26,6 +26,10 @@ async function escolherFarmacia() {
   expect(screen.getAllByRole("menuitemradio").map((opcao) => opcao.textContent)).toEqual([
     "Casa da PizzaPizzaria",
     "Drogaria Bem EstarFarmácia",
+    "Adega da VilaAdega",
+    "Açougue Sabor da CarneAçougue",
+    "Empório das DeusasSalão de beleza",
+    "Quiosque do MineiroLanchonete",
   ])
   await usuario.click(screen.getByRole("menuitemradio", { name: /Drogaria Bem Estar/ }))
   return usuario

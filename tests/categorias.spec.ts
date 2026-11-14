@@ -133,9 +133,7 @@ test.describe("categorias com rolagem lateral", () => {
   })
 })
 
-test("farmácia: rolando rápido por categorias curtas, a pílula pula as do meio", async ({
-  page,
-}) => {
+test("farmácia: num deslize rápido, a pílula pula as categorias do meio", async ({ page }) => {
   await page.addInitScript(() =>
     localStorage.setItem(
       "clickpedido-loja",
@@ -158,7 +156,7 @@ test("farmácia: rolando rápido por categorias curtas, a pílula pula as do mei
   await expect(barra.locator("[aria-current]")).toHaveText("Dor e febre")
   await esperarAnimacoes(page)
 
-  // Um gesto rápido (60 px por quadro) até Antibióticos, anotando a ativa a cada quadro.
+  // Um deslize rápido (150 px por quadro) até Antibióticos, anotando a ativa a cada quadro.
   const ativas = await page.evaluate(async () => {
     const antibioticos = [...document.querySelectorAll("h2")].find(
       (h) => h.textContent?.trim() === "Antibióticos",
@@ -168,7 +166,7 @@ test("farmácia: rolando rápido por categorias curtas, a pílula pula as do mei
     const lista: string[] = []
     for (let quadro = 0; quadro < 80; quadro += 1) {
       if (window.scrollY < alvo)
-        window.scrollTo({ top: Math.min(alvo, window.scrollY + 60), behavior: "instant" })
+        window.scrollTo({ top: Math.min(alvo, window.scrollY + 150), behavior: "instant" })
       await new Promise(requestAnimationFrame)
       const ativa = document.querySelector("[data-testid=barra-navegacao] [aria-current]")
       if (ativa?.textContent) lista.push(ativa.textContent)

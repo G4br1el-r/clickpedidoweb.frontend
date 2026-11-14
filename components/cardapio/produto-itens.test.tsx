@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { cardapioDrogariaBemEstar } from "@/lib/mock/drogaria-bem-estar"
 import { useSacola } from "@/lib/sacola"
+import type { Produto } from "@/lib/tipos"
 import { ProdutoLinha } from "./produto-itens"
 
 const produto = (id: string) =>
@@ -29,5 +30,30 @@ describe("ProdutoLinha na farmácia", () => {
     expect(
       within(screen.getByTestId("produto-protetor-50")).queryByText(/Tarja|receita/),
     ).not.toBeInTheDocument()
+  })
+})
+
+describe("ProdutoLinha no açougue", () => {
+  test("o preço do corte por quilo diz que é o do quilo", () => {
+    const picanha = {
+      id: "picanha",
+      nome: "Picanha",
+      descricao: "",
+      preco: 89.9,
+      tipo: "produto",
+      unidade: "kg",
+      imagem: {
+        src: "/p.jpg",
+        width: 1,
+        height: 1,
+        blurDataURL: "data:image/gif;base64,R0lGODlhAQABAAAAACw=",
+      },
+    } as Produto
+    render(
+      <TooltipProvider>
+        <ProdutoLinha produto={picanha} aoAbrir={() => {}} />
+      </TooltipProvider>,
+    )
+    expect(within(screen.getByTestId("rodape-picanha")).getByText("o kg")).toBeInTheDocument()
   })
 })

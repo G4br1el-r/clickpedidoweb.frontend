@@ -1,6 +1,14 @@
 "use client"
 
-import { ChevronsUpDownIcon, PillIcon, PizzaIcon } from "lucide-react"
+import {
+  BeefIcon,
+  ChevronsUpDownIcon,
+  PillIcon,
+  PizzaIcon,
+  SandwichIcon,
+  ScissorsIcon,
+  WineIcon,
+} from "lucide-react"
 import { useState } from "react"
 import {
   AlertDialog,
@@ -31,7 +39,14 @@ import { cn } from "@/lib/utils"
 /** Lista fixa: um `[]` novo a cada leitura faria o zustand renderizar sem parar. */
 const SEM_ITENS: ItemSacola[] = []
 
-const ICONES: Record<SegmentoId, typeof PizzaIcon> = { pizzaria: PizzaIcon, farmacia: PillIcon }
+const ICONES: Record<SegmentoId, typeof PizzaIcon> = {
+  pizzaria: PizzaIcon,
+  farmacia: PillIcon,
+  adega: WineIcon,
+  acougue: BeefIcon,
+  salao: ScissorsIcon,
+  lanchonete: SandwichIcon,
+}
 
 /**
  * Troca a loja que a vitrine mostra (demonstração). A sacola é de uma loja só: com itens nela,

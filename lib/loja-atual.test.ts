@@ -21,7 +21,14 @@ afterEach(() => {
 
 describe("loja atual", () => {
   test("começa na Casa da Pizza e troca para a Drogaria Bem Estar", () => {
-    expect(LOJAS.map(({ loja }) => loja.nome)).toEqual(["Casa da Pizza", "Drogaria Bem Estar"])
+    expect(LOJAS.map(({ loja }) => [loja.nome, loja.segmento])).toEqual([
+      ["Casa da Pizza", "pizzaria"],
+      ["Drogaria Bem Estar", "farmacia"],
+      ["Adega da Vila", "adega"],
+      ["Açougue Sabor da Carne", "acougue"],
+      ["Empório das Deusas", "salao"],
+      ["Quiosque do Mineiro", "lanchonete"],
+    ])
     expect(lojaAtual().nome).toBe("Casa da Pizza")
     useLojaAtual.getState().escolher("drogaria-bem-estar")
     expect(lojaAtual().nome).toBe("Drogaria Bem Estar")
@@ -40,6 +47,16 @@ describe("loja atual", () => {
     await useLojaAtual.persist.rehydrate()
     expect(useLojaAtual.getState().id).toBe("casa-da-pizza")
     expect(ehLojaId("x")).toBe(false)
+  })
+
+  test("cada loja nova vem do catálogo do painel, com as cores dela", async () => {
+    const quiosque = await buscarCardapio("quiosque-do-mineiro")
+    expect(quiosque.flatMap((categoria) => categoria.produtos).map((p) => p.nome)).toContain(
+      "Pastel de Carne",
+    )
+    const acougue = LOJAS.find(({ loja }) => loja.id === "acougue-sabor-da-carne")?.loja
+    expect(acougue?.tema.primaria).toBe("#9F1D1D")
+    expect(cssDasLojas()).toContain(':root[data-loja="emporio-das-deusas"]{')
   })
 
   test("o cardápio vem da loja pedida", async () => {

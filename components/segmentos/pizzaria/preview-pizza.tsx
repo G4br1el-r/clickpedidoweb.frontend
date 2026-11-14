@@ -2,12 +2,13 @@
 
 import { motion, useAnimationControls } from "motion/react"
 import { useEffect, useRef } from "react"
+import type { Selecoes } from "@/lib/produto"
 import type { GrupoOpcao, ItemOpcao, Produto } from "@/lib/tipos"
 import { PizzaSvg } from "./pizza-svg"
 
 const CURVA = [0.23, 1, 0.32, 1] as const
 
-function escolhido(grupo: GrupoOpcao | undefined, selecoes: Record<string, string>) {
+function escolhido(grupo: GrupoOpcao | undefined, selecoes: Selecoes) {
   return grupo?.itens.find((item) => item.id === selecoes[grupo.id])
 }
 
@@ -22,7 +23,7 @@ export function PreviewPizza({
   grupoAtivo,
 }: {
   produto: Produto
-  selecoes: Record<string, string>
+  selecoes: Selecoes
   grupoAtivo?: GrupoOpcao
 }) {
   const grupos = produto.grupos ?? []

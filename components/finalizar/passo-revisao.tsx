@@ -6,6 +6,7 @@ import type { ReactNode } from "react"
 import { useFormContext, useWatch } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
+import { textoDoHorario } from "@/lib/agendar"
 import { type DadosCheckout, FORMAS_PAGAMENTO, LIMITE_OBSERVACAO_PEDIDO } from "@/lib/checkout"
 import { useLoja } from "@/lib/loja-atual"
 import { descricaoDoTroco } from "@/lib/pedido"
@@ -97,7 +98,7 @@ export function PassoRevisao({ total, aoIr }: { total: number; aoIr: (passo: Pas
         </Bloco>
         <Bloco
           icone={entrega ? <BikeIcon /> : <StoreIcon />}
-          titulo={entrega ? "Entrega" : "Retirada"}
+          titulo={dados.agendamento ? "Horário" : entrega ? "Entrega" : "Retirada"}
           indice={1}
           aoAlterar={() => aoIr("entrega")}
         >
@@ -117,9 +118,17 @@ export function PassoRevisao({ total, aoIr }: { total: number; aoIr: (passo: Pas
             </>
           ) : (
             <>
-              <p className="font-semibold">Balcão da {lojaEscolhida.nome}</p>
+              {dados.agendamento ? (
+                <p className="font-semibold">{textoDoHorario(dados.agendamento)}</p>
+              ) : (
+                <p className="font-semibold">Balcão da {lojaEscolhida.nome}</p>
+              )}
               <p className="text-muted-foreground">{lojaEscolhida.endereco}</p>
-              <p className="text-muted-foreground">Fica pronto em {lojaEscolhida.retirada.tempo}</p>
+              {!dados.agendamento && (
+                <p className="text-muted-foreground">
+                  Fica pronto em {lojaEscolhida.retirada.tempo}
+                </p>
+              )}
             </>
           )}
         </Bloco>

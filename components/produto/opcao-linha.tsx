@@ -4,6 +4,7 @@ import { motion } from "motion/react"
 import type { MouseEvent } from "react"
 import { Foto } from "@/components/foto"
 import { registroSegmentos } from "@/components/segmentos/registro"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Field,
   FieldContent,
@@ -105,6 +106,58 @@ export function OpcaoLinha({ grupo, item, selecionada, invalida, aoClicar }: Opc
           data-testid={`opcao-${item.id}`}
           aria-label={item.nome}
           aria-invalid={invalida || undefined}
+          className="size-5"
+        />
+      </Field>
+    </FieldLabel>
+  )
+}
+
+type OpcaoCaixaProps = {
+  grupo: GrupoOpcao
+  item: ItemOpcao
+  marcada: boolean
+  /** O grupo chegou ao máximo e esta não está marcada. */
+  desligada: boolean
+  /** Fica grátis se for marcada agora (ainda dentro do "grátis até"). */
+  gratis: boolean
+  aoAlternar: () => void
+}
+
+/** Opção de grupo com várias escolhas (adicionais, gelos do combo): caixa de marcar. */
+export function OpcaoCaixa({
+  grupo,
+  item,
+  marcada,
+  desligada,
+  gratis,
+  aoAlternar,
+}: OpcaoCaixaProps) {
+  const id = `opcao-${grupo.id}-${item.id}`
+  return (
+    <FieldLabel
+      htmlFor={id}
+      className={cn(
+        "w-full rounded-2xl transition-[border-color,background-color,opacity] duration-200 ease-saida",
+        desligada && "opacity-55",
+      )}
+    >
+      <Field orientation="horizontal" className="items-center gap-3 py-2! pr-3.5! pl-2!">
+        <Miniatura grupo={grupo} item={item} selecionada={marcada} />
+        <FieldContent className="min-w-0">
+          <FieldTitle className={cn("text-base", marcada && "font-bold")}>{item.nome}</FieldTitle>
+          {item.descricao && <FieldDescription>{item.descricao}</FieldDescription>}
+        </FieldContent>
+        <span className="shrink-0 text-sm font-medium text-muted-foreground tabular-nums">
+          {item.extra > 0 && !gratis ? `+ ${emReais(item.extra)}` : "Grátis"}
+        </span>
+        <Checkbox
+          id={id}
+          checked={marcada}
+          disabled={desligada}
+          onCheckedChange={aoAlternar}
+          data-testid={`opcao-${item.id}`}
+          aria-label={item.nome}
           className="size-5"
         />
       </Field>

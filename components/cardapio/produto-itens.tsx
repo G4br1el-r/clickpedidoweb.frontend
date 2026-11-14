@@ -53,6 +53,7 @@ function Preco({ produto, sobreFoto = false, empilhado = false }: PrecoProps) {
         <>
           {aPartirDe && <span className={detalhe}>A partir de</span>}
           <span className={empilhado ? "text-[17px]" : undefined}>{emReais(produto.preco)}</span>
+          {produto.unidade === "kg" && <span className={detalhe}>o kg</span>}
         </>
       )}
     </p>
@@ -82,7 +83,7 @@ export function ProdutoLinha({ produto, aoAbrir }: ItemProps) {
           <Foto src={produto.imagem} alt="" sizes="112px" className={cn("size-full", ZOOM_FOTO)} />
         </AmpliarFoto>
         <div className="min-w-0 flex-1 pt-0.5">
-          <h3 className="font-sans text-base leading-snug font-semibold md:text-[17px]">
+          <h3 className="font-sans text-base leading-snug font-semibold wrap-anywhere md:text-[17px]">
             <button
               type="button"
               onClick={aoAbrir}
@@ -150,7 +151,7 @@ export function ProdutoDestaque({ produto, aoAbrir }: ItemProps) {
           naSacola ? "pr-4 pb-[72px]" : "pr-20",
         )}
       >
-        <h3 className="font-heading text-xl leading-tight font-bold">
+        <h3 className="font-heading text-xl leading-tight font-bold wrap-anywhere">
           <button
             type="button"
             onClick={aoAbrir}

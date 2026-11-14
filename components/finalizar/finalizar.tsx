@@ -13,6 +13,7 @@ import { AlternarTema } from "@/components/alternar-tema"
 import { Dica } from "@/components/dica"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { duracaoDaSacola } from "@/lib/agendar"
 import {
   CAMPOS_DO_PASSO,
   type DadosCheckout,
@@ -31,6 +32,7 @@ import { AnexarReceita, type ReceitaAnexada } from "./anexar-receita"
 import { CarregamentoEnvio, DURACAO_ENVIO_MS } from "./carregamento-envio"
 import { PassoDados } from "./passo-dados"
 import { PassoEntrega } from "./passo-entrega"
+import { PassoHorario } from "./passo-horario"
 import { PassoPagamento } from "./passo-pagamento"
 import { PassoRevisao } from "./passo-revisao"
 import { PASSOS, type PassoId, Passos } from "./passos"
@@ -189,6 +191,9 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
           ...(exigida && receita
             ? { receita: { arquivo: receita.nome, retida: exigida.retida } }
             : {}),
+          ...(dados.agendamento
+            ? { agendamento: { inicio: dados.agendamento, duracaoMin: duracaoDaSacola(itens) } }
+            : {}),
         },
         dadosParaLembrar(dados),
       )
@@ -214,7 +219,12 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
     <FormProvider {...formulario}>
       <div className="mx-auto w-full max-w-[1180px] px-4 pt-4 pb-36 md:px-6 md:pt-8 md:pb-16 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8">
         <div className="flex min-w-0 flex-col gap-4 md:gap-5">
-          <Passos atual={passo} alcancado={alcancado} aoIr={irPara} />
+          <Passos
+            atual={passo}
+            alcancado={alcancado}
+            aoIr={irPara}
+            rotulos={lojaEscolhida.segmento === "salao" ? { entrega: "Horário" } : undefined}
+          />
           <ResumoCompacto {...valores} />
 
           <form
@@ -239,7 +249,8 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
                   transition={{ duration: 0.24, ease: CURVA }}
                 >
                   {PASSOS[passo].id === "dados" && <PassoDados lembrado={Boolean(lembrados)} />}
-                  {PASSOS[passo].id === "entrega" && <PassoEntrega />}
+                  {PASSOS[passo].id === "entrega" &&
+                    (lojaEscolhida.segmento === "salao" ? <PassoHorario /> : <PassoEntrega />)}
                   {PASSOS[passo].id === "pagamento" && <PassoPagamento total={total} />}
                   {PASSOS[passo].id === "revisao" && (
                     <div className="flex flex-col gap-5">

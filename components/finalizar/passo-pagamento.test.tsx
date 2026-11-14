@@ -2,8 +2,10 @@ import { zodResolver } from "@hookform/resolvers/zod"
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { FormProvider, useForm } from "react-hook-form"
-import { describe, expect, test } from "vitest"
+import { afterEach, beforeEach, describe, expect, test } from "vitest"
 import { type DadosCheckout, esquemaCheckout, valoresIniciais } from "@/lib/checkout"
+import { useLojaAtual } from "@/lib/loja-atual"
+import { useSacola } from "@/lib/sacola"
 import { PassoPagamento } from "./passo-pagamento"
 
 // O Intl separa "R$" do valor com espaço não separável. A busca por texto da Testing Library
@@ -110,5 +112,37 @@ describe("PassoPagamento", () => {
 
       expect(screen.getByText("Seu troco será de R$ 7,00")).toBeInTheDocument()
     })
+  })
+})
+
+describe("PassoPagamento no açougue", () => {
+  beforeEach(() => {
+    useLojaAtual.setState({ id: "acougue-sabor-da-carne", hidratada: true })
+    useSacola.setState({ ...useSacola.getInitialState(), hidratada: true }, true)
+  })
+  afterEach(() => useLojaAtual.setState(useLojaAtual.getInitialState(), true))
+
+  test("com corte por quilo na sacola, oferece pagar depois da pesagem", async () => {
+    useSacola.getState().adicionar({
+      produtoId: "picanha",
+      nome: "Picanha",
+      imagem: { src: "/p.jpg", width: 1, height: 1 },
+      precoUnitario: 44.95,
+      quantidade: 1,
+      resumo: ["500 g"],
+      pesoGramas: 500,
+    })
+    const usuario = abrir(44.95)
+    await usuario.click(screen.getByRole("radio", { name: /Pagar após a pesagem/ }))
+    expect(
+      screen.getByText(
+        "Depois de pesar, mandamos pelo WhatsApp o valor exato e o link para pagar.",
+      ),
+    ).toBeInTheDocument()
+  })
+
+  test("sem corte por quilo, a opção não aparece", () => {
+    abrir(30)
+    expect(screen.queryByRole("radio", { name: /Pagar após a pesagem/ })).not.toBeInTheDocument()
   })
 })

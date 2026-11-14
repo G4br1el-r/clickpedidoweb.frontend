@@ -1,16 +1,18 @@
 import type { ComponentType } from "react"
+import type { Selecoes } from "@/lib/produto"
 import type { ItemSacola } from "@/lib/sacola"
 import type { SegmentoId } from "@/lib/segmentos"
 import type { GrupoOpcao, ItemOpcao, Produto } from "@/lib/tipos"
-import { MENSAGENS_ENVIO_FARMACIA, PreviewFarmacia } from "./farmacia/preview-farmacia"
+import { MENSAGENS_ENVIO_FARMACIA } from "./farmacia/preview-farmacia"
 import { ArteEnvioPizza, MENSAGENS_ENVIO_PIZZA } from "./pizzaria/envio-pizza"
 import { MiniaturaPizza, PreviewPizza } from "./pizzaria/preview-pizza"
+import { PreviewFoto } from "./preview-foto"
 
 type BlocosDoSegmento = {
   /** Prévia que muda conforme as escolhas do produto; destaca o grupo em escolha. */
   PreviewProduto: ComponentType<{
     produto: Produto
-    selecoes: Record<string, string>
+    selecoes: Selecoes
     grupoAtivo?: GrupoOpcao
   }>
   /**
@@ -32,8 +34,41 @@ export const registroSegmentos: Record<SegmentoId, BlocosDoSegmento> = {
     ArteEnvio: ArteEnvioPizza,
     mensagensEnvio: MENSAGENS_ENVIO_PIZZA,
   },
-  farmacia: {
-    PreviewProduto: PreviewFarmacia,
-    mensagensEnvio: MENSAGENS_ENVIO_FARMACIA,
+  farmacia: { PreviewProduto: PreviewFoto, mensagensEnvio: MENSAGENS_ENVIO_FARMACIA },
+  adega: {
+    PreviewProduto: PreviewFoto,
+    mensagensEnvio: [
+      "Recebendo seu pedido",
+      "Separando as bebidas",
+      "Gelando tudo",
+      "Saindo gelado!",
+    ],
+  },
+  acougue: {
+    PreviewProduto: PreviewFoto,
+    mensagensEnvio: [
+      "Recebendo seu pedido",
+      "Separando os cortes",
+      "Cortando e pesando",
+      "Embalado a vácuo!",
+    ],
+  },
+  salao: {
+    PreviewProduto: PreviewFoto,
+    mensagensEnvio: [
+      "Recebendo seu agendamento",
+      "Conferindo a agenda",
+      "Reservando seu horário",
+      "Horário confirmado!",
+    ],
+  },
+  lanchonete: {
+    PreviewProduto: PreviewFoto,
+    mensagensEnvio: [
+      "Recebendo seu pedido",
+      "Esquentando a chapa",
+      "Montando seu lanche",
+      "Saindo quentinho!",
+    ],
   },
 }

@@ -107,9 +107,11 @@ export function ResumoLateral(valores: ValoresResumo) {
       <Totais {...valores} />
       <p className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2.5 text-sm text-muted-foreground">
         <ClockIcon className="size-4 shrink-0" aria-hidden="true" />
-        {valores.retirada
-          ? `Fica pronto em ${lojaEscolhida.retirada.tempo}`
-          : `Chega em ${lojaEscolhida.entrega.tempo}`}
+        {lojaEscolhida.aceitaEntrega === false
+          ? "Atendimento no salão, no horário marcado"
+          : valores.retirada
+            ? `Fica pronto em ${lojaEscolhida.retirada.tempo}`
+            : `Chega em ${lojaEscolhida.entrega.tempo}`}
       </p>
     </aside>
   )

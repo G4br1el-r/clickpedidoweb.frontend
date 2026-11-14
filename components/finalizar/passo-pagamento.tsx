@@ -1,6 +1,13 @@
 "use client"
 
-import { BanknoteIcon, CreditCardIcon, InfoIcon, QrCodeIcon, SmartphoneNfcIcon } from "lucide-react"
+import {
+  BanknoteIcon,
+  CreditCardIcon,
+  InfoIcon,
+  QrCodeIcon,
+  ScaleIcon,
+  SmartphoneNfcIcon,
+} from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import { type ReactNode, useState } from "react"
 import { Controller, useFormContext, useWatch } from "react-hook-form"
@@ -12,10 +19,12 @@ import {
   type DadosCheckout,
   FORMAS_PAGAMENTO,
   type FormaPagamento,
+  formasDePagamento,
   sugestoesDeTroco,
 } from "@/lib/checkout"
 import { emReais } from "@/lib/formato"
 import { vibrar } from "@/lib/haptico"
+import { useSacola } from "@/lib/sacola"
 import { cn } from "@/lib/utils"
 import { CabecalhoPasso } from "./cabecalho-passo"
 import { Campo, ESTILO_CAMPO } from "./campo"
@@ -28,6 +37,7 @@ const ICONES: Record<FormaPagamento, ReactNode> = {
   "cartao-online": <CreditCardIcon />,
   dinheiro: <BanknoteIcon />,
   maquininha: <SmartphoneNfcIcon />,
+  "apos-pesagem": <ScaleIcon />,
 }
 
 function Aviso({ children }: { children: ReactNode }) {
@@ -208,6 +218,9 @@ function Detalhe({
     return <Aviso>Você paga com segurança logo depois de enviar o pedido.</Aviso>
   }
   if (forma === "dinheiro") return <BlocoTroco total={total} />
+  if (forma === "apos-pesagem") {
+    return <Aviso>Depois de pesar, mandamos pelo WhatsApp o valor exato e o link para pagar.</Aviso>
+  }
   return (
     <Aviso>
       {retirada
@@ -221,12 +234,11 @@ export function PassoPagamento({ total }: { total: number }) {
   const { control } = useFormContext<DadosCheckout>()
   const tipo = useWatch({ control, name: "tipo" })
   const retirada = tipo === "retirada"
+  const itens = useSacola((estado) => estado.itens)
+  const formas = formasDePagamento(itens)
   const grupos = [
-    { titulo: "Pague agora", formas: ["pix", "cartao-online"] as const },
-    {
-      titulo: retirada ? "Pague na retirada" : "Pague na entrega",
-      formas: ["dinheiro", "maquininha"] as const,
-    },
+    { titulo: "Pague agora", formas: formas.agora },
+    { titulo: retirada ? "Pague na retirada" : "Pague na entrega", formas: formas.depois },
   ]
 
   return (

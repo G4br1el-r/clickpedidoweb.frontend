@@ -19,10 +19,12 @@ import { SeletorQuantidade } from "@/components/sacola/seletor-quantidade"
 import { registroSegmentos } from "@/components/segmentos/registro"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
-import { RadioGroup } from "@/components/ui/radio-group"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
+import { PESOS_EM_GRAMAS, precoDoPeso, rotuloDoPeso } from "@/lib/acougue"
 import { comoVender } from "@/lib/farmacia"
 import { emReais, formatoMoeda } from "@/lib/formato"
 import { vibrar } from "@/lib/haptico"
@@ -33,13 +35,14 @@ import {
   gruposFaltantes,
   montarItemSacola,
   precoComExtras,
+  type Selecoes,
 } from "@/lib/produto"
 import { useSacola } from "@/lib/sacola"
-import type { Produto } from "@/lib/tipos"
+import type { GrupoOpcao, Produto } from "@/lib/tipos"
 import { cn } from "@/lib/utils"
 import { lancarParaSacola } from "@/lib/voo"
 import { InfoRemedio } from "./info-remedio"
-import { OpcaoLinha } from "./opcao-linha"
+import { OpcaoCaixa, OpcaoLinha } from "./opcao-linha"
 
 // Tempo para ver a escolha marcada (e a metade da pizza preenchida) antes de ir ao próximo passo.
 const ESPERA_AVANCO_MS = 700
@@ -200,10 +203,13 @@ function ConteudoProduto({
   const [passo, setPasso] = useState(0)
   // 1 indo para a frente, -1 voltando: decide de que lado a lista entra e para onde a outra sai.
   const [direcao, setDirecao] = useState(1)
-  const [selecoes, setSelecoes] = useState<Record<string, string>>({})
+  const [selecoes, setSelecoes] = useState<Selecoes>({})
   // Grupos obrigatórios que ficaram sem escolha quando a pessoa tentou adicionar.
   const [invalidos, setInvalidos] = useState<Set<string>>(new Set())
   const [quantidade, setQuantidade] = useState(1)
+  // Açougue: o peso de cada unidade; o preço da ficha é o estimado desse peso.
+  const porQuilo = produto.unidade === "kg"
+  const [peso, setPeso] = useState(500)
   const [observacao, setObservacao] = useState("")
 
   const grupos = produto.grupos ?? []
@@ -212,6 +218,7 @@ function ConteudoProduto({
   const escolhidos = escolhidosDe(grupos, selecoes)
   const faltantes = gruposFaltantes(grupos, selecoes)
   const precoUnitario = precoComExtras(produto, escolhidos)
+  const total = (porQuilo ? precoDoPeso(precoUnitario, peso) : precoUnitario) * quantidade
   // Controlado da Portaria 344: a ficha explica, mas não há como pedir pelo site.
   const soBalcao = Boolean(produto.medicamento) && comoVender(produto.medicamento) === "so-balcao"
   const { PreviewProduto } = registroSegmentos[lojaEscolhida.segmento]
@@ -236,6 +243,20 @@ function ConteudoProduto({
     if (avanco.current) clearTimeout(avanco.current)
     setDirecao(indice > passo ? 1 : -1)
     setPasso(indice)
+  }
+
+  /** Grupo de várias escolhas: marca ou desmarca, sem passar do máximo. */
+  function alternar(grupo: GrupoOpcao, itemId: string) {
+    vibrar()
+    setSelecoes((atuais) => {
+      const marcados = Array.isArray(atuais[grupo.id]) ? (atuais[grupo.id] as string[]) : []
+      const proximos = marcados.includes(itemId)
+        ? marcados.filter((id) => id !== itemId)
+        : marcados.length < (grupo.maximo ?? 1)
+          ? [...marcados, itemId]
+          : marcados
+      return { ...atuais, [grupo.id]: proximos }
+    })
   }
 
   function escolher(grupoId: string, valor: string) {
@@ -268,7 +289,9 @@ function ConteudoProduto({
     }
     vibrar()
     lancarParaSacola(evento.currentTarget, produto.imagem)
-    adicionar(montarItemSacola(produto, escolhidos, quantidade, observacao))
+    adicionar(
+      montarItemSacola(produto, escolhidos, quantidade, observacao, porQuilo ? peso : undefined),
+    )
     aoFechar()
   }
 
@@ -278,8 +301,15 @@ function ConteudoProduto({
         <div className="px-4 pt-3 pb-3">
           {/* Espaço à direita para o X e, quando há, as setas de produto. */}
           <div className={cn("min-w-0", comNavegacao ? "pr-40" : "pr-14")}>
-            <PainelTitulo className="text-xl leading-tight font-bold">{produto.nome}</PainelTitulo>
+            <PainelTitulo className="text-xl leading-tight font-bold wrap-anywhere">
+              {produto.nome}
+            </PainelTitulo>
             <PainelDescricao className="mt-0.5 line-clamp-2">{produto.descricao}</PainelDescricao>
+            {porQuilo && (
+              <p className="mt-0.5 text-sm font-semibold text-marca-texto">
+                {emReais(produto.preco)} o quilo
+              </p>
+            )}
           </div>
           {/* A pizza no centro, grande o bastante para ver cada metade sendo montada. */}
           <div className="mt-3 flex justify-center">
@@ -301,8 +331,15 @@ function ConteudoProduto({
               className="size-full"
             />
           </AmpliarFoto>
-          <PainelTitulo className="mt-3 text-xl font-bold">{produto.nome}</PainelTitulo>
+          <PainelTitulo className="mt-3 text-xl font-bold wrap-anywhere">
+            {produto.nome}
+          </PainelTitulo>
           <PainelDescricao className="mt-0.5">{produto.descricao}</PainelDescricao>
+          {porQuilo && (
+            <p className="mt-1 text-sm font-semibold text-marca-texto">
+              {emReais(produto.preco)} o quilo
+            </p>
+          )}
         </div>
       )}
 
@@ -320,7 +357,7 @@ function ConteudoProduto({
             {grupos.length > 1 && (
               <TabsList variant="line" aria-label="Passos do produto" className="mt-1 h-11! w-full">
                 {grupos.map((grupo, indice) => {
-                  const feito = Boolean(selecoes[grupo.id])
+                  const feito = escolhidos.some((escolha) => escolha.grupo.id === grupo.id)
                   const invalido = invalidos.has(grupo.id)
                   return (
                     <TabsTrigger
@@ -328,7 +365,8 @@ function ConteudoProduto({
                       value={grupo.id}
                       // O traço do passo ativo desliza de uma aba para a outra (em vez do traço fixo).
                       className={cn(
-                        "h-11 gap-1.5 text-sm after:hidden",
+                        // Nomes longos (combos da adega) encurtam em vez de alargar a ficha.
+                        "h-11 min-w-0 gap-1.5 text-sm after:hidden",
                         invalido && "text-destructive data-active:text-destructive",
                       )}
                     >
@@ -346,7 +384,7 @@ function ConteudoProduto({
                       <span
                         aria-hidden="true"
                         className={cn(
-                          "flex size-5 items-center justify-center rounded-full text-[11px] font-bold transition-colors duration-200",
+                          "flex size-5 shrink-0 items-center justify-center rounded-full text-[11px] font-bold transition-colors duration-200",
                           invalido
                             ? "bg-destructive text-white"
                             : feito
@@ -356,7 +394,7 @@ function ConteudoProduto({
                       >
                         {feito ? <CheckIcon className="size-3" strokeWidth={3} /> : indice + 1}
                       </span>
-                      {grupo.nome}
+                      <span className="truncate">{grupo.nome}</span>
                       {feito && <span className="sr-only">(escolhido)</span>}
                       {invalido && <span className="sr-only">(falta escolher)</span>}
                     </TabsTrigger>
@@ -409,25 +447,44 @@ function ConteudoProduto({
                             {grupo.obrigatorio ? "Obrigatório" : "Opcional"}
                           </Badge>
                         </div>
-                        <RadioGroup
-                          aria-label={grupo.titulo}
-                          value={selecoes[grupo.id] ?? ""}
-                          onValueChange={(valor) => escolher(grupo.id, valor)}
-                          className="gap-2"
-                        >
-                          {grupo.itens.map((item) => (
-                            <OpcaoLinha
-                              key={item.id}
-                              grupo={grupo}
-                              item={item}
-                              selecionada={selecoes[grupo.id] === item.id}
-                              invalida={invalidos.has(grupo.id)}
-                              aoClicar={aoEscolherComToque}
-                            />
-                          ))}
-                        </RadioGroup>
+                        {(grupo.maximo ?? 1) > 1 ? (
+                          <GrupoVarias
+                            grupo={grupo}
+                            marcados={
+                              Array.isArray(selecoes[grupo.id])
+                                ? (selecoes[grupo.id] as string[])
+                                : []
+                            }
+                            aoAlternar={(itemId) => alternar(grupo, itemId)}
+                          />
+                        ) : (
+                          <RadioGroup
+                            aria-label={grupo.titulo}
+                            value={(selecoes[grupo.id] as string | undefined) ?? ""}
+                            onValueChange={(valor) => escolher(grupo.id, valor)}
+                            className="gap-2"
+                          >
+                            {grupo.itens.map((item) => (
+                              <OpcaoLinha
+                                key={item.id}
+                                grupo={grupo}
+                                item={item}
+                                selecionada={selecoes[grupo.id] === item.id}
+                                invalida={invalidos.has(grupo.id)}
+                                aoClicar={aoEscolherComToque}
+                              />
+                            ))}
+                          </RadioGroup>
+                        )}
                         {indice === grupos.length - 1 && (
-                          <Observacao valor={observacao} aoMudar={setObservacao} />
+                          <>
+                            {porQuilo && (
+                              <div className="pt-4">
+                                <EscolhaPeso valor={peso} aoMudar={setPeso} />
+                              </div>
+                            )}
+                            <Observacao valor={observacao} aoMudar={setObservacao} />
+                          </>
                         )}
                       </motion.div>
                     )}
@@ -440,6 +497,7 @@ function ConteudoProduto({
       ) : (
         <div className="relative flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-3">
           {produto.medicamento && <InfoRemedio medicamento={produto.medicamento} />}
+          {porQuilo && <EscolhaPeso valor={peso} aoMudar={setPeso} />}
           {!soBalcao && <Observacao valor={observacao} aoMudar={setObservacao} />}
         </div>
       )}
@@ -460,10 +518,10 @@ function ConteudoProduto({
               {soBalcao ? "Só no balcão" : faltantes[0] ? faltantes[0].nome : "Adicionar"}
             </span>
             <NumberFlow
-              value={precoUnitario * quantidade}
+              value={total}
               locales="pt-BR"
               format={formatoMoeda}
-              aria-label={emReais(precoUnitario * quantidade)}
+              aria-label={emReais(total)}
               className="tabular-nums"
             />
           </Button>
@@ -596,5 +654,73 @@ export function ProdutoSheet({
         )}
       </AnimatePresence>
     </Painel>
+  )
+}
+
+/** Açougue: o peso de cada unidade, em pílulas; o valor final sai na balança. */
+function EscolhaPeso({ valor, aoMudar }: { valor: number; aoMudar: (gramas: number) => void }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <p id="titulo-peso" className="text-sm font-semibold">
+        Peso
+      </p>
+      <RadioGroup
+        aria-labelledby="titulo-peso"
+        value={String(valor)}
+        onValueChange={(gramas) => aoMudar(Number(gramas))}
+        className="flex flex-wrap gap-2"
+      >
+        {PESOS_EM_GRAMAS.map((gramas) => (
+          <Label
+            key={gramas}
+            className="flex h-11 cursor-pointer items-center gap-2 rounded-full border px-4 text-sm font-semibold transition-colors has-data-[state=checked]:border-primary has-data-[state=checked]:bg-primary has-data-[state=checked]:text-primary-foreground has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
+          >
+            <RadioGroupItem value={String(gramas)} className="sr-only" />
+            {rotuloDoPeso(gramas)}
+          </Label>
+        ))}
+      </RadioGroup>
+      <p className="text-xs text-muted-foreground">
+        O valor final sai na balança e pode variar um pouco.
+      </p>
+    </div>
+  )
+}
+
+/** Grupo de várias escolhas: o limite, quantas saem grátis e as caixas de marcar. */
+function GrupoVarias({
+  grupo,
+  marcados,
+  aoAlternar,
+}: {
+  grupo: GrupoOpcao
+  marcados: string[]
+  aoAlternar: (itemId: string) => void
+}) {
+  const maximo = grupo.maximo ?? 1
+  const gratis = grupo.gratisAte ?? 0
+  return (
+    <fieldset aria-label={grupo.titulo} className="flex min-w-0 flex-col gap-2">
+      <p className="text-xs text-muted-foreground">
+        Escolha até {maximo}
+        {gratis > 0 &&
+          ` · ${gratis === 1 ? "a primeira é grátis" : `as ${gratis} primeiras são grátis`}`}
+      </p>
+      {grupo.itens.map((item) => {
+        const marcada = marcados.includes(item.id)
+        const posicao = marcada ? marcados.indexOf(item.id) : marcados.length
+        return (
+          <OpcaoCaixa
+            key={item.id}
+            grupo={grupo}
+            item={item}
+            marcada={marcada}
+            desligada={!marcada && marcados.length >= maximo}
+            gratis={posicao < gratis}
+            aoAlternar={() => aoAlternar(item.id)}
+          />
+        )
+      })}
+    </fieldset>
   )
 }

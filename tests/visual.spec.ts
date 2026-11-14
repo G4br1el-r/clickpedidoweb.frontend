@@ -13,6 +13,36 @@ test.describe("visual", () => {
   })
 
   for (const tema of ["light", "dark"] as const) {
+    for (const loja of [
+      "adega-da-vila",
+      "acougue-sabor-da-carne",
+      "emporio-das-deusas",
+      "quiosque-do-mineiro",
+    ]) {
+      test(`vitrine ${loja}, tema ${tema === "light" ? "claro" : "escuro"}`, async ({ page }) => {
+        await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+        await page.addInitScript(
+          (id) =>
+            localStorage.setItem("clickpedido-loja", JSON.stringify({ state: { id }, version: 1 })),
+          loja,
+        )
+        await page.goto("/")
+        const primeira = page.locator("section[id^=categoria-]").first()
+        await expect(primeira.getByRole("article").first()).toBeVisible()
+        await page.waitForLoadState("networkidle")
+        await esperarAnimacoes(page)
+        await expect(page.getByTestId("cabecalho-loja")).toHaveScreenshot(
+          `${loja}-cabecalho-${tema}.png`,
+          { animations: "disabled" },
+        )
+        await primeira.scrollIntoViewIfNeeded()
+        await esperarAnimacoes(page)
+        await expect(primeira).toHaveScreenshot(`${loja}-primeira-categoria-${tema}.png`, {
+          animations: "disabled",
+        })
+      })
+    }
+
     test(`vitrine da farmácia, tema ${tema === "light" ? "claro" : "escuro"}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
       await page.addInitScript(() =>

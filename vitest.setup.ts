@@ -64,3 +64,34 @@ afterEach(() => {
   cleanup()
   localStorage.clear()
 })
+
+// O NumberFlow anima o número com um elemento próprio do navegador, que o jsdom não roda
+// (quebra ao atualizar o valor). Nos testes, vira o número já formatado, com o mesmo rótulo.
+vi.mock("@number-flow/react", async () => {
+  const { createElement } = await import("react")
+  return {
+    default: ({
+      value,
+      locales,
+      format,
+      className,
+      ...resto
+    }: {
+      value: number
+      locales?: string
+      format?: Intl.NumberFormatOptions
+      className?: string
+      "aria-hidden"?: boolean | "true" | "false"
+      "aria-label"?: string
+    }) =>
+      createElement(
+        "span",
+        {
+          className,
+          "aria-hidden": resto["aria-hidden"],
+          "aria-label": resto["aria-label"],
+        },
+        new Intl.NumberFormat(locales, format).format(value),
+      ),
+  }
+})

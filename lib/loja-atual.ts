@@ -2,16 +2,29 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import { cardapioCasaDaPizza, casaDaPizza } from "./mock/casa-da-pizza"
 import { cardapioDrogariaBemEstar, drogariaBemEstar } from "./mock/drogaria-bem-estar"
+import { vitrineAcougue, vitrineAdega, vitrineQuiosque, vitrineSalao } from "./mock/vitrines"
 import { variaveisClaras, variaveisEscuras } from "./tema"
 import type { Categoria, Loja } from "./tipos"
+
+type Vitrine = { loja: Loja; categorias: Categoria[] }
 
 /** Lojas da demonstração: a vitrine é a mesma, o que muda é a loja escolhida no topo. */
 export const LOJAS = [
   { loja: casaDaPizza as Loja, categorias: cardapioCasaDaPizza as Categoria[] },
   { loja: drogariaBemEstar as Loja, categorias: cardapioDrogariaBemEstar as Categoria[] },
+  vitrineAdega as Vitrine,
+  vitrineAcougue as Vitrine,
+  vitrineSalao as Vitrine,
+  vitrineQuiosque as Vitrine,
 ] as const
 
-export type LojaId = "casa-da-pizza" | "drogaria-bem-estar"
+export type LojaId =
+  | "casa-da-pizza"
+  | "drogaria-bem-estar"
+  | "adega-da-vila"
+  | "acougue-sabor-da-carne"
+  | "emporio-das-deusas"
+  | "quiosque-do-mineiro"
 
 const PADRAO: LojaId = "casa-da-pizza"
 const CHAVE = "clickpedido-loja"

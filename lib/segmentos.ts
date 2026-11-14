@@ -24,6 +24,26 @@ export const segmentos = {
     // Remédio não se monta: a apresentação já vem na embalagem.
     tiposOpcao: [],
   },
+  adega: {
+    nome: "Adega",
+    tiposProduto: ["produto"],
+    tiposOpcao: ["opcao"],
+  },
+  acougue: {
+    nome: "Açougue",
+    tiposProduto: ["produto"],
+    tiposOpcao: ["opcao"],
+  },
+  salao: {
+    nome: "Salão de beleza",
+    tiposProduto: ["produto"],
+    tiposOpcao: ["opcao"],
+  },
+  lanchonete: {
+    nome: "Lanchonete",
+    tiposProduto: ["produto"],
+    tiposOpcao: ["opcao"],
+  },
 } as const
 
 export type Segmentos = typeof segmentos
@@ -52,6 +72,46 @@ const TEXTOS = {
     preparoConversa: "A farmacêutica já está conferindo e separando seus itens.",
     fim: "Melhoras! Obrigado pela preferência.",
     fimCurto: "Melhoras!",
+  },
+  adega: {
+    busca: "Buscar cerveja, destilado, combo",
+    destaques: "Mais vendidos",
+    buscaVazia: "Tente buscar pelo nome da bebida ou da marca.",
+    preparo: "Seu pedido está sendo separado e gelado.",
+    preparoCurto: { titulo: "Separando", texto: "Tudo bem gelado" },
+    preparoConversa: "Já estamos separando e gelando seu pedido.",
+    fim: "Saúde! Obrigado pela preferência.",
+    fimCurto: "Saúde!",
+  },
+  acougue: {
+    busca: "Buscar corte, linguiça, carvão",
+    destaques: "Mais pedidos",
+    buscaVazia: "Tente buscar pelo nome do corte.",
+    preparo: "O açougueiro está cortando e pesando seu pedido.",
+    preparoCurto: { titulo: "Na pesagem", texto: "Cortado e pesado na hora" },
+    preparoConversa: "O açougueiro já está cortando e pesando seu pedido.",
+    fim: "Bom churrasco! Obrigado pela preferência.",
+    fimCurto: "Bom churrasco!",
+  },
+  salao: {
+    busca: "Buscar serviço",
+    destaques: "Mais procurados",
+    buscaVazia: "Tente buscar pelo nome do serviço.",
+    preparo: "Seu horário está reservado. Te esperamos!",
+    preparoCurto: { titulo: "Confirmado", texto: "Horário reservado" },
+    preparoConversa: "Seu horário está reservado. Te esperamos no salão!",
+    fim: "Obrigada pela visita! Volte sempre.",
+    fimCurto: "Volte sempre!",
+  },
+  lanchonete: {
+    busca: "Buscar lanche, pastel, bebida",
+    destaques: "Mais pedidos",
+    buscaVazia: "Tente buscar por outro lanche ou bebida.",
+    preparo: "Seu lanche está na chapa.",
+    preparoCurto: { titulo: "Na chapa", texto: "Seu lanche sendo feito" },
+    preparoConversa: "Seu lanche já está na chapa.",
+    fim: "Bom apetite! Obrigado pela preferência.",
+    fimCurto: "Bom apetite!",
   },
 } satisfies Record<SegmentoId, unknown>
 

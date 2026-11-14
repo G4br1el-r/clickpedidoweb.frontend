@@ -3,6 +3,7 @@
 import {
   ArrowLeftIcon,
   BikeIcon,
+  CalendarClockIcon,
   CheckIcon,
   ChefHatIcon,
   CopyIcon,
@@ -30,6 +31,7 @@ import { Foto } from "@/components/foto"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker"
+import { textoDoHorario } from "@/lib/agendar"
 import { FORMAS_PAGAMENTO } from "@/lib/checkout"
 import { emReais } from "@/lib/formato"
 import { vibrar } from "@/lib/haptico"
@@ -335,6 +337,18 @@ function Detalhes({ pedido }: { pedido: Pedido }) {
             <div>
               <p className="font-semibold">{retirada ? "Retirada no balcão" : "Entrega em"}</p>
               <p className="text-muted-foreground">{pedido.endereco}</p>
+            </div>
+          </div>
+        )}
+        {pedido.agendamento && (
+          <div className="flex gap-3 sm:col-span-2">
+            <CalendarClockIcon
+              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <div>
+              <p className="font-semibold">Horário marcado</p>
+              <p className="text-muted-foreground">{textoDoHorario(pedido.agendamento.inicio)}</p>
             </div>
           </div>
         )}

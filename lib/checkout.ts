@@ -15,9 +15,30 @@ export const FORMAS_PAGAMENTO = {
   },
   dinheiro: { titulo: "Dinheiro", detalhe: "Com troco, se precisar", agora: false },
   maquininha: { titulo: "Cartão na maquininha", detalhe: "Crédito ou débito", agora: false },
+  "apos-pesagem": {
+    titulo: "Pagar após a pesagem",
+    detalhe: "Mandamos o link com o valor exato depois de pesar",
+    agora: false,
+  },
 } as const
 
 export type FormaPagamento = keyof typeof FORMAS_PAGAMENTO
+
+/**
+ * Formas que o pedido oferece. Açougue: com corte por quilo, o valor exato só sai na balança,
+ * então a loja que aceita deixa pagar depois da pesagem.
+ */
+export function formasDePagamento(itens: { pesoGramas?: number }[]): {
+  agora: FormaPagamento[]
+  depois: FormaPagamento[]
+} {
+  const pesaDepois =
+    itens.some((item) => item.pesoGramas) && lojaAtual().pagamentos.includes("Pagar após a pesagem")
+  return {
+    agora: ["pix", "cartao-online"],
+    depois: ["dinheiro", "maquininha", ...(pesaDepois ? (["apos-pesagem"] as const) : [])],
+  }
+}
 
 export const LIMITE_OBSERVACAO_PEDIDO = 300
 
@@ -38,10 +59,12 @@ export const esquemaCheckout = z
     cidade: z.string(),
     uf: z.string(),
     referencia: z.string(),
-    pagamento: z.enum(["pix", "cartao-online", "dinheiro", "maquininha"]),
+    pagamento: z.enum(["pix", "cartao-online", "dinheiro", "maquininha", "apos-pesagem"]),
     cpf: z.string(),
     troco: z.number().nullable(),
     observacao: z.string(),
+    /** Salão: início do atendimento (ISO). Vazio nas outras lojas. */
+    agendamento: z.string(),
     /** Total do pedido no momento da validação, para conferir o troco. */
     total: z.number(),
   })
@@ -51,6 +74,10 @@ export const esquemaCheckout = z
 
     if (dados.nome.trim().length < 2) erro("nome", "Diga como podemos te chamar")
     if (somenteDigitos(dados.whatsapp).length !== 11) erro("whatsapp", "Confira o número com DDD")
+
+    if (lojaAtual().segmento === "salao" && !dados.agendamento) {
+      erro("agendamento", "Escolha o dia e o horário")
+    }
 
     if (dados.tipo === "entrega") {
       if (somenteDigitos(dados.cep).length !== 8) erro("cep", "Digite os 8 números do CEP")
@@ -72,7 +99,7 @@ export type DadosCheckout = z.infer<typeof esquemaCheckout>
 /** Campos conferidos ao sair de cada passo. */
 export const CAMPOS_DO_PASSO: Record<string, (keyof DadosCheckout)[]> = {
   dados: ["nome", "whatsapp"],
-  entrega: ["cep", "rua", "numero", "bairro"],
+  entrega: ["cep", "rua", "numero", "bairro", "agendamento"],
   pagamento: ["cpf", "troco"],
   revisao: ["observacao"],
 }
@@ -145,6 +172,9 @@ export function valoresIniciais(lembrados: DadosLembrados | null): DadosCheckout
     referencia: "",
     pagamento: "pix",
     ...lembrados,
+    // Loja que não entrega (salão) atende no balcão, mesmo que da última vez tenha sido entrega.
+    ...(lojaAtual().aceitaEntrega === false ? { tipo: "retirada" as const } : {}),
+    agendamento: "",
     cpf: "",
     troco: null,
     observacao: "",

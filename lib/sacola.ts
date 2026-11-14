@@ -13,6 +13,10 @@ export type ItemSacola = {
   quantidade: number
   resumo: string[]
   observacao?: string
+  /** Salão: quanto o serviço dura, para achar o horário. */
+  duracaoMin?: number
+  /** Açougue: o peso pedido de cada unidade; o preço é estimado e o final sai na balança. */
+  pesoGramas?: number
   /** Farmácia: o remédio pede receita (ver lib/farmacia.ts). Sem o campo, venda livre. */
   venda?: ModoVenda
 }
@@ -33,6 +37,8 @@ export type Pedido = {
   observacao?: string
   /** Farmácia: a foto da receita enviada no fechamento e se a via fica retida na entrega. */
   receita?: { arquivo: string; retida: boolean }
+  /** Salão: início do atendimento (ISO) e quanto ele dura. */
+  agendamento?: { inicio: string; duracaoMin: number }
 }
 
 export type DadosFinalizacao = Required<
@@ -43,7 +49,10 @@ export type DadosFinalizacao = Required<
 >
 
 /** O que a pessoa preencheu da última vez, para não digitar tudo de novo. */
-export type DadosLembrados = Omit<DadosCheckout, "cpf" | "troco" | "observacao" | "total">
+export type DadosLembrados = Omit<
+  DadosCheckout,
+  "cpf" | "troco" | "observacao" | "total" | "agendamento"
+>
 
 type NovoItem = Omit<ItemSacola, "chave">
 
@@ -73,7 +82,10 @@ type EstadoSacola = {
   restaurar: (item: ItemSacola, posicao: number) => void
   /** Tira todos os itens (ao trocar de loja). Os pedidos feitos continuam no histórico. */
   esvaziar: () => void
-  finalizar: (dados: DadosFinalizacao & Pick<Pedido, "receita">, lembrar: DadosLembrados) => Pedido
+  finalizar: (
+    dados: DadosFinalizacao & Pick<Pedido, "receita" | "agendamento">,
+    lembrar: DadosLembrados,
+  ) => Pedido
   /** Põe um pedido do histórico na tela de acompanhamento. */
   verPedido: (numero: number) => void
 }

@@ -108,3 +108,29 @@ describe("BotaoAdicionar na farmácia", () => {
     expect(useSacola.getState().itens).toEqual([])
   })
 })
+
+describe("BotaoAdicionar no açougue", () => {
+  test("o corte por quilo abre a ficha para escolher o peso", async () => {
+    useSacola.setState({ hidratada: true })
+    const aoAbrir = vi.fn()
+    const picanha = {
+      id: "picanha",
+      nome: "Picanha",
+      descricao: "",
+      preco: 89.9,
+      tipo: "produto",
+      unidade: "kg",
+      imagem: IMAGEM,
+    } as Produto
+    render(
+      <TooltipProvider>
+        <BotaoAdicionar produto={picanha} aoAbrir={aoAbrir} />
+      </TooltipProvider>,
+    )
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Escolher o peso de Picanha" }))
+    expect(aoAbrir).toHaveBeenCalled()
+    expect(useSacola.getState().itens).toEqual([])
+  })
+})

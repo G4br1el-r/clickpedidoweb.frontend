@@ -1,5 +1,5 @@
 import type { StaticImageData } from "next/image"
-import type { DadosMedicamento } from "./admin/dados/tipos"
+import type { DadosMedicamento, HorarioFuncionamento } from "./admin/dados/tipos"
 import type { SegmentoId, TipoOpcaoDe, TipoProdutoDe } from "./segmentos"
 
 export type Tema = {
@@ -34,6 +34,10 @@ export type GrupoOpcao<S extends SegmentoId = SegmentoId> = {
   /** Título completo mostrado acima da lista. */
   titulo: string
   obrigatorio: boolean
+  /** Quantas opções dá para marcar (sem o campo, uma só). */
+  maximo?: number
+  /** Quantas saem sem cobrar o acréscimo (adicionais grátis). */
+  gratisAte?: number
   /** Em qual metade da prévia a opção aparece. */
   metade?: "esquerda" | "direita"
   itens: ItemOpcao[]
@@ -49,6 +53,10 @@ export type Produto<S extends SegmentoId = SegmentoId> = {
   imagem: StaticImageData
   destaque?: boolean
   grupos?: GrupoOpcao<S>[]
+  /** Açougue: "kg" quando o preço é do quilo e a pessoa escolhe o peso. Sem o campo, unidade. */
+  unidade?: "un" | "kg"
+  /** Salão: quanto o serviço dura, para achar um horário livre. */
+  duracaoMin?: number
   /** Farmácia: tarja, princípio ativo e registro. Decide se pede receita (lib/farmacia.ts). */
   medicamento?: DadosMedicamento
 }
@@ -96,6 +104,12 @@ export type Loja<S extends SegmentoId = SegmentoId> = {
   retirada: { tempo: string }
   pedidoMinimo: number
   horarios: HorarioDia[]
+  /** A grade do painel, para achar horário livre (salão) ou dia de retirada (açougue). */
+  expediente?: HorarioFuncionamento[]
+  /** Salão: quantos atendimentos cabem ao mesmo tempo. */
+  capacidade?: number
+  /** Sem o campo, faz entrega. O salão atende só no salão. */
+  aceitaEntrega?: boolean
   endereco: string
   telefone: string
   pagamentos: string[]

@@ -159,3 +159,105 @@ describe("na farmácia", () => {
     expect(textoDeBusca(remedio())).toBe("amoxicilina 500 mg antibiotico. caixa com 21 capsulas.")
   })
 })
+
+describe("no açougue", () => {
+  const picanha = {
+    id: "picanha",
+    tipo: "produto",
+    nome: "Picanha",
+    descricao: "",
+    preco: 89.9,
+    unidade: "kg",
+    imagem: IMAGEM,
+  } as Produto
+
+  test("o corte por quilo entra com o peso escolhido e o preço estimado dele", () => {
+    expect(montarItemSacola(picanha, [], 1, "", 500)).toMatchObject({
+      produtoId: "picanha",
+      precoUnitario: 44.95,
+      quantidade: 1,
+      resumo: ["500 g"],
+      pesoGramas: 500,
+    })
+  })
+})
+
+describe("no salão", () => {
+  test("o serviço leva a duração para a sacola", () => {
+    const escova = {
+      id: "escova",
+      tipo: "produto",
+      nome: "Escova",
+      descricao: "",
+      preco: 55,
+      duracaoMin: 45,
+      imagem: IMAGEM,
+    } as Produto
+    expect(montarItemSacola(escova, [], 1, "").duracaoMin).toBe(45)
+  })
+})
+
+describe("grupos com várias escolhas (quiosque e adega)", () => {
+  const ADICIONAIS = {
+    id: "adicionais",
+    tipo: "opcao",
+    nome: "Adicionais",
+    titulo: "Adicionais",
+    obrigatorio: false,
+    maximo: 3,
+    gratisAte: 1,
+    itens: [
+      { id: "bacon", nome: "Bacon", extra: 4 },
+      { id: "ovo", nome: "Ovo", extra: 2 },
+      { id: "cheddar", nome: "Cheddar", extra: 3 },
+    ],
+  } as GrupoOpcao
+  const PONTO = {
+    id: "ponto",
+    tipo: "opcao",
+    nome: "Ponto",
+    titulo: "Ponto da carne",
+    obrigatorio: true,
+    itens: [{ id: "ao-ponto", nome: "Ao ponto", extra: 0 }],
+  } as GrupoOpcao
+  const LANCHE = {
+    id: "x-burger",
+    tipo: "produto",
+    nome: "X-Burger",
+    descricao: "",
+    preco: 20,
+    imagem: IMAGEM,
+    grupos: [PONTO, ADICIONAIS],
+  } as Produto
+
+  test("cada opção marcada vira uma escolha, na ordem em que foi marcada", () => {
+    const escolhidos = escolhidosDe(LANCHE.grupos ?? [], {
+      ponto: "ao-ponto",
+      adicionais: ["cheddar", "bacon"],
+    })
+    expect(escolhidos.map(({ item }) => item.nome)).toEqual(["Ao ponto", "Cheddar", "Bacon"])
+  })
+
+  test("as primeiras até o limite grátis não cobram; as outras cobram o acréscimo", () => {
+    const escolhidos = escolhidosDe(LANCHE.grupos ?? [], {
+      ponto: "ao-ponto",
+      adicionais: ["cheddar", "bacon", "ovo"],
+    })
+    // Cheddar sai grátis; bacon (4) e ovo (2) cobram.
+    expect(precoComExtras(LANCHE, escolhidos)).toBe(26)
+  })
+
+  test("grupo de várias escolhas vazio só falta se for obrigatório", () => {
+    expect(gruposFaltantes(LANCHE.grupos ?? [], { adicionais: [] }).map((g) => g.id)).toEqual([
+      "ponto",
+    ])
+  })
+
+  test("o resumo lista cada adicional", () => {
+    const escolhidos = escolhidosDe(LANCHE.grupos ?? [], {
+      ponto: "ao-ponto",
+      adicionais: ["bacon", "ovo"],
+    })
+    expect(montarItemSacola(LANCHE, escolhidos, 1, "").resumo).toEqual(["Ao ponto", "Bacon", "Ovo"])
+  })
+})

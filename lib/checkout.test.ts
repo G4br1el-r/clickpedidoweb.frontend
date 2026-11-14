@@ -6,6 +6,7 @@ import {
   dadosDoPedido,
   dadosParaLembrar,
   esquemaCheckout,
+  formasDePagamento,
   montarEndereco,
   somenteDigitos,
   sugestoesDeTroco,
@@ -36,6 +37,7 @@ function pedido(mudancas: Partial<DadosCheckout> = {}): DadosCheckout {
     cpf: CPF_VALIDO,
     troco: null,
     observacao: "",
+    agendamento: "",
     total: 50,
     ...mudancas,
   }
@@ -261,6 +263,7 @@ describe("valoresIniciais", () => {
       cpf: "",
       troco: null,
       observacao: "",
+      agendamento: "",
       total: 0,
     })
   })
@@ -276,6 +279,7 @@ describe("valoresIniciais", () => {
       cpf: "",
       troco: null,
       observacao: "",
+      agendamento: "",
       total: 0,
     })
   })
@@ -378,6 +382,71 @@ describe("com a farmácia escolhida no topo", () => {
       { ...valoresIniciais(null), nome: "Ana", whatsapp: "12991112233", tipo: "retirada" },
       null,
     )
-    expect(pedido.endereco).toBe("Av. São João, 870, Jardim Esplanada")
+    expect(pedido.endereco).toBe(
+      "Avenida São João, 870 - Jardim Esplanada, São José dos Campos - SP",
+    )
+  })
+})
+
+describe("formasDePagamento", () => {
+  afterEach(() => useLojaAtual.setState(useLojaAtual.getInitialState(), true))
+  const corte = { pesoGramas: 500 }
+  const pacote = {}
+
+  test("no açougue, com corte por quilo, dá para pagar depois da pesagem", () => {
+    useLojaAtual.getState().escolher("acougue-sabor-da-carne")
+    expect(formasDePagamento([corte, pacote])).toEqual({
+      agora: ["pix", "cartao-online"],
+      depois: ["dinheiro", "maquininha", "apos-pesagem"],
+    })
+  })
+
+  test("sem corte por quilo, ou numa loja que não aceita, ficam as formas de sempre", () => {
+    useLojaAtual.getState().escolher("acougue-sabor-da-carne")
+    expect(formasDePagamento([pacote]).depois).toEqual(["dinheiro", "maquininha"])
+    useLojaAtual.getState().escolher("casa-da-pizza")
+    expect(formasDePagamento([corte]).depois).toEqual(["dinheiro", "maquininha"])
+  })
+
+  test("pagar após a pesagem não pede CPF nem troco", () => {
+    const dados = {
+      ...valoresIniciais(null),
+      nome: "Ana",
+      whatsapp: "(12) 99111-2233",
+      tipo: "retirada" as const,
+      pagamento: "apos-pesagem" as const,
+      total: 50,
+    }
+    expect(esquemaCheckout.safeParse(dados).success).toBe(true)
+  })
+})
+
+describe("no salão", () => {
+  afterEach(() => useLojaAtual.setState(useLojaAtual.getInitialState(), true))
+  const dados = (agendamento: string) => ({
+    ...valoresIniciais(null),
+    nome: "Ana",
+    whatsapp: "(12) 99111-2233",
+    pagamento: "maquininha" as const,
+    agendamento,
+    total: 55,
+  })
+
+  test("o salão só atende no salão: o checkout já começa assim", () => {
+    useLojaAtual.getState().escolher("emporio-das-deusas")
+    expect(valoresIniciais(null).tipo).toBe("retirada")
+  })
+
+  test("pede o horário do atendimento", () => {
+    useLojaAtual.getState().escolher("emporio-das-deusas")
+    const semHorario = esquemaCheckout.safeParse(dados(""))
+    expect(semHorario.success ? [] : semHorario.error.issues.map((erro) => erro.message)).toEqual([
+      "Escolha o dia e o horário",
+    ])
+    expect(esquemaCheckout.safeParse(dados("2026-11-14T15:30:00.000Z")).success).toBe(true)
+  })
+
+  test("nas outras lojas, o horário não é pedido", () => {
+    expect(esquemaCheckout.safeParse({ ...dados(""), tipo: "retirada" }).success).toBe(true)
   })
 })
