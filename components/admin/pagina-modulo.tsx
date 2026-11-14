@@ -59,6 +59,11 @@ const PAGINAS: Partial<Record<ModuloId, ComponentType>> = {
   validade: PaginaValidade,
 }
 
+/** Enquanto a página do módulo não chega (ou lê a URL no navegador). */
+export function CarregandoModulo() {
+  return <Skeleton className="m-4 h-48 rounded-xl md:m-6" />
+}
+
 /**
  * Corpo da página de um módulo. Se o segmento escolhido não tem o módulo,
  * avisa e leva para a visão geral; senão mostra a página dele.
@@ -71,7 +76,7 @@ export function PaginaModulo({ id }: { id: ModuloId }) {
 
   if (!temModulo(segmento, id)) {
     // Antes de ler o segmento salvo, não dá para saber se o aviso vale.
-    if (!hidratado) return <Skeleton className="m-4 h-48 rounded-xl md:m-6" />
+    if (!hidratado) return <CarregandoModulo />
     const Icone = modulo.icone
     return (
       <Empty className="m-4 border md:m-6">
