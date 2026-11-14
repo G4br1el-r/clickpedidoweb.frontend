@@ -1,22 +1,14 @@
 "use client"
 
 import {
-  BarChart3Icon,
   ChevronDownIcon,
   ChevronRightIcon,
-  ExternalLinkIcon,
-  HomeIcon,
   LockIcon,
-  type LucideIcon,
-  ReceiptTextIcon,
   SearchIcon,
   SettingsIcon,
   SparklesIcon,
-  UsersIcon,
-  UtensilsCrossedIcon,
 } from "lucide-react"
 import { motion } from "motion/react"
-import Image from "next/image"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { type ReactNode, useId, useState } from "react"
@@ -45,7 +37,6 @@ import {
   SidebarHeader,
   SidebarInput,
   SidebarMenu,
-  SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarMenuSub,
@@ -55,19 +46,9 @@ import {
 } from "@/components/ui/sidebar"
 import { useConfig } from "@/lib/admin/config"
 import { GRUPOS, type GrupoSecoes, normalizar, SECOES } from "@/lib/admin/secoes"
-import { clienteAtual } from "@/lib/cliente"
 import { liberarPro } from "./campos"
-
-type ItemPainel = { titulo: string; href?: string; icone: LucideIcon }
-
-/** Áreas do painel. As que ainda não existem aparecem como "Em breve". */
-const AREAS: ItemPainel[] = [
-  { titulo: "Início", href: "/admin", icone: HomeIcon },
-  { titulo: "Pedidos", icone: ReceiptTextIcon },
-  { titulo: "Cardápio", icone: UtensilsCrossedIcon },
-  { titulo: "Clientes", icone: UsersIcon },
-  { titulo: "Relatórios", icone: BarChart3Icon },
-]
+import { MarcaLoja } from "./marca-loja"
+import { MenuModulos } from "./menu-modulos"
 
 /**
  * Plano Pro, só aqui na lateral: "Liberar todos" desbloqueia tudo de uma vez;
@@ -227,11 +208,9 @@ function TituloGrupo({ controla, children }: { controla: string; children: strin
 /** Barra lateral do painel (Sidebar do shadcn), com busca entre as configurações. */
 export function BarraLateralAdmin() {
   const caminho = usePathname()
-  const nomeLoja = useConfig((estado) => estado.config.identidade.nome)
   const [busca, setBusca] = useState("")
-  const [painelAberto, setPainelAberto] = useState(true)
-  const [configAberto, setConfigAberto] = useState(true)
-  const idPainel = useId()
+  // Como os outros grupos: começa fechado e só abre sozinho numa página de configuração.
+  const [configAberto, setConfigAberto] = useState(() => caminho.startsWith("/admin/configuracoes"))
   const idConfig = useId()
   const termo = normalizar(busca)
   const encontradas = termo
@@ -243,65 +222,15 @@ export function BarraLateralAdmin() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader>
-        <SidebarMenu>
-          <SidebarMenuItem>
-            <SidebarMenuButton size="lg" asChild tooltip="Ver a loja">
-              <Link href="/" target="_blank">
-                <Image
-                  src={clienteAtual.logo}
-                  alt=""
-                  className="size-8 shrink-0 rounded-lg object-cover"
-                  sizes="32px"
-                />
-                <span className="grid min-w-0 flex-1 leading-tight">
-                  <span className="truncate font-semibold">{nomeLoja}</span>
-                  <span className="truncate text-xs text-muted-foreground">ClickPedido</span>
-                </span>
-                <ExternalLinkIcon className="size-4 text-muted-foreground" />
-              </Link>
-            </SidebarMenuButton>
-          </SidebarMenuItem>
-        </SidebarMenu>
+        <MarcaLoja />
       </SidebarHeader>
 
       <SidebarContent>
-        <Collapsible open={painelAberto} onOpenChange={setPainelAberto} asChild>
-          <SidebarGroup>
-            <TituloGrupo controla={idPainel}>Painel</TituloGrupo>
-            <ConteudoAnimado id={idPainel} aberto={painelAberto}>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {AREAS.map(({ titulo, href, icone: Icone }) => (
-                    <SidebarMenuItem key={titulo}>
-                      {href ? (
-                        <SidebarMenuButton asChild isActive={caminho === href} tooltip={titulo}>
-                          <Link href={href}>
-                            <Icone />
-                            <span>{titulo}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      ) : (
-                        <>
-                          <SidebarMenuButton disabled tooltip={`${titulo} (em breve)`}>
-                            <Icone />
-                            <span>{titulo}</span>
-                          </SidebarMenuButton>
-                          <SidebarMenuBadge className="text-[10px] font-medium text-muted-foreground">
-                            Em breve
-                          </SidebarMenuBadge>
-                        </>
-                      )}
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </ConteudoAnimado>
-          </SidebarGroup>
-        </Collapsible>
+        <MenuModulos />
 
         <Collapsible open={configAberto} onOpenChange={setConfigAberto} asChild>
           <SidebarGroup>
-            <TituloGrupo controla={idConfig}>Configurações</TituloGrupo>
+            <TituloGrupo controla={idConfig}>Personalizar loja</TituloGrupo>
             <ConteudoAnimado id={idConfig} aberto={configAberto}>
               <SidebarGroupContent className="flex flex-col gap-2">
                 <div className="relative group-data-[collapsible=icon]:hidden">
@@ -341,11 +270,11 @@ export function BarraLateralAdmin() {
                         <SidebarMenuButton
                           asChild
                           isActive={caminho === "/admin/configuracoes"}
-                          tooltip="Visão geral"
+                          tooltip="Todas as opções"
                         >
                           <Link href="/admin/configuracoes">
                             <SettingsIcon />
-                            <span>Visão geral</span>
+                            <span>Todas as opções</span>
                           </Link>
                         </SidebarMenuButton>
                       </SidebarMenuItem>

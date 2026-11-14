@@ -1,4 +1,5 @@
 import type { Metadata } from "next"
+import { NuqsAdapter } from "nuqs/adapters/next/app"
 import type { ReactNode } from "react"
 import { ShellAdmin } from "@/components/admin/shell-admin"
 import { VARIAVEIS_FONTES } from "@/lib/admin/fontes"
@@ -23,7 +24,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
     <>
       {/* biome-ignore lint/security/noDangerouslySetInnerHtml: CSS gerado de cores fixas do painel. */}
       <style dangerouslySetInnerHTML={{ __html: temaParaCss(TEMA_PAINEL) }} />
-      <ShellAdmin className={VARIAVEIS_FONTES}>{children}</ShellAdmin>
+      <NuqsAdapter>
+        <ShellAdmin className={VARIAVEIS_FONTES}>{children}</ShellAdmin>
+      </NuqsAdapter>
     </>
   )
 }

@@ -1,0 +1,763 @@
+import { addDays, format, subDays, subHours, subMinutes } from "date-fns"
+import type {
+  CatalogoLoja,
+  DadosMedicamento,
+  Lote,
+  MovimentoControlado,
+  Produto,
+  Receita,
+} from "@/lib/admin/dados/tipos"
+import { clientesDemo } from "./clientes"
+
+/**
+ * Drogaria Bem Estar (farmácia): loja fictícia de demonstração. Os registros no MS,
+ * lotes e documentos são inventados; os nomes seguem princípios ativos comuns no balcão.
+ */
+
+/** Farmacêutica responsável técnica, que confere as receitas. */
+export const farmaceuticaResponsavel = { nome: "Dra. Camila Rocha", crf: "CRF-SP 45.812" }
+
+const categorias = [
+  ["dor-febre", "Dor e febre"],
+  ["gripe", "Gripe e resfriado"],
+  ["antibioticos", "Antibióticos"],
+  ["uso-continuo", "Uso contínuo"],
+  ["controlados", "Controlados"],
+  ["vitaminas", "Vitaminas e suplementos"],
+  ["dermocosmeticos", "Dermocosméticos"],
+  ["higiene", "Higiene e cuidados"],
+  ["mamae-bebe", "Mamãe e bebê"],
+] as const
+
+type Categoria = (typeof categorias)[number][0]
+
+let ordem = 0
+function produto(
+  id: string,
+  categoria: Categoria,
+  nome: string,
+  preco: number,
+  descricao: string,
+  medicamento?: DadosMedicamento,
+  extra: Partial<Produto> = {},
+): Produto {
+  ordem += 1
+  return {
+    id: `prod-${id}`,
+    categoriaId: `cat-${categoria}`,
+    nome,
+    descricao,
+    preco,
+    precoBalcao: preco,
+    ativo: true,
+    disponivel: true,
+    destaque: false,
+    oferta: false,
+    ordem,
+    unidade: "un",
+    grupos: [],
+    ...(medicamento ? { medicamento: { pmc: Math.round(preco * 118) / 100, ...medicamento } } : {}),
+    ...extra,
+  }
+}
+
+const med = (
+  tarja: DadosMedicamento["tarja"],
+  tipo: DadosMedicamento["tipo"],
+  principioAtivo: string,
+  apresentacao: string,
+  laboratorio: string,
+  registroMs: string,
+  resto: Partial<DadosMedicamento> = {},
+): DadosMedicamento => ({
+  tarja,
+  tipo,
+  principioAtivo,
+  apresentacao,
+  laboratorio,
+  registroMs,
+  ...resto,
+})
+
+const produtos: Produto[] = [
+  // Dor e febre: venda livre (MIP).
+  produto(
+    "dipirona-500",
+    "dor-febre",
+    "Dipirona 500 mg",
+    8.9,
+    "Analgésico e antitérmico. Caixa com 20 comprimidos.",
+    med(
+      "sem-tarja",
+      "generico",
+      "Dipirona monoidratada",
+      "500 mg, 20 comprimidos",
+      "EMS",
+      "1023504210011",
+    ),
+    { destaque: true },
+  ),
+  produto(
+    "paracetamol-750",
+    "dor-febre",
+    "Paracetamol 750 mg",
+    11.5,
+    "Para dor e febre. Caixa com 20 comprimidos.",
+    med(
+      "sem-tarja",
+      "generico",
+      "Paracetamol",
+      "750 mg, 20 comprimidos",
+      "Medley",
+      "1083500940025",
+    ),
+  ),
+  produto(
+    "ibuprofeno-400",
+    "dor-febre",
+    "Ibuprofeno 400 mg",
+    14.9,
+    "Anti-inflamatório. Caixa com 10 cápsulas.",
+    med(
+      "sem-tarja",
+      "similar",
+      "Ibuprofeno",
+      "400 mg, 10 cápsulas",
+      "Neo Química",
+      "1556600160031",
+    ),
+    { precoOriginal: 17.9, oferta: true, preco: 14.9 },
+  ),
+  produto(
+    "dorflex",
+    "dor-febre",
+    "Relaxante muscular com dipirona",
+    19.9,
+    "Dipirona, orfenadrina e cafeína. Caixa com 36 comprimidos.",
+    med(
+      "sem-tarja",
+      "referencia",
+      "Dipirona + orfenadrina + cafeína",
+      "36 comprimidos",
+      "Sanofi",
+      "1832603230042",
+    ),
+    { destaque: true },
+  ),
+  // Gripe.
+  produto(
+    "antigripal",
+    "gripe",
+    "Antigripal em sachê",
+    24.9,
+    "Paracetamol, fenilefrina e clorfeniramina. 10 sachês sabor limão.",
+    med(
+      "sem-tarja",
+      "similar",
+      "Paracetamol + fenilefrina + clorfeniramina",
+      "10 sachês",
+      "Eurofarma",
+      "1004302150013",
+    ),
+  ),
+  produto(
+    "xarope-tosse",
+    "gripe",
+    "Xarope expectorante",
+    29.5,
+    "Acebrofilina adulto. Frasco com 120 mL.",
+    med("vermelha", "generico", "Acebrofilina", "10 mg/mL, 120 mL", "Germed", "1058300220027"),
+  ),
+  produto(
+    "soro-nasal",
+    "gripe",
+    "Soro fisiológico nasal",
+    9.9,
+    "Cloreto de sódio 0,9%. Spray com 50 mL.",
+    med("sem-tarja", "similar", "Cloreto de sódio 0,9%", "Spray 50 mL", "Farmax", "1135000410019"),
+  ),
+  // Antibióticos: tarja vermelha com retenção da receita.
+  produto(
+    "amoxicilina-500",
+    "antibioticos",
+    "Amoxicilina 500 mg",
+    27.9,
+    "Antibiótico. Caixa com 21 cápsulas. Venda com retenção da receita.",
+    med(
+      "vermelha-retencao",
+      "generico",
+      "Amoxicilina tri-hidratada",
+      "500 mg, 21 cápsulas",
+      "EMS",
+      "1023508930064",
+      { lista: "antimicrobiano" },
+    ),
+  ),
+  produto(
+    "azitromicina-500",
+    "antibioticos",
+    "Azitromicina 500 mg",
+    32.5,
+    "Antibiótico. Caixa com 3 comprimidos. Venda com retenção da receita.",
+    med(
+      "vermelha-retencao",
+      "generico",
+      "Azitromicina di-hidratada",
+      "500 mg, 3 comprimidos",
+      "Medley",
+      "1083502950078",
+      { lista: "antimicrobiano" },
+    ),
+  ),
+  produto(
+    "cefalexina-500",
+    "antibioticos",
+    "Cefalexina 500 mg",
+    38.9,
+    "Antibiótico. Caixa com 8 cápsulas. Venda com retenção da receita.",
+    med(
+      "vermelha-retencao",
+      "generico",
+      "Cefalexina monoidratada",
+      "500 mg, 8 cápsulas",
+      "Eurofarma",
+      "1004306120052",
+      { lista: "antimicrobiano" },
+    ),
+  ),
+  // Uso contínuo: tarja vermelha, receita simples.
+  produto(
+    "losartana-50",
+    "uso-continuo",
+    "Losartana 50 mg",
+    12.9,
+    "Para pressão alta. Caixa com 30 comprimidos. Também no Farmácia Popular.",
+    med(
+      "vermelha",
+      "generico",
+      "Losartana potássica",
+      "50 mg, 30 comprimidos",
+      "Prati-Donaduzzi",
+      "1219702460039",
+    ),
+    { destaque: true },
+  ),
+  produto(
+    "metformina-850",
+    "uso-continuo",
+    "Metformina 850 mg",
+    10.9,
+    "Para diabetes tipo 2. Caixa com 30 comprimidos.",
+    med(
+      "vermelha",
+      "generico",
+      "Cloridrato de metformina",
+      "850 mg, 30 comprimidos",
+      "Merck",
+      "1008901930081",
+    ),
+  ),
+  produto(
+    "sinvastatina-20",
+    "uso-continuo",
+    "Sinvastatina 20 mg",
+    15.9,
+    "Para colesterol. Caixa com 30 comprimidos.",
+    med("vermelha", "generico", "Sinvastatina", "20 mg, 30 comprimidos", "EMS", "1023503490045"),
+  ),
+  produto(
+    "levotiroxina-50",
+    "uso-continuo",
+    "Levotiroxina 50 mcg",
+    18.5,
+    "Para tireoide. Caixa com 30 comprimidos. Tomar em jejum.",
+    med(
+      "vermelha",
+      "referencia",
+      "Levotiroxina sódica",
+      "50 mcg, 30 comprimidos",
+      "Merck",
+      "1008900180072",
+    ),
+  ),
+  produto(
+    "insulina-nph",
+    "uso-continuo",
+    "Insulina humana NPH",
+    54.9,
+    "Frasco com 10 mL (100 UI/mL). Conservar na geladeira, entre 2 °C e 8 °C.",
+    med(
+      "vermelha",
+      "referencia",
+      "Insulina humana NPH",
+      "100 UI/mL, frasco 10 mL",
+      "Novo Nordisk",
+      "1176600080016",
+      { refrigerado: true },
+    ),
+  ),
+  // Controlados: Portaria 344/98.
+  produto(
+    "sertralina-50",
+    "controlados",
+    "Sertralina 50 mg",
+    34.9,
+    "Antidepressivo. Caixa com 30 comprimidos. Receita de controle especial retida.",
+    med(
+      "vermelha-retencao",
+      "generico",
+      "Cloridrato de sertralina",
+      "50 mg, 30 comprimidos",
+      "Medley",
+      "1083503310057",
+      { lista: "C1" },
+    ),
+  ),
+  produto(
+    "fluoxetina-20",
+    "controlados",
+    "Fluoxetina 20 mg",
+    22.9,
+    "Antidepressivo. Caixa com 30 cápsulas. Receita de controle especial retida.",
+    med(
+      "vermelha-retencao",
+      "generico",
+      "Cloridrato de fluoxetina",
+      "20 mg, 30 cápsulas",
+      "EMS",
+      "1023507780033",
+      { lista: "C1" },
+    ),
+  ),
+  produto(
+    "clonazepam-2",
+    "controlados",
+    "Clonazepam 2 mg",
+    16.9,
+    "Ansiolítico. Caixa com 30 comprimidos. Só com notificação de receita B (azul).",
+    med("preta", "generico", "Clonazepam", "2 mg, 30 comprimidos", "Germed", "1058302740069", {
+      lista: "B1",
+    }),
+  ),
+  produto(
+    "zolpidem-10",
+    "controlados",
+    "Zolpidem 10 mg",
+    41.9,
+    "Indutor do sono. Caixa com 20 comprimidos. Só com notificação de receita B (azul).",
+    med(
+      "preta",
+      "generico",
+      "Hemitartarato de zolpidem",
+      "10 mg, 20 comprimidos",
+      "Eurofarma",
+      "1004309930011",
+      { lista: "B1" },
+    ),
+  ),
+  produto(
+    "metilfenidato-10",
+    "controlados",
+    "Metilfenidato 10 mg",
+    48.9,
+    "Para TDAH. Caixa com 30 comprimidos. Só com notificação de receita A (amarela).",
+    med(
+      "preta",
+      "referencia",
+      "Cloridrato de metilfenidato",
+      "10 mg, 30 comprimidos",
+      "Novartis",
+      "1006802830047",
+      { lista: "A3" },
+    ),
+  ),
+  // Venda livre, sem dados de medicamento.
+  produto(
+    "vitamina-c",
+    "vitaminas",
+    "Vitamina C efervescente 1 g",
+    19.9,
+    "Tubo com 10 comprimidos efervescentes, sabor laranja.",
+    undefined,
+    { destaque: true },
+  ),
+  produto("vitamina-d", "vitaminas", "Vitamina D3 2.000 UI", 39.9, "Frasco com 60 cápsulas moles."),
+  produto("omega-3", "vitaminas", "Ômega 3 1.000 mg", 49.9, "Frasco com 120 cápsulas.", undefined, {
+    precoOriginal: 64.9,
+    oferta: true,
+  }),
+  produto(
+    "protetor-50",
+    "dermocosmeticos",
+    "Protetor solar facial FPS 50",
+    69.9,
+    "Toque seco, com cor. 50 g.",
+    undefined,
+    { destaque: true },
+  ),
+  produto(
+    "hidratante",
+    "dermocosmeticos",
+    "Hidratante corporal pele seca",
+    42.9,
+    "Com ureia 10%. 400 mL.",
+  ),
+  produto("creme-dental", "higiene", "Creme dental com flúor", 6.9, "Proteção anticáries. 90 g."),
+  produto(
+    "escova-dental",
+    "higiene",
+    "Escova dental macia",
+    9.9,
+    "Cerdas macias, cabeça compacta.",
+  ),
+  produto("alcool-gel", "higiene", "Álcool em gel 70%", 12.9, "Frasco com 500 mL."),
+  produto(
+    "fralda-g",
+    "mamae-bebe",
+    "Fralda infantil G",
+    69.9,
+    "Pacote com 46 unidades, até 12 horas seca.",
+    undefined,
+    { precoOriginal: 79.9, oferta: true },
+  ),
+  produto(
+    "pomada-assaduras",
+    "mamae-bebe",
+    "Pomada para assaduras",
+    24.9,
+    "Óxido de zinco e vitaminas A e D. 45 g.",
+  ),
+]
+
+export const catalogoFarmacia: CatalogoLoja = {
+  loja: {
+    nome: "Drogaria Bem Estar",
+    slogan: "Cuidado de verdade, perto de você",
+    telefone: "12988776655",
+    whatsapp: "12988776655",
+    endereco: "Avenida São João, 870 - Jardim Esplanada, São José dos Campos - SP",
+    textoHorario: "Todos os dias, das 7h às 23h",
+    controleAutomatico: true,
+    aberta: true,
+    mensagemFechada: "Estamos fechados agora. Abrimos todos os dias, às 7h.",
+    horarios: [0, 1, 2, 3, 4, 5, 6].map((dia) => ({
+      dia,
+      aberto: true,
+      abre: "07:00",
+      fecha: "23:00",
+    })),
+    aceitaEntrega: true,
+    aceitaRetirada: true,
+    taxaEntregaPadrao: 5,
+    pedidoMinimo: 15,
+    tempoEntrega: "30 a 50 min",
+    tempoRetirada: "15 min",
+    cidadesAtendidas: ["São José dos Campos"],
+    pagamentoOnlineConectado: true,
+    pagamentos: {
+      pix: true,
+      "cartao-online": true,
+      dinheiro: true,
+      "cartao-na-entrega": true,
+      "pagar-apos-pesagem": false,
+    },
+    impressaoAutomatica: false,
+    cortarPapel: true,
+    som: "suave",
+    vitrines: {
+      destaques: { titulo: "Mais vendidos", ativo: true },
+      ofertas: { titulo: "Ofertas da semana", ativo: true },
+    },
+  },
+  categorias: categorias.map(([id, nome], indice) => ({
+    id: `cat-${id}`,
+    nome,
+    ordem: indice + 1,
+    ativa: true,
+  })),
+  produtos,
+  mesas: [],
+  motoboys: [
+    { id: "moto-1", nome: "Rodrigo Alves", telefone: "12991230011", ativo: true },
+    { id: "moto-2", nome: "Felipe Nunes", telefone: "12992340022", ativo: true },
+  ],
+  bairros: [
+    ["Jardim Esplanada", 5],
+    ["Vila Adyana", 5],
+    ["Jardim Aquarius", 7],
+    ["Centro", 6],
+    ["Urbanova", 10],
+  ].map(([nome, taxa]) => ({
+    id: `bairro-${String(nome)
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/\s+/g, "-")}`,
+    cidade: "São José dos Campos",
+    nome: String(nome),
+    taxa: Number(taxa),
+    ativo: true,
+  })),
+  clientes: clientesDemo,
+}
+
+const dia = (data: Date) => format(data, "yyyy-MM-dd")
+const iso = (data: Date) => data.toISOString()
+
+/**
+ * Receitas recebidas hoje, com datas contadas de `agora`: a demonstração sempre tem
+ * uma em dia, uma vencida, uma com o papel errado e uma com o CRM incompleto.
+ */
+export function receitasDemo(agora: Date): Receita[] {
+  return [
+    {
+      id: "rec-1001",
+      recebidaEm: iso(subMinutes(agora, 12)),
+      canal: "site",
+      pedidoNumero: 4821,
+      paciente: { nome: "Ana Paula Ferreira", telefone: "12937124519" },
+      prescritor: { nome: "Dr. Paulo Mendes", conselho: "CRM", numero: "143278", uf: "SP" },
+      tipo: "antimicrobiano",
+      emitidaEm: dia(subDays(agora, 2)),
+      itens: [
+        {
+          produtoId: "prod-amoxicilina-500",
+          quantidade: 1,
+          posologia: "1 cápsula a cada 8 horas, por 7 dias",
+        },
+      ],
+    },
+    {
+      id: "rec-1002",
+      recebidaEm: iso(subMinutes(agora, 26)),
+      canal: "whatsapp",
+      paciente: { nome: "Bruno Carvalho", telefone: "12938359086" },
+      prescritor: { nome: "Dra. Helena Prado", conselho: "CRM", numero: "98314", uf: "SP" },
+      tipo: "notificacao-b",
+      emitidaEm: dia(subDays(agora, 5)),
+      itens: [{ produtoId: "prod-clonazepam-2", quantidade: 1, posologia: "1 comprimido à noite" }],
+    },
+    {
+      id: "rec-1003",
+      recebidaEm: iso(subMinutes(agora, 41)),
+      canal: "balcao",
+      paciente: { nome: "Camila Rocha Lima", telefone: "12939593653" },
+      prescritor: { nome: "Dr. Marcos Teixeira", conselho: "CRM", numero: "77120", uf: "RJ" },
+      tipo: "antimicrobiano",
+      // Antimicrobiano vale 10 dias: esta já venceu.
+      emitidaEm: dia(subDays(agora, 14)),
+      itens: [
+        {
+          produtoId: "prod-azitromicina-500",
+          quantidade: 1,
+          posologia: "1 comprimido ao dia, por 3 dias",
+        },
+      ],
+    },
+    {
+      id: "rec-1004",
+      recebidaEm: iso(subHours(agora, 1)),
+      canal: "site",
+      pedidoNumero: 4817,
+      paciente: { nome: "Daniel Souza", telefone: "12940828220" },
+      prescritor: { nome: "Dra. Fernanda Luz", conselho: "CRM", numero: "201544", uf: "SP" },
+      // Zolpidem pede a notificação azul: chegou numa receita simples.
+      tipo: "simples",
+      emitidaEm: dia(subDays(agora, 1)),
+      itens: [
+        { produtoId: "prod-zolpidem-10", quantidade: 1, posologia: "1 comprimido ao deitar" },
+        { produtoId: "prod-losartana-50", quantidade: 2, posologia: "1 comprimido pela manhã" },
+      ],
+    },
+    {
+      id: "rec-1005",
+      recebidaEm: iso(subHours(agora, 2)),
+      canal: "whatsapp",
+      paciente: { nome: "Eduarda Lima", telefone: "12942062787" },
+      prescritor: { nome: "Dr. Caio Ramos", conselho: "CRM", numero: "55", uf: "SP" },
+      tipo: "controle-especial",
+      emitidaEm: dia(subDays(agora, 3)),
+      itens: [
+        { produtoId: "prod-sertralina-50", quantidade: 1, posologia: "1 comprimido pela manhã" },
+      ],
+    },
+    {
+      id: "rec-1006",
+      recebidaEm: iso(subHours(agora, 3)),
+      canal: "site",
+      pedidoNumero: 4809,
+      paciente: { nome: "Fábio Martins", telefone: "12943297354" },
+      prescritor: { nome: "Dra. Renata Galvão", conselho: "CRM", numero: "118802", uf: "SP" },
+      tipo: "notificacao-a",
+      emitidaEm: dia(subDays(agora, 4)),
+      itens: [
+        { produtoId: "prod-metilfenidato-10", quantidade: 1, posologia: "1 comprimido pela manhã" },
+      ],
+    },
+    {
+      id: "rec-1007",
+      recebidaEm: iso(subHours(agora, 4)),
+      canal: "balcao",
+      paciente: { nome: "Gabriela Nunes", telefone: "12944531921" },
+      prescritor: { nome: "Dr. Otávio Reis", conselho: "CRM", numero: "64410", uf: "MG" },
+      tipo: "simples",
+      emitidaEm: dia(subDays(agora, 40)),
+      itens: [
+        {
+          produtoId: "prod-metformina-850",
+          quantidade: 2,
+          posologia: "1 comprimido no almoço e no jantar",
+        },
+        { produtoId: "prod-insulina-nph", quantidade: 1, posologia: "10 UI antes do café" },
+      ],
+    },
+  ]
+}
+
+/** Lotes em estoque: alguns vencidos e vencendo, para a tela ter o que mostrar. */
+export function lotesDemo(agora: Date): Lote[] {
+  const lote = (
+    produtoId: string,
+    codigo: string,
+    diasParaVencer: number,
+    quantidade: number,
+    minimo = 5,
+  ): Lote => ({
+    id: `lote-${codigo.toLowerCase()}`,
+    produtoId: `prod-${produtoId}`,
+    codigo,
+    validade: dia(addDays(agora, diasParaVencer)),
+    quantidade,
+    minimo,
+  })
+  return [
+    lote("dipirona-500", "DP25K09", -6, 4),
+    lote("dipirona-500", "DP26C14", 410, 86, 20),
+    lote("paracetamol-750", "PC26A02", 21, 18, 10),
+    lote("ibuprofeno-400", "IB26F30", 260, 40, 10),
+    lote("dorflex", "DF26B11", 75, 32, 10),
+    lote("antigripal", "AG25L20", 9, 12),
+    lote("xarope-tosse", "XT26E05", 190, 14),
+    lote("soro-nasal", "SN26H22", 330, 25),
+    lote("amoxicilina-500", "AM26D17", 140, 22, 8),
+    lote("azitromicina-500", "AZ26A08", 55, 6, 6),
+    lote("cefalexina-500", "CF25M01", -2, 3),
+    lote("losartana-50", "LS26G13", 300, 60, 20),
+    lote("metformina-850", "MT26B27", 85, 15, 20),
+    lote("sinvastatina-20", "SV26I04", 240, 34, 10),
+    lote("levotiroxina-50", "LV26C19", 120, 21, 10),
+    lote("insulina-nph", "IN26A06", 28, 7, 6),
+    lote("sertralina-50", "SR26F21", 210, 18, 6),
+    lote("fluoxetina-20", "FX26D02", 170, 24, 6),
+    lote("clonazepam-2", "CZ26E15", 260, 27, 6),
+    lote("zolpidem-10", "ZP26B09", 64, 9, 4),
+    lote("metilfenidato-10", "MF26A30", 180, 5, 4),
+    lote("vitamina-c", "VC26J18", 14, 30, 10),
+    lote("protetor-50", "PS27A10", 520, 16, 6),
+    lote("fralda-g", "FR27C01", 700, 3, 6),
+  ]
+}
+
+/** Escrituração dos controlados e antimicrobianos nos últimos dias. */
+export function movimentosDemo(agora: Date): MovimentoControlado[] {
+  const movimento = (
+    id: string,
+    produtoId: string,
+    diasAtras: number,
+    tipo: MovimentoControlado["tipo"],
+    quantidade: number,
+    documento: string,
+    paciente?: string,
+    prescritor?: string,
+  ): MovimentoControlado => ({
+    id,
+    produtoId: `prod-${produtoId}`,
+    em: iso(subHours(subDays(agora, diasAtras), 3)),
+    tipo,
+    quantidade,
+    documento,
+    ...(paciente ? { paciente } : {}),
+    ...(prescritor ? { prescritor } : {}),
+  })
+  return [
+    movimento("mov-01", "clonazepam-2", 9, "entrada", 30, "NF 18.233"),
+    movimento("mov-02", "sertralina-50", 9, "entrada", 20, "NF 18.233"),
+    movimento("mov-03", "fluoxetina-20", 9, "entrada", 25, "NF 18.233"),
+    movimento("mov-04", "zolpidem-10", 9, "entrada", 10, "NF 18.233"),
+    movimento("mov-05", "metilfenidato-10", 8, "entrada", 6, "NF 7.411"),
+    movimento("mov-06", "amoxicilina-500", 8, "entrada", 24, "NF 7.411"),
+    movimento("mov-07", "azitromicina-500", 8, "entrada", 8, "NF 7.411"),
+    movimento("mov-08", "cefalexina-500", 8, "entrada", 3, "NF 7.411"),
+    movimento(
+      "mov-09",
+      "clonazepam-2",
+      6,
+      "saida",
+      2,
+      "Notificação B 3.104.552",
+      "Marta Silveira",
+      "CRM 98314/SP",
+    ),
+    movimento(
+      "mov-10",
+      "sertralina-50",
+      5,
+      "saida",
+      1,
+      "Receita 0412",
+      "José Antunes",
+      "CRM 143278/SP",
+    ),
+    movimento(
+      "mov-11",
+      "amoxicilina-500",
+      4,
+      "saida",
+      1,
+      "Receita 0415",
+      "Lúcia Prado",
+      "CRM 64410/MG",
+    ),
+    movimento(
+      "mov-12",
+      "metilfenidato-10",
+      3,
+      "saida",
+      1,
+      "Notificação A 0.887.120",
+      "Pedro Henrique Costa",
+      "CRM 118802/SP",
+    ),
+    movimento(
+      "mov-13",
+      "fluoxetina-20",
+      2,
+      "saida",
+      1,
+      "Receita 0420",
+      "Sílvia Ramos",
+      "CRM 201544/SP",
+    ),
+    movimento(
+      "mov-14",
+      "zolpidem-10",
+      1,
+      "saida",
+      1,
+      "Notificação B 3.104.601",
+      "Rafael Moreira",
+      "CRM 98314/SP",
+    ),
+    movimento(
+      "mov-15",
+      "amoxicilina-500",
+      1,
+      "saida",
+      1,
+      "Receita 0423",
+      "Tânia Freitas",
+      "CRM 77120/RJ",
+    ),
+    movimento("mov-16", "fluoxetina-20", 1, "perda", 1, "Embalagem avariada"),
+  ]
+}

@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Drogaria Bem Estar">
+  <rect width="64" height="64" rx="14" fill="#0F766E"/>
+  <path d="M26 14h12v12h12v12H38v12H26V38H14V26h12z" fill="#FFFFFF"/>
+  <path d="M32 44.5c-4.6-3.2-8-6-8-9.6a4.4 4.4 0 0 1 8-2.5 4.4 4.4 0 0 1 8 2.5c0 3.6-3.4 6.4-8 9.6z" fill="#16A34A"/>
+</svg>

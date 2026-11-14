@@ -34,6 +34,13 @@ Object.assign(globalThis, {
 
 // jsdom não rola elementos; a barra de categorias centraliza a ativa com scrollTo.
 Element.prototype.scrollTo ??= () => {}
+// A lista dos filtros (cmdk) leva a opção marcada até a vista.
+Element.prototype.scrollIntoView ??= () => {}
+// O Select do Radix captura o ponteiro ao abrir.
+Element.prototype.hasPointerCapture ??= () => false
+Element.prototype.releasePointerCapture ??= () => {}
+// O Drawer (vaul) da janela do produto também captura o ponteiro ao tocar.
+Element.prototype.setPointerCapture ??= () => {}
 
 // next/font só funciona dentro do build do Next.
 vi.mock("next/font/google", () => {

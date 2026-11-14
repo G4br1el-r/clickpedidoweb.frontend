@@ -13,18 +13,24 @@ import {
 } from "@/components/ui/breadcrumb"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
+import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { type ModuloId, tituloDoModulo } from "@/lib/admin/segmentos-painel"
+import { SeletorSegmento } from "./seletor-segmento"
 
-export type Trilha = { titulo: string; href?: string }[]
+/** `modulo`: o título segue o nome do módulo no segmento escolhido (ex.: Produtos na farmácia). */
+export type Trilha = { titulo: string; href?: string; modulo?: ModuloId }[]
 
 /** Topo de cada página do painel: abre e fecha a barra lateral, mostra onde você está e as ações. */
 export function CabecalhoAdmin({ trilha, acoes }: { trilha: Trilha; acoes?: ReactNode }) {
+  const segmento = useSegmentoAtual((estado) => estado.segmento)
   return (
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur md:px-4">
       <SidebarTrigger className="-ml-1" />
       <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
       <Breadcrumb className="min-w-0">
         <BreadcrumbList className="flex-nowrap">
-          {trilha.map((item, indice) => {
+          {trilha.map(({ modulo, ...resto }, indice) => {
+            const item = modulo ? { ...resto, titulo: tituloDoModulo(modulo, segmento) } : resto
             const ultimo = indice === trilha.length - 1
             return (
               <Fragment key={item.titulo}>
@@ -45,6 +51,7 @@ export function CabecalhoAdmin({ trilha, acoes }: { trilha: Trilha; acoes?: Reac
       </Breadcrumb>
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         {acoes}
+        <SeletorSegmento />
         <AlternarTema />
       </div>
     </header>

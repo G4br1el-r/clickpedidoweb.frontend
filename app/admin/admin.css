@@ -161,3 +161,29 @@
     background-position: -30% 0;
   }
 }
+
+/*
+ * Cor dos gráficos do painel: uma série só, validada pela skill de dataviz
+ * (contraste ≥ 3:1 sobre o cartão nos dois temas).
+ */
+:root {
+  --grafico: #2a78d6;
+}
+.dark {
+  --grafico: #3987e5;
+}
+
+/* Barras de proporção das listas da visão geral: a mesma cor dos gráficos. */
+.barras-do-grafico [data-slot="progress-indicator"] {
+  background-color: var(--grafico);
+}
+
+/*
+ * No escuro, o painel usa o primário claro (o neutro do shadcn): a cor quase preta
+ * do tema some no fundo escuro, e chaves ligadas e botões principais ficam ilegíveis.
+ */
+:root.dark {
+  --primary: #f4f4f5;
+  --primary-foreground: #18181c;
+  --ring: #a1a1aa;
+}
