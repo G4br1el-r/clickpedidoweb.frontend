@@ -13,9 +13,10 @@ import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker"
 import { Message, MessageContent } from "@/components/ui/message"
-import { clienteAtual } from "@/lib/cliente"
 import { emReais } from "@/lib/formato"
+import { useLoja } from "@/lib/loja-atual"
 import { type Pedido, useSacola } from "@/lib/sacola"
+import { textosDoSegmento } from "@/lib/segmentos"
 
 const CURVA = [0.23, 1, 0.32, 1] as const
 const TEMPOS_MS = [900, 1300, 1300]
@@ -33,8 +34,9 @@ function BalaoLoja({ children }: { children: ReactNode }) {
 }
 
 function Digitando() {
+  const lojaEscolhida = useLoja()
   return (
-    <div role="status" aria-label={`${clienteAtual.nome} está digitando`}>
+    <div role="status" aria-label={`${lojaEscolhida.nome} está digitando`}>
       <BalaoLoja>
         <span className="flex h-6 items-center gap-1" aria-hidden="true">
           {[0, 0.15, 0.3].map((atraso) => (
@@ -94,12 +96,12 @@ export function ConversaSimulada() {
   const pedido = useSacola((estado) => estado.ultimoPedido)
   const hidratada = useSacola((estado) => estado.hidratada)
   const [etapa, setEtapa] = useState(0)
-  const loja = clienteAtual
+  const loja = useLoja()
 
   const mensagens = pedido
     ? [
         `Recebemos seu pedido nº ${pedido.numero}. Obrigado por escolher a ${loja.nome}!`,
-        "Sua pizza já está indo para o forno a lenha.",
+        textosDoSegmento(loja.segmento).preparoConversa,
         pedido.tipo === "retirada"
           ? `Fica pronto em ${loja.retirada.tempo}. Avisamos por aqui quando puder buscar.`
           : `A previsão de entrega é de ${loja.entrega.tempo}. Avisamos por aqui quando sair.`,

@@ -2,6 +2,7 @@ import type { ComponentType } from "react"
 import type { ItemSacola } from "@/lib/sacola"
 import type { SegmentoId } from "@/lib/segmentos"
 import type { GrupoOpcao, ItemOpcao, Produto } from "@/lib/tipos"
+import { MENSAGENS_ENVIO_FARMACIA, PreviewFarmacia } from "./farmacia/preview-farmacia"
 import { ArteEnvioPizza, MENSAGENS_ENVIO_PIZZA } from "./pizzaria/envio-pizza"
 import { MiniaturaPizza, PreviewPizza } from "./pizzaria/preview-pizza"
 
@@ -30,5 +31,9 @@ export const registroSegmentos: Record<SegmentoId, BlocosDoSegmento> = {
     MiniaturaOpcao: MiniaturaPizza,
     ArteEnvio: ArteEnvioPizza,
     mensagensEnvio: MENSAGENS_ENVIO_PIZZA,
+  },
+  farmacia: {
+    PreviewProduto: PreviewFarmacia,
+    mensagensEnvio: MENSAGENS_ENVIO_FARMACIA,
   },
 }

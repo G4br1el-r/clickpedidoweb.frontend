@@ -1,6 +1,7 @@
-import { clienteAtual } from "./cliente"
 import { emReais } from "./formato"
+import { lojaAtual } from "./loja-atual"
 import type { Pedido } from "./sacola"
+import { textosDoSegmento } from "./segmentos"
 
 const VALIDADE_PIX_MS = 30 * 60 * 1000
 
@@ -15,15 +16,16 @@ export type EtapaPedido = { titulo: string; texto: string }
 
 export function etapasDoPedido(tipo: Pedido["tipo"]): EtapaPedido[] {
   const retirada = tipo === "retirada"
+  const textos = textosDoSegmento(lojaAtual().segmento)
   return [
     { titulo: "Pedido recebido", texto: "A loja já viu seu pedido." },
-    { titulo: "Em preparo", texto: "Sua pizza está no forno a lenha." },
+    { titulo: "Em preparo", texto: textos.preparo },
     retirada
       ? { titulo: "Pronto para retirar", texto: "Pode vir buscar no balcão." }
       : { titulo: "Saiu para entrega", texto: "O entregador está a caminho." },
     {
       titulo: retirada ? "Retirado" : "Entregue",
-      texto: "Bom apetite! Obrigado pela preferência.",
+      texto: textos.fim,
     },
   ]
 }
@@ -37,7 +39,8 @@ export const horario = (momento: number) =>
 
 /** Faixa de horário em que o pedido deve chegar (ou ficar pronto), contada a partir do início. */
 export function previsaoDoPedido(tipo: Pedido["tipo"], inicio: number) {
-  const tempo = tipo === "retirada" ? clienteAtual.retirada.tempo : clienteAtual.entrega.tempo
+  const loja = lojaAtual()
+  const tempo = tipo === "retirada" ? loja.retirada.tempo : loja.entrega.tempo
   const [minimo, maximo] = tempo.match(/\d+/g)?.map(Number) ?? [30, 45]
   return `${horario(inicio + minimo * 60_000)} – ${horario(inicio + (maximo ?? minimo) * 60_000)}`
 }
@@ -45,7 +48,7 @@ export function previsaoDoPedido(tipo: Pedido["tipo"], inicio: number) {
 /** Código fictício: tem o formato do Pix copia e cola, mas não paga nada. */
 export function codigoPix(pedido: Pedido) {
   const valor = pedido.total.toFixed(2)
-  return `00020126580014br.gov.bcb.pix0136demo-clickpedido-${pedido.numero}5204000053039865406${valor}5802BR5913${clienteAtual.nome.slice(0, 13)}6009SAO PAULO62070503***6304DEMO`
+  return `00020126580014br.gov.bcb.pix0136demo-clickpedido-${pedido.numero}5204000053039865406${valor}5802BR5913${lojaAtual().nome.slice(0, 13)}6009SAO PAULO62070503***6304DEMO`
 }
 
 /** Quanto falta para o Pix vencer, como "mm:ss". */

@@ -3,6 +3,7 @@
 import { motion } from "motion/react"
 import { AmpliarFoto } from "@/components/ampliar-foto"
 import { Foto } from "@/components/foto"
+import { SeloRemedio } from "@/components/produto/info-remedio"
 import { emReais } from "@/lib/formato"
 import type { Produto } from "@/lib/tipos"
 import { cn } from "@/lib/utils"
@@ -90,9 +91,18 @@ export function ProdutoLinha({ produto, aoAbrir }: ItemProps) {
               {produto.nome}
             </button>
           </h3>
-          <p className="mt-1 line-clamp-2 text-sm text-muted-foreground md:line-clamp-3">
-            {produto.descricao}
-          </p>
+          {produto.medicamento ? (
+            <>
+              <SeloRemedio medicamento={produto.medicamento} className="mt-1.5" />
+              <p className="mt-1.5 line-clamp-2 text-sm text-muted-foreground">
+                {produto.descricao}
+              </p>
+            </>
+          ) : (
+            <p className="mt-1 line-clamp-2 text-sm text-muted-foreground md:line-clamp-3">
+              {produto.descricao}
+            </p>
+          )}
         </div>
       </div>
       <div

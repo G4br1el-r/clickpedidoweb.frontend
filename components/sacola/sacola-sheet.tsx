@@ -9,9 +9,9 @@ import { Foto } from "@/components/foto"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Progress } from "@/components/ui/progress"
-import { clienteAtual } from "@/lib/cliente"
 import { emReais, formatoMoeda } from "@/lib/formato"
 import { vibrar } from "@/lib/haptico"
+import { useLoja } from "@/lib/loja-atual"
 import {
   calcularSubtotal,
   faltaParaMinimo,
@@ -84,12 +84,13 @@ export function ConteudoSacola({
   aoContinuar: () => void
   botaoVazio?: React.ReactNode
 }) {
+  const lojaEscolhida = useLoja()
   const itens = useSacola((estado) => estado.itens)
   const avisoMinimo = useAnimationControls()
   // Com um painel aberto, leitores de tela não alcançam o toast; o aviso é repetido aqui.
   const [avisoLeitor, setAvisoLeitor] = useState("")
   const subtotal = calcularSubtotal(itens)
-  const { pedidoMinimo } = clienteAtual
+  const { pedidoMinimo } = lojaEscolhida
   const falta = faltaParaMinimo(subtotal, pedidoMinimo)
   // A entrega depende do bairro e entra no total no checkout; aqui, só os itens.
   const total = subtotal

@@ -7,7 +7,7 @@ import { useFormContext, useWatch } from "react-hook-form"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { type DadosCheckout, FORMAS_PAGAMENTO, LIMITE_OBSERVACAO_PEDIDO } from "@/lib/checkout"
-import { clienteAtual } from "@/lib/cliente"
+import { useLoja } from "@/lib/loja-atual"
 import { descricaoDoTroco } from "@/lib/pedido"
 import { cn } from "@/lib/utils"
 import { CabecalhoPasso } from "./cabecalho-passo"
@@ -60,6 +60,7 @@ function Bloco({
 }
 
 export function PassoRevisao({ total, aoIr }: { total: number; aoIr: (passo: PassoId) => void }) {
+  const lojaEscolhida = useLoja()
   const {
     register,
     control,
@@ -75,7 +76,7 @@ export function PassoRevisao({ total, aoIr }: { total: number; aoIr: (passo: Pas
     <div className="flex flex-col gap-5">
       <CabecalhoPasso titulo="Confira e envie" descricao="Se algo estiver errado, é só alterar." />
 
-      {!clienteAtual.status.aberta && (
+      {!lojaEscolhida.status.aberta && (
         <p
           role="alert"
           className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
@@ -112,13 +113,13 @@ export function PassoRevisao({ total, aoIr }: { total: number; aoIr: (passo: Pas
                 {dados.uf ? `/${dados.uf.toUpperCase()}` : ""}
               </p>
               {dados.referencia && <p className="text-muted-foreground">{dados.referencia}</p>}
-              <p className="text-muted-foreground">Chega em {clienteAtual.entrega.tempo}</p>
+              <p className="text-muted-foreground">Chega em {lojaEscolhida.entrega.tempo}</p>
             </>
           ) : (
             <>
-              <p className="font-semibold">Balcão da {clienteAtual.nome}</p>
-              <p className="text-muted-foreground">{clienteAtual.endereco}</p>
-              <p className="text-muted-foreground">Fica pronto em {clienteAtual.retirada.tempo}</p>
+              <p className="font-semibold">Balcão da {lojaEscolhida.nome}</p>
+              <p className="text-muted-foreground">{lojaEscolhida.endereco}</p>
+              <p className="text-muted-foreground">Fica pronto em {lojaEscolhida.retirada.tempo}</p>
             </>
           )}
         </Bloco>

@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from "vitest"
+import { afterEach, describe, expect, test, vi } from "vitest"
 import {
   acharBairro,
   buscarCep,
@@ -13,6 +13,7 @@ import {
   taxaDoBairro,
   valoresIniciais,
 } from "./checkout"
+import { useLojaAtual } from "./loja-atual"
 
 // Os bairros e taxas vêm do cliente atual (mock da Casa da Pizza).
 
@@ -362,5 +363,21 @@ describe("dadosParaLembrar", () => {
       referencia: "",
       pagamento: "pix",
     })
+  })
+})
+
+describe("com a farmácia escolhida no topo", () => {
+  afterEach(() => useLojaAtual.setState(useLojaAtual.getInitialState(), true))
+
+  test("os bairros, as taxas e o endereço de retirada são os da drogaria", () => {
+    useLojaAtual.getState().escolher("drogaria-bem-estar")
+    expect(taxaDoBairro("Vila Adyana")).toBe(5)
+    expect(taxaDoBairro("Vila Ema")).toBeNull()
+    expect(acharBairro("vila adyana")?.nome).toBe("Vila Adyana")
+    const pedido = dadosDoPedido(
+      { ...valoresIniciais(null), nome: "Ana", whatsapp: "12991112233", tipo: "retirada" },
+      null,
+    )
+    expect(pedido.endereco).toBe("Av. São João, 870, Jardim Esplanada")
   })
 })

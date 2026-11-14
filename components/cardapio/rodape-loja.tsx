@@ -1,11 +1,11 @@
 "use client"
 
 import Image from "next/image"
-import { clienteAtual } from "@/lib/cliente"
+import { useLoja } from "@/lib/loja-atual"
 
 /** Fechamento discreto: a marca, onde fica e como falar com a loja. O resto está em "A loja". */
 export function RodapeLoja() {
-  const loja = clienteAtual
+  const loja = useLoja()
   const telefone = loja.telefone.replace(/\D/g, "")
 
   return (

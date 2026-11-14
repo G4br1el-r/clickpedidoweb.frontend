@@ -4,7 +4,7 @@ import { HomeIcon } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import Image from "next/image"
 import type { ReactNode } from "react"
-import { clienteAtual } from "@/lib/cliente"
+import { useLoja } from "@/lib/loja-atual"
 import { Motoboy } from "./motoboy"
 
 export type FaseEntrega = "parado" | "buscando" | "achou" | "nada"
@@ -100,6 +100,7 @@ function Pino({
  * achando o pedido, chega na porta.
  */
 export function MapaEntrega({ fase, children }: { fase: FaseEntrega; children: ReactNode }) {
+  const lojaEscolhida = useLoja()
   const reduzido = useReducedMotion()
   const posicao = POSICAO[fase]
   const rapido = fase === "buscando" || fase === "achou"
@@ -157,14 +158,14 @@ export function MapaEntrega({ fase, children }: { fase: FaseEntrega; children: R
           rotulo={
             <>
               <span className="md:hidden">Loja</span>
-              <span className="hidden md:inline">{clienteAtual.nome}</span>
+              <span className="hidden md:inline">{lojaEscolhida.nome}</span>
             </>
           }
           lado="esquerda"
           atraso={0.2}
         >
           <span className="relative size-9 overflow-hidden rounded-full md:size-10">
-            <Image src={clienteAtual.logo} alt="" fill sizes="40px" />
+            <Image src={lojaEscolhida.logo} alt="" fill sizes="40px" />
           </span>
         </Pino>
         <Pino rotulo="Você" lado="direita" atraso={0.55} pulsando={fase === "achou"}>

@@ -2,6 +2,7 @@ import type { StaticImageData } from "next/image"
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import type { DadosCheckout, FormaPagamento } from "./checkout"
+import type { ModoVenda } from "./farmacia"
 
 export type ItemSacola = {
   chave: string
@@ -12,6 +13,8 @@ export type ItemSacola = {
   quantidade: number
   resumo: string[]
   observacao?: string
+  /** Farmácia: o remédio pede receita (ver lib/farmacia.ts). Sem o campo, venda livre. */
+  venda?: ModoVenda
 }
 
 export type Pedido = {
@@ -28,6 +31,8 @@ export type Pedido = {
   pagamento?: FormaPagamento
   troco?: number | null
   observacao?: string
+  /** Farmácia: a foto da receita enviada no fechamento e se a via fica retida na entrega. */
+  receita?: { arquivo: string; retida: boolean }
 }
 
 export type DadosFinalizacao = Required<
@@ -66,7 +71,9 @@ type EstadoSacola = {
   alterarQuantidade: (chave: string, quantidade: number) => void
   remover: (chave: string) => void
   restaurar: (item: ItemSacola, posicao: number) => void
-  finalizar: (dados: DadosFinalizacao, lembrar: DadosLembrados) => Pedido
+  /** Tira todos os itens (ao trocar de loja). Os pedidos feitos continuam no histórico. */
+  esvaziar: () => void
+  finalizar: (dados: DadosFinalizacao & Pick<Pedido, "receita">, lembrar: DadosLembrados) => Pedido
   /** Põe um pedido do histórico na tela de acompanhamento. */
   verPedido: (numero: number) => void
 }
@@ -133,6 +140,7 @@ export const useSacola = create<EstadoSacola>()(
           return { itens: copia }
         })
       },
+      esvaziar: () => set({ itens: [] }),
       finalizar: (dados, lembrar) => {
         const { itens, pedidos, ultimoPedido } = get()
         const subtotal = calcularSubtotal(itens)

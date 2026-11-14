@@ -23,9 +23,10 @@ import { Progress } from "@/components/ui/progress"
 import { RadioGroup } from "@/components/ui/radio-group"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
-import { clienteAtual } from "@/lib/cliente"
+import { comoVender } from "@/lib/farmacia"
 import { emReais, formatoMoeda } from "@/lib/formato"
 import { vibrar } from "@/lib/haptico"
+import { useLoja } from "@/lib/loja-atual"
 import {
   avisoDeFaltantes,
   escolhidosDe,
@@ -37,6 +38,7 @@ import { useSacola } from "@/lib/sacola"
 import type { Produto } from "@/lib/tipos"
 import { cn } from "@/lib/utils"
 import { lancarParaSacola } from "@/lib/voo"
+import { InfoRemedio } from "./info-remedio"
 import { OpcaoLinha } from "./opcao-linha"
 
 // Tempo para ver a escolha marcada (e a metade da pizza preenchida) antes de ir ao próximo passo.
@@ -191,6 +193,7 @@ function ConteudoProduto({
   comNavegacao: boolean
   aoFechar: () => void
 }) {
+  const lojaEscolhida = useLoja()
   const adicionar = useSacola((estado) => estado.adicionar)
   const avisoFaltando = useAnimationControls()
   const avanco = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -209,7 +212,9 @@ function ConteudoProduto({
   const escolhidos = escolhidosDe(grupos, selecoes)
   const faltantes = gruposFaltantes(grupos, selecoes)
   const precoUnitario = precoComExtras(produto, escolhidos)
-  const { PreviewProduto } = registroSegmentos[clienteAtual.segmento]
+  // Controlado da Portaria 344: a ficha explica, mas não há como pedir pelo site.
+  const soBalcao = Boolean(produto.medicamento) && comoVender(produto.medicamento) === "so-balcao"
+  const { PreviewProduto } = registroSegmentos[lojaEscolhida.segmento]
   const avisoAberto = useRef<string | number | null>(null)
 
   // Com tudo escolhido, o aviso de "falta escolher" sai da tela sozinho.
@@ -433,8 +438,9 @@ function ConteudoProduto({
           </div>
         </Tabs>
       ) : (
-        <div className="relative min-h-0 flex-1 overflow-y-auto px-4 pb-3">
-          <Observacao valor={observacao} aoMudar={setObservacao} />
+        <div className="relative flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-4 pb-3">
+          {produto.medicamento && <InfoRemedio medicamento={produto.medicamento} />}
+          {!soBalcao && <Observacao valor={observacao} aoMudar={setObservacao} />}
         </div>
       )}
 
@@ -446,11 +452,12 @@ function ConteudoProduto({
             size="cta"
             className="w-full justify-between"
             onClick={aoPressionarAcao}
+            disabled={soBalcao}
             data-testid="cta-adicionar"
           >
             <span className="truncate">
               {faltantes[0] ? <span className="sr-only">Falta escolher: </span> : null}
-              {faltantes[0] ? faltantes[0].nome : "Adicionar"}
+              {soBalcao ? "Só no balcão" : faltantes[0] ? faltantes[0].nome : "Adicionar"}
             </span>
             <NumberFlow
               value={precoUnitario * quantidade}

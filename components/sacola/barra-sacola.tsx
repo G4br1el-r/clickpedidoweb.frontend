@@ -5,8 +5,8 @@ import { ChevronRightIcon } from "lucide-react"
 import { AnimatePresence, motion, useAnimationControls } from "motion/react"
 import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
-import { clienteAtual } from "@/lib/cliente"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
+import { useLoja } from "@/lib/loja-atual"
 import { calcularSubtotal, contarItens, faltaParaMinimo, useSacola } from "@/lib/sacola"
 import { MOLA_ILHA, PECA_ILHA, useIlhaSacola } from "./ilha-sacola"
 
@@ -20,6 +20,7 @@ const MOLA = { type: "spring", duration: 0.5, bounce: 0.35 } as const
  * e cada item que chega faz a barra pular e brilhar.
  */
 export function BarraSacola({ oculta }: { oculta: boolean }) {
+  const lojaEscolhida = useLoja()
   const abrir = useIlhaSacola((estado) => estado.abrir)
   // Aberta pela própria barra: ela vira a sacola. Aberta pelo ícone do topo: a barra sai de cena.
   const abertaAqui = useIlhaSacola((estado) => estado.aberta && estado.de === "barra")
@@ -29,8 +30,8 @@ export function BarraSacola({ oculta }: { oculta: boolean }) {
   const quantidade = contarItens(itens)
   const subtotal = calcularSubtotal(itens)
   const visivel = hidratada && quantidade > 0 && !oculta && !abertaNoTopo
-  const falta = faltaParaMinimo(subtotal, clienteAtual.pedidoMinimo)
-  const progresso = Math.min(1, subtotal / clienteAtual.pedidoMinimo)
+  const falta = faltaParaMinimo(subtotal, lojaEscolhida.pedidoMinimo)
+  const progresso = Math.min(1, subtotal / lojaEscolhida.pedidoMinimo)
   const miniaturas = itens.slice(-3)
 
   const pulo = useAnimationControls()

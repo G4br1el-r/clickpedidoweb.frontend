@@ -4,7 +4,7 @@ import { motion, useScroll, useTransform } from "motion/react"
 import Image from "next/image"
 import { Entrada } from "@/components/entrada"
 import { Foto } from "@/components/foto"
-import { clienteAtual } from "@/lib/cliente"
+import { useLoja } from "@/lib/loja-atual"
 import { BarraTopo } from "./barra-topo"
 import { PainelLoja } from "./painel-loja"
 
@@ -20,7 +20,7 @@ type CabecalhoLojaProps = {
  * pela cor da página, então a linha passa no meio do painel, qualquer que seja a altura dele.
  */
 export function CabecalhoLoja({ aoVerDetalhes, termo, aoBuscar }: CabecalhoLojaProps) {
-  const loja = clienteAtual
+  const loja = useLoja()
   const { scrollY } = useScroll()
   const deslocamento = useTransform(scrollY, [0, 500], [0, 90])
 

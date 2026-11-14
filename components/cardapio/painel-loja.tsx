@@ -6,8 +6,9 @@ import { Dica } from "@/components/dica"
 import { Entrada } from "@/components/entrada"
 import { Button } from "@/components/ui/button"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
-import { clienteAtual } from "@/lib/cliente"
 import { emReais } from "@/lib/formato"
+import { useLoja } from "@/lib/loja-atual"
+import { textosDoSegmento } from "@/lib/segmentos"
 import { cn } from "@/lib/utils"
 
 function Informacao({
@@ -54,7 +55,7 @@ type PainelLojaProps = {
  * fica compacta à direita. Com a barra grudada no topo, a busca passa para a barra.
  */
 export function PainelLoja({ termo, aoBuscar }: PainelLojaProps) {
-  const loja = clienteAtual
+  const loja = useLoja()
   const horario = loja.horarios.find(({ horario: valor }) => valor !== "Fechado")
 
   return (
@@ -85,7 +86,7 @@ export function PainelLoja({ termo, aoBuscar }: PainelLojaProps) {
         <InputGroupInput
           type="search"
           aria-label="Buscar no cardápio"
-          placeholder="Buscar pizza, borda, bebida"
+          placeholder={textosDoSegmento(loja.segmento).busca}
           value={termo}
           onChange={(evento) => aoBuscar(evento.target.value)}
           className="h-full text-[15px] md:text-[15px]"

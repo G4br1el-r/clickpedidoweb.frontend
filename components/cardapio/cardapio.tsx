@@ -12,8 +12,11 @@ import { VooParaSacola } from "@/components/sacola/voo-para-sacola"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { useCardapio } from "@/hooks/use-cardapio"
-import { clienteAtual } from "@/lib/cliente"
+import { useValorAssentado } from "@/hooks/use-valor-assentado"
 import { plural } from "@/lib/formato"
+import { useLoja } from "@/lib/loja-atual"
+import { textoDeBusca } from "@/lib/produto"
+import { textosDoSegmento } from "@/lib/segmentos"
 import type { Banner, Produto } from "@/lib/tipos"
 import { cn } from "@/lib/utils"
 import { BannersLoja } from "./banners-loja"
@@ -26,6 +29,8 @@ import { ProdutoLinha } from "./produto-itens"
 import { RodapeLoja } from "./rodape-loja"
 
 const ALTURA_BARRA = 66
+/** Quanto uma categoria precisa ficar sob a barra, rolando, para virar a ativa. */
+const ESPERA_CATEGORIA_MS = 200
 const EVENTOS_ROLAGEM = ["wheel", "touchmove", "keydown"] as const
 
 function normalizar(texto: string) {
@@ -36,6 +41,7 @@ function normalizar(texto: string) {
 }
 
 export function Cardapio() {
+  const lojaEscolhida = useLoja()
   const router = useRouter()
   const { data: categorias } = useCardapio()
 
@@ -45,6 +51,11 @@ export function Cardapio() {
   const [buscando, setBuscando] = useState(false)
   const [termo, setTermo] = useState("")
   const [categoriaAtiva, setCategoriaAtiva] = useState<string | null>(null)
+  // Rolando, a categoria sob a barra troca a cada seção que passa. Categorias curtas (a farmácia
+  // tem três itens por seção) passam em menos de um quarto de segundo: só a que fica é marcada,
+  // e a pílula vai direto para ela, sem piscar nas do meio.
+  const [ativaNaRolagem, setAtivaNaRolagem] = useState<string | null>(null)
+  const ativaAssentada = useValorAssentado(ativaNaRolagem, ESPERA_CATEGORIA_MS)
   const refsSecoes = useRef(new Map<string, HTMLElement>())
   const rolagemPorClique = useRef(false)
 
@@ -61,7 +72,7 @@ export function Cardapio() {
       .map((categoria) => ({
         ...categoria,
         produtos: categoria.produtos.filter((produto) =>
-          normalizar(`${produto.nome} ${produto.descricao}`).includes(termoNormalizado),
+          textoDeBusca(produto).includes(termoNormalizado),
         ),
       }))
       .filter((categoria) => categoria.produtos.length > 0)
@@ -80,7 +91,10 @@ export function Cardapio() {
   // pode não chegar ao topo; se ela já está inteira à vista, é ela que fica marcada.
   useEffect(() => {
     if (!categorias) return
-    setCategoriaAtiva((atual) => atual ?? categorias[0]?.id ?? null)
+    // Ao trocar de loja, a ativa da loja anterior não existe aqui: volta para a primeira.
+    setCategoriaAtiva((atual) =>
+      atual && categorias.some(({ id }) => id === atual) ? atual : (categorias[0]?.id ?? null),
+    )
     let quadro = 0
     const atualizar = () => {
       quadro = 0
@@ -95,7 +109,7 @@ export function Cardapio() {
       for (const { id, caixa } of ordem) if (caixa.top <= limite) ativa = id
       const noFim = window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2
       if (noFim) ativa = ordem[ordem.length - 1].id
-      setCategoriaAtiva(ativa)
+      setAtivaNaRolagem(ativa)
     }
     const agendar = () => {
       if (!quadro) quadro = requestAnimationFrame(atualizar)
@@ -109,8 +123,14 @@ export function Cardapio() {
     }
   }, [categorias, categoriasVisiveis])
 
+  useEffect(() => {
+    if (ativaAssentada && !rolagemPorClique.current) setCategoriaAtiva(ativaAssentada)
+  }, [ativaAssentada])
+
   function irParaCategoria(id: string) {
+    // O clique marca na hora; a rolagem que ele causa não muda a escolha.
     setCategoriaAtiva(id)
+    setAtivaNaRolagem(id)
     rolagemPorClique.current = true
     const secao = refsSecoes.current.get(id)
     // Rola só a página: no celular, scrollIntoView também desloca a área visível e esconde parte da barra.
@@ -200,9 +220,9 @@ export function Cardapio() {
                   </p>
                 )}
 
-                {!termoNormalizado && clienteAtual.banners && (
+                {!termoNormalizado && lojaEscolhida.banners && (
                   <BannersLoja
-                    banners={clienteAtual.banners}
+                    banners={lojaEscolhida.banners}
                     produtoDoBanner={produtoDoBanner}
                     aoEscolher={escolherBanner}
                   />
@@ -219,7 +239,9 @@ export function Cardapio() {
                         <SearchXIcon />
                       </EmptyMedia>
                       <EmptyTitle>Nada encontrado para "{termo.trim()}"</EmptyTitle>
-                      <EmptyDescription>Tente buscar por outro sabor ou produto.</EmptyDescription>
+                      <EmptyDescription>
+                        {textosDoSegmento(lojaEscolhida.segmento).buscaVazia}
+                      </EmptyDescription>
                     </EmptyHeader>
                     <Button type="button" variant="outline" size="cta" onClick={() => setTermo("")}>
                       Limpar busca

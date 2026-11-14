@@ -1,3 +1,4 @@
+import { comoVender } from "./farmacia"
 import type { ItemSacola } from "./sacola"
 import type { GrupoOpcao, ItemOpcao, Produto } from "./tipos"
 
@@ -45,5 +46,18 @@ export function montarItemSacola(
       grupo.tipo === "borda" ? `Borda ${item.nome.toLowerCase()}` : item.nome,
     ),
     observacao: observacao.trim() || undefined,
+    ...(produto.medicamento ? { venda: comoVender(produto.medicamento) } : {}),
   }
+}
+
+/** Texto em que a busca procura, sem acento e em minúsculas. Na farmácia, entra o princípio ativo. */
+export function textoDeBusca(produto: Produto): string {
+  const partes = [produto.nome, produto.descricao]
+  if (produto.medicamento)
+    partes.push(produto.medicamento.principioAtivo, produto.medicamento.laboratorio)
+  return partes
+    .join(" ")
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
 }

@@ -1,7 +1,7 @@
 import { cpf } from "cpf-cnpj-validator"
 import { z } from "zod"
-import { clienteAtual } from "./cliente"
 import { emReais } from "./formato"
+import { lojaAtual } from "./loja-atual"
 import type { DadosFinalizacao, DadosLembrados } from "./sacola"
 
 export const somenteDigitos = (texto: string) => texto.replace(/\D/g, "")
@@ -56,7 +56,7 @@ export const esquemaCheckout = z
       if (somenteDigitos(dados.cep).length !== 8) erro("cep", "Digite os 8 números do CEP")
       if (!dados.rua.trim()) erro("rua", "Informe a rua")
       if (!dados.numero.trim()) erro("numero", "Informe o número")
-      if (!clienteAtual.entrega.bairros.some(({ nome }) => nome === dados.bairro))
+      if (!lojaAtual().entrega.bairros.some(({ nome }) => nome === dados.bairro))
         erro("bairro", "Escolha um bairro da lista")
     }
 
@@ -116,11 +116,11 @@ const normalizar = (texto: string) =>
 /** Acha o bairro atendido pelo nome que veio do CEP, sem ligar para acento ou maiúscula. */
 export function acharBairro(nome: string) {
   const alvo = normalizar(nome)
-  return clienteAtual.entrega.bairros.find((bairro) => normalizar(bairro.nome) === alvo)
+  return lojaAtual().entrega.bairros.find((bairro) => normalizar(bairro.nome) === alvo)
 }
 
 export function taxaDoBairro(nome: string): number | null {
-  return clienteAtual.entrega.bairros.find((bairro) => bairro.nome === nome)?.taxa ?? null
+  return lojaAtual().entrega.bairros.find((bairro) => bairro.nome === nome)?.taxa ?? null
 }
 
 /** Valores de troco que fazem sentido para o total: as próximas notas redondas. */
@@ -171,7 +171,7 @@ export function dadosDoPedido(dados: DadosCheckout, taxa: number | null): DadosF
     taxaEntrega: taxa ?? 0,
     cliente: { nome: dados.nome.trim(), whatsapp: dados.whatsapp },
     tipo: dados.tipo,
-    endereco: dados.tipo === "entrega" ? montarEndereco(dados) : clienteAtual.endereco,
+    endereco: dados.tipo === "entrega" ? montarEndereco(dados) : lojaAtual().endereco,
     pagamento: dados.pagamento,
     troco: dados.pagamento === "dinheiro" ? dados.troco : null,
     observacao: dados.observacao.trim(),

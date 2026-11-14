@@ -1,9 +1,10 @@
 import { toast } from "sonner"
-import { clienteAtual } from "./cliente"
+import { lojaAtual } from "./loja-atual"
 
 /** Compartilha a loja pelo menu do aparelho; sem ele, copia o link e avisa. */
 export async function compartilharLoja() {
-  const dados = { title: clienteAtual.nome, text: clienteAtual.slogan, url: window.location.origin }
+  const { nome, slogan } = lojaAtual()
+  const dados = { title: nome, text: slogan, url: window.location.origin }
   try {
     if (navigator.share) {
       await navigator.share(dados)

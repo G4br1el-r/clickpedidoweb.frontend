@@ -195,6 +195,15 @@ describe("finalizar", () => {
     vi.setSystemTime(AGORA)
   })
 
+  test("farmácia: o pedido guarda a receita anexada e se a via fica retida", () => {
+    sacola().adicionar(item({ produtoId: "losartana-50", venda: "receita" }))
+    const pedido = sacola().finalizar(
+      { ...dados(), receita: { arquivo: "receita.jpg", retida: false } },
+      LEMBRAR,
+    )
+    expect(pedido.receita).toEqual({ arquivo: "receita.jpg", retida: false })
+  })
+
   test("cria o pedido com subtotal, taxa, total, número e horário", () => {
     sacola().adicionar(item({ precoUnitario: 40, quantidade: 2 }))
     const pedido = sacola().finalizar(dados({ taxaEntrega: 8 }), LEMBRAR)
@@ -362,5 +371,20 @@ describe("pedidosDoCelular", () => {
     useSacola.setState({ pedidos: [pedidoDe(2001)] })
 
     expect(pedidosDoCelular("12998765432")).toEqual([])
+  })
+})
+
+describe("esvaziar", () => {
+  test("tira todos os itens e mantém os pedidos já feitos", () => {
+    sacola().adicionar(item())
+    sacola().adicionar(item({ produtoId: "mussarela", nome: "Mussarela" }))
+    useSacola.setState({
+      pedidos: [{ numero: 1234, itens: [], subtotal: 0, taxaEntrega: 0, total: 0 }],
+    })
+
+    sacola().esvaziar()
+
+    expect(sacola().itens).toEqual([])
+    expect(sacola().pedidos).toHaveLength(1)
   })
 })

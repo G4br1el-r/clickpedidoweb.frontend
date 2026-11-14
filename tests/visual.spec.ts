@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { abrirCardapio, abrirSoOEsqueleto } from "./apoio"
+import { abrirCardapio, abrirSoOEsqueleto, esperarAnimacoes } from "./apoio"
 
 /**
  * Referências visuais: mudança de estilo só depois de existir a imagem do antes.
@@ -13,11 +13,44 @@ test.describe("visual", () => {
   })
 
   for (const tema of ["light", "dark"] as const) {
+    test(`vitrine da farmácia, tema ${tema === "light" ? "claro" : "escuro"}`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+      await page.addInitScript(() =>
+        localStorage.setItem(
+          "clickpedido-loja",
+          JSON.stringify({ state: { id: "drogaria-bem-estar" }, version: 1 }),
+        ),
+      )
+      await page.goto("/")
+      const antibioticos = page.locator("#categoria-antibioticos")
+      await expect(antibioticos.getByTestId("produto-amoxicilina-500")).toBeVisible()
+      await page.waitForLoadState("networkidle")
+      await esperarAnimacoes(page)
+
+      await expect(page.getByTestId("cabecalho-loja")).toHaveScreenshot(
+        `farmacia-cabecalho-${tema}.png`,
+        { animations: "disabled" },
+      )
+      await antibioticos.scrollIntoViewIfNeeded()
+      await esperarAnimacoes(page)
+      await expect(antibioticos).toHaveScreenshot(`farmacia-antibioticos-${tema}.png`, {
+        animations: "disabled",
+      })
+    })
+
     test(`barra de categorias, tema ${tema === "light" ? "claro" : "escuro"}`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
       await abrirCardapio(page)
       const barra = page.getByTestId("barra-navegacao")
       await barra.scrollIntoViewIfNeeded()
+      // A foto redonda da categoria ativa carrega à parte: espera ela chegar antes da foto da barra.
+      await expect
+        .poll(() =>
+          barra
+            .locator("[aria-current] img")
+            .evaluate((foto: HTMLImageElement) => foto.complete && foto.naturalWidth > 0),
+        )
+        .toBe(true)
 
       await expect(barra).toHaveScreenshot(`barra-categorias-${tema}.png`, {
         animations: "disabled",

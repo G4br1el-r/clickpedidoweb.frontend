@@ -1,12 +1,14 @@
 "use client"
 
 import NumberFlow from "@number-flow/react"
-import { MinusIcon, PlusIcon, Trash2Icon } from "lucide-react"
+import { MinusIcon, PlusIcon, StoreIcon, Trash2Icon } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import { type MouseEvent, useState } from "react"
 import { toast } from "sonner"
 import { Dica } from "@/components/dica"
+import { comoVender } from "@/lib/farmacia"
 import { vibrar } from "@/lib/haptico"
+import { montarItemSacola } from "@/lib/produto"
 import { useSacola } from "@/lib/sacola"
 import type { Produto } from "@/lib/tipos"
 import { cn } from "@/lib/utils"
@@ -85,14 +87,25 @@ export function BotaoAdicionar({
       alterarQuantidade(ultimo.chave, ultimo.quantidade + 1)
       return
     }
-    adicionar({
-      produtoId: produto.id,
-      nome: produto.nome,
-      imagem: produto.imagem,
-      precoUnitario: produto.preco,
-      quantidade: 1,
-      resumo: [],
-    })
+    adicionar(montarItemSacola(produto, [], 1, ""))
+  }
+
+  // Controlado (Portaria 344): não tem venda à distância. O botão abre o produto, que explica.
+  if (produto.medicamento && comoVender(produto.medicamento) === "so-balcao") {
+    return (
+      <button
+        type="button"
+        onClick={aoAbrir}
+        aria-label={`${produto.nome}: só no balcão`}
+        className={cn(
+          "z-10 flex h-11 shrink-0 items-center gap-1.5 rounded-full bg-muted px-3.5 text-sm font-semibold text-foreground outline-none focus-visible:ring-3 focus-visible:ring-ring",
+          className,
+        )}
+      >
+        <StoreIcon className="size-4" aria-hidden="true" />
+        Só no balcão
+      </button>
+    )
   }
 
   function aoPressionarMenos() {

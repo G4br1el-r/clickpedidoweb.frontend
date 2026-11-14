@@ -1,4 +1,5 @@
 import type { StaticImageData } from "next/image"
+import type { DadosMedicamento } from "./admin/dados/tipos"
 import type { SegmentoId, TipoOpcaoDe, TipoProdutoDe } from "./segmentos"
 
 export type Tema = {
@@ -48,6 +49,8 @@ export type Produto<S extends SegmentoId = SegmentoId> = {
   imagem: StaticImageData
   destaque?: boolean
   grupos?: GrupoOpcao<S>[]
+  /** Farmácia: tarja, princípio ativo e registro. Decide se pede receita (lib/farmacia.ts). */
+  medicamento?: DadosMedicamento
 }
 
 export type Categoria<S extends SegmentoId = SegmentoId> = {

@@ -7,6 +7,7 @@ import {
   ChefHatIcon,
   CopyIcon,
   CreditCardIcon,
+  FileTextIcon,
   InfoIcon,
   MapPinIcon,
   MessageCircleIcon,
@@ -30,9 +31,9 @@ import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Marker, MarkerContent, MarkerIcon } from "@/components/ui/marker"
 import { FORMAS_PAGAMENTO } from "@/lib/checkout"
-import { clienteAtual } from "@/lib/cliente"
 import { emReais } from "@/lib/formato"
 import { vibrar } from "@/lib/haptico"
+import { useLoja } from "@/lib/loja-atual"
 import {
   codigoPix,
   descricaoDoTroco,
@@ -337,6 +338,22 @@ function Detalhes({ pedido }: { pedido: Pedido }) {
             </div>
           </div>
         )}
+        {pedido.receita && (
+          <div className="flex gap-3 sm:col-span-2">
+            <FileTextIcon
+              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+              aria-hidden="true"
+            />
+            <div>
+              <p className="font-semibold">Receita enviada</p>
+              <p className="text-muted-foreground">
+                {pedido.receita.retida
+                  ? `${pedido.receita.arquivo} · tenha a via original em mãos para ${retirada ? "o balcão" : "o entregador"}`
+                  : `${pedido.receita.arquivo} · conferida pela farmacêutica antes de separar`}
+              </p>
+            </div>
+          </div>
+        )}
         {pedido.observacao && (
           <div className="flex gap-3 sm:col-span-2">
             <InfoIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -397,6 +414,7 @@ function Status({
 }
 
 function Conteudo({ pedido }: { pedido: Pedido }) {
+  const lojaEscolhida = useLoja()
   const agora = useAgora()
   const { pago, atual, concluido, atualNaLista, momentos, pagamentoAcabouDeConfirmar, criadoEm } =
     situacaoDoPedido(pedido, agora)
@@ -444,10 +462,10 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
               </Button>
             </Dica>
             <span className="relative size-9 shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-border">
-              <Image src={clienteAtual.logo} alt="" fill sizes="36px" />
+              <Image src={lojaEscolhida.logo} alt="" fill sizes="36px" />
             </span>
             <p className="hidden min-w-0 flex-1 truncate text-sm font-semibold sm:block">
-              {clienteAtual.nome}
+              {lojaEscolhida.nome}
             </p>
             <p className="ml-auto text-sm text-muted-foreground tabular-nums">
               Pedido nº {pedido.numero}

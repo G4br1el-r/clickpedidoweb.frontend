@@ -7,6 +7,8 @@ import { Dica } from "@/components/dica"
 import { Entrada } from "@/components/entrada"
 import { Button } from "@/components/ui/button"
 import { Carousel, type CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel"
+import { useLoja } from "@/lib/loja-atual"
+import { textosDoSegmento } from "@/lib/segmentos"
 import type { Produto } from "@/lib/tipos"
 import { ProdutoDestaque } from "./produto-itens"
 
@@ -17,6 +19,7 @@ type MaisPedidasProps = {
 
 /** Rolagem horizontal: setas e trackpad no computador, arrastar com o dedo no celular. */
 export function MaisPedidas({ produtos, aoAbrir }: MaisPedidasProps) {
+  const loja = useLoja()
   const [api, setApi] = useState<CarouselApi>()
   // Arrastar com dois dedos no trackpad do notebook também passa os produtos.
   const [plugins] = useState(() => [WheelGesturesPlugin()])
@@ -49,7 +52,7 @@ export function MaisPedidas({ produtos, aoAbrir }: MaisPedidasProps) {
         className="flex items-end justify-between gap-4 px-4 pb-3 md:px-6"
       >
         <h2 id="mais-pedidas" className="text-2xl font-extrabold tracking-tight md:text-3xl">
-          Mais pedidas
+          {textosDoSegmento(loja.segmento).destaques}
         </h2>
         <div className="hidden gap-2 md:flex">
           <Dica texto="Anteriores">

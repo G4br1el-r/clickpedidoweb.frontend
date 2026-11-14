@@ -6,7 +6,9 @@ import { ThemeProvider } from "next-themes"
 import { type ReactNode, useEffect, useState } from "react"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { useLojaAtual } from "@/lib/loja-atual"
 import { useSacola } from "@/lib/sacola"
+import { TemaDaLoja } from "./tema-da-loja"
 
 export function Provedores({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -18,6 +20,7 @@ export function Provedores({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void useSacola.persist.rehydrate()
+    void useLojaAtual.persist.rehydrate()
   }, [])
 
   return (
@@ -26,6 +29,7 @@ export function Provedores({ children }: { children: ReactNode }) {
       <QueryClientProvider client={queryClient}>
         <MotionConfig reducedMotion="user">
           <TooltipProvider delayDuration={300}>
+            <TemaDaLoja />
             {children}
             <Toaster />
           </TooltipProvider>

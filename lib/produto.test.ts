@@ -6,6 +6,7 @@ import {
   gruposFaltantes,
   montarItemSacola,
   precoComExtras,
+  textoDeBusca,
 } from "./produto"
 import type { GrupoOpcao, Produto } from "./tipos"
 
@@ -121,5 +122,40 @@ describe("montarItemSacola", () => {
 
   test("observação em branco não vai para o item", () => {
     expect(montarItemSacola(PRODUTO, [], 1, "   ").observacao).toBeUndefined()
+  })
+})
+
+describe("na farmácia", () => {
+  const remedio = (medicamento?: Produto["medicamento"]): Produto =>
+    ({
+      id: "amoxicilina-500",
+      tipo: "medicamento",
+      nome: "Amoxicilina 500 mg",
+      descricao: "Antibiótico. Caixa com 21 cápsulas.",
+      preco: 27.9,
+      imagem: IMAGEM,
+      ...(medicamento ? { medicamento } : {}),
+    }) as Produto
+
+  const amoxicilina = {
+    tarja: "vermelha-retencao",
+    tipo: "generico",
+    principioAtivo: "Amoxicilina tri-hidratada",
+    apresentacao: "500 mg, 21 cápsulas",
+    laboratorio: "EMS",
+    registroMs: "1023508930064",
+    lista: "antimicrobiano",
+  } as const
+
+  test("o item da sacola guarda como o remédio pode ser vendido", () => {
+    expect(montarItemSacola(remedio(amoxicilina), [], 1, "").venda).toBe("receita-retida")
+    expect(montarItemSacola(remedio(), [], 1, "")).not.toHaveProperty("venda")
+  })
+
+  test("a busca também acha pelo princípio ativo e pelo laboratório", () => {
+    expect(textoDeBusca(remedio(amoxicilina))).toBe(
+      "amoxicilina 500 mg antibiotico. caixa com 21 capsulas. amoxicilina tri-hidratada ems",
+    )
+    expect(textoDeBusca(remedio())).toBe("amoxicilina 500 mg antibiotico. caixa com 21 capsulas.")
   })
 })

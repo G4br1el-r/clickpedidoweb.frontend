@@ -37,10 +37,11 @@ import {
   ItemTitle,
 } from "@/components/ui/item"
 import { Spinner } from "@/components/ui/spinner"
-import { clienteAtual } from "@/lib/cliente"
 import { emReais, plural } from "@/lib/formato"
 import { vibrar } from "@/lib/haptico"
+import { useLoja } from "@/lib/loja-atual"
 import { type Pedido, pedidosDoCelular, useSacola } from "@/lib/sacola"
+import { type SegmentoId, textosDoSegmento } from "@/lib/segmentos"
 import { cn } from "@/lib/utils"
 import { type FaseEntrega, MapaEntrega } from "./mapa-entrega"
 
@@ -52,12 +53,16 @@ const CURVA = [0.23, 1, 0.32, 1] as const
 
 type Resultado = { tipo: "inicio" } | { tipo: "lista"; pedidos: Pedido[] } | { tipo: "nada" }
 
-const ETAPAS: { titulo: string; texto: string; icone: ReactNode }[] = [
-  { titulo: "Recebido", texto: "A loja confirma o pedido", icone: <ReceiptTextIcon /> },
-  { titulo: "No forno", texto: "Sua pizza sendo feita", icone: <ChefHatIcon /> },
-  { titulo: "A caminho", texto: "O entregador saiu", icone: <BikeIcon /> },
-  { titulo: "Entregue", texto: "Bom apetite!", icone: <PartyPopperIcon /> },
-]
+/** As etapas do acompanhamento, com o preparo e o fim no jeito do segmento. */
+function etapasDe(segmento: SegmentoId): { titulo: string; texto: string; icone: ReactNode }[] {
+  const textos = textosDoSegmento(segmento)
+  return [
+    { titulo: "Recebido", texto: "A loja confirma o pedido", icone: <ReceiptTextIcon /> },
+    { ...textos.preparoCurto, icone: <ChefHatIcon /> },
+    { titulo: "A caminho", texto: "O entregador saiu", icone: <BikeIcon /> },
+    { titulo: "Entregue", texto: textos.fimCurto, icone: <PartyPopperIcon /> },
+  ]
+}
 
 const quando = (momento?: number) =>
   momento
@@ -71,14 +76,16 @@ const quando = (momento?: number) =>
 
 /** As etapas que a pessoa vai ver no acompanhamento, acendendo uma de cada vez. */
 function Etapas() {
+  const ETAPAS = etapasDe(useLoja().segmento)
   const reduzido = useReducedMotion()
   const [ativa, setAtiva] = useState(0)
+  const total = ETAPAS.length
 
   useEffect(() => {
     if (reduzido) return
-    const relogio = setInterval(() => setAtiva((atual) => (atual + 1) % ETAPAS.length), 1800)
+    const relogio = setInterval(() => setAtiva((atual) => (atual + 1) % total), 1800)
     return () => clearInterval(relogio)
-  }, [reduzido])
+  }, [reduzido, total])
 
   return (
     <section aria-labelledby="titulo-etapas" className="flex flex-col gap-4">
@@ -137,6 +144,7 @@ function Etapas() {
  * acompanhamento. Com mais de um pedido no mesmo número, escolhe qual ver.
  */
 export function BuscarPedidos() {
+  const lojaEscolhida = useLoja()
   const router = useRouter()
   const hidratada = useSacola((estado) => estado.hidratada)
   const lembrado = useSacola((estado) => estado.dadosLembrados?.whatsapp)
@@ -201,9 +209,9 @@ export function BuscarPedidos() {
             </Button>
           </Dica>
           <span className="relative size-9 shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-border">
-            <Image src={clienteAtual.logo} alt="" fill sizes="36px" />
+            <Image src={lojaEscolhida.logo} alt="" fill sizes="36px" />
           </span>
-          <p className="min-w-0 flex-1 truncate text-sm font-semibold">{clienteAtual.nome}</p>
+          <p className="min-w-0 flex-1 truncate text-sm font-semibold">{lojaEscolhida.nome}</p>
           <AlternarTema />
         </div>
       </header>
@@ -214,7 +222,7 @@ export function BuscarPedidos() {
             <div className="flex max-w-xl flex-col items-start gap-3">
               <Badge className="border-white/20 bg-white/12 text-white backdrop-blur-md">
                 <ClockIcon data-icon="inline-start" />
-                Entrega em {clienteAtual.entrega.tempo}
+                Entrega em {lojaEscolhida.entrega.tempo}
               </Badge>
               <h1 className="font-heading text-[2rem] leading-[1.05] font-extrabold tracking-tight text-balance md:text-5xl">
                 Acompanhe seu pedido
@@ -304,12 +312,12 @@ export function BuscarPedidos() {
                             className="mt-2 w-auto px-4"
                           >
                             <a
-                              href={`https://wa.me/55${clienteAtual.telefone.replace(/\D/g, "")}`}
+                              href={`https://wa.me/55${lojaEscolhida.telefone.replace(/\D/g, "")}`}
                               target="_blank"
                               rel="noreferrer"
                             >
                               <MessageCircleIcon data-icon="inline-start" />
-                              {clienteAtual.telefone}
+                              {lojaEscolhida.telefone}
                             </a>
                           </Button>
                         </AlertDescription>

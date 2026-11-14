@@ -7,6 +7,7 @@ import { Dica } from "@/components/dica"
 import { IconeSacola } from "@/components/sacola/ilha-sacola"
 import { Button } from "@/components/ui/button"
 import { compartilharLoja } from "@/lib/compartilhar"
+import { SeletorLoja } from "./seletor-loja"
 
 /** Botões claros sobre a foto escura, iguais nos dois temas. */
 const SOBRE_FOTO = "rounded-full text-white hover:bg-white/15 hover:text-white"
@@ -22,6 +23,8 @@ export function BarraTopo({ aoVerDetalhes }: { aoVerDetalhes: () => void }) {
         aria-label="Ações da loja"
         className="mx-auto flex h-14 w-full max-w-[1320px] items-center justify-end gap-0.5 px-2 md:gap-1 md:px-6 2xl:max-w-[1640px]"
       >
+        {/* Demonstração: troca entre as lojas de exemplo. */}
+        <SeletorLoja className={`${SOBRE_FOTO} mr-auto bg-white/10 ring-1 ring-white/20`} />
         <Dica texto="Sobre a loja">
           <Button
             type="button"

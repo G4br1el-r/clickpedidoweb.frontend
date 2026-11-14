@@ -22,10 +22,12 @@ import {
   taxaDaEntrega,
   valoresIniciais,
 } from "@/lib/checkout"
-import { clienteAtual } from "@/lib/cliente"
+import { receitaDaSacola } from "@/lib/farmacia"
 import { emReais, formatoMoeda } from "@/lib/formato"
 import { vibrar } from "@/lib/haptico"
+import { useLoja } from "@/lib/loja-atual"
 import { calcularSubtotal, type DadosLembrados, faltaParaMinimo, useSacola } from "@/lib/sacola"
+import { AnexarReceita, type ReceitaAnexada } from "./anexar-receita"
 import { CarregamentoEnvio, DURACAO_ENVIO_MS } from "./carregamento-envio"
 import { PassoDados } from "./passo-dados"
 import { PassoEntrega } from "./passo-entrega"
@@ -38,6 +40,7 @@ const CURVA = [0.23, 1, 0.32, 1] as const
 const TREMOR = { x: [0, -6, 6, -4, 4, 0], transition: { duration: 0.32 } }
 
 function Cabecalho() {
+  const lojaEscolhida = useLoja()
   return (
     <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur-xl backdrop-saturate-150">
       <div className="mx-auto flex h-16 w-full max-w-[1180px] items-center gap-2 px-2 md:px-6">
@@ -52,11 +55,11 @@ function Cabecalho() {
           <h1 className="truncate text-lg leading-tight font-extrabold tracking-tight md:text-xl">
             Finalizar pedido
           </h1>
-          <p className="truncate text-sm text-muted-foreground">{clienteAtual.nome}</p>
+          <p className="truncate text-sm text-muted-foreground">{lojaEscolhida.nome}</p>
         </div>
         <AlternarTema />
         <span className="relative mr-2 size-10 shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-border">
-          <Image src={clienteAtual.logo} alt="" fill sizes="40px" />
+          <Image src={lojaEscolhida.logo} alt="" fill sizes="40px" />
         </span>
       </div>
     </header>
@@ -87,6 +90,7 @@ function SacolaVazia({ falta }: { falta: number }) {
 }
 
 function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null }) {
+  const lojaEscolhida = useLoja()
   const router = useRouter()
   const itens = useSacola((estado) => estado.itens)
   const finalizar = useSacola((estado) => estado.finalizar)
@@ -98,6 +102,10 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
   const [enviando, setEnviando] = useState(false)
   // Os itens são guardados no envio: a sacola esvazia ao final, mas a arte do envio não muda.
   const [itensEnviados, setItensEnviados] = useState<typeof itens>([])
+  // Farmácia: a foto da receita, quando a sacola tem remédio de tarja vermelha.
+  const exigida = receitaDaSacola(itens)
+  const [receita, setReceita] = useState<ReceitaAnexada | null>(null)
+  const [semReceita, setSemReceita] = useState(false)
 
   const formulario = useForm<DadosCheckout>({
     resolver: zodResolver(esquemaCheckout),
@@ -161,7 +169,12 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
   function enviar(dados: DadosCheckout) {
     // Um toque a mais durante o envio não manda o pedido duas vezes.
     if (enviando) return
-    if (!clienteAtual.status.aberta) {
+    if (!lojaEscolhida.status.aberta) {
+      avisarErro()
+      return
+    }
+    if (exigida && !receita) {
+      setSemReceita(true)
       avisarErro()
       return
     }
@@ -170,7 +183,15 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
     setEnviando(true)
     router.prefetch("/pedido")
     window.setTimeout(() => {
-      finalizar(dadosDoPedido(dados, taxa), dadosParaLembrar(dados))
+      finalizar(
+        {
+          ...dadosDoPedido(dados, taxa),
+          ...(exigida && receita
+            ? { receita: { arquivo: receita.nome, retida: exigida.retida } }
+            : {}),
+        },
+        dadosParaLembrar(dados),
+      )
       router.push("/pedido")
     }, DURACAO_ENVIO_MS)
   }
@@ -220,7 +241,19 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
                   {PASSOS[passo].id === "dados" && <PassoDados lembrado={Boolean(lembrados)} />}
                   {PASSOS[passo].id === "entrega" && <PassoEntrega />}
                   {PASSOS[passo].id === "pagamento" && <PassoPagamento total={total} />}
-                  {PASSOS[passo].id === "revisao" && <PassoRevisao total={total} aoIr={irParaId} />}
+                  {PASSOS[passo].id === "revisao" && (
+                    <div className="flex flex-col gap-5">
+                      {exigida && (
+                        <AnexarReceita
+                          exigida={exigida}
+                          receita={receita}
+                          aoMudar={setReceita}
+                          invalida={semReceita}
+                        />
+                      )}
+                      <PassoRevisao total={total} aoIr={irParaId} />
+                    </div>
+                  )}
                 </motion.div>
               </AnimatePresence>
             </div>
@@ -324,10 +357,11 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
 
 /** Checkout em quatro passos curtos, com o pedido sempre à vista. */
 export function Finalizar() {
+  const lojaEscolhida = useLoja()
   const hidratada = useSacola((estado) => estado.hidratada)
   const subtotal = useSacola((estado) => calcularSubtotal(estado.itens))
   const lembrados = useSacola((estado) => estado.dadosLembrados)
-  const falta = faltaParaMinimo(subtotal, clienteAtual.pedidoMinimo)
+  const falta = faltaParaMinimo(subtotal, lojaEscolhida.pedidoMinimo)
   const pode = subtotal > 0 && falta === 0
   // Depois de enviar, a sacola esvazia; a tela de envio não pode virar "sacola vazia".
   const [jaPodia, setJaPodia] = useState(false)

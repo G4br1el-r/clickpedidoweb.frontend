@@ -25,8 +25,8 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { acharBairro, buscarCep, type DadosCheckout, somenteDigitos } from "@/lib/checkout"
-import { clienteAtual } from "@/lib/cliente"
 import { emReais } from "@/lib/formato"
+import { useLoja } from "@/lib/loja-atual"
 import { cn } from "@/lib/utils"
 import { CabecalhoPasso } from "./cabecalho-passo"
 import { Campo, ESTILO_CAMPO } from "./campo"
@@ -44,6 +44,7 @@ const ABRIR = {
 } as const
 
 function BlocoEndereco() {
+  const lojaEscolhida = useLoja()
   const {
     register,
     control,
@@ -61,7 +62,7 @@ function BlocoEndereco() {
   const refNumero = useRef<HTMLInputElement | null>(null)
   const digitos = somenteDigitos(cep)
   const mostrarCampos = manual || busca === "achou" || busca === "nao-achou"
-  const taxa = clienteAtual.entrega.bairros.find(({ nome }) => nome === bairro)?.taxa
+  const taxa = lojaEscolhida.entrega.bairros.find(({ nome }) => nome === bairro)?.taxa
 
   useEffect(() => {
     if (digitos.length !== 8 || digitos === ultimoBuscado.current) return
@@ -247,7 +248,7 @@ function BlocoEndereco() {
                       </SelectTrigger>
                       <SelectContent position="popper" className="rounded-xl">
                         <SelectGroup>
-                          {clienteAtual.entrega.bairros.map(({ nome }) => (
+                          {lojaEscolhida.entrega.bairros.map(({ nome }) => (
                             <SelectItem key={nome} value={nome} className="h-11 text-base">
                               {nome}
                             </SelectItem>
@@ -311,7 +312,7 @@ function BlocoEndereco() {
 }
 
 function BlocoRetirada() {
-  const loja = clienteAtual
+  const loja = useLoja()
   const mapa = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loja.endereco)}`
 
   return (
@@ -341,7 +342,7 @@ function BlocoRetirada() {
 
 export function PassoEntrega() {
   const { control } = useFormContext<DadosCheckout>()
-  const loja = clienteAtual
+  const loja = useLoja()
 
   return (
     <div className="flex flex-col gap-5">

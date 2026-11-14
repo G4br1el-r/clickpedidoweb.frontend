@@ -6,8 +6,8 @@ import { AnimatePresence, motion } from "motion/react"
 import Link from "next/link"
 import { useState } from "react"
 import { Foto } from "@/components/foto"
-import { clienteAtual } from "@/lib/cliente"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
+import { useLoja } from "@/lib/loja-atual"
 import { contarItens, type ItemSacola, totalDoItem } from "@/lib/sacola"
 import { cn } from "@/lib/utils"
 
@@ -81,6 +81,7 @@ function Totais({ subtotal, taxa, total, retirada }: Omit<ValoresResumo, "itens"
 
 /** No computador: o pedido sempre à vista ao lado dos passos. */
 export function ResumoLateral(valores: ValoresResumo) {
+  const lojaEscolhida = useLoja()
   const quantidade = contarItens(valores.itens)
 
   return (
@@ -107,8 +108,8 @@ export function ResumoLateral(valores: ValoresResumo) {
       <p className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2.5 text-sm text-muted-foreground">
         <ClockIcon className="size-4 shrink-0" aria-hidden="true" />
         {valores.retirada
-          ? `Fica pronto em ${clienteAtual.retirada.tempo}`
-          : `Chega em ${clienteAtual.entrega.tempo}`}
+          ? `Fica pronto em ${lojaEscolhida.retirada.tempo}`
+          : `Chega em ${lojaEscolhida.entrega.tempo}`}
       </p>
     </aside>
   )

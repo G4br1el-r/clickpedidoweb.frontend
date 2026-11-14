@@ -12,8 +12,8 @@ import {
   FieldTitle,
 } from "@/components/ui/field"
 import { RadioGroupItem } from "@/components/ui/radio-group"
-import { clienteAtual } from "@/lib/cliente"
 import { emReais } from "@/lib/formato"
+import { useLoja } from "@/lib/loja-atual"
 import type { GrupoOpcao, ItemOpcao } from "@/lib/tipos"
 import { cn } from "@/lib/utils"
 
@@ -32,7 +32,8 @@ function Miniatura({
   item: ItemOpcao
   selecionada: boolean
 }) {
-  const { MiniaturaOpcao } = registroSegmentos[clienteAtual.segmento]
+  const lojaEscolhida = useLoja()
+  const { MiniaturaOpcao } = registroSegmentos[lojaEscolhida.segmento]
 
   return (
     <span className="relative flex size-14 shrink-0 items-center justify-center" aria-hidden="true">

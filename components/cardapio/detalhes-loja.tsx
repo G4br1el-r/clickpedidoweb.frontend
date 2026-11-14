@@ -5,8 +5,8 @@ import type { ReactNode } from "react"
 import { Dica } from "@/components/dica"
 import { Painel, PainelDescricao, PainelFechar, PainelTitulo } from "@/components/painel-responsivo"
 import { Button } from "@/components/ui/button"
-import { clienteAtual } from "@/lib/cliente"
 import { emReais } from "@/lib/formato"
+import { useLoja } from "@/lib/loja-atual"
 
 function Bloco({
   icone,
@@ -40,7 +40,7 @@ export function DetalhesLoja({
   aberto: boolean
   aoMudar: (aberto: boolean) => void
 }) {
-  const loja = clienteAtual
+  const loja = useLoja()
 
   return (
     <Painel aberto={aberto} aoMudar={aoMudar}>

@@ -1,4 +1,5 @@
-import { describe, expect, test } from "vitest"
+import { afterEach, describe, expect, test } from "vitest"
+import { useLojaAtual } from "./loja-atual"
 import {
   codigoPix,
   descricaoDoTroco,
@@ -173,5 +174,26 @@ describe("descricaoDoTroco", () => {
 
   test("troco zero conta como sem troco", () => {
     expect(descricaoDoTroco(0, 88)).toBe("Sem troco")
+  })
+})
+
+describe("com a farmácia escolhida no topo", () => {
+  afterEach(() => useLojaAtual.setState(useLojaAtual.getInitialState(), true))
+
+  test("o Pix leva o nome da drogaria e a previsão usa o tempo dela", () => {
+    useLojaAtual.getState().escolher("drogaria-bem-estar")
+    expect(codigoPix(pedido({ numero: 2234, total: 88 }))).toContain("5913Drogaria Bem 6009")
+    const inicio = new Date(2026, 10, 13, 20, 0).getTime()
+    expect(previsaoDoPedido("retirada", inicio)).toBe("20:15 – 20:15")
+  })
+
+  test("as etapas falam de farmácia, não de forno", () => {
+    useLojaAtual.getState().escolher("drogaria-bem-estar")
+    expect(etapasDoPedido("entrega").map((etapa) => etapa.texto)).toEqual([
+      "A loja já viu seu pedido.",
+      "A farmacêutica está conferindo e separando seus itens.",
+      "O entregador está a caminho.",
+      "Melhoras! Obrigado pela preferência.",
+    ])
   })
 })

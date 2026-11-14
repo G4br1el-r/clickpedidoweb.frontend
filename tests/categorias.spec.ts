@@ -132,3 +132,53 @@ test.describe("categorias com rolagem lateral", () => {
     expect(recuos, "a pílula não volta para trás no caminho").toEqual([])
   })
 })
+
+test("farmácia: rolando rápido por categorias curtas, a pílula pula as do meio", async ({
+  page,
+}) => {
+  await page.addInitScript(() =>
+    localStorage.setItem(
+      "clickpedido-loja",
+      JSON.stringify({ state: { id: "drogaria-bem-estar" }, version: 1 }),
+    ),
+  )
+  await page.goto("/")
+  const barra = page.getByTestId("barra-navegacao")
+  await expect(page.getByTestId("produto-amoxicilina-500")).toBeVisible()
+  await page.evaluate(() => {
+    const titulo = [...document.querySelectorAll("h2")].find(
+      (h) => h.textContent?.trim() === "Dor e febre",
+    )
+    if (titulo)
+      window.scrollTo({
+        top: titulo.getBoundingClientRect().top + window.scrollY - 100,
+        behavior: "instant",
+      })
+  })
+  await expect(barra.locator("[aria-current]")).toHaveText("Dor e febre")
+  await esperarAnimacoes(page)
+
+  // Um gesto rápido (60 px por quadro) até Antibióticos, anotando a ativa a cada quadro.
+  const ativas = await page.evaluate(async () => {
+    const antibioticos = [...document.querySelectorAll("h2")].find(
+      (h) => h.textContent?.trim() === "Antibióticos",
+    )
+    if (!antibioticos) return []
+    const alvo = antibioticos.getBoundingClientRect().top + window.scrollY - 100
+    const lista: string[] = []
+    for (let quadro = 0; quadro < 80; quadro += 1) {
+      if (window.scrollY < alvo)
+        window.scrollTo({ top: Math.min(alvo, window.scrollY + 60), behavior: "instant" })
+      await new Promise(requestAnimationFrame)
+      const ativa = document.querySelector("[data-testid=barra-navegacao] [aria-current]")
+      if (ativa?.textContent) lista.push(ativa.textContent)
+    }
+    return lista
+  })
+
+  const ordem = ativas.filter((ativa, i, todas) => ativa !== todas[i - 1])
+  expect(ordem, "sem parar em Gripe e resfriado no caminho").toEqual([
+    "Dor e febre",
+    "Antibióticos",
+  ])
+})

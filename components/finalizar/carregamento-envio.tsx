@@ -5,7 +5,7 @@ import { AnimatePresence, motion } from "motion/react"
 import { useEffect, useState } from "react"
 import { registroSegmentos } from "@/components/segmentos/registro"
 import { Progress } from "@/components/ui/progress"
-import { clienteAtual } from "@/lib/cliente"
+import { useLoja } from "@/lib/loja-atual"
 import type { ItemSacola } from "@/lib/sacola"
 
 /** Tempo total do envio; dividido em quatro etapas iguais. */
@@ -39,7 +39,8 @@ function ArtePadrao({ etapa }: { etapa: number }) {
  * montada e indo ao forno). Dura 5 segundos, com mensagem e progresso por etapa.
  */
 export function CarregamentoEnvio({ itens }: { itens: ItemSacola[] }) {
-  const { ArteEnvio, mensagensEnvio } = registroSegmentos[clienteAtual.segmento]
+  const lojaEscolhida = useLoja()
+  const { ArteEnvio, mensagensEnvio } = registroSegmentos[lojaEscolhida.segmento]
   const mensagens = mensagensEnvio ?? MENSAGENS_PADRAO
   const [etapa, setEtapa] = useState(0)
   const [progresso, setProgresso] = useState(0)
@@ -84,7 +85,7 @@ export function CarregamentoEnvio({ itens }: { itens: ItemSacola[] }) {
               </motion.p>
             </AnimatePresence>
           </div>
-          <p className="text-sm text-muted-foreground">{clienteAtual.nome}</p>
+          <p className="text-sm text-muted-foreground">{lojaEscolhida.nome}</p>
         </div>
         <Progress
           value={progresso}

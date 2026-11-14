@@ -3,6 +3,7 @@ import { Bricolage_Grotesque, Figtree } from "next/font/google"
 import type { ReactNode } from "react"
 import { Provedores } from "@/components/provedores"
 import { clienteAtual } from "@/lib/cliente"
+import { cssDasLojas, SCRIPT_LOJA } from "@/lib/loja-atual"
 import { corDaBarra, temaParaCss } from "@/lib/tema"
 import "./globals.css"
 
@@ -42,6 +43,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <head>
         {/* biome-ignore lint/security/noDangerouslySetInnerHtml: CSS gerado das cores do cliente, sem dado digitado por ninguém. */}
         <style dangerouslySetInnerHTML={{ __html: temaParaCss(clienteAtual.tema) }} />
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: CSS gerado das cores fixas das lojas da demonstração. */}
+        <style dangerouslySetInnerHTML={{ __html: cssDasLojas() }} />
+        {/* Marca a loja salva antes da primeira pintura, para não piscar as cores da pizzaria. */}
+        {/* biome-ignore lint/security/noDangerouslySetInnerHtml: script fixo, sem dado digitado por ninguém. */}
+        <script dangerouslySetInnerHTML={{ __html: SCRIPT_LOJA }} />
       </head>
       <body>
         <Provedores>{children}</Provedores>

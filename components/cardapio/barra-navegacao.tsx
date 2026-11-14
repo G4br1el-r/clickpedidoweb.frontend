@@ -31,8 +31,8 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
-import { clienteAtual } from "@/lib/cliente"
 import { compartilharLoja } from "@/lib/compartilhar"
+import { useLoja } from "@/lib/loja-atual"
 import { distanciaDaSeta, setasDaRolagem } from "@/lib/rolagem"
 import type { Categoria, Produto } from "@/lib/tipos"
 import { cn } from "@/lib/utils"
@@ -87,6 +87,7 @@ export function BarraNavegacao({
   aoVerDetalhes,
   aoRecolherBusca,
 }: BarraNavegacaoProps) {
+  const lojaEscolhida = useLoja()
   const refCategorias = useRef<HTMLDivElement>(null)
   const refChips = useRef(new Map<string, HTMLButtonElement>())
   const refCampo = useRef<HTMLInputElement>(null)
@@ -202,10 +203,10 @@ export function BarraNavegacao({
                   transition={{ type: "spring", duration: 0.4, bounce: 0.1 }}
                 >
                   <span className="relative size-9 shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-border">
-                    <Image src={clienteAtual.logo} alt="" fill sizes="36px" />
+                    <Image src={lojaEscolhida.logo} alt="" fill sizes="36px" />
                   </span>
                   <span className="truncate font-heading text-base font-extrabold">
-                    {clienteAtual.nome}
+                    {lojaEscolhida.nome}
                   </span>
                 </motion.div>
               )}
@@ -474,6 +475,7 @@ function SetaDoTrilho({ lado, aoClicar }: { lado: "anterior" | "proxima"; aoClic
  * Traz também o tema; no celular, onde não cabem mais botões, traz ainda "Pedidos".
  */
 function MenuMais({ aoVerDetalhes }: { aoVerDetalhes: () => void }) {
+  const lojaEscolhida = useLoja()
   const { resolvedTheme, setTheme } = useTheme()
   const escuro = resolvedTheme === "dark"
   // A dica fica quieta com o menu aberto e logo depois de fechar: ela nasceria em cima
@@ -513,7 +515,7 @@ function MenuMais({ aoVerDetalhes }: { aoVerDetalhes: () => void }) {
       </Dica>
       <DropdownMenuContent align="end" sideOffset={8} className="w-56 rounded-2xl p-1.5">
         <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
-          {clienteAtual.nome}
+          {lojaEscolhida.nome}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
