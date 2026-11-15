@@ -39,6 +39,7 @@ import {
 import { cn } from "@/lib/utils"
 import { avisarSacola, SeloPro } from "./campos"
 import { usePrevia } from "./previa/estado"
+import { useFocoNaPrevia } from "./previa/foco"
 
 const ROTULO_EXIBICAO: Record<ExibicaoBloco, string> = {
   padrao: "Padrão",
@@ -108,11 +109,19 @@ function LinhaBloco({ bloco }: { bloco: Bloco }) {
   const nome = nomeDoBloco(bloco.id)
   const ativo = bloco.ativo
   const categoria = bloco.id.startsWith("categoria:")
+  // Mostra na prévia onde este bloco fica (ou que está desligado).
+  const { avisar, eventos } = useFocoNaPrevia({
+    alvo: `bloco:${bloco.id}`,
+    secao: "Página inicial",
+    rotulo: nome,
+    desligado: !ativo,
+  })
 
   function mudar(parcial: Partial<Bloco>) {
     atualizar("inicio", {
       blocos: blocos.map((item) => (item.id === bloco.id ? { ...item, ...parcial } : item)),
     })
+    avisar(parcial.ativo === undefined ? {} : { desligado: !parcial.ativo })
   }
 
   return (
@@ -121,6 +130,7 @@ function LinhaBloco({ bloco }: { bloco: Bloco }) {
       style={{ transform: CSS.Transform.toString(transform), transition }}
       data-pro-liberada={liberada || undefined}
       data-testid={`bloco-${bloco.id}`}
+      {...eventos}
       className={cn(
         "relative flex items-stretch gap-2 rounded-2xl bg-card p-2 ring-1 ring-border",
         isDragging && "z-10 shadow-[0_18px_40px_-16px_rgb(0_0_0/0.45)] ring-2 ring-primary",

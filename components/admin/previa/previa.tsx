@@ -36,6 +36,7 @@ import { variaveisClaras, variaveisEscuras } from "@/lib/tema"
 import { cn } from "@/lib/utils"
 import { type Dispositivo, usePrevia } from "./estado"
 import { raio } from "./estilos"
+import { MarcaFoco } from "./marca-foco"
 import { TelaAcompanhamento } from "./tela-acompanhamento"
 import { TelaConversa } from "./tela-conversa"
 import { TelaFinalizar } from "./tela-finalizar"
@@ -104,6 +105,8 @@ function Tela({ className }: { className?: string }) {
   const rodada = usePrevia((estado) => estado.rodada)
   const escuro = useEscuro()
   const moldura = useRef<HTMLDivElement>(null)
+  // A tela que rola por dentro: a marca de foco mede e rola por ela.
+  const rolavel = useRef<HTMLDivElement>(null)
   const [espaco, setEspaco] = useState({ largura: 0, altura: 0 })
   const { largura, altura } = TAMANHO[dispositivo]
 
@@ -142,6 +145,7 @@ function Tela({ className }: { className?: string }) {
           data-dispositivo={dispositivo}
         >
           <div
+            ref={rolavel}
             style={{
               width: largura,
               height: alturaInterna,
@@ -160,6 +164,7 @@ function Tela({ className }: { className?: string }) {
               <TelaAtual key={`${tela}-${rodada}`} tela={tela} />
             </div>
           </div>
+          <MarcaFoco tela={rolavel} />
         </div>
       )}
     </div>

@@ -34,8 +34,10 @@ import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { type Config, ehPro, type SecaoConfig, useConfig, useOpcaoPro } from "@/lib/admin/config"
+import { buscarSecao } from "@/lib/admin/secoes"
 import { cn } from "@/lib/utils"
 import { type Dispositivo, usePrevia } from "./previa/estado"
+import { useFocoNaPrevia } from "./previa/foco"
 
 /** Campos de uma seção cujo valor é do tipo `V`. */
 type CampoDe<S extends SecaoConfig, V> = {
@@ -43,12 +45,27 @@ type CampoDe<S extends SecaoConfig, V> = {
 }[keyof Config[S]] &
   string
 
-function useCampo<S extends SecaoConfig, K extends keyof Config[S]>(secao: S, campo: K) {
+/**
+ * Valor de um campo da configuração e como mudá-lo. Mexer no campo (passar o mouse, focar ou
+ * mudar o valor) mostra na prévia a seção e o item; `eventos` vai no elemento do campo.
+ */
+function useCampo<S extends SecaoConfig, K extends keyof Config[S]>(
+  secao: S,
+  campo: K,
+  titulo: string,
+) {
   const valor = useConfig((estado) => estado.config[secao][campo])
   const atualizar = useConfig((estado) => estado.atualizar)
-  const definir = (novo: Config[S][K]) =>
+  const { avisar, eventos } = useFocoNaPrevia({
+    alvo: `${secao}.${String(campo)}`,
+    secao: buscarSecao(secao)?.titulo ?? secao,
+    rotulo: titulo,
+  })
+  const definir = (novo: Config[S][K]) => {
     atualizar(secao, { [campo]: novo } as unknown as Partial<Config[S]>)
-  return [valor, definir] as const
+    avisar()
+  }
+  return [valor, definir, eventos] as const
 }
 
 /**
@@ -172,12 +189,13 @@ export function CampoSwitch<S extends SecaoConfig>({
   titulo,
   descricao,
 }: CampoSwitchProps<S>) {
-  const [valor, definir] = useCampo(secao, campo)
+  const [valor, definir, eventos] = useCampo(secao, campo, titulo)
   const { ehPro, bloqueada, naSacola, liberada } = useOpcaoPro(`${secao}.${campo}`)
   const id = `campo-${secao}-${campo}`
 
   return (
     <Field
+      {...eventos}
       orientation="horizontal"
       data-pro-liberada={liberada || undefined}
       className={cn("rounded-xl", liberada && "opcao-pro -m-2 w-auto p-2")}
@@ -261,11 +279,11 @@ export function CampoEscolha<S extends SecaoConfig, V extends string>({
   colunas = 2,
   formato = "horizontal",
 }: CampoEscolhaProps<S, V>) {
-  const [valor, definir] = useCampo(secao, campo)
+  const [valor, definir, eventos] = useCampo(secao, campo, titulo)
   const liberadas = useConfig((estado) => (estado.pro ? "tudo" : estado.compradas))
 
   return (
-    <Field>
+    <Field {...eventos}>
       <FieldContent>
         <FieldTitle>{titulo}</FieldTitle>
         {descricao && <FieldDescription>{descricao}</FieldDescription>}
@@ -384,11 +402,11 @@ export function CampoSegmentado<S extends SecaoConfig, V extends string | number
   opcoes,
   aparelho,
 }: CampoSegmentadoProps<S, V>) {
-  const [valor, definir] = useCampo(secao, campo)
+  const [valor, definir, eventos] = useCampo(secao, campo, titulo)
   const id = `campo-${secao}-${campo}`
 
   return (
-    <Field orientation="responsive" className="@md/conteudo:items-center">
+    <Field {...eventos} orientation="responsive" className="@md/conteudo:items-center">
       <FieldContent>
         <FieldTitle id={id} className="flex-wrap">
           {titulo}
@@ -449,12 +467,12 @@ export function CampoSlider<S extends SecaoConfig>({
   passo = 1,
   formatar = String,
 }: CampoSliderProps<S>) {
-  const [valor, definir] = useCampo(secao, campo)
+  const [valor, definir, eventos] = useCampo(secao, campo, titulo)
   const id = `campo-${secao}-${campo}`
   const numero = Number(valor)
 
   return (
-    <Field>
+    <Field {...eventos}>
       <div className="flex items-baseline justify-between gap-3">
         <FieldTitle id={id}>{titulo}</FieldTitle>
         <span className="text-sm font-semibold text-muted-foreground tabular-nums">
@@ -495,12 +513,12 @@ export function CampoTexto<S extends SecaoConfig>({
   limite,
   placeholder,
 }: CampoTextoProps<S>) {
-  const [valor, definir] = useCampo(secao, campo)
+  const [valor, definir, eventos] = useCampo(secao, campo, titulo)
   const texto = String(valor ?? "")
   const id = `campo-${secao}-${campo}`
 
   return (
-    <Field>
+    <Field {...eventos}>
       <div className="flex items-baseline justify-between gap-3">
         <FieldLabel htmlFor={id}>{titulo}</FieldLabel>
         <span className="text-xs text-muted-foreground tabular-nums">

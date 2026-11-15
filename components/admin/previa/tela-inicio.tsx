@@ -533,13 +533,13 @@ export function TelaInicio() {
         />
       )}
       <div className="relative flex-1">
-        <Entrada indice={0}>
+        <Entrada indice={0} alvo="inicio.cabecalho">
           <Cabecalho config={config} />
         </Entrada>
-        <Entrada indice={1}>
+        <Entrada indice={1} alvo="inicio.painelInfo">
           <PainelInfo config={config} />
         </Entrada>
-        <Entrada indice={2}>
+        <Entrada indice={2} alvo="inicio.barraCategorias">
           <BarraCategorias config={config} blocos={blocosAtivos} />
         </Entrada>
         <main className="mx-auto flex w-full max-w-[1180px] flex-col gap-8 px-3 pt-6 pb-10 @3xl/tela:px-8">
@@ -549,7 +549,7 @@ export function TelaInicio() {
             </Entrada>
           )}
           {blocosAtivos.map((bloco, indice) => (
-            <Entrada key={bloco.id} indice={indice + 3}>
+            <Entrada key={bloco.id} indice={indice + 3} alvo={`bloco:${bloco.id}`}>
               <BlocoPagina bloco={bloco} config={config} />
             </Entrada>
           ))}

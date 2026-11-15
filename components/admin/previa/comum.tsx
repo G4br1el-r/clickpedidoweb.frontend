@@ -39,10 +39,13 @@ export function ImagemLoja({
 /** Bloco que entra com a animação escolhida; `indice` define a ordem da cascata. */
 export function Entrada({
   indice = 0,
+  alvo,
   className,
   children,
 }: {
   indice?: number
+  /** Nome do pedaço para a marca de foco da prévia (ex.: "bloco:promocional"). */
+  alvo?: string
   className?: string
   children: ReactNode
 }) {
@@ -53,6 +56,7 @@ export function Entrada({
       variants={variantesEntrada(entrada, velocidade)}
       initial="escondido"
       animate="visivel"
+      data-alvo={alvo}
       className={cn("transform-gpu", className)}
       style={{ transformPerspective: 900 }}
     >
