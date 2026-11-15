@@ -1,12 +1,12 @@
 "use client"
 
-import { ShoppingBagIcon } from "lucide-react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { useEffect, useState } from "react"
 import { registroSegmentos } from "@/components/segmentos/registro"
 import { Progress } from "@/components/ui/progress"
 import { useLoja } from "@/lib/loja-atual"
 import type { ItemSacola } from "@/lib/sacola"
+import { CURVA_SAIDA } from "./movimento"
 
 /** Tempo total do envio; dividido em quatro etapas iguais. */
 export const DURACAO_ENVIO_MS = 5000
@@ -19,29 +19,16 @@ const MENSAGENS_PADRAO = [
   "Quase lá!",
 ]
 
-/** Arte para segmentos sem uma própria: a sacola pulando a cada etapa. */
-function ArtePadrao({ etapa }: { etapa: number }) {
-  return (
-    <motion.div
-      key={etapa}
-      className="grid size-40 place-items-center rounded-full bg-accent text-marca-texto"
-      initial={{ scale: 0.9, y: 6 }}
-      animate={{ scale: [0.9, 1.08, 1], y: [6, -8, 0] }}
-      transition={{ duration: 0.6, ease: "easeOut" }}
-    >
-      <ShoppingBagIcon className="size-16" />
-    </motion.div>
-  )
-}
-
 /**
  * Carregamento do envio do pedido, temático por segmento (na pizzaria, a pizza sendo
- * montada e indo ao forno). Dura 5 segundos, com mensagem e progresso por etapa.
+ * montada e indo ao forno). Dura 5 segundos, em quatro etapas: a arte do nicho muda,
+ * a frase troca num crossfade e o fio de progresso enche em linha reta.
  */
 export function CarregamentoEnvio({ itens }: { itens: ItemSacola[] }) {
   const lojaEscolhida = useLoja()
   const { ArteEnvio, mensagensEnvio } = registroSegmentos[lojaEscolhida.segmento]
   const mensagens = mensagensEnvio ?? MENSAGENS_PADRAO
+  const reduzido = useReducedMotion()
   const [etapa, setEtapa] = useState(0)
   const [progresso, setProgresso] = useState(0)
 
@@ -62,37 +49,58 @@ export function CarregamentoEnvio({ itens }: { itens: ItemSacola[] }) {
       role="status"
       aria-label="Enviando seu pedido"
       data-testid="carregamento-envio"
-      className="fixed inset-0 z-50 grid place-items-center bg-background/95 backdrop-blur-md"
+      className="fixed inset-0 z-50 grid place-items-center bg-background"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.3 }}
+      exit={{ opacity: 0, transition: { duration: 0.2 } }}
+      transition={{ duration: 0.28, ease: CURVA_SAIDA }}
     >
-      <div className="flex flex-col items-center gap-7 px-6 text-center">
-        {ArteEnvio ? <ArteEnvio etapa={etapa} itens={itens} /> : <ArtePadrao etapa={etapa} />}
-        <div className="flex flex-col items-center gap-1.5">
-          <div className="relative h-8 w-72 overflow-hidden">
-            <AnimatePresence mode="popLayout" initial={false}>
-              <motion.p
-                key={etapa}
-                aria-live="polite"
-                className="absolute inset-x-0 font-heading text-2xl font-extrabold tracking-tight"
-                initial={{ y: 22, opacity: 0, filter: "blur(4px)" }}
-                animate={{ y: 0, opacity: 1, filter: "blur(0px)" }}
-                exit={{ y: -22, opacity: 0, filter: "blur(4px)" }}
-                transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
-              >
-                {mensagens[etapa]}
-              </motion.p>
-            </AnimatePresence>
-          </div>
-          <p className="text-sm text-muted-foreground">{lojaEscolhida.nome}</p>
+      {/* O conteúdo chega um instante depois do fundo, subindo pouco: a tela "assenta". */}
+      <motion.div
+        className="flex w-full max-w-sm flex-col items-center px-6 text-center"
+        initial={reduzido ? { opacity: 0 } : { opacity: 0, y: 12, scale: 0.98 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.45, delay: 0.06, ease: CURVA_SAIDA }}
+      >
+        <ArteEnvio etapa={etapa} itens={itens} />
+
+        {/* As frases dividem a mesma célula: a nova entra enquanto a antiga sai, sem pular. */}
+        <div aria-live="polite" className="mt-8 grid min-h-9 w-full place-items-center">
+          <AnimatePresence initial={false}>
+            <motion.p
+              key={etapa}
+              className="col-start-1 row-start-1 text-2xl leading-9 font-semibold tracking-[-0.022em] text-balance md:text-[26px]"
+              initial={reduzido ? { opacity: 0 } : { opacity: 0, y: 10, filter: "blur(3px)" }}
+              animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
+              exit={
+                reduzido
+                  ? { opacity: 0, transition: { duration: 0.15 } }
+                  : {
+                      opacity: 0,
+                      y: -10,
+                      filter: "blur(3px)",
+                      transition: { duration: 0.2, ease: CURVA_SAIDA },
+                    }
+              }
+              transition={{ duration: 0.34, ease: CURVA_SAIDA }}
+            >
+              {mensagens[etapa]}
+            </motion.p>
+          </AnimatePresence>
         </div>
-        <Progress
-          value={progresso}
-          aria-label="Andamento do envio"
-          className="w-56 md:w-64 [&_[data-slot=progress-indicator]]:duration-[4800ms] [&_[data-slot=progress-indicator]]:ease-linear"
-        />
-      </div>
+        <p className="mt-1 text-sm text-muted-foreground">{lojaEscolhida.nome}</p>
+
+        <div className="mt-7 flex w-60 flex-col gap-2 md:w-72">
+          <Progress
+            value={progresso}
+            aria-label="Andamento do envio"
+            className="h-[3px] bg-border [&_[data-slot=progress-indicator]]:duration-[4800ms] [&_[data-slot=progress-indicator]]:ease-linear"
+          />
+          <p className="text-[13px] text-muted-foreground tabular-nums">
+            Etapa {etapa + 1} de {ETAPAS}
+          </p>
+        </div>
+      </motion.div>
     </motion.div>
   )
 }

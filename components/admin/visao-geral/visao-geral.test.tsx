@@ -59,14 +59,14 @@ describe("PainelVisaoGeral", () => {
       wrapper: Provedores,
     })
     const hoje = regiao("Hoje")
-    expect(hoje.getByText("Faturamento hoje").closest("[data-slot=card]")).toHaveTextContent(
+    expect(hoje.getByText("Faturamento hoje").closest("[data-indicador]")).toHaveTextContent(
       "R$ 90,00",
     )
-    expect(hoje.getByText("Pedidos hoje").closest("[data-slot=card]")).toHaveTextContent("2")
-    expect(hoje.getByText("Ticket médio hoje").closest("[data-slot=card]")).toHaveTextContent(
+    expect(hoje.getByText("Pedidos hoje").closest("[data-indicador]")).toHaveTextContent("2")
+    expect(hoje.getByText("Ticket médio hoje").closest("[data-indicador]")).toHaveTextContent(
       "R$ 45,00",
     )
-    expect(hoje.getByText("Em andamento").closest("[data-slot=card]")).toHaveTextContent("1")
+    expect(hoje.getByText("Em andamento").closest("[data-indicador]")).toHaveTextContent("1")
     expect(hoje.getByText("1 aguardando pagamento online")).toBeInTheDocument()
   })
 
@@ -75,13 +75,13 @@ describe("PainelVisaoGeral", () => {
       wrapper: Provedores,
     })
     const periodo = regiao("Desempenho do período")
-    const faturamento = periodo.getByText("Faturamento").closest("[data-slot=card]")
+    const faturamento = periodo.getByText("Faturamento").closest("[data-indicador]")
     expect(faturamento).toHaveTextContent("R$ 170,00")
     expect(faturamento).toHaveTextContent("+6,3% sobre os 2 dias anteriores")
-    expect(periodo.getByText("Ticket médio").closest("[data-slot=card]")).toHaveTextContent(
+    expect(periodo.getByText("Ticket médio").closest("[data-indicador]")).toHaveTextContent(
       "R$ 42,50",
     )
-    expect(periodo.getByText("Melhor dia").closest("[data-slot=card]")).toHaveTextContent(
+    expect(periodo.getByText("Melhor dia").closest("[data-indicador]")).toHaveTextContent(
       "sexta-feira, 13/11R$ 90,00 em 2 pedidos",
     )
   })

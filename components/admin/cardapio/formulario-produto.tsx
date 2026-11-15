@@ -29,7 +29,7 @@ import {
   XIcon,
 } from "lucide-react"
 import Image from "next/image"
-import { useEffect, useMemo, useState } from "react"
+import { type ReactNode, useEffect, useId, useMemo, useState } from "react"
 import {
   type Control,
   Controller,
@@ -103,9 +103,44 @@ import { opcaoDoProduto } from "@/lib/admin/regras/cardapio"
 import { camposDoProduto, esquemaProduto } from "@/lib/admin/regras/esquema-produto"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temRecurso } from "@/lib/admin/segmentos-painel"
+import { Traco } from "../traco"
 import { useProdutoAberto } from "./pagina-cardapio"
 
 const novoId = (prefixo: string) => `${prefixo}-${crypto.randomUUID().slice(0, 8)}`
+
+/** Quantos campos têm erro: conta cada mensagem, inclusive as de dentro dos grupos. */
+function contarErros(erros: unknown): number {
+  if (!erros || typeof erros !== "object") return 0
+  if ("message" in erros && typeof erros.message === "string") return 1
+  return Object.values(erros).reduce<number>((soma, valor) => soma + contarErros(valor), 0)
+}
+
+/** Seção plana do formulário: título pequeno, fio em cima e os campos abaixo. */
+function Secao({
+  titulo,
+  descricao,
+  children,
+}: {
+  titulo: string
+  descricao?: string
+  children: ReactNode
+}) {
+  const id = useId()
+  return (
+    <section
+      aria-labelledby={id}
+      className="flex flex-col gap-4 border-t border-border/70 pt-5 first:border-t-0 first:pt-0"
+    >
+      <div className="flex flex-col gap-0.5">
+        <h3 id={id} className="text-sm font-semibold tracking-[-0.01em]">
+          {titulo}
+        </h3>
+        {descricao && <p className="text-[13px] text-muted-foreground">{descricao}</p>}
+      </div>
+      {children}
+    </section>
+  )
+}
 
 type ValoresGrupo = {
   id: string
@@ -273,7 +308,7 @@ function EscolherProduto({
   }
   // A busca abre dentro do próprio grupo: sem janela por cima do painel.
   return (
-    <div className="flex flex-col gap-2 rounded-lg border p-2">
+    <div className="flex flex-col gap-2 rounded-lg bg-background p-2 ring-1 ring-border/80">
       <Command className="bg-transparent" label="Buscar produto">
         <CommandInput placeholder="Buscar produto" autoFocus />
         <CommandList className="max-h-48">
@@ -344,7 +379,7 @@ function GrupoDeOpcoes({
         transition: ordenavel.transition,
       }}
       aria-label={`Grupo ${numero}`}
-      className="flex flex-col gap-3 rounded-xl border bg-card p-3"
+      className="flex flex-col gap-3 rounded-xl bg-foreground/[0.03] p-3"
     >
       <div className="flex items-center gap-1">
         <Button
@@ -618,94 +653,108 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
     }
   }
 
+  const faltando = formState.submitCount > 0 ? contarErros(erros) : 0
+
   return (
     <form onSubmit={enviar} noValidate className="flex min-h-0 flex-1 flex-col">
-      <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-4 pb-4">
-        <FieldGroup>
-          <Controller
-            control={control}
-            name="categoriaId"
-            render={({ field }) => (
-              <Field data-invalid={Boolean(erros.categoriaId)}>
-                <FieldLabel htmlFor="produto-categoria">Categoria</FieldLabel>
-                <Select value={field.value} onValueChange={field.onChange}>
-                  <SelectTrigger
-                    id="produto-categoria"
-                    aria-label="Categoria"
-                    aria-invalid={Boolean(erros.categoriaId)}
-                  >
-                    <SelectValue placeholder="Escolha a categoria" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectGroup>
-                      {categorias.map((categoria) => (
-                        <SelectItem key={categoria.id} value={categoria.id}>
-                          {categoria.nome}
-                        </SelectItem>
-                      ))}
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                {erros.categoriaId && <FieldError>{erros.categoriaId.message}</FieldError>}
-              </Field>
-            )}
-          />
-          <Controller
-            control={control}
-            name="nome"
-            render={({ field }) => (
-              <Field data-invalid={Boolean(erros.nome)}>
-                <FieldLabel htmlFor="produto-nome">Nome</FieldLabel>
-                <Input
-                  {...field}
-                  id="produto-nome"
-                  maxLength={80}
-                  aria-invalid={Boolean(erros.nome)}
-                />
-                {erros.nome && <FieldError>{erros.nome.message}</FieldError>}
-              </Field>
-            )}
-          />
-          <Controller
-            control={control}
-            name="descricao"
-            render={({ field }) => (
-              <Field data-invalid={Boolean(erros.descricao)}>
-                <FieldLabel htmlFor="produto-descricao">Descrição</FieldLabel>
-                <Textarea {...field} id="produto-descricao" maxLength={300} rows={2} />
-                {erros.descricao && <FieldError>{erros.descricao.message}</FieldError>}
-              </Field>
-            )}
-          />
-          {campos.unidade && (
+      <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-4 pt-5 pb-6">
+        <Secao titulo="Sobre o produto">
+          <FieldGroup className="gap-4">
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,14rem)]">
+              <Controller
+                control={control}
+                name="nome"
+                render={({ field }) => (
+                  <Field data-invalid={Boolean(erros.nome)}>
+                    <FieldLabel htmlFor="produto-nome">Nome</FieldLabel>
+                    <Input
+                      {...field}
+                      id="produto-nome"
+                      maxLength={80}
+                      aria-invalid={Boolean(erros.nome)}
+                    />
+                    {erros.nome && <FieldError>{erros.nome.message}</FieldError>}
+                  </Field>
+                )}
+              />
+              <Controller
+                control={control}
+                name="categoriaId"
+                render={({ field }) => (
+                  <Field data-invalid={Boolean(erros.categoriaId)}>
+                    <FieldLabel htmlFor="produto-categoria">Categoria</FieldLabel>
+                    <Select value={field.value} onValueChange={field.onChange}>
+                      <SelectTrigger
+                        id="produto-categoria"
+                        aria-label="Categoria"
+                        aria-invalid={Boolean(erros.categoriaId)}
+                        className="w-full"
+                      >
+                        <SelectValue placeholder="Escolha a categoria" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          {categorias.map((categoria) => (
+                            <SelectItem key={categoria.id} value={categoria.id}>
+                              {categoria.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    {erros.categoriaId && <FieldError>{erros.categoriaId.message}</FieldError>}
+                  </Field>
+                )}
+              />
+            </div>
             <Controller
               control={control}
-              name="unidade"
+              name="descricao"
               render={({ field }) => (
-                <FieldSet>
-                  <FieldLegend variant="label">Vendido por</FieldLegend>
-                  <RadioGroup
-                    value={field.value}
-                    onValueChange={field.onChange}
-                    className="flex gap-4"
-                  >
-                    <Field orientation="horizontal" className="w-auto">
-                      <RadioGroupItem value="un" id="produto-unidade-un" />
-                      <FieldLabel htmlFor="produto-unidade-un">Por unidade</FieldLabel>
-                    </Field>
-                    <Field orientation="horizontal" className="w-auto">
-                      <RadioGroupItem value="kg" id="produto-unidade-kg" />
-                      <FieldLabel htmlFor="produto-unidade-kg">Por quilo</FieldLabel>
-                    </Field>
-                  </RadioGroup>
-                  <FieldDescription>
-                    No quilo, o preço é o do quilo e o cliente escolhe o peso.
-                  </FieldDescription>
-                </FieldSet>
+                <Field data-invalid={Boolean(erros.descricao)}>
+                  <FieldLabel htmlFor="produto-descricao">Descrição</FieldLabel>
+                  <Textarea {...field} id="produto-descricao" maxLength={300} rows={2} />
+                  {erros.descricao && <FieldError>{erros.descricao.message}</FieldError>}
+                </Field>
               )}
             />
-          )}
-          <div className="grid gap-3 sm:grid-cols-2">
+            {campos.unidade && (
+              <Controller
+                control={control}
+                name="unidade"
+                render={({ field }) => (
+                  <FieldSet>
+                    <FieldLegend variant="label">Vendido por</FieldLegend>
+                    <RadioGroup
+                      value={field.value}
+                      onValueChange={field.onChange}
+                      className="flex gap-5"
+                    >
+                      <Field orientation="horizontal" className="w-auto">
+                        <RadioGroupItem value="un" id="produto-unidade-un" />
+                        <FieldLabel htmlFor="produto-unidade-un" className="font-normal">
+                          Por unidade
+                        </FieldLabel>
+                      </Field>
+                      <Field orientation="horizontal" className="w-auto">
+                        <RadioGroupItem value="kg" id="produto-unidade-kg" />
+                        <FieldLabel htmlFor="produto-unidade-kg" className="font-normal">
+                          Por quilo
+                        </FieldLabel>
+                      </Field>
+                    </RadioGroup>
+                    <FieldDescription>
+                      No quilo, o preço é o do quilo e o cliente escolhe o peso.
+                    </FieldDescription>
+                  </FieldSet>
+                )}
+              />
+            )}
+          </FieldGroup>
+        </Secao>
+
+        <Secao titulo="Valores">
+          <div className="grid gap-4 sm:grid-cols-2">
             <CampoDinheiro
               control={control}
               nome="preco"
@@ -722,110 +771,126 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
                 erro={erros.precoBalcao?.message}
               />
             )}
+            {campos.duracao && (
+              <CampoInteiro
+                control={control}
+                nome="duracaoMin"
+                rotulo="Duração (minutos)"
+                id="produto-duracao"
+                erro={erros.duracaoMin?.message}
+              />
+            )}
           </div>
-          {campos.duracao && (
-            <CampoInteiro
+        </Secao>
+
+        <Secao titulo={campos.video ? "Foto e vídeo" : "Foto"}>
+          <FieldSet>
+            <FieldLegend variant="label" className="sr-only">
+              Foto
+            </FieldLegend>
+            <div className="flex flex-wrap items-center gap-3">
+              {imagem ? (
+                <Image
+                  src={imagem}
+                  alt="Foto do produto"
+                  width={64}
+                  height={64}
+                  unoptimized={imagem.startsWith("data:")}
+                  className="size-16 rounded-lg object-cover"
+                />
+              ) : (
+                <span
+                  aria-hidden="true"
+                  className="flex size-16 items-center justify-center rounded-lg bg-foreground/[0.04] text-muted-foreground"
+                >
+                  <ImageUpIcon className="size-5" />
+                </span>
+              )}
+              <Button asChild variant="outline" size="sm" disabled={enviandoFoto}>
+                <label className="cursor-pointer">
+                  <ImageUpIcon data-icon="inline-start" />
+                  {enviandoFoto ? "Preparando…" : imagem ? "Trocar foto" : "Enviar foto"}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="sr-only"
+                    onChange={(evento) => escolherFoto(evento.target.files?.[0])}
+                  />
+                </label>
+              </Button>
+              {imagem && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setValue("imagem", undefined)}
+                >
+                  Remover foto
+                </Button>
+              )}
+            </div>
+          </FieldSet>
+          {campos.video && (
+            <Controller
               control={control}
-              nome="duracaoMin"
-              rotulo="Duração (minutos)"
-              id="produto-duracao"
-              erro={erros.duracaoMin?.message}
+              name="videoUrl"
+              render={({ field }) => (
+                <Field data-invalid={Boolean(erros.videoUrl)}>
+                  <FieldLabel htmlFor="produto-video">Link do vídeo</FieldLabel>
+                  <Input
+                    {...field}
+                    value={field.value ?? ""}
+                    id="produto-video"
+                    type="url"
+                    placeholder="https://"
+                  />
+                  <FieldDescription>YouTube, Shorts ou Reels.</FieldDescription>
+                  {erros.videoUrl && <FieldError>{erros.videoUrl.message}</FieldError>}
+                </Field>
+              )}
             />
           )}
-        </FieldGroup>
+        </Secao>
 
-        <FieldSet>
-          <FieldLegend variant="label">Foto</FieldLegend>
-          <div className="flex items-center gap-3">
-            {imagem ? (
-              <Image
-                src={imagem}
-                alt="Foto do produto"
-                width={64}
-                height={64}
-                unoptimized={imagem.startsWith("data:")}
-                className="size-16 rounded-lg object-cover"
-              />
-            ) : (
-              <Skeleton className="size-16 animate-none rounded-lg" />
-            )}
-            <Button asChild variant="outline" size="sm" disabled={enviandoFoto}>
-              <label className="cursor-pointer">
-                <ImageUpIcon data-icon="inline-start" />
-                {enviandoFoto ? "Preparando…" : "Enviar foto"}
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="sr-only"
-                  onChange={(evento) => escolherFoto(evento.target.files?.[0])}
+        <Secao titulo="No cardápio">
+          <FieldSet>
+            <FieldLegend variant="label" className="sr-only">
+              No cardápio
+            </FieldLegend>
+            <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+              {(
+                [
+                  ["disponivel", "Disponível", "Desligado, aparece como esgotado."],
+                  ["ativo", "Visível", "Desligado, some do cardápio."],
+                  ["destaque", "Destaque", "Entra na vitrine de destaques."],
+                  ["oferta", "Oferta", "Mostra o preço “de” riscado e o desconto."],
+                ] as const
+              ).map(([nome, rotulo, descricao]) => (
+                <Controller
+                  key={nome}
+                  control={control}
+                  name={nome}
+                  render={({ field }) => (
+                    <Field orientation="horizontal" className="items-start">
+                      <Switch
+                        id={`produto-${nome}`}
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                        className="mt-0.5"
+                      />
+                      <div className="flex flex-col gap-0.5">
+                        <FieldLabel htmlFor={`produto-${nome}`}>{rotulo}</FieldLabel>
+                        <FieldDescription>{descricao}</FieldDescription>
+                      </div>
+                    </Field>
+                  )}
                 />
-              </label>
-            </Button>
-            {imagem && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={() => setValue("imagem", undefined)}
-              >
-                Remover foto
-              </Button>
-            )}
-          </div>
-        </FieldSet>
-
-        {campos.video && (
-          <Controller
-            control={control}
-            name="videoUrl"
-            render={({ field }) => (
-              <Field data-invalid={Boolean(erros.videoUrl)}>
-                <FieldLabel htmlFor="produto-video">Link do vídeo</FieldLabel>
-                <Input
-                  {...field}
-                  value={field.value ?? ""}
-                  id="produto-video"
-                  type="url"
-                  placeholder="https://"
-                />
-                <FieldDescription>YouTube, Shorts ou Reels.</FieldDescription>
-                {erros.videoUrl && <FieldError>{erros.videoUrl.message}</FieldError>}
-              </Field>
-            )}
-          />
-        )}
-
-        <FieldSet>
-          <FieldLegend variant="label">No cardápio</FieldLegend>
-          <FieldGroup className="gap-3">
-            {(
-              [
-                ["disponivel", "Disponível", "Desligado, aparece como esgotado."],
-                ["ativo", "Visível", "Desligado, some do cardápio."],
-                ["destaque", "Destaque", "Entra na vitrine de destaques."],
-                ["oferta", "Oferta", "Mostra o preço “de” riscado e o desconto."],
-              ] as const
-            ).map(([nome, rotulo, descricao]) => (
-              <Controller
-                key={nome}
-                control={control}
-                name={nome}
-                render={({ field }) => (
-                  <Field orientation="horizontal">
-                    <Switch
-                      id={`produto-${nome}`}
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                    <div className="flex flex-col">
-                      <FieldLabel htmlFor={`produto-${nome}`}>{rotulo}</FieldLabel>
-                      <FieldDescription>{descricao}</FieldDescription>
-                    </div>
-                  </Field>
-                )}
-              />
-            ))}
-            {oferta && (
+              ))}
+            </div>
+          </FieldSet>
+          {/* Ao ligar a oferta, o preço "de" aparece logo abaixo da chave. */}
+          {oferta && (
+            <div className="sm:max-w-[calc(50%-0.75rem)]">
               <CampoDinheiro
                 control={control}
                 nome="precoOriginal"
@@ -833,14 +898,22 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
                 id="produto-original"
                 erro={erros.precoOriginal?.message}
               />
-            )}
-          </FieldGroup>
-        </FieldSet>
+            </div>
+          )}
+        </Secao>
 
         {campos.grupos && (
-          <fieldset aria-label="Grupos de opções" className="flex flex-col gap-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <legend className="text-sm font-medium">Grupos de opções</legend>
+          <fieldset
+            aria-label="Grupos de opções"
+            className="flex flex-col gap-4 border-t border-border/70 pt-5"
+          >
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="flex flex-col gap-0.5">
+                <h3 className="text-sm font-semibold tracking-[-0.01em]">Grupos de opções</h3>
+                <p className="text-[13px] text-muted-foreground">
+                  Borda, sabores, adicionais. Arraste ou use as setas para ordenar.
+                </p>
+              </div>
               {produto && grupos.fields.length > 0 && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
@@ -926,13 +999,27 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
         )}
       </div>
 
-      <SheetFooter className="flex-row border-t">
-        <Button type="button" variant="outline" className="flex-1" onClick={aoFechar}>
-          Cancelar
-        </Button>
-        <Button type="submit" className="flex-1" disabled={salvar.isPending}>
-          Salvar produto
-        </Button>
+      <SheetFooter className="gap-2 border-t border-border/70">
+        {faltando > 0 && (
+          <p role="alert" className="flex items-center gap-2 text-[13px] text-destructive">
+            <Traco tom="cancelado" />
+            {faltando === 1
+              ? "Confira 1 campo antes de salvar."
+              : `Confira ${faltando} campos antes de salvar.`}
+          </p>
+        )}
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" className="flex-1 max-md:h-11" onClick={aoFechar}>
+            Cancelar
+          </Button>
+          <Button
+            type="submit"
+            className="flex-1 active:scale-[0.97] max-md:h-11"
+            disabled={salvar.isPending}
+          >
+            Salvar produto
+          </Button>
+        </div>
       </SheetFooter>
     </form>
   )

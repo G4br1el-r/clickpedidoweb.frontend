@@ -1,0 +1,1647 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-15T18:20:10.427Z",
+  "title": "Design System: ClickPedido",
+  "extensions": {
+    "colorMeta": {
+      "loja-primaria": {
+        "role": "primary",
+        "displayName": "Azul da Casa (primária da loja)",
+        "canonical": "#0B4F9C",
+        "tonalRamp": [
+          "#161c2d",
+          "#1a2948",
+          "#1a3665",
+          "#154484",
+          "#516fb0",
+          "#8999c9",
+          "#bfc6e1",
+          "#e9ecf5"
+        ],
+        "note": "Entrada do lojista; exemplo da Casa da Pizza. Derivados por lib/tema.ts."
+      },
+      "loja-acento": {
+        "role": "secondary",
+        "displayName": "Vermelho de Oferta (acento da loja)",
+        "canonical": "#C8321F",
+        "tonalRamp": [
+          "#381a12",
+          "#5c2216",
+          "#81291a",
+          "#a92f1d",
+          "#da6248",
+          "#ec947e",
+          "#f8c5b7",
+          "#feebe6"
+        ],
+        "note": "Entrada do lojista. Como texto, passa por garantirContraste sobre a página e sobre o cartão (4,5:1)."
+      },
+      "loja-fundo": {
+        "role": "neutral",
+        "displayName": "Névoa da Loja (fundo)",
+        "canonical": "#F5F6F8",
+        "tonalRamp": [
+          "#3e3e3f",
+          "#6a6b6b",
+          "#9a9b9c",
+          "#cdced0",
+          "#f7f8f9",
+          "#f9fafb",
+          "#fcfcfd",
+          "#fefefe"
+        ],
+        "note": "Entrada do lojista."
+      },
+      "loja-tinta": {
+        "role": "neutral",
+        "displayName": "Tinta da Loja (texto)",
+        "canonical": "#14202E",
+        "tonalRamp": [
+          "#0e1115",
+          "#11161c",
+          "#121922",
+          "#131d29",
+          "#3d4653",
+          "#757b85",
+          "#b1b5bb",
+          "#e5e6e8"
+        ],
+        "note": "Entrada do lojista; também gera o fundo escuro (45% para o preto)."
+      },
+      "superficie": {
+        "role": "neutral",
+        "displayName": "Superfície",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "#404040",
+          "#6e6e6e",
+          "#a0a0a0",
+          "#d5d5d5",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff",
+          "#ffffff"
+        ]
+      },
+      "apagado": {
+        "role": "neutral",
+        "displayName": "Apagado",
+        "canonical": "#E6E7EA",
+        "tonalRamp": [
+          "#3b3b3c",
+          "#656566",
+          "#919294",
+          "#c1c2c4",
+          "#ebecee",
+          "#f1f2f3",
+          "#f7f8f9",
+          "#fcfdfd"
+        ]
+      },
+      "texto-suave": {
+        "role": "neutral",
+        "displayName": "Texto Suave",
+        "canonical": "#5B636E",
+        "tonalRamp": [
+          "#1f2123",
+          "#2e3136",
+          "#3e4349",
+          "#4e555e",
+          "#798089",
+          "#a1a6ad",
+          "#cbced1",
+          "#edeef0"
+        ]
+      },
+      "realce": {
+        "role": "neutral",
+        "displayName": "Realce",
+        "canonical": "#E9ECF5",
+        "tonalRamp": [
+          "#3c3c3e",
+          "#66676a",
+          "#93959a",
+          "#c3c6cd",
+          "#edf0f7",
+          "#f3f5f9",
+          "#f8f9fc",
+          "#fdfdfe"
+        ]
+      },
+      "fio": {
+        "role": "neutral",
+        "displayName": "Fio",
+        "canonical": "#D2D4D9",
+        "tonalRamp": [
+          "#373738",
+          "#5d5e5f",
+          "#85878a",
+          "#b0b2b6",
+          "#dbdce1",
+          "#e6e7ea",
+          "#f1f2f3",
+          "#fafbfb"
+        ]
+      },
+      "contorno-campo": {
+        "role": "neutral",
+        "displayName": "Contorno de Campo",
+        "canonical": "#8E949D",
+        "tonalRamp": [
+          "#292b2d",
+          "#424548",
+          "#5d6066",
+          "#787d85",
+          "#a4a9b0",
+          "#bfc3c8",
+          "#dcdee1",
+          "#f3f4f5"
+        ]
+      },
+      "escuro-fundo": {
+        "role": "neutral",
+        "displayName": "Fundo escuro",
+        "canonical": "#0F151C",
+        "tonalRamp": [
+          "#0b0d10",
+          "#0c1014",
+          "#0e1217",
+          "#0e141a",
+          "#383c43",
+          "#707479",
+          "#afb1b3",
+          "#e4e4e5"
+        ]
+      },
+      "escuro-superficie": {
+        "role": "neutral",
+        "displayName": "Superfície escura",
+        "canonical": "#191E25",
+        "tonalRamp": [
+          "#0f1113",
+          "#121518",
+          "#15181c",
+          "#171b21",
+          "#40444b",
+          "#777a7f",
+          "#b2b4b7",
+          "#e5e6e7"
+        ]
+      },
+      "escuro-texto": {
+        "role": "neutral",
+        "displayName": "Texto escuro",
+        "canonical": "#EFF0F1",
+        "tonalRamp": [
+          "#3d3d3d",
+          "#686869",
+          "#979798",
+          "#c8c9ca",
+          "#f2f3f4",
+          "#f6f7f7",
+          "#fafafb",
+          "#fdfdfe"
+        ]
+      },
+      "escuro-apagado": {
+        "role": "neutral",
+        "displayName": "Apagado escuro",
+        "canonical": "#21262D",
+        "tonalRamp": [
+          "#121315",
+          "#16181b",
+          "#1a1d21",
+          "#1e2228",
+          "#474c52",
+          "#7c7f84",
+          "#b6b7ba",
+          "#e6e7e8"
+        ]
+      },
+      "escuro-texto-suave": {
+        "role": "neutral",
+        "displayName": "Texto suave escuro",
+        "canonical": "#919498",
+        "tonalRamp": [
+          "#2a2b2b",
+          "#434546",
+          "#5e6063",
+          "#7b7d81",
+          "#a6a9ac",
+          "#c1c3c5",
+          "#dddedf",
+          "#f4f4f4"
+        ]
+      },
+      "escuro-fio": {
+        "role": "neutral",
+        "displayName": "Fio escuro",
+        "canonical": "#292E35",
+        "tonalRamp": [
+          "#141517",
+          "#1a1c1e",
+          "#1f2226",
+          "#25292f",
+          "#4e5359",
+          "#828589",
+          "#b9babd",
+          "#e7e8e9"
+        ]
+      },
+      "escuro-primaria": {
+        "role": "primary",
+        "displayName": "Azul da Casa, escuro",
+        "canonical": "#3C62A8",
+        "tonalRamp": [
+          "#1b202f",
+          "#25314d",
+          "#2e426c",
+          "#36548e",
+          "#677fb9",
+          "#97a5cf",
+          "#c6cde5",
+          "#eceef6"
+        ]
+      },
+      "escuro-marca-texto": {
+        "role": "primary",
+        "displayName": "Texto da marca, escuro",
+        "canonical": "#7286BE",
+        "tonalRamp": [
+          "#242833",
+          "#383f55",
+          "#4c587a",
+          "#6272a0",
+          "#8f9dcb",
+          "#b2bbdb",
+          "#d5d9ec",
+          "#f1f2f9"
+        ]
+      },
+      "escuro-acento-texto": {
+        "role": "secondary",
+        "displayName": "Vermelho de Oferta, escuro",
+        "canonical": "#D96046",
+        "tonalRamp": [
+          "#3a211b",
+          "#613126",
+          "#8b4231",
+          "#b7533d",
+          "#e58168",
+          "#f2a995",
+          "#fad0c4",
+          "#feefeb"
+        ]
+      },
+      "perigo": {
+        "role": "error",
+        "displayName": "Perigo",
+        "canonical": "#B42318",
+        "tonalRamp": [
+          "#341710",
+          "#541d13",
+          "#762115",
+          "#992317",
+          "#ca5742",
+          "#e18d79",
+          "#f2c0b4",
+          "#fceae5"
+        ]
+      },
+      "sucesso": {
+        "role": "success",
+        "displayName": "Sucesso",
+        "canonical": "#0F6B3A",
+        "tonalRamp": [
+          "#142318",
+          "#163521",
+          "#17482a",
+          "#145c33",
+          "#49885e",
+          "#82ac8e",
+          "#bad1c0",
+          "#e8f0ea"
+        ]
+      },
+      "perigo-escuro": {
+        "role": "error",
+        "displayName": "Perigo no escuro",
+        "canonical": "#FF8A7A",
+        "tonalRamp": [
+          "#412925",
+          "#70413a",
+          "#a15b51",
+          "#d67568",
+          "#ffa293",
+          "#ffc0b4",
+          "#ffddd5",
+          "#fff4f1"
+        ]
+      },
+      "sucesso-escuro": {
+        "role": "success",
+        "displayName": "Sucesso no escuro",
+        "canonical": "#4ADE80",
+        "tonalRamp": [
+          "#203a27",
+          "#2d623d",
+          "#398d55",
+          "#43ba6d",
+          "#7ae699",
+          "#a8eeb9",
+          "#d1f6d8",
+          "#f0fcf2"
+        ]
+      },
+      "ilustracao-massa": {
+        "role": "illustration",
+        "displayName": "Massa",
+        "canonical": "#EED7AE",
+        "tonalRamp": [
+          "#3d3830",
+          "#685f4f",
+          "#968870",
+          "#c7b593",
+          "#f2dfbe",
+          "#f6e9d2",
+          "#fbf3e6",
+          "#fefbf7"
+        ],
+        "note": "Só dentro das artes desenhadas (artes-envio, envio-pizza, carregadores)."
+      },
+      "ilustracao-borda-massa": {
+        "role": "illustration",
+        "displayName": "Borda da massa",
+        "canonical": "#DDBF8A",
+        "tonalRamp": [
+          "#3a3329",
+          "#615541",
+          "#8c7a5a",
+          "#baa175",
+          "#e5cba1",
+          "#eedbbe",
+          "#f6ebdb",
+          "#fcf8f3"
+        ],
+        "note": "Só dentro das artes desenhadas (artes-envio, envio-pizza, carregadores)."
+      },
+      "ilustracao-farinha": {
+        "role": "illustration",
+        "displayName": "Farinha",
+        "canonical": "#F6E6C6",
+        "tonalRamp": [
+          "#3e3b35",
+          "#6b6558",
+          "#9b917e",
+          "#cec1a7",
+          "#f8ebd1",
+          "#faf1df",
+          "#fdf7ee",
+          "#fefcf9"
+        ],
+        "note": "Só dentro das artes desenhadas (artes-envio, envio-pizza, carregadores)."
+      },
+      "ilustracao-molho": {
+        "role": "illustration",
+        "displayName": "Molho",
+        "canonical": "#C8452C",
+        "tonalRamp": [
+          "#381c15",
+          "#5b281b",
+          "#813321",
+          "#a93d28",
+          "#d96d53",
+          "#ea9b85",
+          "#f7c8bb",
+          "#fdede8"
+        ],
+        "note": "Só dentro das artes desenhadas (artes-envio, envio-pizza, carregadores)."
+      },
+      "ilustracao-madeira": {
+        "role": "illustration",
+        "displayName": "Madeira",
+        "canonical": "#C99360",
+        "tonalRamp": [
+          "#362b20",
+          "#5a4430",
+          "#816041",
+          "#a97d53",
+          "#d6a87e",
+          "#e4c2a5",
+          "#f1decd",
+          "#fbf4ee"
+        ],
+        "note": "Só dentro das artes desenhadas (artes-envio, envio-pizza, carregadores)."
+      },
+      "ilustracao-pao": {
+        "role": "illustration",
+        "displayName": "Pão",
+        "canonical": "#E7A957",
+        "tonalRamp": [
+          "#3c2f1f",
+          "#664d2d",
+          "#936d3c",
+          "#c28f4b",
+          "#eeba78",
+          "#f6cfa2",
+          "#fce5cc",
+          "#fef6ee"
+        ],
+        "note": "Só dentro das artes desenhadas (artes-envio, envio-pizza, carregadores)."
+      },
+      "ilustracao-queijo": {
+        "role": "illustration",
+        "displayName": "Queijo",
+        "canonical": "#F4C430",
+        "tonalRamp": [
+          "#3f341a",
+          "#6b5722",
+          "#9b7d28",
+          "#cda52d",
+          "#f9cf61",
+          "#fede94",
+          "#ffedc4",
+          "#fff9eb"
+        ],
+        "note": "Só dentro das artes desenhadas (artes-envio, envio-pizza, carregadores)."
+      },
+      "ilustracao-folha": {
+        "role": "illustration",
+        "displayName": "Folha",
+        "canonical": "#7DB247",
+        "tonalRamp": [
+          "#27311c",
+          "#3d5028",
+          "#537233",
+          "#6b963e",
+          "#98c16c",
+          "#b9d599",
+          "#d9e8c7",
+          "#f2f7ec"
+        ],
+        "note": "Só dentro das artes desenhadas (artes-envio, envio-pizza, carregadores)."
+      },
+      "ilustracao-carne": {
+        "role": "illustration",
+        "displayName": "Carne",
+        "canonical": "#B3302B",
+        "tonalRamp": [
+          "#331915",
+          "#53201b",
+          "#752720",
+          "#982d26",
+          "#c85e51",
+          "#de9184",
+          "#f0c2ba",
+          "#fbebe8"
+        ],
+        "note": "Só dentro das artes desenhadas (artes-envio, envio-pizza, carregadores)."
+      },
+      "ilustracao-gordura": {
+        "role": "illustration",
+        "displayName": "Gordura",
+        "canonical": "#F3D3C4",
+        "tonalRamp": [
+          "#3e3734",
+          "#6a5d57",
+          "#99867d",
+          "#ccb1a5",
+          "#f6dcd0",
+          "#f9e7de",
+          "#fcf2ed",
+          "#fefbf9"
+        ],
+        "note": "Só dentro das artes desenhadas (artes-envio, envio-pizza, carregadores)."
+      },
+      "ilustracao-pele": {
+        "role": "illustration",
+        "displayName": "Pele",
+        "canonical": "#F3D9C8",
+        "tonalRamp": [
+          "#3e3835",
+          "#6a6059",
+          "#998a7f",
+          "#ccb6a8",
+          "#f6e1d3",
+          "#f9eae0",
+          "#fcf4ee",
+          "#fefbf9"
+        ],
+        "note": "Só dentro das artes desenhadas (artes-envio, envio-pizza, carregadores)."
+      },
+      "ilustracao-papel": {
+        "role": "illustration",
+        "displayName": "Papel",
+        "canonical": "#FFF8E7",
+        "tonalRamp": [
+          "#403f3b",
+          "#6e6b65",
+          "#a09c92",
+          "#d5d0c2",
+          "#fff9ec",
+          "#fffbf2",
+          "#fffdf8",
+          "#fffefd"
+        ],
+        "note": "Só dentro das artes desenhadas (artes-envio, envio-pizza, carregadores)."
+      },
+      "painel-fundo": {
+        "role": "neutral",
+        "displayName": "Névoa do Painel",
+        "canonical": "#F4F4F2",
+        "tonalRamp": [
+          "#2f2f2e",
+          "#5b5b5a",
+          "#8b8b8a",
+          "#bebebc",
+          "#f7f7f5",
+          "#f9f9f8",
+          "#fcfcfc",
+          "#fefefe"
+        ],
+        "note": "Fundo do painel e da lateral (--color-sidebar aponta para --background). TEMA_PAINEL.fundo."
+      },
+      "painel-tinta": {
+        "role": "neutral",
+        "displayName": "Tinta do Painel",
+        "canonical": "#18181C",
+        "tonalRamp": [
+          "#060608",
+          "#0c0c0e",
+          "#111114",
+          "#151518",
+          "#49494d",
+          "#818184",
+          "#bebec0",
+          "#eaeaea"
+        ],
+        "note": "Texto do painel. TEMA_PAINEL.tinta."
+      },
+      "painel-primaria": {
+        "role": "primary",
+        "displayName": "Primária do Painel (tinta de ação)",
+        "canonical": "#1F1E24",
+        "tonalRamp": [
+          "#09080a",
+          "#101013",
+          "#161519",
+          "#1a1a1e",
+          "#504f54",
+          "#868589",
+          "#c1c0c2",
+          "#ebebeb"
+        ],
+        "note": "Botão principal, chave ligada, escolhido. TEMA_PAINEL.primaria."
+      },
+      "painel-apagado": {
+        "role": "neutral",
+        "displayName": "Apagado do Painel",
+        "canonical": "#E5E5E3",
+        "tonalRamp": [
+          "#2c2c2c",
+          "#565655",
+          "#838381",
+          "#b2b2b1",
+          "#ebebea",
+          "#f2f2f1",
+          "#f8f8f8",
+          "#fdfdfd"
+        ],
+        "note": "Derivado por variaveisClaras(TEMA_PAINEL)."
+      },
+      "painel-texto-suave": {
+        "role": "neutral",
+        "displayName": "Texto Suave do Painel",
+        "canonical": "#5C5C5E",
+        "tonalRamp": [
+          "#171717",
+          "#272728",
+          "#383839",
+          "#4a4a4b",
+          "#828283",
+          "#aaaaab",
+          "#d4d4d4",
+          "#f1f1f1"
+        ],
+        "note": "Derivado; 4,5:1 sobre o apagado."
+      },
+      "painel-fio": {
+        "role": "neutral",
+        "displayName": "Fio do Painel",
+        "canonical": "#D1D1D0",
+        "tonalRamp": [
+          "#292929",
+          "#4f4f4f",
+          "#787877",
+          "#a3a3a2",
+          "#dcdcdc",
+          "#e8e8e7",
+          "#f3f3f3",
+          "#fbfbfb"
+        ],
+        "note": "Fios e anéis, quase sempre a 70%."
+      },
+      "painel-contorno-campo": {
+        "role": "neutral",
+        "displayName": "Contorno de Campo do Painel",
+        "canonical": "#8F8F90",
+        "tonalRamp": [
+          "#1f1f1f",
+          "#393939",
+          "#545454",
+          "#717171",
+          "#aaaaab",
+          "#c6c6c6",
+          "#e2e2e2",
+          "#f6f6f6"
+        ],
+        "note": "Borda de input."
+      },
+      "painel-escuro-fundo": {
+        "role": "neutral",
+        "displayName": "Fundo escuro do Painel",
+        "canonical": "#101012",
+        "tonalRamp": [
+          "#030304",
+          "#070708",
+          "#0a0a0c",
+          "#0d0d0f",
+          "#434345",
+          "#7d7d7e",
+          "#bcbcbc",
+          "#e9e9e9"
+        ],
+        "note": "variaveisEscuras(TEMA_PAINEL)."
+      },
+      "painel-escuro-superficie": {
+        "role": "neutral",
+        "displayName": "Folha escura",
+        "canonical": "#1A1A1C",
+        "tonalRamp": [
+          "#070707",
+          "#0d0d0e",
+          "#121214",
+          "#161618",
+          "#4b4b4d",
+          "#838384",
+          "#bfbfc0",
+          "#eaeaea"
+        ],
+        "note": "Folha e cartões no escuro."
+      },
+      "painel-escuro-apagado": {
+        "role": "neutral",
+        "displayName": "Apagado escuro do Painel",
+        "canonical": "#222224",
+        "tonalRamp": [
+          "#0a0a0a",
+          "#121213",
+          "#171719",
+          "#1d1d1e",
+          "#525254",
+          "#888889",
+          "#c2c2c2",
+          "#ebebeb"
+        ]
+      },
+      "painel-escuro-texto": {
+        "role": "neutral",
+        "displayName": "Texto escuro do Painel",
+        "canonical": "#EFEFEF",
+        "tonalRamp": [
+          "#2e2e2e",
+          "#595959",
+          "#888888",
+          "#bababa",
+          "#f3f3f3",
+          "#f7f7f7",
+          "#fbfbfb",
+          "#fefefe"
+        ]
+      },
+      "painel-escuro-texto-suave": {
+        "role": "neutral",
+        "displayName": "Texto suave escuro do Painel",
+        "canonical": "#919192",
+        "tonalRamp": [
+          "#202020",
+          "#39393a",
+          "#555555",
+          "#727273",
+          "#ababac",
+          "#c7c7c7",
+          "#e2e2e3",
+          "#f6f6f6"
+        ]
+      },
+      "painel-escuro-fio": {
+        "role": "neutral",
+        "displayName": "Fio escuro do Painel",
+        "canonical": "#2A2A2B",
+        "tonalRamp": [
+          "#0c0c0d",
+          "#151516",
+          "#1c1c1d",
+          "#232324",
+          "#59595a",
+          "#8d8d8d",
+          "#c4c4c5",
+          "#ececec"
+        ]
+      },
+      "painel-escuro-primaria": {
+        "role": "primary",
+        "displayName": "Primária do Painel no escuro",
+        "canonical": "#F4F4F5",
+        "tonalRamp": [
+          "#2f2f2f",
+          "#5b5b5b",
+          "#8b8b8b",
+          "#bebebf",
+          "#f7f7f7",
+          "#f9f9fa",
+          "#fcfcfc",
+          "#fefefe"
+        ],
+        "note": "Override em admin.css (:root.dark --primary), com texto #18181C."
+      },
+      "painel-escuro-anel": {
+        "role": "neutral",
+        "displayName": "Anel de foco no escuro",
+        "canonical": "#A1A1AA",
+        "tonalRamp": [
+          "#222223",
+          "#3f3f42",
+          "#5e5e63",
+          "#7e7e85",
+          "#b8b8bf",
+          "#cfcfd4",
+          "#e7e7e9",
+          "#f7f7f8"
+        ],
+        "note": "Override em admin.css (:root.dark --ring)."
+      },
+      "atencao": {
+        "role": "attention",
+        "displayName": "Atenção (laranja)",
+        "canonical": "#D9480F",
+        "tonalRamp": [
+          "#2d1609",
+          "#54230f",
+          "#7e2f11",
+          "#aa3c11",
+          "#eb7a4d",
+          "#f8a786",
+          "#ffd3c1",
+          "#fff1eb"
+        ],
+        "note": "--atencao. Só o pedido que acabou de chegar."
+      },
+      "atencao-escuro": {
+        "role": "attention",
+        "displayName": "Atenção no escuro",
+        "canonical": "#FF7A45",
+        "tonalRamp": [
+          "#321d14",
+          "#603220",
+          "#92492c",
+          "#c76138",
+          "#ff9d72",
+          "#ffbea0",
+          "#ffdfcf",
+          "#fff5ef"
+        ],
+        "note": "--atencao em .dark."
+      },
+      "tom-espera": {
+        "role": "status",
+        "displayName": "Espera",
+        "canonical": "#7357D1",
+        "tonalRamp": [
+          "#1c172a",
+          "#31264f",
+          "#463578",
+          "#5c46a3",
+          "#997fdd",
+          "#bca8e9",
+          "#ded3f5",
+          "#f5f1fc"
+        ],
+        "note": "--tom-espera: aguardando pagamento."
+      },
+      "tom-novo": {
+        "role": "status",
+        "displayName": "Novo (a tinta)",
+        "canonical": "#1F1E24",
+        "tonalRamp": [
+          "#09080a",
+          "#101013",
+          "#161519",
+          "#1a1a1e",
+          "#504f54",
+          "#868589",
+          "#c1c0c2",
+          "#ebebeb"
+        ],
+        "note": "--tom-novo: recebido; a cor da ação."
+      },
+      "tom-preparo": {
+        "role": "status",
+        "displayName": "Preparo (âmbar)",
+        "canonical": "#C98A00",
+        "tonalRamp": [
+          "#2a1e0c",
+          "#4e3711",
+          "#755111",
+          "#9e6d0d",
+          "#dba652",
+          "#ebc38b",
+          "#f7e1c4",
+          "#fdf5ec"
+        ],
+        "note": "--tom-preparo: em preparo; também aviso de tempo."
+      },
+      "tom-pronto": {
+        "role": "status",
+        "displayName": "Pronto (verde)",
+        "canonical": "#13854A",
+        "tonalRamp": [
+          "#101e14",
+          "#153621",
+          "#184f2e",
+          "#18693c",
+          "#5da374",
+          "#94c2a1",
+          "#c9e0cf",
+          "#eef5ef"
+        ],
+        "note": "--tom-pronto: pronto, ao vivo, salvo, variação positiva."
+      },
+      "tom-caminho": {
+        "role": "status",
+        "displayName": "A caminho (azul)",
+        "canonical": "#2E6BD6",
+        "tonalRamp": [
+          "#15192a",
+          "#1f2c51",
+          "#26407b",
+          "#2b55a7",
+          "#738de1",
+          "#a4b2ec",
+          "#d2d8f6",
+          "#f1f2fc"
+        ],
+        "note": "--tom-caminho: saiu para entrega."
+      },
+      "tom-fim": {
+        "role": "status",
+        "displayName": "Fim (cinza quente)",
+        "canonical": "#B4B4AE",
+        "tonalRamp": [
+          "#252524",
+          "#454543",
+          "#686865",
+          "#8d8d88",
+          "#c6c6c2",
+          "#d9d9d6",
+          "#ececea",
+          "#f9f9f8"
+        ],
+        "note": "--tom-fim: concluído."
+      },
+      "tom-cancelado": {
+        "role": "status",
+        "displayName": "Cancelado (vermelho)",
+        "canonical": "#C2362B",
+        "tonalRamp": [
+          "#29130d",
+          "#4c1d16",
+          "#71261d",
+          "#992e24",
+          "#d86d5b",
+          "#ea9e8f",
+          "#f8cec5",
+          "#fdefec"
+        ],
+        "note": "--tom-cancelado: cancelado, atraso, variação negativa."
+      },
+      "tom-espera-escuro": {
+        "role": "status",
+        "displayName": "Espera, escuro",
+        "canonical": "#A993F2",
+        "tonalRamp": [
+          "#24202f",
+          "#423a5a",
+          "#62568a",
+          "#8574bc",
+          "#c0adf6",
+          "#d5c8f9",
+          "#eae3fc",
+          "#f8f6fe"
+        ]
+      },
+      "tom-novo-escuro": {
+        "role": "status",
+        "displayName": "Novo, escuro",
+        "canonical": "#F4F4F5",
+        "tonalRamp": [
+          "#2f2f2f",
+          "#5b5b5b",
+          "#8b8b8b",
+          "#bebebf",
+          "#f7f7f7",
+          "#f9f9fa",
+          "#fcfcfc",
+          "#fefefe"
+        ]
+      },
+      "tom-preparo-escuro": {
+        "role": "status",
+        "displayName": "Preparo, escuro",
+        "canonical": "#F0B43A",
+        "tonalRamp": [
+          "#2f2514",
+          "#5a451e",
+          "#896828",
+          "#bb8d31",
+          "#f8c66f",
+          "#fdd99f",
+          "#ffeccf",
+          "#fff9ef"
+        ]
+      },
+      "tom-pronto-escuro": {
+        "role": "status",
+        "displayName": "Pronto, escuro",
+        "canonical": "#3FD28A",
+        "tonalRamp": [
+          "#172a1f",
+          "#235037",
+          "#2e7951",
+          "#37a46d",
+          "#7ddea7",
+          "#abeac4",
+          "#d6f5e1",
+          "#f2fcf5"
+        ]
+      },
+      "tom-caminho-escuro": {
+        "role": "status",
+        "displayName": "A caminho, escuro",
+        "canonical": "#6FA1F6",
+        "tonalRamp": [
+          "#1c222f",
+          "#303f5b",
+          "#445e8c",
+          "#597ec0",
+          "#98b8f9",
+          "#bccffb",
+          "#dee7fd",
+          "#f5f7ff"
+        ]
+      },
+      "tom-fim-escuro": {
+        "role": "status",
+        "displayName": "Fim, escuro",
+        "canonical": "#5E5E66",
+        "tonalRamp": [
+          "#171719",
+          "#28282a",
+          "#39393d",
+          "#4b4b51",
+          "#83838a",
+          "#ababaf",
+          "#d4d4d6",
+          "#f1f1f2"
+        ]
+      },
+      "tom-cancelado-escuro": {
+        "role": "status",
+        "displayName": "Cancelado, escuro",
+        "canonical": "#F2766B",
+        "tonalRamp": [
+          "#301c1a",
+          "#5b312c",
+          "#8b4740",
+          "#bd5e55",
+          "#fa9a8e",
+          "#ffbcb2",
+          "#ffddd8",
+          "#fff4f2"
+        ]
+      },
+      "preparo-texto": {
+        "role": "status",
+        "displayName": "Texto de atenção sobre âmbar",
+        "canonical": "#8A5C00",
+        "tonalRamp": [
+          "#201707",
+          "#38270b",
+          "#52380c",
+          "#6d4a08",
+          "#aa8246",
+          "#c9aa81",
+          "#e5d4bf",
+          "#f7f1ea"
+        ],
+        "note": "Tempo em atenção no claro (fila e cozinha), sobre tom-preparo a 12%."
+      },
+      "grafico": {
+        "role": "data",
+        "displayName": "Gráfico",
+        "canonical": "#2A78D6",
+        "tonalRamp": [
+          "#151c2a",
+          "#1e3151",
+          "#25477b",
+          "#295fa7",
+          "#7198e1",
+          "#a4b9ec",
+          "#d2dbf6",
+          "#f1f3fc"
+        ],
+        "note": "--grafico: série única dos gráficos e barras de proporção (3:1 sobre a folha)."
+      },
+      "grafico-escuro": {
+        "role": "data",
+        "displayName": "Gráfico no escuro",
+        "canonical": "#3987E5",
+        "tonalRamp": [
+          "#161e2d",
+          "#223656",
+          "#2b4f83",
+          "#336bb3",
+          "#79a3ec",
+          "#a9c1f3",
+          "#d5dff9",
+          "#f2f5fd"
+        ],
+        "note": "--grafico em .dark."
+      },
+      "pro-ouro": {
+        "role": "accent",
+        "displayName": "Ouro Pro",
+        "canonical": "#F5B700",
+        "tonalRamp": [
+          "#302510",
+          "#5c4615",
+          "#8c6a16",
+          "#bf8f11",
+          "#fcc85b",
+          "#ffda93",
+          "#ffecc9",
+          "#fff9ee"
+        ],
+        "note": "Selo Pro liberado (degradê), contorno da opção liberada, ícone no escuro."
+      },
+      "pro-ouro-texto": {
+        "role": "accent",
+        "displayName": "Ouro Pro, texto",
+        "canonical": "#C27C00",
+        "tonalRamp": [
+          "#291c0b",
+          "#4b3210",
+          "#714a10",
+          "#98620c",
+          "#d69b4f",
+          "#e7bc89",
+          "#f5ddc3",
+          "#fcf4ec"
+        ],
+        "note": "Ícone de brilho do cartão Pro no claro."
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Nome da loja sobre a foto (44px do tablet em diante) e títulos do acompanhamento e da busca de pedidos."
+      },
+      "display-celular": {
+        "displayName": "Display no celular",
+        "purpose": "Nome da loja sobre a foto no celular (28px)."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Título de cada passo do checkout (26px no celular, 30px no tablet) e da tela de envio."
+      },
+      "title-folha": {
+        "displayName": "Título da folha",
+        "purpose": "Nome do produto na folha do produto."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Nome de categoria e de Mais pedidos (18px no celular, 20px no tablet)."
+      },
+      "title-sm": {
+        "displayName": "Title pequeno",
+        "purpose": "Topo do checkout e blocos do acompanhamento."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Tamanho base: nome do produto, valores da régua, títulos de opção."
+      },
+      "body-sm": {
+        "displayName": "Body pequeno",
+        "purpose": "Descrição em duas linhas, dado da etiqueta, detalhe das opções."
+      },
+      "preco": {
+        "displayName": "Preço",
+        "purpose": "Valor da etiqueta, sempre tabular (18px na folha)."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Rótulos da régua de fatos. Sem caixa-alta."
+      },
+      "painel-titulo": {
+        "displayName": "Título de página (painel)",
+        "purpose": "Nome da tela no CabecalhoPagina, 24px/600."
+      },
+      "painel-regua": {
+        "displayName": "Régua (painel)",
+        "purpose": "Número de cada fato da régua: 22px no celular, 24px de 640px, 28px de 1024px; tabular."
+      },
+      "painel-secao": {
+        "displayName": "Seção (painel)",
+        "purpose": "Título do BlocoSecao e dos blocos da visão geral."
+      },
+      "painel-texto": {
+        "displayName": "Texto (painel)",
+        "purpose": "Itens do menu, células, botões (14px)."
+      },
+      "painel-rotulo": {
+        "displayName": "Rótulo (painel)",
+        "purpose": "Status, cabeçalho de tabela, título de coluna; 13px/500 tabular."
+      },
+      "painel-detalhe": {
+        "displayName": "Detalhe (painel)",
+        "purpose": "Endereço, cobrança, rótulo de grupo da lateral (12px); etapas do caminho a 11px."
+      }
+    },
+    "shadows": [
+      {
+        "name": "sombra-flutuante",
+        "value": "0 1px 2px rgb(14 26 43 / 0.08), 0 16px 40px -16px rgb(14 26 43 / 0.28)",
+        "purpose": "Peças soltas sobre a página (etiqueta em voo). No escuro: 0 0 0 1px rgb(255 255 255 / 0.06), 0 16px 40px -16px rgb(0 0 0 / 0.7)."
+      },
+      {
+        "name": "sombra-sacola",
+        "value": "0 14px 32px -14px color-mix(in oklab, var(--primary) 60%, transparent)",
+        "purpose": "Barra da sacola no celular; a única sombra tingida pela marca."
+      },
+      {
+        "name": "sombra-ilha",
+        "value": "0 30px 80px -20px rgb(0 0 0 / 0.45)",
+        "purpose": "Sacola aberta como ilha, com anel de fio."
+      },
+      {
+        "name": "sombra-sobre-foto",
+        "value": "0 10px 15px -3px rgb(0 0 0 / 0.25), 0 4px 6px -4px rgb(0 0 0 / 0.25)",
+        "purpose": "Botão de adicionar quando fica sobre a foto de Mais pedidos."
+      },
+      {
+        "name": "sombra-cta-hover",
+        "value": "0 10px 15px -3px color-mix(in oklab, var(--primary) 30%, transparent)",
+        "purpose": "CTA do checkout no hover com ponteiro, junto da subida de 2px."
+      },
+      {
+        "name": "escolha-interna",
+        "value": "inset 0 0 0 1px var(--primary)",
+        "purpose": "Cartão de opção escolhido: o fio engrossa por dentro sem mudar o tamanho."
+      },
+      {
+        "name": "painel-peca-no-trilho",
+        "value": "0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.05)",
+        "purpose": "Peça branca escolhida sobre tom neutro: item ativo do menu, opção do segmento (0.06), cartão Pro."
+      },
+      {
+        "name": "painel-cartao-quadro",
+        "value": "0 1px 2px rgb(0 0 0 / 0.04)",
+        "purpose": "Cartão da fila, ticket da cozinha, bloco da agenda; com anel de 1px."
+      },
+      {
+        "name": "painel-barra-acoes",
+        "value": "0 12px 32px -18px rgb(0 0 0 / 0.35)",
+        "purpose": "Barra de mudanças não aplicadas presa ao pé da folha. Barra da loja: 0 18px 40px -20px rgb(0 0 0 / 0.45)."
+      },
+      {
+        "name": "painel-opcao-pro",
+        "value": "0 0 0 1px rgb(245 183 0 / 0.28), 0 10px 28px -16px rgb(245 140 0 / 0.55)",
+        "purpose": "Opção Pro liberada (.opcao-pro em admin.css)."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-saida",
+        "value": "cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Curva da casa (--ease-saida, CURVA_SAIDA): tudo que entra, sai ou muda de estado."
+      },
+      {
+        "name": "curva-tela",
+        "value": "cubic-bezier(0.77, 0, 0.175, 1)",
+        "purpose": "O que se desloca pela tela: fio dos passos (450ms), linha do tempo do acompanhamento."
+      },
+      {
+        "name": "curva-gaveta",
+        "value": "cubic-bezier(0.32, 0.72, 0, 1)",
+        "purpose": "Curva própria do Vaul para a gaveta do celular (500ms)."
+      },
+      {
+        "name": "curva-laco",
+        "value": "cubic-bezier(0.65, 0, 0.35, 1)",
+        "purpose": "Laços simétricos dos carregadores do nicho."
+      },
+      {
+        "name": "duracao-toque",
+        "value": "100ms–150ms",
+        "purpose": "Resposta ao toque, cor e borda."
+      },
+      {
+        "name": "duracao-troca",
+        "value": "200ms–300ms",
+        "purpose": "Trocas de rótulo, de passo, de estado."
+      },
+      {
+        "name": "duracao-entrada",
+        "value": "300ms",
+        "purpose": "Entrada única da página: bloco da marca e régua sobem 16px, atrasos de 30 e 60ms, em CSS na primeira pintura."
+      },
+      {
+        "name": "foto-assenta",
+        "value": "600ms, scale 1.06 → 1",
+        "purpose": "A foto da loja assenta uma vez na primeira pintura."
+      },
+      {
+        "name": "toque-escala",
+        "value": "scale(0.97)",
+        "purpose": "Botões e abas. Linhas e cartões: 0.985. O botão de adicionar: 0.92."
+      },
+      {
+        "name": "saida-mais-rapida",
+        "value": "saída 100–160ms / entrada 200–260ms",
+        "purpose": "Tudo que sai é mais curto que o que entrou."
+      },
+      {
+        "name": "voo-etiqueta",
+        "value": "300ms, ease-saida, scale 1 → 0.6, opacidade some nos últimos 20%",
+        "purpose": "Assinatura: a etiqueta desliza até a sacola. A sacola reage na chegada: pulo 1.025 em 350ms, fio do mínimo enche (mola 700ms)."
+      },
+      {
+        "name": "marcador-aba",
+        "value": "20×2px, spring duration 0.3s bounce 0",
+        "purpose": "O marcador da aba ativa desliza entre abas (elemento compartilhado)."
+      },
+      {
+        "name": "passo-crossfade",
+        "value": "x ±24px, blur 3px; entra 260ms, sai 160ms, ease-saida",
+        "purpose": "Troca de passo do checkout na direção do caminho."
+      },
+      {
+        "name": "erro-empurrao",
+        "value": "x [0, -4, 4, -2, 0] em 260ms",
+        "purpose": "Ao avançar com erro; nunca tremor longo."
+      },
+      {
+        "name": "mola-crescer",
+        "value": "spring duration 0.42 bounce 0.22",
+        "purpose": "Botão de adicionar crescendo em seletor; sacola e miniaturas usam molas de 0.4–0.5s."
+      },
+      {
+        "name": "movimento-reduzido",
+        "value": "prefers-reduced-motion: reduce",
+        "purpose": "Sem voo, deslocamento ou desfoque; trocas viram esmaecimento curto (120–200ms); laços param inteiros; rolagem suave desligada."
+      },
+      {
+        "name": "painel-pedido-anda",
+        "value": "layoutId compartilhado, 250ms, cubic-bezier(0.23, 1, 0.32, 1)",
+        "purpose": "Assinatura do painel: o cartão da fila/ticket desliza até a coluna seguinte; entrada de y 8px para 0."
+      },
+      {
+        "name": "painel-traco-cor",
+        "value": "200ms, ease-saida",
+        "purpose": "O traço troca de cor ao mudar o status."
+      },
+      {
+        "name": "painel-caminho",
+        "value": "300ms, ease-saida",
+        "purpose": "A próxima haste do caminho do pedido acende."
+      },
+      {
+        "name": "painel-traco-menu",
+        "value": "spring duration 0.3 bounce 0, layoutId traco-menu",
+        "purpose": "O traço do item ativo da lateral desliza entre páginas."
+      },
+      {
+        "name": "painel-estado",
+        "value": "150ms",
+        "purpose": "Hover, cor, toque, segmento, linhas de tabela."
+      },
+      {
+        "name": "painel-saida",
+        "value": "120–160ms",
+        "purpose": "Botões da barra de ações saem em 120ms; gaveta lateral sai em 160ms (entra em 250ms)."
+      },
+      {
+        "name": "painel-realce-novo",
+        "value": "opacity 0.1 → 0 em 2.4s, easeOut",
+        "purpose": "Pedido que chegou: véu laranja que esmaece uma vez."
+      },
+      {
+        "name": "painel-pro-uma-vez",
+        "value": "giro 1.6s, varredura 1.3s (+0.1s), selo 1.6s; uma iteração",
+        "purpose": "Brilho Pro ao liberar, uma vez só; desligado com movimento reduzido."
+      },
+      {
+        "name": "painel-numero",
+        "value": "NumberFlow",
+        "purpose": "Régua, contagens de coluna e estoque rolam os dígitos."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "celular",
+        "value": "<768px",
+        "purpose": "Gaveta de baixo, barra da sacola no pé, lista em uma coluna, foto 104px."
+      },
+      {
+        "name": "md",
+        "value": "768px",
+        "purpose": "Janela central de até 560px, lista em duas colunas, foto 112px, régua e busca lado a lado."
+      },
+      {
+        "name": "xl",
+        "value": "1280px",
+        "purpose": "Quarto fato na régua (horário) e marca na barra grudada."
+      },
+      {
+        "name": "coluna",
+        "value": "1120px",
+        "purpose": "Largura máxima da coluna de leitura da vitrine."
+      },
+      {
+        "name": "painel-container-3xl",
+        "value": "@container 768px",
+        "purpose": "Linha de produto numa linha só a partir de 768px de contêiner; quebra abaixo."
+      },
+      {
+        "name": "painel-lg",
+        "value": "1024px",
+        "purpose": "Régua em quatro fatos numa linha; quadro em colunas; visão geral em duas colunas; página com 32px nas laterais."
+      },
+      {
+        "name": "painel-lateral",
+        "value": "256px",
+        "purpose": "Largura da lateral inset; folha afastada 8px da borda."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Etiqueta",
+      "kind": "custom",
+      "refersTo": "etiqueta",
+      "description": "O único detalhe marcado do produto: dado do segmento, haste na cor da loja e preço tabular.",
+      "html": "<p class=\"ds-etiqueta\"><span class=\"ds-etiqueta-dado\">8 fatias</span><span class=\"ds-etiqueta-linha\"><span class=\"ds-etiqueta-traco\"></span><span class=\"ds-etiqueta-suave\">A partir de</span><span class=\"ds-etiqueta-preco\">R$ 58,00</span></span></p>",
+      "css": ".ds-etiqueta{display:flex;flex-direction:column;gap:2px;margin:0;font-family:Geist,system-ui,sans-serif;line-height:1.25;font-variant-numeric:tabular-nums;color:var(--foreground,#14202E)} .ds-etiqueta-dado,.ds-etiqueta-suave{font-size:13px;color:var(--muted-foreground,#5B636E)} .ds-etiqueta-linha{display:flex;align-items:baseline;gap:8px} .ds-etiqueta-traco{width:3px;height:14px;align-self:center;border-radius:9999px;background:var(--primary,#0B4F9C)} .ds-etiqueta-preco{font-size:15px;font-weight:600;letter-spacing:-0.01em}"
+    },
+    {
+      "name": "Etiqueta em voo",
+      "kind": "custom",
+      "refersTo": "etiqueta-voando",
+      "description": "A etiqueta solta a caminho da sacola: pílula de 32px com sombra flutuante.",
+      "html": "<span class=\"ds-voo\"><span class=\"ds-voo-traco\"></span>R$ 58,00</span>",
+      "css": "@keyframes ds-voo{0%{transform:translate(0,0) scale(1);opacity:1}80%{opacity:1}100%{transform:translate(120px,60px) scale(.6);opacity:0}} .ds-voo{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 10px;border-radius:12px;background:var(--card,#fff);color:var(--card-foreground,#14202E);font:600 15px Geist,system-ui,sans-serif;letter-spacing:-0.01em;font-variant-numeric:tabular-nums;box-shadow:0 0 0 1px var(--border,#D2D4D9),0 1px 2px rgb(14 26 43/.08),0 16px 40px -16px rgb(14 26 43/.28)} .ds-voo:hover{animation:ds-voo 300ms cubic-bezier(0.23,1,0.32,1) both} .ds-voo-traco{width:3px;height:14px;border-radius:9999px;background:var(--primary,#0B4F9C)} @media (prefers-reduced-motion:reduce){.ds-voo:hover{animation:none}}"
+    },
+    {
+      "name": "Botão de adicionar",
+      "kind": "button",
+      "refersTo": "botao-adicionar",
+      "description": "Círculo de 44px na linha do produto; vira primária no hover e afunda no toque.",
+      "html": "<button class=\"ds-adicionar\" aria-label=\"Adicionar\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\"><path d=\"M5 12h14M12 5v14\"/></svg></button>",
+      "css": ".ds-adicionar{display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:9999px;background:var(--accent,#E9ECF5);color:var(--marca-texto,#0B4F9C);cursor:pointer;transition:background-color 200ms cubic-bezier(0.23,1,0.32,1),color 200ms cubic-bezier(0.23,1,0.32,1),transform 150ms cubic-bezier(0.23,1,0.32,1)} .ds-adicionar:hover{background:var(--primary,#0B4F9C);color:var(--primary-foreground,#fff)} .ds-adicionar:active{transform:scale(0.92)} .ds-adicionar:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring,#0B4F9C)}"
+    },
+    {
+      "name": "CTA do checkout",
+      "kind": "button",
+      "refersTo": "botao-cta",
+      "description": "Pílula de 48px: rótulo à esquerda, total tabular e ícone à direita.",
+      "html": "<button class=\"ds-cta\"><span>Continuar</span><span class=\"ds-cta-fim\">R$ 72,00<svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M5 12h14M12 5l7 7-7 7\"/></svg></span></button>",
+      "css": ".ds-cta{display:flex;align-items:center;justify-content:space-between;gap:16px;min-width:280px;height:48px;padding:0 16px 0 20px;border:0;border-radius:9999px;background:var(--primary,#0B4F9C);color:var(--primary-foreground,#fff);font:600 16px/1 Geist,system-ui,sans-serif;cursor:pointer;transition:transform 300ms cubic-bezier(0.23,1,0.32,1),box-shadow 300ms cubic-bezier(0.23,1,0.32,1)} .ds-cta-fim{display:flex;align-items:center;gap:10px;font-variant-numeric:tabular-nums} .ds-cta:hover{transform:translateY(-2px);box-shadow:0 10px 15px -3px color-mix(in oklab,var(--primary,#0B4F9C) 30%,transparent)} .ds-cta:active{transform:scale(0.97);transition-duration:100ms} .ds-cta:focus-visible{outline:none;box-shadow:0 0 0 3px color-mix(in oklab,var(--ring,#0B4F9C) 50%,transparent)}"
+    },
+    {
+      "name": "Barra da sacola",
+      "kind": "custom",
+      "refersTo": "barra-sacola",
+      "description": "Só no celular: 56px na cor da loja, com o fio do mínimo enchendo no pé.",
+      "html": "<button class=\"ds-sacola\"><span class=\"ds-sacola-mini\"></span><span class=\"ds-sacola-texto\"><strong>Ver sacola</strong><small>Faltam R$ 12,00 pro mínimo</small></span><span class=\"ds-sacola-total\">R$ 18,00</span><span class=\"ds-sacola-fio\"></span></button>",
+      "css": ".ds-sacola{position:relative;display:flex;align-items:center;gap:12px;width:360px;height:56px;padding:0 16px 0 10px;border:0;border-radius:16px;overflow:hidden;background:var(--primary,#0B4F9C);color:var(--primary-foreground,#fff);font-family:Geist,system-ui,sans-serif;text-align:left;cursor:pointer;box-shadow:0 14px 32px -14px color-mix(in oklab,var(--primary,#0B4F9C) 60%,transparent);transition:transform 150ms cubic-bezier(0.23,1,0.32,1)} .ds-sacola:active{transform:scale(0.97)} .ds-sacola:focus-visible{outline:none;box-shadow:0 0 0 4px color-mix(in oklab,var(--ring,#0B4F9C) 50%,transparent)} .ds-sacola-mini{width:36px;height:36px;border-radius:10px;background:#fff} .ds-sacola-texto{display:flex;flex:1;flex-direction:column;line-height:1.25} .ds-sacola-texto strong{font-size:15px;font-weight:600} .ds-sacola-texto small{font-size:12px;opacity:.8} .ds-sacola-total{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums} .ds-sacola-fio{position:absolute;left:0;bottom:0;height:3px;width:60%;background:color-mix(in oklab,var(--primary-foreground,#fff) 70%,transparent)}"
+    },
+    {
+      "name": "Abas de categoria",
+      "kind": "nav",
+      "refersTo": "aba-categoria",
+      "description": "Abas de texto com o marcador de 20×2px na cor da loja sob a ativa.",
+      "html": "<nav class=\"ds-abas\"><button class=\"ds-aba ds-aba-ativa\">Monte a sua</button><button class=\"ds-aba\">Combos</button><button class=\"ds-aba\">Tradicionais</button></nav>",
+      "css": ".ds-abas{display:flex;gap:4px;font-family:Geist,system-ui,sans-serif} .ds-aba{position:relative;height:44px;padding:0 12px;border:0;border-radius:12px;background:transparent;font-size:14px;font-weight:500;color:var(--muted-foreground,#5B636E);cursor:pointer;transition:color 150ms cubic-bezier(0.23,1,0.32,1),transform 150ms cubic-bezier(0.23,1,0.32,1)} .ds-aba:hover{color:var(--foreground,#14202E)} .ds-aba:active{transform:scale(0.97)} .ds-aba:focus-visible{outline:none;box-shadow:inset 0 0 0 2px var(--ring,#0B4F9C)} .ds-aba-ativa{color:var(--foreground,#14202E)} .ds-aba-ativa::after{content:'';position:absolute;bottom:0;left:calc(50% - 10px);width:20px;height:2px;border-radius:9999px;background:var(--primary,#0B4F9C)}"
+    },
+    {
+      "name": "Campo do checkout",
+      "kind": "input",
+      "refersTo": "campo",
+      "description": "48px, cantos de 16,8px, fundo da página, caret na cor da loja.",
+      "html": "<label class=\"ds-campo\"><span>Nome</span><input placeholder=\"Como podemos te chamar\"></label>",
+      "css": ".ds-campo{display:flex;flex-direction:column;gap:8px;width:320px;font:500 14px Geist,system-ui,sans-serif;color:var(--foreground,#14202E)} .ds-campo input{height:48px;padding:0 14px;border:1px solid var(--input,#8E949D);border-radius:16.8px;background:var(--background,#F5F6F8);font:400 16px Geist,system-ui,sans-serif;color:inherit;caret-color:var(--primary,#0B4F9C);transition:border-color 150ms,box-shadow 150ms} .ds-campo input:focus-visible{outline:none;border-color:var(--ring,#0B4F9C);box-shadow:0 0 0 3px color-mix(in oklab,var(--ring,#0B4F9C) 50%,transparent)}"
+    },
+    {
+      "name": "Busca",
+      "kind": "input",
+      "refersTo": "busca",
+      "description": "44px, sem borda, no apagado, com ícone à esquerda.",
+      "html": "<label class=\"ds-busca\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><circle cx=\"11\" cy=\"11\" r=\"7\"/><path d=\"m20 20-3.5-3.5\"/></svg><input type=\"search\" placeholder=\"Buscar pizza, borda, bebida\"></label>",
+      "css": ".ds-busca{display:flex;align-items:center;gap:8px;width:320px;height:44px;padding:0 14px;border-radius:16.8px;background:var(--secondary,#E6E7EA);color:var(--muted-foreground,#5B636E);transition:box-shadow 150ms} .ds-busca:focus-within{box-shadow:0 0 0 3px color-mix(in oklab,var(--ring,#0B4F9C) 50%,transparent)} .ds-busca input{flex:1;border:0;background:transparent;font:400 15px Geist,system-ui,sans-serif;color:var(--foreground,#14202E);caret-color:var(--primary,#0B4F9C);outline:none}"
+    },
+    {
+      "name": "Cartão de opção",
+      "kind": "chip",
+      "refersTo": "cartao-opcao",
+      "description": "Escolha plana com fio; escolhida, o fio vira a cor da loja e engrossa por dentro.",
+      "html": "<label class=\"ds-opcao ds-opcao-escolhida\"><span class=\"ds-opcao-texto\"><strong>Entrega</strong><small>35–50 min</small></span><span class=\"ds-opcao-valor\">R$ 6,00</span><span class=\"ds-opcao-radio\"></span></label>",
+      "css": ".ds-opcao{display:flex;align-items:center;gap:14px;width:340px;min-height:64px;padding:12px 16px;border:1px solid var(--border,#D2D4D9);border-radius:16.8px;font-family:Geist,system-ui,sans-serif;color:var(--foreground,#14202E);cursor:pointer;transition:border-color 150ms cubic-bezier(0.23,1,0.32,1),box-shadow 150ms cubic-bezier(0.23,1,0.32,1),transform 150ms cubic-bezier(0.23,1,0.32,1)} .ds-opcao:hover{background:color-mix(in oklab,var(--muted,#E6E7EA) 40%,transparent)} .ds-opcao:active{transform:scale(0.985)} .ds-opcao-escolhida{border-color:var(--primary,#0B4F9C);box-shadow:inset 0 0 0 1px var(--primary,#0B4F9C)} .ds-opcao-texto{display:flex;flex:1;flex-direction:column;gap:2px} .ds-opcao-texto strong{font-size:15px;font-weight:500;letter-spacing:-0.01em} .ds-opcao-texto small{font-size:13px;color:var(--muted-foreground,#5B636E)} .ds-opcao-valor{font-size:13px;font-weight:500;font-variant-numeric:tabular-nums} .ds-opcao-radio{width:20px;height:20px;box-sizing:border-box;border-radius:9999px;border:6px solid var(--primary,#0B4F9C)}"
+    },
+    {
+      "name": "Linha do produto",
+      "kind": "card",
+      "refersTo": "linha-produto",
+      "description": "Sem cartão: foto de 104px, nome, descrição em duas linhas e etiqueta, com fio no pé.",
+      "html": "<article class=\"ds-linha\"><div class=\"ds-linha-foto\"></div><div class=\"ds-linha-corpo\"><h3>Pizza meio a meio</h3><p>8 fatias. Escolha dois sabores e a borda.</p><div class=\"ds-linha-pe\"><span class=\"ds-linha-preco\"><i></i>R$ 58,00</span><button aria-label=\"Adicionar\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2.5\" stroke-linecap=\"round\"><path d=\"M5 12h14M12 5v14\"/></svg></button></div></div></article>",
+      "css": ".ds-linha{display:flex;gap:16px;width:360px;padding:16px 0;border-bottom:1px solid color-mix(in oklab,var(--border,#D2D4D9) 70%,transparent);font-family:Geist,system-ui,sans-serif;color:var(--foreground,#14202E);transition:transform 150ms cubic-bezier(0.23,1,0.32,1)} .ds-linha:active{transform:scale(0.985)} .ds-linha-foto{width:104px;height:104px;flex-shrink:0;border-radius:16.8px;background:var(--muted,#E6E7EA)} .ds-linha-corpo{display:flex;flex:1;flex-direction:column} .ds-linha h3{margin:0;font-size:15px;font-weight:500;letter-spacing:-0.01em} .ds-linha p{margin:4px 0 0;font-size:13px;line-height:1.375;color:var(--muted-foreground,#5B636E)} .ds-linha-pe{display:flex;align-items:flex-end;justify-content:space-between;margin-top:auto;padding-top:12px} .ds-linha-preco{display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;font-variant-numeric:tabular-nums} .ds-linha-preco i{width:3px;height:14px;border-radius:9999px;background:var(--primary,#0B4F9C)} .ds-linha button{display:grid;place-items:center;width:44px;height:44px;border:0;border-radius:9999px;background:var(--accent,#E9ECF5);color:var(--marca-texto,#0B4F9C);cursor:pointer;transition:background-color 200ms,color 200ms} .ds-linha button:hover{background:var(--primary,#0B4F9C);color:var(--primary-foreground,#fff)} .ds-linha button:focus-visible{outline:none;box-shadow:0 0 0 3px var(--ring,#0B4F9C)}"
+    },
+    {
+      "name": "Painel: SeloStatus",
+      "kind": "chip",
+      "refersTo": "painel-selo-status",
+      "description": "Traço de 3px no tom da etapa e o nome na tinta; sem fundo.",
+      "html": "<div class=\"ds-ps-lista\"><span class=\"ds-ps\"><i style=\"background:var(--tom-novo,#1F1E24)\"></i>Novo</span><span class=\"ds-ps\"><i style=\"background:var(--tom-preparo,#C98A00)\"></i>Em preparo</span><span class=\"ds-ps\"><i style=\"background:var(--tom-pronto,#13854A)\"></i>Pronto para retirada</span><span class=\"ds-ps\"><i style=\"background:var(--tom-caminho,#2E6BD6)\"></i>Saiu para entrega</span><span class=\"ds-ps ds-ps-fora\"><i style=\"background:var(--tom-fim,#B4B4AE)\"></i>Entregue</span></div>",
+      "css": ".ds-ps-lista{display:flex;flex-direction:column;gap:12px} .ds-ps{display:inline-flex;align-items:center;gap:8px;font:500 13px/1 Geist,system-ui,sans-serif;color:#18181C;white-space:nowrap;font-variant-numeric:tabular-nums} .ds-ps i{display:inline-block;width:3px;height:14px;border-radius:9999px;transition:background-color 200ms cubic-bezier(0.23,1,0.32,1)} .ds-ps-fora{color:#5C5C5E}"
+    },
+    {
+      "name": "Painel: Caminho do pedido",
+      "kind": "custom",
+      "refersTo": "caminho-pedido",
+      "description": "Uma haste de 3px por etapa, acesa no tom de cada etapa até onde o pedido chegou.",
+      "html": "<ol class=\"ds-cam\"><li><i style=\"background:#1F1E24\"></i>Novo</li><li><i style=\"background:#C98A00\"></i>Em preparo</li><li class=\"ds-cam-agora\"><i style=\"background:#13854A\"></i>Pronto</li><li><i></i>Saiu para entrega</li><li><i></i>Entregue</li></ol>",
+      "css": ".ds-cam{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;width:420px;margin:0;padding:8px 0 0;list-style:none;font-family:Geist,system-ui,sans-serif} .ds-cam li{display:flex;flex-direction:column;gap:6px;font-size:11px;line-height:1.25;color:#5C5C5E} .ds-cam i{height:3px;border-radius:9999px;background:rgb(24 24 28/.1);transition:background-color 300ms cubic-bezier(0.23,1,0.32,1)} .ds-cam li.ds-cam-agora{font-weight:500;color:#18181C}"
+    },
+    {
+      "name": "Painel: Régua",
+      "kind": "custom",
+      "refersTo": "regua",
+      "description": "Fatos lado a lado entre fios, sem cartão nem ícone.",
+      "html": "<dl class=\"ds-regua\"><div><dt>Pedidos hoje</dt><dd class=\"ds-n\">12</dd></div><div><dt>Faturamento hoje</dt><dd class=\"ds-n\">R$ 1.706,50</dd><dd class=\"ds-d\">Sem cancelados</dd></div><div><dt>Em andamento</dt><dd class=\"ds-n\">9</dd><dd class=\"ds-d\">Ver na fila</dd></div></dl>",
+      "css": ".ds-regua{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:620px;margin:0;border-top:1px solid rgb(209 209 208/.7);border-bottom:1px solid rgb(209 209 208/.7);font-family:Geist,system-ui,sans-serif;color:#18181C} .ds-regua>div{display:flex;flex-direction:column;gap:6px;padding:16px} .ds-regua>div:first-child{padding-left:0} .ds-regua>div+div{border-left:1px solid rgb(209 209 208/.7)} .ds-regua dt{font-size:13px;color:#5C5C5E} .ds-regua dd{margin:0} .ds-n{font-size:28px;line-height:1;font-weight:600;letter-spacing:-0.025em;font-variant-numeric:tabular-nums} .ds-d{font-size:12px;color:#5C5C5E}"
+    },
+    {
+      "name": "Painel: Cabeçalho da página",
+      "kind": "custom",
+      "refersTo": "cabecalho-pagina",
+      "description": "Título de 24px, resumo vivo e ações à direita.",
+      "html": "<div class=\"ds-cab\"><div><h1>Fila de pedidos</h1><p>9 em andamento · 3 concluídos hoje</p></div><button class=\"ds-cab-btn\">Abrir a fila</button></div>",
+      "css": ".ds-cab{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;width:620px;font-family:Geist,system-ui,sans-serif;color:#18181C} .ds-cab h1{margin:0;font-size:24px;line-height:1.25;font-weight:600;letter-spacing:-0.02em} .ds-cab p{margin:4px 0 0;font-size:14px;color:#5C5C5E;font-variant-numeric:tabular-nums} .ds-cab-btn{height:32px;padding:0 10px;border-radius:12px;font-size:14px;border:0;background:#1F1E24;color:#fff;font:500 14px Geist,system-ui,sans-serif;cursor:pointer;transition:background-color 150ms cubic-bezier(0.23,1,0.32,1),transform 150ms cubic-bezier(0.23,1,0.32,1)} .ds-cab-btn:hover{background:rgb(31 30 36/.8)} .ds-cab-btn:active{transform:scale(0.97)} .ds-cab-btn:focus-visible{outline:none;box-shadow:0 0 0 3px rgb(31 30 36/.5)}"
+    },
+    {
+      "name": "Painel: Controle segmentado",
+      "kind": "chip",
+      "refersTo": "painel-segmento-ativo",
+      "description": "Trilho de tinta a 5%; a escolhida vira uma peça branca com fio.",
+      "html": "<div class=\"ds-seg\" role=\"group\"><button>Hoje</button><button>Ontem</button><button aria-pressed=\"true\">7 dias</button><button>30 dias</button></div>",
+      "css": ".ds-seg{display:inline-flex;gap:2px;padding:2px;border-radius:12px;background:rgb(24 24 28/.05);font-family:Geist,system-ui,sans-serif} .ds-seg button{height:28px;padding:0 10px;border:0;border-radius:9.6px;background:transparent;color:#5C5C5E;font:500 13px Geist,system-ui,sans-serif;cursor:pointer;transition:background-color 150ms cubic-bezier(0.23,1,0.32,1),color 150ms cubic-bezier(0.23,1,0.32,1),box-shadow 150ms cubic-bezier(0.23,1,0.32,1),transform 150ms cubic-bezier(0.23,1,0.32,1)} .ds-seg button:hover{color:#18181C} .ds-seg button:active{transform:scale(0.97)} .ds-seg button:focus-visible{outline:none;box-shadow:0 0 0 3px rgb(31 30 36/.5)} .ds-seg button[aria-pressed=true]{background:#fff;color:#18181C;box-shadow:0 0 0 1px #D1D1D0,0 1px 2px rgb(0 0 0/.06)}"
+    },
+    {
+      "name": "Painel: Cartão da fila",
+      "kind": "card",
+      "refersTo": "painel-cartao-fila",
+      "description": "Cartão do quadro: traço, número, tempo, itens e a próxima etapa; urgência no tempo e no anel de 1px.",
+      "html": "<article class=\"ds-cf\"><header><i></i><strong>#1408</strong><span class=\"ds-cf-canal\">Mesa 2</span><span class=\"ds-cf-tempo\">20:09 · 21 min</span></header><p class=\"ds-cf-cli\">Vanessa Cunha</p><p><b>2×</b> Burrata</p><p class=\"ds-cf-suave\">Cobrar R$ 276,00 · Dinheiro</p><footer><button>Marcar como pronto</button></footer></article>",
+      "css": ".ds-cf{display:flex;flex-direction:column;gap:8px;width:340px;padding:12px;border-radius:16.8px;background:#fff;color:#18181C;font:400 14px Geist,system-ui,sans-serif;box-shadow:0 0 0 1px rgb(201 138 0/.45),0 1px 2px rgb(0 0 0/.04)} .ds-cf header{display:flex;align-items:center;gap:8px} .ds-cf header i{width:3px;height:12px;border-radius:9999px;background:var(--tom-preparo,#C98A00)} .ds-cf strong{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums} .ds-cf-canal{font-size:13px;color:#5C5C5E} .ds-cf-tempo{margin-left:auto;padding:2px 6px;border-radius:6px;background:rgb(201 138 0/.12);color:#8A5C00;font-size:12px;font-weight:500;font-variant-numeric:tabular-nums} .ds-cf p{margin:0} .ds-cf-cli{font-weight:500} .ds-cf b{font-weight:500} .ds-cf-suave{font-size:12px;color:#5C5C5E} .ds-cf footer{display:flex;padding-top:12px;border-top:1px solid rgb(209 209 208/.7)} .ds-cf footer button{flex:1;height:28px;border:0;border-radius:9.6px;background:#1F1E24;color:#fff;font:500 13px Geist,system-ui,sans-serif;cursor:pointer;transition:background-color 150ms cubic-bezier(0.23,1,0.32,1),transform 150ms cubic-bezier(0.23,1,0.32,1)} .ds-cf footer button:hover{background:rgb(31 30 36/.8)} .ds-cf footer button:active{transform:scale(0.97)} .ds-cf footer button:focus-visible{outline:none;box-shadow:0 0 0 3px rgb(31 30 36/.5)}"
+    },
+    {
+      "name": "Painel: Item da lateral",
+      "kind": "nav",
+      "refersTo": "painel-item-menu-ativo",
+      "description": "Itens de 36px na névoa; o ativo é uma peça branca com o traço na tinta.",
+      "html": "<nav class=\"ds-lat\"><p>Operação</p><a>Visão geral</a><a class=\"ds-lat-ativo\" aria-current=\"page\">Fila de pedidos</a><a>Cozinha</a></nav>",
+      "css": ".ds-lat{display:flex;flex-direction:column;gap:4px;width:224px;padding:8px;background:#F4F4F2;font-family:Geist,system-ui,sans-serif} .ds-lat p{margin:0;height:32px;display:flex;align-items:center;padding:0 8px;font-size:12px;font-weight:500;color:rgb(24 24 28/.7)} .ds-lat a{position:relative;display:flex;align-items:center;height:36px;padding:0 8px;border-radius:12px;font-size:14px;color:rgb(24 24 28/.8);cursor:pointer;transition:background-color 150ms cubic-bezier(0.23,1,0.32,1),color 150ms cubic-bezier(0.23,1,0.32,1),transform 150ms cubic-bezier(0.23,1,0.32,1)} .ds-lat a:hover{background:rgb(24 24 28/.05);color:#18181C} .ds-lat a:active{transform:scale(0.98)} .ds-lat a:focus-visible{outline:none;box-shadow:0 0 0 2px #1F1E24} .ds-lat a.ds-lat-ativo{background:#fff;color:#18181C;font-weight:500;box-shadow:0 0 0 1px #D1D1D0,0 1px 2px rgb(0 0 0/.05)} .ds-lat-ativo::before{content:'';position:absolute;left:0;top:8px;bottom:8px;width:3px;border-radius:9999px;background:#18181C}"
+    },
+    {
+      "name": "Painel: Tabela",
+      "kind": "custom",
+      "refersTo": "tabela-painel",
+      "description": "Cabeçalho suave de 13px, linhas com fio a 70%, hover a 2,5%, status em SeloStatus.",
+      "html": "<table class=\"ds-tab\"><thead><tr><th>Nº</th><th>Cliente</th><th class=\"ds-dir\">Total</th><th>Situação</th></tr></thead><tbody><tr><td>#1411</td><td>Priscila Salgado</td><td class=\"ds-dir\">R$ 165,00</td><td><span class=\"ds-tab-st\"><i style=\"background:#1F1E24\"></i>Novo</span></td></tr><tr><td>#1409</td><td>Guilherme Prado</td><td class=\"ds-dir\">R$ 72,00</td><td><span class=\"ds-tab-st\"><i style=\"background:#C98A00\"></i>Em preparo</span></td></tr></tbody></table>",
+      "css": ".ds-tab{width:560px;border-collapse:collapse;font:400 14px Geist,system-ui,sans-serif;color:#18181C} .ds-tab th{height:40px;padding:0 8px;text-align:left;font-size:13px;font-weight:500;color:#5C5C5E;border-bottom:1px solid rgb(209 209 208/.7)} .ds-tab td{padding:8px;font-variant-numeric:tabular-nums;border-bottom:1px solid rgb(209 209 208/.7)} .ds-tab tbody tr{transition:background-color 150ms} .ds-tab tbody tr:hover{background:rgb(24 24 28/.025)} .ds-tab .ds-dir{text-align:right} .ds-tab-st{display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:500} .ds-tab-st i{width:3px;height:14px;border-radius:9999px}"
+    },
+    {
+      "name": "Painel: Cartão Pro",
+      "kind": "card",
+      "refersTo": "painel-cartao-pro",
+      "description": "Uma linha no pé da lateral: brilho em ouro, Plano Pro e Liberar todos.",
+      "html": "<div class=\"ds-pro\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M12 3l1.9 5.8L20 10l-6.1 1.2L12 17l-1.9-5.8L4 10l6.1-1.2z\"/></svg><span><strong>Plano Pro</strong><small>Extras</small></span><button>Liberar todos</button></div>",
+      "css": ".ds-pro{display:flex;align-items:center;gap:10px;width:224px;padding:8px 8px 8px 12px;border-radius:16.8px;background:#fff;color:#18181C;font-family:Geist,system-ui,sans-serif;box-shadow:0 0 0 1px #D1D1D0,0 1px 2px rgb(0 0 0/.05)} .ds-pro svg{flex-shrink:0;color:#C27C00} .ds-pro span{display:flex;flex:1;flex-direction:column} .ds-pro strong{font-size:14px;line-height:1.25;font-weight:600} .ds-pro small{font-size:12px;color:#5C5C5E} .ds-pro button{height:28px;padding:0 10px;border:0;border-radius:9.6px;background:#1F1E24;color:#fff;font:500 13px Geist,system-ui,sans-serif;cursor:pointer;transition:background-color 150ms cubic-bezier(0.23,1,0.32,1),transform 150ms cubic-bezier(0.23,1,0.32,1)} .ds-pro button:hover{background:rgb(31 30 36/.8)} .ds-pro button:active{transform:scale(0.97)} .ds-pro button:focus-visible{outline:none;box-shadow:0 0 0 3px rgb(31 30 36/.5)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "A Etiqueta da Vitrine",
+    "overview": "A vitrine é uma página quieta no fundo da loja, sem cartões, em que a etiqueta de preço é o único detalhe marcado. Os produtos se separam por espaço e por fios finos; a cor da loja aparece só onde tem função: o traço da etiqueta, o sublinhado da aba ativa, o botão de adicionar, a sacola, o fio de progresso e o anel de foco. O mesmo sistema veste uma pizzaria, uma farmácia, uma adega, um açougue, um salão e um quiosque: mudam as quatro cores, a marca, a foto e o dado que a etiqueta escreve, nunca a estrutura.\n\nO topo é a foto da loja de ponta a ponta, com um véu escuro, e sobre ela a marca, o nome, o slogan e o status. Logo abaixo, no fundo da página, a régua de três fatos (entrega, retirada, mínimo) entre dois fios, a busca e as abas de texto. Tudo o mais é lista: foto à esquerda, nome, descrição em duas linhas e, no pé, a etiqueta e o \"+\". O detalhe de cada segmento mora em lugares pequenos: o que a etiqueta diz (8 fatias, 350 ml, 1h30, o kg), o carregador desenhado do ofício e a ilustração do envio.\n\nO movimento é parte do sistema, não enfeite. A assinatura: ao adicionar, a etiqueta se solta do produto e desliza até a sacola em 300 ms, a sacola dá um pulo curto e o fio do mínimo enche. Fora dela, a casa usa uma curva de saída rápida, durações de 150 a 300 ms, toque que afunda a 0,97, saídas mais rápidas que entradas e uma única entrada curta na abertura da página. Com movimento reduzido, nada voa, nada desliza: as trocas viram esmaecimento e os laços param inteiros.\n\nO painel da loja (`app/admin`, `components/admin`) é o fundo da mesma loja. Mesma família, Geist, mesmos fios, mesma curva; muda a cor: no lugar das quatro cores do lojista, um tema neutro fixo (névoa, folha branca, tinta quase preta), porque a marca da loja só aparece na prévia. O traço de 3 px da etiqueta continua sendo o único detalhe marcado, e aqui marca estado e seleção: a etapa do pedido, a página do menu, a coluna do quadro. O painel recusa o dashboard padrão de cartões com borda, pílula cinza para tudo e número grande em caixa: os números ficam numa régua entre fios, as listas são linhas e as colunas do quadro não têm bandeja.\n\nO painel é ferramenta de pico. Quem abre lê o estado, o tempo e a próxima ação em segundos: título de 24 px com um resumo vivo, a régua ou o quadro logo abaixo. O movimento só mostra que algo mudou de estado; a assinatura é \"o pedido anda\": ao avançar, o cartão desliza para a coluna seguinte e o traço troca de cor. Nada se mexe sozinho.",
+    "keyCharacteristics": [
+      "Quatro cores por loja (primária, acento, fundo, tinta); todo o resto é derivado em `lib/tema.ts` com contraste garantido de 4,5:1.",
+      "Uma família só, Geist, em dois pesos de trabalho (500 e 600), números tabulares em todo preço e prazo.",
+      "Plano: sem cartões na lista, fios de 1 px a 70% de opacidade, sombra só no que flutua.",
+      "A etiqueta (traço de 3 px na cor da loja + dado do segmento + preço) se repete na vitrine, na folha do produto, no voo, no resumo e no acompanhamento.",
+      "Foto da loja com véu no topo; foto de produto em moldura arredondada; ilustrações próprias só nas artes de carregamento.",
+      "Gramática de movimento única: curva da casa, toque 0,97, saída mais curta que entrada, tudo parado com movimento reduzido.",
+      "No painel: tema neutro fixo, lateral no fundo e uma folha branca com fio; o traço de 3 px numa paleta fixa de status marca a etapa de cada pedido.",
+      "No painel, laranja só para atenção; a ação primária é a tinta."
+    ],
+    "rules": [
+      {
+        "name": "The Quatro Cores Rule",
+        "body": "O lojista escolhe quatro cores; o sistema deriva as outras dezessete por loja e por tema. Nenhum componente do cliente usa hex fixo de marca: sempre `--primary`, `--marca-texto`, `--marca-acento-texto` e afins.",
+        "section": "colors"
+      },
+      {
+        "name": "The Contraste Garantido Rule",
+        "body": "Toda cor que vira texto passa por `garantirContraste` até 4,5:1 sobre onde ela aparece. O acento é garantido duas vezes, sobre a página e sobre o cartão, porque o preço de oferta vive nos dois.",
+        "section": "colors"
+      },
+      {
+        "name": "The Cor com Função Rule",
+        "body": "A cor da loja só aparece onde age ou marca: etiqueta, aba ativa, adicionar, sacola, progresso, foco. Título, fundo de seção e ícone decorativo ficam na tinta.",
+        "section": "colors"
+      },
+      {
+        "name": "The Laranja Só Para Atenção Rule",
+        "body": "No painel o laranja marca só o que exige o olho agora. Novo é a tinta, a ação é a tinta, o atraso é âmbar e vermelho no tempo; o laranja não vira botão, título nem status.",
+        "section": "colors"
+      },
+      {
+        "name": "The Traço Fala, o Texto Fica Rule",
+        "body": "A cor de status mora só no traço de 3 px (e na haste do caminho do pedido). O nome do status ao lado fica na tinta, ou no texto suave quando o pedido já saiu da operação (fim, cancelado). Nenhum fundo de linha, cartão ou pílula ganha a cor do status.",
+        "section": "colors"
+      },
+      {
+        "name": "The Uma Voz Rule",
+        "body": "A vitrine e o painel falam só em Geist. As fontes do editor de aparência (Bricolage, Figtree, Fraunces, Space Grotesk, Playfair, DM Sans, Outfit, em `lib/admin/fontes.ts`) são opções que o lojista escolhe: vestem só a prévia da vitrine e as amostras do editor, nunca a interface do painel.",
+        "section": "typography"
+      },
+      {
+        "name": "The Número Tabular Rule",
+        "body": "Preço, prazo, quantidade e total usam `tabular-nums`; valores que mudam animam com NumberFlow, nunca saltam.",
+        "section": "typography"
+      },
+      {
+        "name": "The Número que Rola Rule",
+        "body": "No painel todo número vivo (régua, contagem de coluna, estoque) é tabular e muda com NumberFlow, com o valor formatado ao lado para leitores de tela.",
+        "section": "typography"
+      },
+      {
+        "name": "The Contêiner Decide Rule",
+        "body": "Quando a lateral aberta rouba largura, o layout de uma lista se decide pela largura do contêiner, não da janela: a linha de produto (`linha-produto.tsx`, lista com `@container`) fica numa linha só a partir de 768 px de contêiner (`@3xl`) e quebra em duas abaixo disso, com o preço indo para baixo do nome. Use `@container` em toda lista densa dentro da folha.",
+        "section": "layout"
+      },
+      {
+        "name": "The Só o que Flutua Rule",
+        "body": "Lista, régua, opções e cartões de escolha não têm sombra. Sombra é sinal de que a peça está acima da página: sacola, etiqueta em voo, ilha, janela.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do derive toda cor do cliente das quatro entradas por `lib/tema.ts` e use os tokens (`--primary`, `--marca-texto`, `--marca-acento-texto`, `--muted-foreground`).",
+      "Do separe produtos por espaço e fio de 1 px a 70% de opacidade, sem cartão.",
+      "Do escreva todo preço com a etiqueta: haste de 3 px na cor da loja e valor tabular em 600.",
+      "Do use a curva `cubic-bezier(0.23, 1, 0.32, 1)` e durações de 150 a 300 ms; toque a 0,97.",
+      "Do faça a saída mais curta que a entrada e desligue voo, deslocamento e desfoque com movimento reduzido.",
+      "Do mantenha alvos de toque de 44 px e campos de 48 px.",
+      "Do coloque a foto da loja no topo da vitrine, com véu escuro e marca, nome, slogan e status por cima.",
+      "Do marque o estado no painel com o `Traco` ou o `SeloStatus`: haste de 3 px no tom da etapa e o nome na tinta.",
+      "Do abra toda tela do painel com o `CabecalhoPagina` (título de 24 px, resumo vivo, ações à direita) e ponha números na `Regua`, entre fios.",
+      "Do use a tinta para a ação primária do painel e o laranja só para atenção.",
+      "Do separe seções com o fio do `BlocoSecao` e linhas com fio de 1 px a 70%.",
+      "Do decida o layout das listas densas pelo contêiner (`@container`) quando a lateral estiver aberta.",
+      "Do anime só mudança de estado, em 150 a 250 ms na curva da casa; o pedido anda com `layoutId` em 250 ms."
+    ],
+    "donts": [
+      "Don't use cartões com sombra na lista, pílulas de categoria ou capa colorida com cartão flutuante.",
+      "Don't use a cor da loja em títulos, fundos de seção ou ícones decorativos.",
+      "Don't use a paleta de ilustração fora das artes desenhadas.",
+      "Don't traga outra família tipográfica para a vitrine ou para o painel; as fontes do editor de aparência ficam só na prévia e nas amostras do editor.",
+      "Don't ponha sombra no que não flutua.",
+      "Don't anime elementos ao rolar o cardápio nem repita a entrada da página.",
+      "Don't use hex fixo de marca em componente do cliente.",
+      "Don't ponha os cartões do quadro numa bandeja (coluna com fundo ou cartão em volta); a coluna é um fio.",
+      "Don't use borda colorida com mais de 1 px nem faixa lateral grossa para marcar estado ou urgência.",
+      "Don't use pílula cinza (ou de qualquer cor) para status; o status é traço + texto.",
+      "Don't ponha rótulo em caixa-alta e espaçado acima de título (eyebrow) nem número grande dentro de cartão de métrica.",
+      "Don't use animação contínua no painel: ponto pulsando, brilho em laço, esqueleto que respira fora do carregamento.",
+      "Don't use laranja em botão, título ou status no painel."
+    ]
+  }
+}

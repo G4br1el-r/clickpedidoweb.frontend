@@ -54,11 +54,11 @@ export function LayoutConfiguracoes({ children }: { children: ReactNode }) {
         }
       />
       <div className="grid flex-1 xl:grid-cols-[minmax(0,1fr)_minmax(380px,460px)]">
-        <div className="@container/conteudo flex min-w-0 flex-col px-4 pt-6 md:px-8 md:pt-8">
-          <div className="mx-auto flex w-full max-w-3xl flex-col gap-5">{children}</div>
+        <div className="@container/conteudo flex min-w-0 flex-col px-4 pt-4 md:px-6 md:pt-6 lg:px-8">
+          <div className="mx-auto flex w-full max-w-3xl flex-col gap-8">{children}</div>
           <BarraAcoes />
         </div>
-        <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] border-l border-border bg-muted/40 p-4 xl:flex">
+        <aside className="sticky top-14 hidden h-[calc(100dvh-3.5rem)] border-l border-border/70 bg-foreground/[0.02] p-4 xl:flex">
           <Previa className="w-full" />
         </aside>
       </div>

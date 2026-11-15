@@ -78,7 +78,7 @@ export function EscolhaHorario({
             <Label
               key={livre}
               htmlFor={id}
-              className="flex cursor-pointer justify-center rounded-md border py-1.5 text-sm tabular-nums has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-primary has-[[data-state=checked]]:text-primary-foreground"
+              className="flex min-h-9 cursor-pointer items-center justify-center rounded-md bg-background text-sm font-medium tabular-nums ring-1 ring-border/80 transition-[background-color,color,box-shadow] duration-150 hover:ring-foreground/30 active:scale-[0.97] has-focus-visible:ring-3 has-focus-visible:ring-ring/50 has-[[data-state=checked]]:bg-primary has-[[data-state=checked]]:text-primary-foreground has-[[data-state=checked]]:ring-primary"
             >
               <RadioGroupItem id={id} value={livre} className="sr-only" />
               {hora}
@@ -105,7 +105,7 @@ export function EscolhaHorario({
             setDia(escolhido)
             aoMudar(null)
           }}
-          className="rounded-lg border"
+          className="rounded-xl ring-1 ring-border/80"
         />
         <div className="flex min-w-0 flex-1 flex-col gap-2">{horariosDoDia}</div>
       </div>

@@ -1,6 +1,7 @@
 "use client"
 
 import { type ComponentProps, createContext, type ReactNode, useContext } from "react"
+import { MOVIMENTO_DO_MODAL, RAIO_DO_MODAL, VEU_DO_MODAL } from "@/components/modal"
 import { focarPainel } from "@/components/sacola/ilha-sacola"
 import { manterToastClicavel } from "@/components/sacola/manter-toast-clicavel"
 import {
@@ -28,11 +29,20 @@ type PainelProps = {
   /** Altura fixa, para o painel não pular entre passos de tamanhos diferentes. */
   altoFixo?: boolean
   testId?: string
+  /** Classes extras da gaveta ou da janela (ex.: o movimento próprio de quem usa). */
+  className?: string
   children: ReactNode
 }
 
 /** No celular sobe de baixo; do tablet para cima abre como janela central. */
-export function Painel({ aberto, aoMudar, altoFixo = false, testId, children }: PainelProps) {
+export function Painel({
+  aberto,
+  aoMudar,
+  altoFixo = false,
+  testId,
+  className,
+  children,
+}: PainelProps) {
   const telaGrande = useTelaGrande()
 
   return (
@@ -41,13 +51,17 @@ export function Painel({ aberto, aoMudar, altoFixo = false, testId, children }: 
         <Dialog open={aberto} onOpenChange={aoMudar}>
           <DialogContent
             showCloseButton={false}
+            overlayClassName={VEU_DO_MODAL}
             data-testid={testId}
             onPointerDownOutside={manterToastClicavel}
             onInteractOutside={manterToastClicavel}
             onOpenAutoFocus={focarPainel}
             className={cn(
-              "flex max-h-[88dvh] flex-col gap-0 overflow-hidden rounded-2xl bg-popover p-0 text-base sm:max-w-[560px]",
+              "flex max-h-[88dvh] flex-col gap-0 overflow-hidden bg-popover p-0 text-base sm:max-w-[560px]",
+              RAIO_DO_MODAL,
               altoFixo && "h-[min(760px,88dvh)]",
+              MOVIMENTO_DO_MODAL,
+              className,
             )}
           >
             {children}
@@ -56,13 +70,16 @@ export function Painel({ aberto, aoMudar, altoFixo = false, testId, children }: 
       ) : (
         <Drawer open={aberto} onOpenChange={aoMudar}>
           <DrawerContent
+            overlayClassName={VEU_DO_MODAL}
             data-testid={testId}
             onPointerDownOutside={manterToastClicavel}
             onInteractOutside={manterToastClicavel}
             onOpenAutoFocus={focarPainel}
             className={cn(
-              "w-full rounded-t-2xl text-base data-[vaul-drawer-direction=bottom]:max-h-[90dvh]",
+              "w-full rounded-t-[20px] text-base data-[vaul-drawer-direction=bottom]:max-h-[90dvh]",
               altoFixo && "h-[90dvh]",
+              MOVIMENTO_DO_MODAL,
+              className,
             )}
           >
             {children}

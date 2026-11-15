@@ -13,14 +13,6 @@ import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
-import {
   Field,
   FieldContent,
   FieldDescription,
@@ -36,6 +28,7 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { type Config, ehPro, type SecaoConfig, useConfig, useOpcaoPro } from "@/lib/admin/config"
 import { buscarSecao } from "@/lib/admin/secoes"
 import { cn } from "@/lib/utils"
+import { BlocoSecao } from "./bloco-secao"
 import { type Dispositivo, usePrevia } from "./previa/estado"
 import { useFocoNaPrevia } from "./previa/foco"
 
@@ -93,8 +86,9 @@ export function liberarPro() {
 }
 
 /**
- * Selo das opções pagas: cadeado enquanto bloqueada, sacola quando escolhida
- * e ainda não contratada, brilho depois de liberada.
+ * Selo das opções pagas, igual em todo o painel: cadeado discreto enquanto bloqueada,
+ * sacola quando escolhida e ainda não contratada, e o brilho dourado depois de liberada,
+ * que é o único momento chamativo do plano Pro.
  */
 export function SeloPro({
   liberada,
@@ -105,31 +99,45 @@ export function SeloPro({
   naSacola?: boolean
   className?: string
 }) {
+  // Mesmo tamanho nos três estados: a troca de um para o outro não mexe a linha.
+  const base = "h-5 shrink-0 gap-1 px-1.5 text-[11px] font-semibold"
   if (naSacola) {
     return (
       <Badge
         variant="outline"
-        className={cn(
-          "shrink-0 gap-1 border-[#F5B700] text-[#9A6400] dark:text-[#F5C542]",
-          className,
-        )}
+        className={cn(base, "border-(--tom-preparo)/45 text-(--tom-preparo)", className)}
       >
-        <ShoppingBagIcon data-icon="inline-start" />
+        <ShoppingBagIcon data-icon="inline-start" className="size-3" />
         Na sacola
       </Badge>
     )
   }
+  if (liberada) {
+    return (
+      <Badge data-pro-liberada className={cn("selo-pro", base, className)}>
+        <SparklesIcon data-icon="inline-start" className="size-3" />
+        Pro
+      </Badge>
+    )
+  }
   return (
-    <Badge
-      variant={liberada ? "default" : "secondary"}
-      data-pro-liberada={liberada || undefined}
-      className={cn("selo-pro shrink-0 gap-1", className)}
-    >
-      {liberada ? <SparklesIcon data-icon="inline-start" /> : <LockIcon data-icon="inline-start" />}
+    <Badge variant="outline" className={cn("selo-pro", base, className)}>
+      <LockIcon data-icon="inline-start" className="size-3" />
       Pro
     </Badge>
   )
 }
+
+/**
+ * Opção escolhível (cartão de rádio): folha branca com fio fino; a escolhida ganha o
+ * anel na tinta, com transição curta. Vale para escolhas, paletas e planos.
+ */
+export const CLASSE_OPCAO = cn(
+  "rounded-xl bg-card transition-[border-color,box-shadow,scale] duration-150 ease-saida active:scale-[0.99] motion-reduce:active:scale-100",
+  "has-[>[data-slot=field]]:border-border/80 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:border-foreground/30 has-[>[data-slot=field]]:not-has-[:disabled,[data-disabled]]:hover:bg-card",
+  "has-data-checked:border-foreground has-data-checked:bg-card has-data-checked:ring-1 has-data-checked:ring-foreground",
+  "dark:has-data-checked:border-foreground dark:has-data-checked:bg-card",
+)
 
 /* ------------------------------------------------------------------ */
 
@@ -141,35 +149,36 @@ type BlocoConfigProps = {
   children: ReactNode
 }
 
-/** Um grupo de ajustes dentro de uma seção: Card do shadcn com os campos dentro. */
+/**
+ * Um grupo de ajustes dentro de uma seção: bloco plano com fio no topo, título e
+ * descrição curtos, e os campos numa coluna com o mesmo espaço entre eles.
+ */
 export function BlocoConfig({ titulo, descricao, restaurar, children }: BlocoConfigProps) {
   const restaurarSecao = useConfig((estado) => estado.restaurarSecao)
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="font-heading text-lg">{titulo}</CardTitle>
-        {descricao && <CardDescription>{descricao}</CardDescription>}
-        {restaurar && (
-          <CardAction>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                restaurarSecao(restaurar)
-                toast("Seção restaurada para o padrão")
-              }}
-            >
-              <RotateCcwIcon data-icon="inline-start" />
-              Restaurar
-            </Button>
-          </CardAction>
-        )}
-      </CardHeader>
-      <CardContent>
-        <FieldGroup className="gap-6">{children}</FieldGroup>
-      </CardContent>
-    </Card>
+    <BlocoSecao
+      titulo={titulo}
+      descricao={descricao}
+      acao={
+        restaurar && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="-my-1 text-muted-foreground"
+            onClick={() => {
+              restaurarSecao(restaurar)
+              toast("Seção restaurada para o padrão")
+            }}
+          >
+            <RotateCcwIcon data-icon="inline-start" />
+            Restaurar
+          </Button>
+        )
+      }
+    >
+      <FieldGroup className="gap-6">{children}</FieldGroup>
+    </BlocoSecao>
   )
 }
 
@@ -299,7 +308,7 @@ export function CampoEscolha<S extends SecaoConfig, V extends string>({
           if (opcao.aparelho) mostrarNoAparelho(opcao.aparelho)
         }}
         className={cn(
-          "grid gap-2.5",
+          "grid gap-2",
           colunas === 2 && "@md/conteudo:grid-cols-2",
           colunas === 3 && "grid-cols-2 @lg/conteudo:grid-cols-3",
         )}
@@ -339,10 +348,7 @@ function CartaoEscolha<V extends string>({
     <FieldLabel
       htmlFor={id}
       data-pro-liberada={liberada || undefined}
-      className={cn(
-        "relative rounded-2xl transition-[border-color,background-color,box-shadow] duration-200 ease-saida",
-        liberada && "opcao-pro",
-      )}
+      className={cn("relative", CLASSE_OPCAO, liberada && "opcao-pro")}
     >
       <Field
         orientation={formato === "vertical" ? "vertical" : "horizontal"}
@@ -373,7 +379,7 @@ function CartaoEscolha<V extends string>({
           id={id}
           aria-label={bloqueada ? `${opcao.rotulo} (Pro)` : opcao.rotulo}
           className={cn(
-            formato === "vertical" && "absolute top-4.5 right-4.5 z-10 size-5! bg-card shadow-sm",
+            formato === "vertical" && "absolute top-4.5 right-4.5 z-10 size-4.5! bg-card shadow-xs",
           )}
         />
       </Field>
@@ -416,7 +422,7 @@ export function CampoSegmentado<S extends SecaoConfig, V extends string | number
       </FieldContent>
       <ToggleGroup
         type="single"
-        variant="outline"
+        variant="segmento"
         aria-labelledby={id}
         value={String(valor)}
         onValueChange={(novo) => {
@@ -454,6 +460,8 @@ type CampoSliderProps<S extends SecaoConfig> = {
   max: number
   passo?: number
   formatar?: (valor: number) => string
+  /** Desenho pequeno que mostra o valor atual, ao lado do número. */
+  amostra?: (valor: number) => ReactNode
 }
 
 /** Valor contínuo (Slider do shadcn) com o número sempre à vista. */
@@ -466,6 +474,7 @@ export function CampoSlider<S extends SecaoConfig>({
   max,
   passo = 1,
   formatar = String,
+  amostra,
 }: CampoSliderProps<S>) {
   const [valor, definir, eventos] = useCampo(secao, campo, titulo)
   const id = `campo-${secao}-${campo}`
@@ -473,10 +482,11 @@ export function CampoSlider<S extends SecaoConfig>({
 
   return (
     <Field {...eventos}>
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <FieldTitle id={id}>{titulo}</FieldTitle>
-        <span className="text-sm font-semibold text-muted-foreground tabular-nums">
+        <span className="flex items-center gap-2 text-sm font-medium text-muted-foreground tabular-nums">
           {formatar(numero)}
+          {amostra?.(numero)}
         </span>
       </div>
       {descricao && <FieldDescription>{descricao}</FieldDescription>}

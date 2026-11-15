@@ -1,17 +1,11 @@
 "use client"
 
-import {
-  BikeIcon,
-  CheckCircle2Icon,
-  Loader2Icon,
-  MapPinIcon,
-  MapPinnedIcon,
-  StoreIcon,
-} from "lucide-react"
+import { BikeIcon, CheckIcon, MapPinIcon, StoreIcon } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import { useEffect, useRef, useState } from "react"
 import { Controller, useFormContext, useWatch } from "react-hook-form"
 import { PatternFormat } from "react-number-format"
+import { registroSegmentos } from "@/components/segmentos/registro"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
@@ -31,8 +25,7 @@ import { cn } from "@/lib/utils"
 import { CabecalhoPasso } from "./cabecalho-passo"
 import { Campo, ESTILO_CAMPO } from "./campo"
 import { CartaoOpcao } from "./cartao-opcao"
-
-const CURVA = [0.23, 1, 0.32, 1] as const
+import { CURVA_SAIDA, CURVA_TELA } from "./movimento"
 
 type Busca = "parada" | "buscando" | "achou" | "nao-achou"
 
@@ -40,11 +33,12 @@ const ABRIR = {
   initial: { height: 0, opacity: 0 },
   animate: { height: "auto", opacity: 1 },
   exit: { height: 0, opacity: 0 },
-  transition: { duration: 0.35, ease: CURVA },
+  transition: { duration: 0.3, ease: CURVA_TELA },
 } as const
 
 function BlocoEndereco() {
   const lojaEscolhida = useLoja()
+  const { Carregador } = registroSegmentos[lojaEscolhida.segmento]
   const {
     register,
     control,
@@ -133,22 +127,25 @@ function BlocoEndereco() {
                     {busca === "buscando" ? (
                       <motion.span
                         key="buscando"
-                        initial={{ opacity: 0, scale: 0.6 }}
+                        className="flex"
+                        initial={{ opacity: 0, scale: 0.9 }}
                         animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.6 }}
+                        exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.1 } }}
+                        transition={{ duration: 0.18, ease: CURVA_SAIDA }}
                       >
-                        <Loader2Icon className="size-5 animate-spin text-muted-foreground" />
+                        <Carregador className="size-6" />
                         <span className="sr-only">Buscando endereço</span>
                       </motion.span>
                     ) : busca === "achou" ? (
                       <motion.span
                         key="achou"
-                        initial={{ opacity: 0, scale: 0.4, rotate: -30 }}
-                        animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                        exit={{ opacity: 0, scale: 0.6 }}
-                        transition={{ type: "spring", duration: 0.45, bounce: 0.45 }}
+                        className="flex"
+                        initial={{ opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.1 } }}
+                        transition={{ duration: 0.22, ease: CURVA_SAIDA }}
                       >
-                        <CheckCircle2Icon className="size-5 text-sucesso" />
+                        <CheckIcon className="size-5 text-sucesso" strokeWidth={2.5} />
                         <span className="sr-only">Endereço encontrado</span>
                       </motion.span>
                     ) : null}
@@ -162,7 +159,7 @@ function BlocoEndereco() {
           <Button
             type="button"
             variant="ghost"
-            className="h-11 w-fit rounded-full px-3 text-sm font-semibold text-marca-texto underline underline-offset-4 hover:bg-accent sm:mt-7"
+            className="-ml-3 h-11 w-fit rounded-full px-3 text-sm font-medium text-marca-texto underline decoration-marca-texto/40 underline-offset-4 hover:bg-transparent hover:decoration-marca-texto sm:mt-7 sm:ml-0"
             onClick={() => setManual(true)}
           >
             Não sei meu CEP
@@ -293,17 +290,21 @@ function BlocoEndereco() {
 
       <AnimatePresence initial={false}>
         {taxa !== undefined && (
+          // A taxa do bairro na língua da etiqueta: o traço da loja e o número tabular.
           <motion.p
             key={bairro}
-            initial={{ opacity: 0, y: 8, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.3, ease: CURVA }}
-            className="flex items-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-sm font-medium text-accent-foreground"
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, transition: { duration: 0.1 } }}
+            transition={{ duration: 0.22, ease: CURVA_SAIDA }}
+            className="flex items-center gap-1 border-t border-border/70 pt-4 text-[15px] text-muted-foreground"
             aria-live="polite"
           >
-            <MapPinnedIcon className="size-4 shrink-0" aria-hidden="true" />
-            Entrega para {bairro}: <strong className="tabular-nums">{emReais(taxa)}</strong>
+            Entrega para {bairro}:{" "}
+            <strong className="ml-auto flex items-center gap-2 font-semibold text-foreground tabular-nums">
+              <span aria-hidden="true" className="h-3.5 w-[3px] rounded-full bg-primary" />
+              {emReais(taxa)}
+            </strong>
           </motion.p>
         )}
       </AnimatePresence>
@@ -316,22 +317,17 @@ function BlocoRetirada() {
   const mapa = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(loja.endereco)}`
 
   return (
-    <div className="flex items-start gap-3 rounded-2xl bg-secondary p-4">
-      <span
-        aria-hidden="true"
-        className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-card text-marca-texto"
-      >
-        <MapPinIcon className="size-5" />
-      </span>
+    <div className="flex items-start gap-3 border-t border-border/70 pt-4">
+      <MapPinIcon className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
       <div className="min-w-0 flex-1">
-        <p className="font-semibold">Balcão da {loja.nome}</p>
+        <p className="text-[15px] font-medium">Balcão da {loja.nome}</p>
         <p className="text-sm text-muted-foreground">{loja.endereco}</p>
         <p className="text-sm text-muted-foreground">Fica pronto em {loja.retirada.tempo}</p>
         <a
           href={mapa}
           target="_blank"
           rel="noopener noreferrer"
-          className="-my-1 inline-flex min-h-11 items-center text-sm font-semibold text-marca-texto underline underline-offset-4"
+          className="-mb-2 inline-flex min-h-11 items-center text-sm font-medium text-marca-texto underline decoration-marca-texto/40 underline-offset-4 hover:decoration-marca-texto"
         >
           Abrir no mapa
         </a>
@@ -345,7 +341,7 @@ export function PassoEntrega() {
   const loja = useLoja()
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <CabecalhoPasso titulo="Como você quer receber?" />
       <Controller
         control={control}
@@ -356,7 +352,7 @@ export function PassoEntrega() {
               aria-label="Forma de receber"
               value={field.value}
               onValueChange={field.onChange}
-              className="grid gap-3 sm:grid-cols-2"
+              className="grid gap-2.5 sm:grid-cols-2"
             >
               <CartaoOpcao
                 valor="entrega"
@@ -380,10 +376,10 @@ export function PassoEntrega() {
             <AnimatePresence mode="wait" initial={false}>
               <motion.div
                 key={field.value}
-                initial={{ opacity: 0, y: 12, filter: "blur(4px)" }}
+                initial={{ opacity: 0, y: 8, filter: "blur(3px)" }}
                 animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                exit={{ opacity: 0, y: -8, filter: "blur(4px)" }}
-                transition={{ duration: 0.25, ease: CURVA }}
+                exit={{ opacity: 0, filter: "blur(3px)", transition: { duration: 0.12 } }}
+                transition={{ duration: 0.24, ease: CURVA_SAIDA }}
               >
                 {field.value === "entrega" ? <BlocoEndereco /> : <BlocoRetirada />}
               </motion.div>

@@ -306,7 +306,7 @@ function Pagamentos() {
         <Field key={id} orientation="horizontal">
           <span
             aria-hidden="true"
-            className="grid size-9 shrink-0 place-items-center rounded-xl bg-secondary [&_svg]:size-4"
+            className="grid size-8 shrink-0 place-items-center rounded-lg bg-foreground/[0.05] text-muted-foreground [&_svg]:size-4"
           >
             <Icone />
           </span>

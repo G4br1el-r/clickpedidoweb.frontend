@@ -201,6 +201,8 @@ for (const tema of ["light", "dark"] as const) {
     await expect(page).toHaveScreenshot(`painel-estoque-${tema}.png`, { fullPage: true })
 
     const primeira = page.getByRole("table", { name: "Estoque" }).getByRole("row").nth(1)
+    // A régua fica acima da tabela: em tela baixa, a linha chega rolando a página para baixo.
+    await primeira.scrollIntoViewIfNeeded()
     // No celular, a situação e as ações cabem na linha, sem rolagem lateral.
     await expect(primeira.getByText("Zerado").filter({ visible: true })).toBeInViewport()
     await expect(primeira.getByRole("button", { name: /^Ações de / })).toBeInViewport()
@@ -265,5 +267,36 @@ for (const tema of ["light", "dark"] as const) {
     await expect(formulario.getByRole("button", { name: "Salvar produto" })).toBeVisible()
     await esperarAnimacoes(page)
     await expect(page).toHaveScreenshot(`painel-produto-${tema}.png`)
+  })
+
+  test(`painel: editor de aparência (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/configuracoes")
+    await expect(page.getByRole("heading", { level: 1 })).toBeVisible({ timeout: 15_000 })
+    await expect(page.getByRole("link", { name: /Identidade/ }).first()).toBeVisible()
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-configuracoes-${tema}.png`, { fullPage: true })
+
+    await page.goto("/admin/configuracoes/identidade")
+    await expect(page.getByRole("textbox", { name: "Nome da loja" })).toBeVisible({
+      timeout: 15_000,
+    })
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-configuracoes-identidade-${tema}.png`)
+  })
+
+  test(`painel: busca de configurações na barra lateral (${tema})`, async ({ page, viewport }) => {
+    test.skip((viewport?.width ?? 0) < 768, "no celular a barra lateral fica num painel à parte")
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/configuracoes")
+    const busca = page.getByRole("textbox", { name: "Buscar configuração" })
+    await expect(busca).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await busca.focus()
+    const grupo = page.locator('[data-sidebar="group"]').filter({ has: busca })
+    await expect(grupo).toHaveScreenshot(`painel-busca-configuracoes-${tema}.png`)
   })
 }

@@ -64,7 +64,7 @@ export function AmpliarFoto({ src, nome, descricao, children, className }: Ampli
             {children}
             <span
               aria-hidden="true"
-              className="absolute right-1.5 bottom-1.5 grid size-7 scale-90 place-items-center rounded-full bg-black/55 text-white opacity-0 backdrop-blur-sm transition-[opacity,transform] duration-200 ease-saida group-hover/foto:scale-100 group-hover/foto:opacity-100 group-focus-visible/foto:scale-100 group-focus-visible/foto:opacity-100"
+              className="absolute right-1.5 bottom-1.5 grid size-7 scale-90 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-[opacity,transform] duration-200 ease-saida group-hover/foto:scale-100 group-hover/foto:opacity-100 group-focus-visible/foto:scale-100 group-focus-visible/foto:opacity-100"
             >
               <ZoomInIcon className="size-3.5" />
             </span>
@@ -73,11 +73,12 @@ export function AmpliarFoto({ src, nome, descricao, children, className }: Ampli
       </Dica>
       <DialogContent
         showCloseButton={false}
-        overlayClassName="bg-black/80! backdrop-blur-sm"
+        overlayClassName="bg-black/85!"
         data-testid="foto-ampliada"
-        className="w-[min(92vw,820px)] max-w-none! gap-3 bg-transparent! p-0! ring-0! duration-300! data-open:zoom-in-90!"
+        // Nasce de 95% em 260 ms e sai em 150 ms; com movimento reduzido, só a opacidade.
+        className="w-[min(92vw,820px)] max-w-none! gap-3 bg-transparent! p-0! ring-0! duration-[260ms]! ease-saida data-open:zoom-in-95! data-closed:duration-150! motion-reduce:data-open:zoom-in-100! motion-reduce:data-closed:zoom-out-100!"
       >
-        <div className="relative overflow-hidden rounded-3xl bg-muted shadow-2xl">
+        <div className="sombra-flutuante relative overflow-hidden rounded-2xl bg-muted">
           <Image
             src={src}
             alt={nome}
@@ -91,14 +92,16 @@ export function AmpliarFoto({ src, nome, descricao, children, className }: Ampli
               variant="secondary"
               size="toque"
               aria-label="Fechar foto"
-              className="absolute top-3 right-3 rounded-full bg-background/85 backdrop-blur-md"
+              className="absolute top-3 right-3 rounded-full bg-background/90"
             >
               <XIcon />
             </Button>
           </DialogClose>
         </div>
         <div className="px-1 text-white">
-          <DialogTitle className="font-heading text-lg font-bold md:text-xl">{nome}</DialogTitle>
+          <DialogTitle className="text-lg font-semibold tracking-[-0.015em] md:text-xl">
+            {nome}
+          </DialogTitle>
           {descricao ? (
             <DialogDescription className="mt-1 text-sm text-white/75">
               {descricao}

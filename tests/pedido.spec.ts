@@ -4,6 +4,7 @@ import {
   abrirMeioAMeio,
   abrirSacola,
   acaoCheckout,
+  avancar,
   caixa,
   montarMeioAMeio,
   verificarAcessibilidade,
@@ -37,7 +38,7 @@ test.describe("produto", () => {
     await expect(painel.getByRole("button", { name: "Fechar" })).toBeInViewport({ ratio: 1 })
   })
 
-  test("os passos avançam sozinhos, o preço acompanha e a seleção fica marcada", async ({
+  test("os passos avançam pelo botão Avançar, o preço acompanha e a seleção fica marcada", async ({
     page,
   }) => {
     await abrirCardapio(page)
@@ -52,8 +53,9 @@ test.describe("produto", () => {
   test("sem as escolhas obrigatórias, o botão leva ao que falta", async ({ page }) => {
     await abrirCardapio(page)
     const painel = await abrirMeioAMeio(page)
-    await expect(painel.getByTestId("cta-adicionar")).toContainText("1º sabor")
+    await expect(painel.getByTestId("cta-adicionar")).toContainText("Avançar")
     await painel.getByRole("tab", { name: /Borda/ }).click()
+    await expect(painel.getByTestId("cta-adicionar")).toContainText("Adicionar")
     await expect(painel.getByRole("radiogroup", { name: "Escolha a borda" })).toBeVisible()
     await painel.getByTestId("cta-adicionar").click()
     await expect(painel.getByRole("radiogroup", { name: "Escolha o 1º sabor" })).toBeVisible()
@@ -99,19 +101,27 @@ test.describe("produto", () => {
 })
 
 test.describe("montagem da pizza", () => {
-  test("sem escolher, adicionar avisa por toast e pinta de vermelho o que falta", async ({
+  test("sem escolher, avançar avisa por toast e pinta de vermelho o que falta", async ({
     page,
   }) => {
     await abrirCardapio(page)
     const painel = await abrirMeioAMeio(page)
+    // No 1º passo, vazio: o botão não avança e aponta o que falta nele.
     await painel.getByTestId("cta-adicionar").click()
-    await expect(page.locator("[data-sonner-toast]").getByText(/Faltam 3 escolhas/)).toBeVisible()
+    await expect(
+      page.locator("[data-sonner-toast]").getByText(/Escolha o 1º sabor para continuar/),
+    ).toBeVisible()
     await expect(painel.getByTestId("opcao-calabresa")).toHaveAttribute("aria-invalid", "true")
     await expect(painel.getByRole("tab", { name: /1º sabor.*falta escolher/ })).toBeVisible()
 
     await painel.getByTestId("opcao-calabresa").click()
     await expect(painel.getByRole("tab", { name: /1º sabor.*escolhido/ })).toBeVisible()
+    await avancar(painel)
     await expect(painel.getByRole("heading", { name: "Escolha o 2º sabor" })).toBeVisible()
+
+    // No último passo, adicionar faltando o 2º sabor leva até ele e o marca.
+    await painel.getByRole("tab", { name: /Borda/ }).click()
+    await painel.getByTestId("cta-adicionar").click()
     await expect(
       painel.getByRole("radiogroup", { name: "Escolha o 2º sabor" }).getByTestId("opcao-pepperoni"),
     ).toHaveAttribute("aria-invalid", "true")
@@ -199,6 +209,10 @@ test.describe("fluxo completo", () => {
     await expect(page.getByRole("status", { name: "Enviando seu pedido" })).toBeVisible()
     await expect(page).toHaveURL("/pedido", { timeout: 15_000 })
     await expect(page.getByRole("heading", { level: 1, name: "Pedido recebido" })).toBeVisible()
+    await expect(
+      page.getByRole("list", { name: "Andamento do pedido" }).locator("[aria-current=step]"),
+    ).toContainText("Pedido recebido")
+    await expect(page.getByRole("link", { name: "Fazer novo pedido" })).toBeVisible()
     await expect(page.getByText("Troco para R$ 100,00 (volta R$ 27,00)")).toBeVisible()
     await expect(page.getByText("Sem guardanapo")).toBeVisible()
     await verificarSemRolagemHorizontal(page)
@@ -230,5 +244,61 @@ test.describe("fluxo completo", () => {
     await page.goto("/whatsapp")
     await expect(page.getByText("Nenhum pedido por aqui")).toBeVisible()
     await expect(page.getByRole("link", { name: "Ver cardápio" })).toBeVisible()
+  })
+})
+
+test.describe("acompanhamento", () => {
+  test("a etapa avança sozinha e a linha do tempo acompanha", async ({ page }) => {
+    await page.addInitScript(() => {
+      // Pedido em dinheiro feito há 3 s: o preparo começa aos 6 s.
+      const pedido = {
+        numero: 4321,
+        itens: [],
+        subtotal: 46,
+        taxaEntrega: 6,
+        total: 52,
+        criadoEm: Date.now() - 3000,
+        cliente: { nome: "Ana", whatsapp: "(12) 97777-6655" },
+        tipo: "entrega",
+        endereco: "Rua A, 1",
+        pagamento: "dinheiro",
+        troco: null,
+      }
+      localStorage.setItem(
+        "clickpedido-sacola",
+        JSON.stringify({
+          state: { itens: [], ultimoPedido: pedido, pedidos: [pedido], dadosLembrados: null },
+          version: 0,
+        }),
+      )
+    })
+    await page.goto("/pedido")
+    const etapaAtual = page
+      .getByRole("list", { name: "Andamento do pedido" })
+      .locator("[aria-current=step]")
+    await expect(page.getByRole("heading", { level: 1, name: "Pedido recebido" })).toBeVisible()
+    await expect(etapaAtual).toContainText("Pedido recebido")
+    await expect(page.getByText("Previsão", { exact: true })).toBeVisible()
+
+    await expect(page.getByRole("heading", { level: 1, name: "Em preparo" })).toBeVisible({
+      timeout: 6000,
+    })
+    await expect(etapaAtual).toContainText("Em preparo")
+    await expect(etapaAtual).toContainText("agora")
+    await verificarSemRolagemHorizontal(page)
+    await verificarAreasDeToque(page.locator("main"))
+    await verificarAcessibilidade(page)
+  })
+
+  test("sem pedido, oferece o cardápio e a busca pelo celular", async ({ page }) => {
+    await page.goto("/pedido")
+    await expect(
+      page.getByRole("heading", { level: 1, name: "Nenhum pedido por aqui" }),
+    ).toBeVisible()
+    await expect(page.getByTestId("carregador-pizzaria")).toBeVisible()
+    await expect(page.getByRole("link", { name: "Ver cardápio" })).toBeVisible()
+    await page.getByRole("link", { name: "Buscar pelo celular" }).click()
+    await expect(page).toHaveURL("/pedidos")
+    await expect(page.getByRole("heading", { name: "Acompanhe seu pedido" })).toBeVisible()
   })
 })

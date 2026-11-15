@@ -81,12 +81,19 @@ describe("PaginaEstoque", { timeout: 15_000 }, () => {
       expect(resumo.getByText(nome)).toBeInTheDocument()
     }
 
-    await usuario.click(screen.getByRole("combobox", { name: "Situação" }))
-    await usuario.click(await screen.findByRole("option", { name: "Baixo" }))
+    // A adega controla os 120 produtos: 12 no mínimo ou abaixo, 5 zerados.
+    expect(resumo.getByText("120")).toBeInTheDocument()
+    expect(resumo.getByText("R$ 119.746,69")).toBeInTheDocument()
+
+    const situacao = screen.getByRole("radiogroup", { name: "Situação" })
+    expect(within(situacao).getByRole("radio", { name: "Controlados 120" })).toBeChecked()
+    expect(within(situacao).getByRole("radio", { name: "OK 103" })).toBeInTheDocument()
+    expect(within(situacao).getByRole("radio", { name: "Zerado 5" })).toBeInTheDocument()
+    await usuario.click(within(situacao).getByRole("radio", { name: "Baixo 12" }))
     const linhas = within(screen.getByRole("table", { name: "Estoque" }))
       .getAllByRole("row")
       .slice(1)
-    expect(linhas.length).toBeGreaterThan(0)
+    expect(linhas).toHaveLength(12)
     for (const item of linhas) expect(item).toHaveTextContent("Baixo")
   })
 
@@ -96,6 +103,8 @@ describe("PaginaEstoque", { timeout: 15_000 }, () => {
     await acao(usuario, produto, "Entrada")
     const janela = within(screen.getByRole("dialog", { name: `Entrada de ${produto.nome}` }))
     await usuario.type(janela.getByRole("spinbutton", { name: "Quantidade" }), "10")
+    // A Skol tem 68 no estoque da demonstração.
+    expect(janela.getByText("Saldo depois: 78 un")).toBeInTheDocument()
     await usuario.type(janela.getByRole("textbox", { name: "Custo unitário" }), "4,5")
     await usuario.click(janela.getByRole("button", { name: "Registrar entrada" }))
 
@@ -111,6 +120,7 @@ describe("PaginaEstoque", { timeout: 15_000 }, () => {
     await acao(usuario, produto, "Saída")
     const janela = within(screen.getByRole("dialog", { name: `Saída de ${produto.nome}` }))
     await usuario.type(janela.getByRole("spinbutton", { name: "Quantidade" }), "1")
+    expect(janela.getByText("Saldo depois: 67 un")).toBeInTheDocument()
     const registrar = janela.getByRole("button", { name: "Registrar saída" })
     expect(registrar).toBeDisabled()
 

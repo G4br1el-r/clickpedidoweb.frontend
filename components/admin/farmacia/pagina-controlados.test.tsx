@@ -75,6 +75,18 @@ describe("PaginaControlados", () => {
     expect(saida.getByText("Notificação de receita B rec-1002")).toBeInTheDocument()
   })
 
+  test("o tipo do movimento é um traço no tom: entrada, saída e perda", async () => {
+    await abrir()
+    const movimentos = within(screen.getByRole("table", { name: "Movimentações" }))
+    const perda = movimentos.getByRole("row", { name: /Embalagem avariada/ })
+    expect(within(perda).getByText("Perda")).toBeInTheDocument()
+    expect(perda.querySelector("[data-traco]")).toHaveAttribute("data-tom", "cancelado")
+    const entrada = movimentos
+      .getAllByRole("row")
+      .find((linha) => linha.textContent?.includes("Entrada"))
+    expect(entrada?.querySelector("[data-traco]")).toHaveAttribute("data-tom", "pronto")
+  })
+
   test("gera o arquivo do SNGPC", async () => {
     const usuario = await abrir()
     await usuario.click(screen.getByRole("button", { name: "Exportar para o SNGPC" }))

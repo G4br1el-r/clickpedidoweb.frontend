@@ -3,8 +3,6 @@
 import { ArrowUpRightIcon } from "lucide-react"
 import Image from "next/image"
 import type { ComponentProps } from "react"
-import { Entrada } from "@/components/entrada"
-import { Badge } from "@/components/ui/badge"
 import { buttonVariants } from "@/components/ui/button"
 import { emReaisCurto } from "@/lib/formato"
 import type { Banner, Produto } from "@/lib/tipos"
@@ -24,10 +22,10 @@ type BannersLojaProps = {
 export const MOSAICO = {
   secao: "px-4 md:px-6",
   grade:
-    "grid grid-cols-2 gap-3 md:h-[380px] md:grid-cols-4 md:grid-rows-2 md:gap-4 lg:h-[440px] xl:h-[480px] 2xl:h-[540px]",
+    "grid grid-cols-2 gap-3 md:h-[380px] md:grid-cols-4 md:grid-rows-2 md:gap-4 lg:h-[440px] xl:h-[460px]",
   celulaGrande: "col-span-2 md:row-span-2",
   celulaLarga: "col-span-2",
-  peca: "relative isolate flex size-full overflow-hidden rounded-3xl",
+  peca: "relative isolate flex size-full overflow-hidden rounded-2xl",
   grande: "aspect-square sm:aspect-[16/9] md:aspect-auto",
   quadrado: "aspect-square flex-col p-4 md:aspect-auto md:p-5",
   largo: "h-44 md:h-full",
@@ -40,7 +38,7 @@ function Peca({ className, ...props }: ComponentProps<"button">) {
       type="button"
       className={cn(
         MOSAICO.peca,
-        "group text-left outline-none transition-transform duration-150 ease-saida focus-visible:ring-3 focus-visible:ring-ring/60 active:scale-[0.985]",
+        "group text-left outline-none transition-transform duration-150 ease-saida focus-visible:ring-3 focus-visible:ring-ring/60 active:scale-[0.99]",
         className,
       )}
       {...props}
@@ -48,13 +46,13 @@ function Peca({ className, ...props }: ComponentProps<"button">) {
   )
 }
 
-/** Seta no canto: gira de leve no hover, dizendo que o banner leva a algum lugar. */
+/** Seta no canto: avança de leve no hover, dizendo que o banner leva a algum lugar. */
 function Seta({ className }: { className?: string }) {
   return (
     <span
       aria-hidden="true"
       className={cn(
-        "absolute top-3 right-3 z-10 grid size-9 place-items-center rounded-full transition-transform duration-500 ease-saida group-hover:rotate-45 md:top-4 md:right-4",
+        "absolute top-3 right-3 z-10 grid size-9 place-items-center rounded-full transition-transform duration-300 ease-saida group-hover:translate-x-0.5 group-hover:-translate-y-0.5 md:top-4 md:right-4",
         className,
       )}
     >
@@ -78,19 +76,14 @@ function BannerFoto({ banner, aoEscolher }: { banner: Banner; aoEscolher: () => 
         priority
         placeholder="blur"
         sizes="(min-width: 768px) 50vw, 100vw"
-        className="object-cover transition-transform duration-[1200ms] ease-saida group-hover:scale-[1.04]"
+        className="object-cover transition-transform duration-300 ease-saida group-hover:scale-[1.03]"
       />
       <span
         aria-hidden="true"
-        className="absolute inset-0 bg-linear-to-t from-black/85 via-black/35 to-black/0"
+        className="absolute inset-0 bg-linear-to-t from-black/80 via-black/30 to-black/0"
       />
       <span className="relative mt-auto flex flex-col items-start gap-2.5 p-5 md:gap-3 md:p-8">
-        {banner.selo && (
-          <Badge className="border-white/20 bg-white/15 text-white backdrop-blur-md">
-            {banner.selo}
-          </Badge>
-        )}
-        <span className="block max-w-[13ch] font-heading text-3xl leading-[1.02] font-extrabold tracking-tight text-balance sm:text-4xl lg:text-5xl">
+        <span className="block max-w-[14ch] text-[28px] leading-[1.05] font-semibold tracking-[-0.025em] text-balance sm:text-4xl lg:text-5xl">
           {banner.titulo}
         </span>
         <span className="block max-w-[38ch] text-sm text-white/80 md:text-base">
@@ -100,7 +93,7 @@ function BannerFoto({ banner, aoEscolher }: { banner: Banner; aoEscolher: () => 
           <span
             className={cn(
               buttonVariants({ size: "cta" }),
-              "mt-1 bg-white text-neutral-900 group-hover:-translate-y-0.5 group-hover:bg-white group-hover:shadow-lg group-hover:shadow-black/30",
+              "mt-1 h-11 bg-white font-medium text-neutral-900 group-hover:bg-white/90",
             )}
           >
             {banner.chamada}
@@ -111,7 +104,7 @@ function BannerFoto({ banner, aoEscolher }: { banner: Banner; aoEscolher: () => 
   )
 }
 
-/** Os quadrados: cor da marca, título curto e a foto num círculo que vaza pelo canto. */
+/** Os quadrados: cor da marca de ponta a ponta, título curto e a foto quadrada no canto. */
 function BannerCor({
   banner,
   tom,
@@ -133,16 +126,16 @@ function BannerCor({
       )}
     >
       <Seta className="bg-white/15" />
-      <span className="relative z-10 block max-w-[9ch] pr-8 font-heading text-lg leading-[1.1] font-extrabold tracking-tight sm:text-xl lg:text-2xl">
+      <span className="relative z-10 block max-w-[10ch] pr-8 text-lg leading-[1.1] font-semibold tracking-[-0.015em] sm:text-xl lg:text-2xl">
         {banner.titulo}
       </span>
       {/* Nos quadrados pequenos do tablet, só o título: a frase encostaria na foto. */}
-      <span className="relative z-10 mt-1.5 hidden max-w-[15ch] text-sm leading-snug sm:block md:hidden xl:block xl:max-w-[19ch]">
+      <span className="relative z-10 mt-1.5 hidden max-w-[50%] text-sm leading-snug sm:block md:hidden xl:block">
         {banner.texto}
       </span>
       <span
         aria-hidden="true"
-        className="absolute -right-[12%] -bottom-[16%] aspect-square w-[66%] overflow-hidden rounded-full shadow-2xl ring-[6px] ring-white/20 transition-transform duration-700 ease-saida group-hover:-rotate-6 group-hover:scale-105"
+        className="absolute right-3 bottom-3 aspect-square w-[46%] overflow-hidden rounded-xl transition-transform duration-300 ease-saida group-hover:scale-[1.03] md:right-4 md:bottom-4"
       >
         <Image
           src={banner.imagem}
@@ -157,7 +150,7 @@ function BannerCor({
   )
 }
 
-/** O largo: oferta com preço de e por, e a foto cortada em diagonal à direita. */
+/** O largo: oferta com preço de e por, e a foto à direita, num corte reto. */
 function BannerOferta({
   banner,
   produto,
@@ -175,15 +168,14 @@ function BannerOferta({
       className={cn(MOSAICO.largo, "bg-card ring-1 ring-border ring-inset")}
     >
       <span className="relative z-10 flex w-[60%] flex-col items-start justify-center gap-1.5 p-4 md:p-6">
-        {banner.selo && <Badge variant="destructive">{banner.selo}</Badge>}
-        <span className="block font-heading text-xl leading-tight font-extrabold tracking-tight lg:text-2xl">
+        <span className="block text-lg leading-tight font-semibold tracking-[-0.015em] lg:text-2xl">
           {banner.titulo}
         </span>
         {temOferta && produto ? (
           <span className="flex items-baseline gap-1.5 text-sm text-muted-foreground">
             <s>{emReaisCurto(produto.precoOriginal ?? 0)}</s>
             <span>por</span>
-            <span className="text-2xl font-extrabold tracking-tight text-marca-texto lg:text-3xl">
+            <span className="text-2xl font-semibold tracking-[-0.02em] tabular-nums lg:text-3xl">
               {emReaisCurto(produto.preco)}
             </span>
           </span>
@@ -191,20 +183,17 @@ function BannerOferta({
           <span className="line-clamp-2 text-sm text-muted-foreground">{banner.texto}</span>
         )}
       </span>
-      <span
-        aria-hidden="true"
-        className="absolute inset-y-0 right-0 w-[48%] overflow-hidden [clip-path:polygon(22%_0,100%_0,100%_100%,0_100%)]"
-      >
+      <span aria-hidden="true" className="absolute inset-y-0 right-0 w-[40%] overflow-hidden">
         <Image
           src={banner.imagem}
           alt=""
           fill
           placeholder="blur"
           sizes="(min-width: 768px) 25vw, 50vw"
-          className="object-cover transition-transform duration-[1200ms] ease-saida group-hover:scale-[1.06]"
+          className="object-cover transition-transform duration-300 ease-saida group-hover:scale-[1.03]"
         />
       </span>
-      <Seta className="bg-background/85 text-foreground shadow-sm backdrop-blur-md" />
+      <Seta className="bg-background text-foreground" />
     </Peca>
   )
 }
@@ -221,27 +210,27 @@ export function BannersLoja({ banners, produtoDoBanner, aoEscolher }: BannersLoj
   return (
     <section aria-label="Destaques da casa" data-testid="banners-loja" className={MOSAICO.secao}>
       <div className={MOSAICO.grade}>
-        <Entrada atraso={0} duracao={0.8} className={MOSAICO.celulaGrande}>
+        <div className={MOSAICO.celulaGrande}>
           <BannerFoto banner={grande} aoEscolher={() => aoEscolher(grande)} />
-        </Entrada>
+        </div>
         {primeiro && (
-          <Entrada atraso={0.08} duracao={0.8}>
+          <div>
             <BannerCor banner={primeiro} tom="acento" aoEscolher={() => aoEscolher(primeiro)} />
-          </Entrada>
+          </div>
         )}
         {segundo && (
-          <Entrada atraso={0.14} duracao={0.8}>
+          <div>
             <BannerCor banner={segundo} tom="primaria" aoEscolher={() => aoEscolher(segundo)} />
-          </Entrada>
+          </div>
         )}
         {largo && (
-          <Entrada atraso={0.2} duracao={0.8} className={MOSAICO.celulaLarga}>
+          <div className={MOSAICO.celulaLarga}>
             <BannerOferta
               banner={largo}
               produto={produtoDoBanner(largo)}
               aoEscolher={() => aoEscolher(largo)}
             />
-          </Entrada>
+          </div>
         )}
       </div>
     </section>

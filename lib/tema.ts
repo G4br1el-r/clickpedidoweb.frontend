@@ -31,7 +31,8 @@ export function variaveisClaras({ primaria, acento, fundo, tinta }: Tema): Varia
   const muted = colord(fundo).mix(tinta, 0.06).toHex()
   const textoSuave = garantirContraste(colord(tinta).mix(fundo, 0.35).toHex(), muted, tinta)
   const textoPrimaria = garantirContraste(primaria, fundo, tinta)
-  const textoAcento = garantirContraste(acento, BRANCO, tinta)
+  // O preço de oferta aparece sobre a página e sobre o cartão: precisa ler bem nos dois.
+  const textoAcento = garantirContraste(garantirContraste(acento, fundo, tinta), BRANCO, tinta)
 
   return {
     "--background": fundo,

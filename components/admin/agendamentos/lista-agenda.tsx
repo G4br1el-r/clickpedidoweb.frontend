@@ -1,8 +1,9 @@
 "use client"
 
 import { format, startOfDay, subDays } from "date-fns"
-import { SearchIcon } from "lucide-react"
+import { SearchIcon, SearchXIcon } from "lucide-react"
 import { useDeferredValue, useState } from "react"
+import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
 import {
   Select,
@@ -61,7 +62,7 @@ function Filtro<T extends string>({
 }) {
   return (
     <Select value={valor} onValueChange={(novo) => aoMudar(novo as T)}>
-      <SelectTrigger size="sm" aria-label={rotulo} className="w-44">
+      <SelectTrigger aria-label={rotulo} className="w-[calc(50%-0.25rem)] sm:w-44">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -101,7 +102,7 @@ export function ListaAgenda({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <InputGroup className="max-w-xs">
+        <InputGroup className="w-full sm:max-w-xs">
           <InputGroupAddon>
             <SearchIcon />
           </InputGroupAddon>
@@ -118,55 +119,57 @@ export function ListaAgenda({
       </div>
 
       {lista.length === 0 ? (
-        <p className="rounded-xl border py-10 text-center text-sm text-muted-foreground">
-          Nenhum atendimento encontrado.
-        </p>
+        <Empty className="border border-border/70 py-10">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <SearchXIcon />
+            </EmptyMedia>
+            <EmptyTitle>Nenhum atendimento encontrado.</EmptyTitle>
+            <EmptyDescription>
+              Confira o nome ou o telefone, ou troque o status e o período.
+            </EmptyDescription>
+          </EmptyHeader>
+        </Empty>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Quando</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead className="hidden md:table-cell">Serviços</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="text-right">Total</TableHead>
+        <Table aria-label="Atendimentos">
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead className="pl-0">Quando</TableHead>
+              <TableHead>Cliente</TableHead>
+              <TableHead className="hidden md:table-cell">Serviços</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead className="pr-0 text-right">Total</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {lista.map((pedido) => (
+              <TableRow key={pedido.id} className="cursor-pointer" onClick={() => aoAbrir(pedido)}>
+                <TableCell className="pl-0 font-medium">
+                  {format(new Date(pedido.agendamento?.inicio ?? pedido.criadoEm), "dd/MM HH:mm")}
+                </TableCell>
+                <TableCell>
+                  <button
+                    type="button"
+                    className="font-medium underline-offset-4 outline-none hover:underline focus-visible:underline"
+                    onClick={(evento) => {
+                      evento.stopPropagation()
+                      aoAbrir(pedido)
+                    }}
+                  >
+                    {pedido.cliente.nome}
+                  </button>
+                </TableCell>
+                <TableCell className="hidden max-w-64 truncate md:table-cell">
+                  {pedido.itens.map((item) => item.nome).join(", ")}
+                </TableCell>
+                <TableCell>
+                  <SeloStatus pedido={pedido} />
+                </TableCell>
+                <TableCell className="pr-0 text-right">{emReais(pedido.total)}</TableCell>
               </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lista.map((pedido) => (
-                <TableRow
-                  key={pedido.id}
-                  className="cursor-pointer"
-                  onClick={() => aoAbrir(pedido)}
-                >
-                  <TableCell className="tabular-nums">
-                    {format(new Date(pedido.agendamento?.inicio ?? pedido.criadoEm), "dd/MM HH:mm")}
-                  </TableCell>
-                  <TableCell>
-                    <button
-                      type="button"
-                      className="font-medium underline-offset-4 outline-none hover:underline focus-visible:underline"
-                      onClick={(evento) => {
-                        evento.stopPropagation()
-                        aoAbrir(pedido)
-                      }}
-                    >
-                      {pedido.cliente.nome}
-                    </button>
-                  </TableCell>
-                  <TableCell className="hidden max-w-64 truncate md:table-cell">
-                    {pedido.itens.map((item) => item.nome).join(", ")}
-                  </TableCell>
-                  <TableCell>
-                    <SeloStatus pedido={pedido} />
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{emReais(pedido.total)}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+            ))}
+          </TableBody>
+        </Table>
       )}
     </div>
   )

@@ -3,6 +3,7 @@ import {
   abrirCardapio,
   abrirMeioAMeio,
   caixa,
+  esperarParado,
   verificarAcessibilidade,
   verificarAreasDeToque,
   verificarSemRolagemHorizontal,
@@ -15,8 +16,10 @@ test.describe("início", () => {
       "em tela muito baixa o cabeçalho ocupa a primeira tela",
     )
     await abrirCardapio(page)
-    // Os banners vêm antes de "Mais pedidas": é o primeiro conteúdo depois do cabeçalho.
-    const primeiro = await caixa(page.getByTestId("banner-meio-a-meio"))
+    // O cardápio vem logo depois do cabeçalho: o primeiro produto já aparece na primeira tela.
+    const primeiro = await caixa(
+      page.locator("section[id^=categoria-]").first().getByRole("article").first(),
+    )
     expect(primeiro.y).toBeLessThan((viewport?.height ?? 0) - 40)
   })
 
@@ -124,6 +127,20 @@ test.describe("início", () => {
     expect(Math.abs(segundo.y - primeiro.y)).toBeLessThanOrEqual(1)
   })
 
+  test("no computador a lista fica numa coluna de leitura central, em duas colunas", async ({
+    page,
+  }) => {
+    const largura = page.viewportSize()?.width ?? 0
+    test.skip(largura < 1280, "coluna de leitura só no computador")
+    await abrirCardapio(page)
+    const primeiro = await caixa(page.getByTestId("produto-calabresa"))
+    const terceiro = await caixa(page.getByTestId("produto-frango"))
+    expect(terceiro.y, "o terceiro desce para a linha de baixo").toBeGreaterThan(primeiro.y + 10)
+    const grade = await caixa(page.getByTestId("grade-produtos").first())
+    expect(grade.width).toBeLessThanOrEqual(1120 - 48)
+    expect(Math.abs(grade.x + grade.width / 2 - largura / 2), "no centro").toBeLessThanOrEqual(2)
+  })
+
   test("a sacola é um ícone no topo que acompanha a rolagem e abre por cima de tudo", async ({
     page,
   }) => {
@@ -131,6 +148,9 @@ test.describe("início", () => {
     await page.mouse.wheel(0, 1200)
     const icone = page.getByTestId("icone-sacola-fixo")
     await expect(icone).toBeInViewport({ ratio: 1 })
+    // O ícone ainda surge na barra que acabou de grudar; clicar no meio disso faz o
+    // Playwright rolar a página atrás dele, e a barra pode desgrudar.
+    await esperarParado(icone)
     await icone.click()
     const ilha = page.getByRole("dialog", { name: "Sua sacola" })
     await expect(ilha.getByText("Sua sacola está vazia")).toBeVisible()
@@ -164,6 +184,63 @@ test.describe("início", () => {
     await expect(barra).toBeFocused()
   })
 
+  test("ao abrir a sacola, o conteúdo só aparece dentro do fundo que cresce", async ({
+    page,
+    viewport,
+  }) => {
+    const celular = (viewport?.width ?? 0) < 768
+    await abrirCardapio(page)
+    const cola = page.getByTestId("adicionar-refrigerante-cola")
+    await cola.scrollIntoViewIfNeeded()
+    await cola.click()
+    await page.waitForTimeout(700)
+    if (!celular) await page.evaluate(() => window.scrollTo(0, 0))
+    await page.waitForTimeout(300)
+    // Anota, quadro a quadro, onde está o fundo e quanto o conteúdo já apareceu.
+    await page.evaluate(() => {
+      const w = window as unknown as { quadros: unknown[] }
+      w.quadros = []
+      const inicio = performance.now()
+      const anotar = () => {
+        const fundo = document.querySelector('[data-testid="ilha-sacola"] [data-parte="fundo"]')
+        const conteudo = document.querySelector(
+          '[data-testid="ilha-sacola"] [data-parte="conteudo"]',
+        )
+        if (fundo && conteudo) {
+          const f = fundo.getBoundingClientRect()
+          // O que a pessoa vê do conteúdo: se o fundo o recorta, só a parte dentro dele.
+          const recortado =
+            fundo.contains(conteudo) && getComputedStyle(fundo).overflow === "hidden"
+          const r = conteudo.getBoundingClientRect()
+          const c = recortado
+            ? {
+                top: Math.max(r.top, f.top),
+                left: Math.max(r.left, f.left),
+                right: Math.min(r.right, f.right),
+                bottom: Math.min(r.bottom, f.bottom),
+              }
+            : r
+          w.quadros.push({
+            opacidade: Number(getComputedStyle(conteudo).opacity),
+            sobra: Math.max(f.top - c.top, f.left - c.left, c.right - f.right, c.bottom - f.bottom),
+          })
+        }
+        if (performance.now() - inicio < 1000) requestAnimationFrame(anotar)
+      }
+      requestAnimationFrame(anotar)
+    })
+    await page.getByTestId(celular ? "barra-sacola" : "icone-sacola").click()
+    await page.waitForTimeout(1100)
+    const quadros = await page.evaluate(
+      () => (window as unknown as { quadros: { opacidade: number; sobra: number }[] }).quadros,
+    )
+    expect(quadros.length).toBeGreaterThan(10)
+    // Enquanto o conteúdo é visível, nada dele fica para fora do fundo (2 px de folga).
+    const vazados = quadros.filter((q) => q.opacidade > 0.05 && q.sobra > 2)
+    expect(vazados).toEqual([])
+    expect(quadros.at(-1)?.opacidade).toBe(1)
+  })
+
   test("só uma busca à vista: no painel, ou na barra quando ela gruda", async ({ page }) => {
     await abrirCardapio(page)
     await expect(page.getByRole("searchbox")).toHaveCount(1)
@@ -172,6 +249,7 @@ test.describe("início", () => {
     const abrir = page.getByRole("button", { name: "Abrir busca" })
     await expect(abrir).toBeVisible()
     await expect(page.getByTestId("busca-painel")).not.toBeInViewport()
+    await esperarParado(abrir)
     await abrir.click()
     const campo = page
       .getByTestId("barra-navegacao")
@@ -241,6 +319,53 @@ test.describe("movimento reduzido", () => {
     await expect(page.getByTestId("painel-loja")).toHaveCSS("animation-name", "none")
     const painel = await abrirMeioAMeio(page)
     await painel.getByTestId("opcao-calabresa").click()
+    await painel.getByTestId("cta-adicionar").click()
     await expect(painel.getByRole("heading", { name: "Escolha o 2º sabor" })).toBeVisible()
+  })
+})
+
+test.describe("celular: categorias em cima, ações embaixo", () => {
+  test("ao rolar, as categorias ocupam a barra de cima inteira e busca, opções e sacola ficam no pé", async ({
+    page,
+    viewport,
+  }) => {
+    test.skip((viewport?.width ?? 0) >= 768, "só no celular")
+    await abrirCardapio(page)
+    await page.evaluate(() => window.scrollTo(0, 900))
+    const barra = page.getByTestId("barra-navegacao")
+    await expect(barra).toHaveAttribute("data-grudada", "true")
+    await page.waitForTimeout(500)
+
+    // Em cima, só as categorias, na largura toda.
+    await expect(barra.getByRole("button", { name: "Abrir busca" })).toHaveCount(0)
+    await expect(barra.getByRole("button", { name: "Mais opções" })).toHaveCount(0)
+    const trilho = await caixa(barra.locator('[aria-current="true"]').locator(".."))
+    expect(trilho.width).toBeGreaterThanOrEqual((viewport?.width ?? 0) - 40)
+
+    // Embaixo, ao alcance do polegar.
+    const doca = page.getByTestId("doca-celular")
+    await expect(doca).toBeVisible()
+    const medida = await caixa(doca)
+    expect(medida.y + medida.height).toBeGreaterThan((viewport?.height ?? 0) - 40)
+    await expect(doca.getByRole("button", { name: "Abrir busca" })).toBeVisible()
+    await expect(doca.getByRole("button", { name: "Mais opções" })).toBeVisible()
+    await expect(doca.getByTestId("icone-sacola-fixo")).toBeVisible()
+
+    // A busca abre no topo, no lugar das categorias.
+    await doca.getByRole("button", { name: "Abrir busca" }).click()
+    await expect(barra.getByRole("searchbox", { name: "Buscar no cardápio" })).toBeFocused()
+  })
+
+  test("com itens, a sacola da barra de baixo cresce e mostra o total", async ({
+    page,
+    viewport,
+  }) => {
+    test.skip((viewport?.width ?? 0) >= 768, "só no celular")
+    await abrirCardapio(page)
+    await page.getByTestId("adicionar-refrigerante-cola").click()
+    const doca = page.getByTestId("doca-celular")
+    await expect(doca.getByTestId("barra-sacola")).toBeVisible()
+    // O valor sai da roleta de dígitos: o nome acessível é o que se lê.
+    await expect(doca.getByTestId("barra-sacola")).toHaveAccessibleName(/R\$\s15,00/)
   })
 })

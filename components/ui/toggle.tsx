@@ -12,6 +12,9 @@ const toggleVariants = cva(
       variant: {
         default: "bg-transparent",
         outline: "border border-input bg-transparent hover:bg-muted",
+        // Controle segmentado do painel: a opção escolhida vira uma etiqueta branca no trilho.
+        segmento:
+          "bg-transparent text-muted-foreground hover:bg-transparent hover:text-foreground aria-pressed:bg-card data-[state=on]:bg-card data-[state=on]:text-foreground data-[state=on]:shadow-[0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.06)] active:scale-[0.97] transition-[background-color,color,box-shadow,transform] duration-150 ease-saida",
       },
       size: {
         default:

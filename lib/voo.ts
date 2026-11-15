@@ -4,6 +4,8 @@ import { create } from "zustand"
 export type Voo = {
   id: number
   imagem: StaticImageData
+  /** O preço escrito na etiqueta que desliza até a sacola. */
+  rotulo: string
   de: { x: number; y: number }
   para: { x: number; y: number }
 }
@@ -41,10 +43,10 @@ function alvoDaSacola() {
   return { x: window.innerWidth / 2, y: window.innerHeight - 40 }
 }
 
-/** Mostra o item saindo de onde a pessoa tocou até a sacola. */
-export function lancarParaSacola(origem: Element, imagem: StaticImageData) {
+/** A etiqueta do produto se solta de onde a pessoa tocou e desliza até a sacola. */
+export function lancarParaSacola(origem: Element, imagem: StaticImageData, rotulo: string) {
   if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return
   proximoId += 1
-  const voo = { id: proximoId, imagem, de: centro(origem), para: alvoDaSacola() }
+  const voo = { id: proximoId, imagem, rotulo, de: centro(origem), para: alvoDaSacola() }
   useVoos.setState(({ voos }) => ({ voos: [...voos, voo] }))
 }

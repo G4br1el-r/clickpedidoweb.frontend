@@ -54,6 +54,17 @@ describe("tema por cliente", () => {
           ).toBeGreaterThanOrEqual(4.5)
         }
       })
+
+      // A vitrine não tem cartões: o preço de oferta, na cor de acento, fica sobre o fundo da página.
+      test(`no tema ${nome}, o acento ${marca} vira texto legível sobre a página e o cartão`, () => {
+        const v = gerar({ primaria: "#0B4F9C", acento: marca, fundo: "#F2F7F6", tinta: TINTA })
+        for (const fundo of ["--background", "--card"] as const) {
+          expect(
+            colord(v["--marca-acento-texto"]).contrast(v[fundo]),
+            `--marca-acento-texto sobre ${fundo}`,
+          ).toBeGreaterThanOrEqual(4.5)
+        }
+      })
     }
   }
 

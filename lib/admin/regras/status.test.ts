@@ -1,5 +1,12 @@
 import { describe, expect, test } from "vitest"
-import { proximoStatus, rotuloAcao, rotuloStatus, rotuloStatusComum } from "./status"
+import {
+  etapasDoCaminho,
+  proximoStatus,
+  rotuloAcao,
+  rotuloStatus,
+  rotuloStatusComum,
+  tomDoStatus,
+} from "./status"
 
 describe("rotuloStatus", () => {
   test("o mesmo status muda de nome conforme o tipo do pedido", () => {
@@ -74,5 +81,38 @@ describe("proximoStatus", () => {
     for (const status of ["aguardando-pagamento", "concluido", "cancelado"] as const) {
       expect(proximoStatus("entrega", status)).toBeNull()
     }
+  })
+})
+
+describe("tomDoStatus", () => {
+  test("cada etapa do caminho tem o seu tom, na ordem em que o pedido anda", () => {
+    expect(tomDoStatus("aguardando-pagamento")).toBe("espera")
+    expect(tomDoStatus("recebido")).toBe("novo")
+    expect(tomDoStatus("em-preparo")).toBe("preparo")
+    expect(tomDoStatus("pronto")).toBe("pronto")
+    expect(tomDoStatus("saiu-para-entrega")).toBe("caminho")
+  })
+
+  test("o que já saiu da operação fica apagado; cancelado é perigo", () => {
+    expect(tomDoStatus("concluido")).toBe("fim")
+    expect(tomDoStatus("cancelado")).toBe("cancelado")
+  })
+})
+
+describe("etapasDoCaminho", () => {
+  test("entrega passa por todas as etapas, até sair e ser entregue", () => {
+    expect(etapasDoCaminho("entrega")).toEqual([
+      "recebido",
+      "em-preparo",
+      "pronto",
+      "saiu-para-entrega",
+      "concluido",
+    ])
+  })
+
+  test("retirada e mesa não saem para entrega; o salão não tem pronto", () => {
+    expect(etapasDoCaminho("retirada")).toEqual(["recebido", "em-preparo", "pronto", "concluido"])
+    expect(etapasDoCaminho("mesa")).toEqual(["recebido", "em-preparo", "pronto", "concluido"])
+    expect(etapasDoCaminho("atendimento")).toEqual(["recebido", "em-preparo", "concluido"])
   })
 })

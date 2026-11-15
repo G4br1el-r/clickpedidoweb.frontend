@@ -66,6 +66,16 @@ describe("MenuModulos", () => {
     )
     expect(screen.getByRole("link", { name: "Visão geral" })).not.toHaveAttribute("aria-current")
   })
+
+  test("o traço da Etiqueta marca só o item da página em que você está", () => {
+    caminho.atual = "/admin/pedidos"
+    const { container } = renderizar()
+
+    const tracos = container.querySelectorAll("[data-traco-menu]")
+    expect(tracos).toHaveLength(1)
+    expect(screen.getByRole("link", { name: "Pedidos" })).toContainElement(tracos[0] as HTMLElement)
+    expect(tracos[0]).toHaveAttribute("aria-hidden", "true")
+  })
 })
 
 describe("aviso do estoque no menu", () => {

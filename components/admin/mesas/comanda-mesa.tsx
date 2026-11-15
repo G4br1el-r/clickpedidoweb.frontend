@@ -1,5 +1,6 @@
 "use client"
 
+import NumberFlow from "@number-flow/react"
 import { format } from "date-fns"
 import {
   BanknoteIcon,
@@ -11,6 +12,7 @@ import {
   ReceiptIcon,
   Trash2Icon,
 } from "lucide-react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import Link from "next/link"
 import { useRef, useState } from "react"
 import { NumericFormat } from "react-number-format"
@@ -62,8 +64,11 @@ import {
 import type { PagamentoMesa } from "@/lib/admin/dados/servidor"
 import type { ItemPedido, Mesa, Pedido } from "@/lib/admin/dados/tipos"
 import { cozinhaJaPreparou } from "@/lib/admin/regras/cozinha"
+import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
-import { emReais } from "@/lib/formato"
+import { emReais, formatoMoeda } from "@/lib/formato"
+import { cn } from "@/lib/utils"
+import { Traco } from "../traco"
 
 const PAGAMENTOS: { valor: PagamentoMesa; rotulo: string; icone: typeof BanknoteIcon }[] = [
   { valor: "dinheiro", rotulo: "Dinheiro", icone: BanknoteIcon },
@@ -208,13 +213,19 @@ function FecharConta({
           aria-label="Forma de pagamento"
           value={pagamento ?? ""}
           onValueChange={(valor) => setPagamento(valor as PagamentoMesa)}
-          className="grid grid-cols-3 gap-2"
+          className="grid grid-cols-3 gap-0.5 rounded-xl bg-foreground/[0.05] p-0.5"
         >
           {PAGAMENTOS.map(({ valor, rotulo, icone: Icone }) => (
+            // Controle segmentado: a forma escolhida vira a etiqueta branca no trilho.
             <Label
               key={valor}
               htmlFor={`conta-pagamento-${valor}`}
-              className="flex cursor-pointer flex-col items-center gap-1 rounded-lg border p-3 text-xs has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-accent"
+              className={cn(
+                "flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] text-[13px] font-medium text-muted-foreground",
+                "transition-[background-color,color,box-shadow,transform] duration-150 ease-saida hover:text-foreground active:scale-[0.97]",
+                "has-[[data-state=checked]]:bg-card has-[[data-state=checked]]:text-foreground has-[[data-state=checked]]:shadow-[0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.06)]",
+                "has-focus-visible:ring-3 has-focus-visible:ring-ring/50",
+              )}
             >
               <RadioGroupItem value={valor} id={`conta-pagamento-${valor}`} className="sr-only" />
               <Icone className="size-4" aria-hidden="true" />
@@ -279,11 +290,19 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
     )
   const tirar = (item: ItemPedido) =>
     remover.mutate({ pedidoId: pedido.id, itemId: item.id }, { onError: aoErrar })
+  const semMovimento = useReducedMotion()
+  const estado = estadoDaMesa(mesa, pedido)
 
   return (
     <>
-      <SheetHeader className="gap-1.5 border-b">
-        <SheetTitle className="text-lg">Mesa {mesa.numero}</SheetTitle>
+      <SheetHeader className="gap-1.5 border-b border-border/70">
+        <div className="flex items-center gap-3 pr-8">
+          <SheetTitle className="text-lg">Mesa {mesa.numero}</SheetTitle>
+          <span className="flex items-center gap-1.5 text-xs font-medium">
+            <Traco tom={estado.tom} />
+            {estado.rotulo}
+          </span>
+        </div>
         <SheetDescription>
           {[
             pedido.cliente.nome,
@@ -295,104 +314,144 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
         </SheetDescription>
       </SheetHeader>
 
-      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
+      <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
         {vazia ? (
-          <p className="py-6 text-center text-sm text-muted-foreground">
+          <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-balance text-muted-foreground">
             A comanda está vazia. Libere a mesa ou lance itens pelo Garçom.
           </p>
         ) : (
-          <ul aria-label="Itens da comanda" className="flex flex-col divide-y">
-            {pedido.itens.map((item) => (
-              <li key={item.id} aria-label={item.nome} className="flex items-start gap-3 py-2.5">
-                <div className="flex min-w-0 flex-1 flex-col text-sm">
-                  <span className="font-medium">{item.nome}</span>
-                  {item.opcoes.length > 0 && (
-                    <span className="text-xs text-muted-foreground">{item.opcoes.join(" · ")}</span>
-                  )}
-                  {item.observacao && <span className="text-xs italic">“{item.observacao}”</span>}
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {emReais(item.precoUnitario)} cada · {emReais(item.total)}
-                  </span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    aria-label="Menos um"
-                    disabled={item.quantidade <= 1}
-                    onClick={() => comConfirmacao(item, () => diminuir(item))}
-                  >
-                    <MinusIcon />
-                  </Button>
-                  <span className="w-7 text-center text-sm font-medium tabular-nums">
-                    {item.quantidade}
-                  </span>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="outline"
-                    aria-label="Mais um"
-                    disabled={item.quantidade >= 999}
-                    onClick={() =>
-                      alterar.mutate(
-                        { pedidoId: pedido.id, itemId: item.id, quantidade: item.quantidade + 1 },
-                        { onError: aoErrar },
-                      )
-                    }
-                  >
-                    <PlusIcon />
-                  </Button>
-                  <Button
-                    type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    aria-label="Remover"
-                    onClick={() => comConfirmacao(item, () => tirar(item))}
-                  >
-                    <Trash2Icon />
-                  </Button>
-                </div>
-              </li>
-            ))}
+          <ul
+            aria-label="Itens da comanda"
+            className="-mt-2 flex flex-col divide-y divide-border/70 border-b border-border/70"
+          >
+            <AnimatePresence initial={false}>
+              {pedido.itens.map((item) => (
+                <motion.li
+                  key={item.id}
+                  aria-label={item.nome}
+                  layout={semMovimento ? false : "position"}
+                  initial={semMovimento ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                  transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                  className="flex items-start gap-3 py-3"
+                >
+                  <div className="flex min-w-0 flex-1 flex-col text-sm">
+                    <span className="font-medium">{item.nome}</span>
+                    {item.opcoes.length > 0 && (
+                      <span className="text-xs text-muted-foreground">
+                        {item.opcoes.join(" · ")}
+                      </span>
+                    )}
+                    {item.observacao && <span className="text-xs italic">“{item.observacao}”</span>}
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {emReais(item.precoUnitario)} cada · {emReais(item.total)}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      className="max-md:size-10"
+                      variant="outline"
+                      aria-label="Menos um"
+                      disabled={item.quantidade <= 1}
+                      onClick={() => comConfirmacao(item, () => diminuir(item))}
+                    >
+                      <MinusIcon />
+                    </Button>
+                    <span className="w-7 text-center text-sm font-medium tabular-nums">
+                      {item.quantidade}
+                    </span>
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      className="max-md:size-10"
+                      variant="outline"
+                      aria-label="Mais um"
+                      disabled={item.quantidade >= 999}
+                      onClick={() =>
+                        alterar.mutate(
+                          { pedidoId: pedido.id, itemId: item.id, quantidade: item.quantidade + 1 },
+                          { onError: aoErrar },
+                        )
+                      }
+                    >
+                      <PlusIcon />
+                    </Button>
+                    <Button
+                      type="button"
+                      size="icon-sm"
+                      className="max-md:size-10"
+                      variant="ghost"
+                      aria-label="Remover"
+                      onClick={() => comConfirmacao(item, () => tirar(item))}
+                    >
+                      <Trash2Icon />
+                    </Button>
+                  </div>
+                </motion.li>
+              ))}
+            </AnimatePresence>
           </ul>
         )}
         <ItemAvulso mesaId={mesa.id} />
-        <div className="flex items-baseline justify-between rounded-lg bg-muted px-3 py-2 text-base font-semibold">
-          <span>Total</span>
-          <span className="tabular-nums">{emReais(pedido.total)}</span>
-        </div>
       </div>
 
-      <SheetFooter className="border-t sm:flex-row">
-        {vazia ? (
+      <SheetFooter className="gap-3 border-t border-border/70">
+        {/* O total fica sempre à vista, junto das ações que fecham a mesa. */}
+        <div className="flex items-baseline justify-between">
+          <span className="text-[15px] font-semibold">Total</span>
+          <NumberFlow
+            value={pedido.total}
+            locales="pt-BR"
+            format={formatoMoeda}
+            className="text-[28px] leading-none font-semibold tracking-[-0.025em] tabular-nums"
+          />
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {vazia ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="h-11 flex-1"
+              disabled={liberar.isPending}
+              onClick={() =>
+                liberar.mutate(mesa.id, {
+                  onSuccess: () => {
+                    toast.success(`Mesa ${mesa.numero} liberada.`)
+                    aoFechar()
+                  },
+                  onError: aoErrar,
+                })
+              }
+            >
+              Liberar mesa
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              size="lg"
+              className="h-11 flex-1"
+              onClick={() => imprimir()}
+            >
+              <PrinterIcon data-icon="inline-start" />
+              Imprimir conta
+            </Button>
+          )}
           <Button
             type="button"
-            variant="outline"
-            className="flex-1"
-            disabled={liberar.isPending}
-            onClick={() =>
-              liberar.mutate(mesa.id, {
-                onSuccess: () => {
-                  toast.success(`Mesa ${mesa.numero} liberada.`)
-                  aoFechar()
-                },
-                onError: aoErrar,
-              })
-            }
+            size="lg"
+            className="h-11 flex-1"
+            disabled={vazia}
+            onClick={() => setFechando(true)}
           >
-            Liberar mesa
+            <ReceiptIcon data-icon="inline-start" />
+            Fechar conta
           </Button>
-        ) : (
-          <Button type="button" variant="outline" className="flex-1" onClick={() => imprimir()}>
-            <PrinterIcon data-icon="inline-start" />
-            Imprimir conta
-          </Button>
-        )}
-        <Button type="button" className="flex-1" disabled={vazia} onClick={() => setFechando(true)}>
-          <ReceiptIcon data-icon="inline-start" />
-          Fechar conta
-        </Button>
+        </div>
       </SheetFooter>
 
       <ContaImpressa pedido={pedido} mesa={mesa} loja={loja?.nome} ref={conta} />
@@ -437,9 +496,12 @@ function MesaLivre({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void }) {
   const excluir = useExcluirMesa()
   return (
     <>
-      <SheetHeader className="gap-1.5 border-b">
+      <SheetHeader className="gap-1.5 border-b border-border/70">
         <SheetTitle className="text-lg">Mesa {mesa.numero}</SheetTitle>
-        <SheetDescription>Mesa livre.</SheetDescription>
+        <SheetDescription className="flex items-center gap-1.5">
+          <Traco tom="fim" />
+          Mesa livre.
+        </SheetDescription>
       </SheetHeader>
       <div className="flex flex-1 flex-col gap-3 p-4 text-sm text-muted-foreground">
         <p>A comanda abre quando o garçom lança o primeiro item.</p>
@@ -447,7 +509,7 @@ function MesaLivre({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void }) {
           <Link href="/admin/garcom">Abrir o Garçom</Link>
         </Button>
       </div>
-      <SheetFooter className="border-t">
+      <SheetFooter className="border-t border-border/70">
         <AlertDialog>
           <AlertDialogTrigger asChild>
             <Button type="button" variant="outline" className="text-destructive">

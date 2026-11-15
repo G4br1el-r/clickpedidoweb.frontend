@@ -1,40 +1,43 @@
 "use client"
 
 import { motion } from "motion/react"
-import Image from "next/image"
 import { useVoos } from "@/lib/voo"
 
-const TAMANHO = 64
+/** A curva de saída da casa: começa rápido e assenta macio. */
+const SAIDA = [0.23, 1, 0.32, 1] as const
+/** Tempo do deslize; a sacola reage quando ele termina (CHEGADA_S na barra e no ícone). */
+const DURACAO_S = 0.3
 
-/** Camada dos itens em voo; não recebe cliques e fica fora da leitura de tela. */
+/**
+ * Camada das etiquetas a caminho da sacola: a etiqueta do produto se solta e desliza
+ * até a sacola. Não recebe cliques e fica fora da leitura de tela.
+ */
 export function VooParaSacola() {
   const voos = useVoos((estado) => estado.voos)
   const concluir = useVoos((estado) => estado.concluir)
 
   return (
     <div aria-hidden="true" className="pointer-events-none fixed inset-0 z-[60] overflow-hidden">
-      {voos.map(({ id, imagem, de, para }) => (
+      {voos.map(({ id, rotulo, de, para }) => (
         <motion.div
           key={id}
           data-testid="voo"
-          className="absolute top-0 left-0 overflow-hidden rounded-full ring-2 ring-white"
-          style={{ width: TAMANHO, height: TAMANHO }}
-          initial={{ x: de.x - TAMANHO / 2, y: de.y - TAMANHO / 2, scale: 0.7, opacity: 0 }}
-          animate={{
-            x: para.x - TAMANHO / 2,
-            y: [de.y - TAMANHO / 2, Math.min(de.y, para.y) - 90, para.y - TAMANHO / 2],
-            scale: [0.7, 1.05, 0.3],
-            opacity: [0, 1, 1, 0],
-          }}
+          className="absolute top-0 left-0"
+          // Nasce já visível, no lugar da etiqueta, e encolhe ao entrar na sacola.
+          initial={{ x: de.x, y: de.y, scale: 1, opacity: 1 }}
+          animate={{ x: para.x, y: para.y, scale: 0.6, opacity: [1, 1, 0] }}
           transition={{
-            duration: 0.62,
-            ease: [0.32, 0.72, 0, 1],
-            y: { duration: 0.62, ease: "easeInOut" },
-            opacity: { duration: 0.62, times: [0, 0.12, 0.85, 1] },
+            duration: DURACAO_S,
+            ease: SAIDA,
+            opacity: { duration: DURACAO_S, times: [0, 0.8, 1] },
           }}
           onAnimationComplete={() => concluir(id)}
         >
-          <Image src={imagem} alt="" fill sizes="64px" className="object-cover" />
+          {/* A mesma etiqueta da linha, agora solta: o traço da loja e o preço. */}
+          <span className="sombra-flutuante flex h-8 -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-lg bg-card px-2.5 text-[15px] font-semibold tracking-[-0.01em] whitespace-nowrap text-card-foreground tabular-nums ring-1 ring-border">
+            <span aria-hidden="true" className="h-3.5 w-[3px] rounded-full bg-primary" />
+            {rotulo}
+          </span>
         </motion.div>
       ))}
     </div>

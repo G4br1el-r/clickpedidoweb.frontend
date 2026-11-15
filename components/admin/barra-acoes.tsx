@@ -1,8 +1,10 @@
 "use client"
 
 import { CheckIcon, RotateCcwIcon, ShoppingBagIcon, Undo2Icon } from "lucide-react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
+import { useMemo } from "react"
 import { toast } from "sonner"
+import { Dica } from "@/components/dica"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -15,9 +17,13 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
-import { useConfig, useMudancasPendentes, useSacolaAdmin } from "@/lib/admin/config"
+import { useConfig, useSacolaAdmin } from "@/lib/admin/config"
+import { type InfoSecao, ondeMudou, secoesAlteradas } from "@/lib/admin/secoes"
 import { emReais } from "@/lib/formato"
-import { cn } from "@/lib/utils"
+import { Traco } from "./traco"
+
+/** Curva da casa: sai rápido e assenta devagar. */
+export const CURVA_SAIDA = [0.23, 1, 0.32, 1] as const
 
 function quandoAplicou(iso: string | null) {
   if (!iso) return "Ainda nada aplicado no site"
@@ -29,18 +35,32 @@ function quandoAplicou(iso: string | null) {
     : `Aplicado em ${data.toLocaleDateString("pt-BR")} às ${hora}`
 }
 
+/** Seções cujas configurações diferem do que está aplicado no site, na ordem do índice. */
+export function useSecoesPendentes(): InfoSecao[] {
+  const config = useConfig((estado) => estado.config)
+  const publicada = useConfig((estado) => estado.publicada)
+  return useMemo(() => secoesAlteradas(config, publicada), [config, publicada])
+}
+
 /** Voltar o site ao visual original da loja, com confirmação. */
 function VoltarAoOriginal() {
   const voltarAoOriginal = useConfig((estado) => estado.voltarAoOriginal)
   return (
     <AlertDialog>
-      <AlertDialogTrigger asChild>
-        <Button type="button" variant="ghost" size="sm">
-          <RotateCcwIcon data-icon="inline-start" />
-          <span className="hidden sm:inline">Voltar ao original</span>
-          <span className="sm:hidden">Original</span>
-        </Button>
-      </AlertDialogTrigger>
+      {/* Ação rara e com confirmação: fica só no ícone, com a dica, para a barra caber numa linha. */}
+      <Dica texto="Voltar ao original" lado="top">
+        <AlertDialogTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            aria-label="Voltar ao original"
+            className="text-muted-foreground"
+          >
+            <RotateCcwIcon />
+          </Button>
+        </AlertDialogTrigger>
+      </Dica>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Voltar o site ao original?</AlertDialogTitle>
@@ -66,8 +86,9 @@ function VoltarAoOriginal() {
 }
 
 /**
- * Barra fixa embaixo das configurações: diz se há mudanças fora do site e reúne
- * as ações de publicar. Com recursos Pro na sacola, "Aplicar" abre a sacola antes.
+ * Barra presa embaixo das configurações: diz o que mudou e onde, e reúne as ações de
+ * publicar. Com recursos Pro na sacola, o botão principal vira "Revisar e aplicar" e
+ * abre a sacola antes de publicar.
  */
 export function BarraAcoes() {
   const hidratada = useConfig((estado) => estado.hidratada)
@@ -75,11 +96,23 @@ export function BarraAcoes() {
   const abrirSacola = useConfig((estado) => estado.abrirSacola)
   const aplicarNoSite = useConfig((estado) => estado.aplicarNoSite)
   const descartar = useConfig((estado) => estado.descartar)
-  const pendentes = useMudancasPendentes()
+  const secoes = useSecoesPendentes()
+  const pendentes = secoes.length > 0
   const itens = useSacolaAdmin()
   const totalSacola = itens.reduce((soma, item) => soma + item.preco, 0)
+  const reduzir = useReducedMotion()
 
   if (!hidratada) return null
+
+  // Botões que entram e saem: crescem um pouco ao entrar e somem mais rápido ao sair.
+  const botao = {
+    initial: reduzir ? { opacity: 0 } : { opacity: 0, scale: 0.94 },
+    animate: { opacity: 1, scale: 1, transition: { duration: 0.2, ease: CURVA_SAIDA } },
+    exit: reduzir
+      ? { opacity: 0, transition: { duration: 0.12 } }
+      : { opacity: 0, scale: 0.94, transition: { duration: 0.12, ease: CURVA_SAIDA } },
+  }
+  const deslocar = { duration: reduzir ? 0 : 0.2, ease: CURVA_SAIDA }
 
   function aplicar() {
     if (itens.length > 0) {
@@ -93,80 +126,82 @@ export function BarraAcoes() {
   }
 
   return (
-    <div className="sticky bottom-0 z-20 -mx-4 mt-auto px-4 pt-6 pb-4 md:-mx-8 md:px-8">
+    <div className="sticky bottom-0 z-20 -mx-4 mt-auto px-4 pt-8 pb-4 md:-mx-6 md:px-6 lg:-mx-8 lg:px-8">
       <div
-        className={cn(
-          "mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl border bg-card/95 p-2.5 pl-4 shadow-[0_18px_40px_-20px_rgb(0_0_0/0.4)] backdrop-blur transition-colors duration-300",
-          pendentes ? "border-[#F5B700]/60" : "border-border",
-        )}
+        className="mx-auto flex w-full max-w-3xl flex-wrap items-center gap-x-3 gap-y-2 rounded-xl bg-background/95 p-2 pl-3.5 shadow-[0_12px_32px_-18px_rgb(0_0_0/0.35)] ring-1 ring-border/80 backdrop-blur-sm"
         data-testid="barra-acoes"
+        data-pendente={pendentes || undefined}
       >
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.p
-            key={pendentes ? "pendente" : "aplicado"}
-            className="flex min-w-48 flex-1 items-center gap-2 text-sm"
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.18 }}
-          >
+        <div className="flex min-w-48 flex-1 items-center gap-2.5 text-sm" aria-live="polite">
+          {pendentes ? (
+            <Traco tom="novo" />
+          ) : (
+            <CheckIcon className="size-4 shrink-0 text-(--tom-pronto)" aria-hidden="true" />
+          )}
+          <p className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
             {pendentes ? (
               <>
-                <span className="relative flex size-2.5 shrink-0">
-                  <span className="absolute inset-0 animate-ping rounded-full bg-[#F5B700] opacity-60 motion-reduce:hidden" />
-                  <span className="relative size-2.5 rounded-full bg-[#F5B700]" />
-                </span>
                 <span className="font-medium">Mudanças não aplicadas</span>
+                <span className="text-muted-foreground">{ondeMudou(secoes)}</span>
               </>
             ) : (
-              <>
-                <CheckIcon className="size-4 shrink-0 text-sucesso" />
-                <span className="truncate text-muted-foreground">{quandoAplicou(publicadaEm)}</span>
-              </>
+              <span className="truncate text-muted-foreground">{quandoAplicou(publicadaEm)}</span>
             )}
-          </motion.p>
-        </AnimatePresence>
+          </p>
+        </div>
 
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-1.5">
-          {itens.length > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={() => abrirSacola(true)}
-              data-testid="botao-sacola-admin"
-              className="border-[#F5B700]/60"
-            >
-              <ShoppingBagIcon data-icon="inline-start" />
-              {itens.length} na sacola · {emReais(totalSacola)}/mês
-            </Button>
-          )}
-          {pendentes && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={() => {
-                descartar()
-                toast("Alterações descartadas", {
-                  description: "O painel voltou ao que está aplicado no site.",
-                })
-              }}
-            >
-              <Undo2Icon data-icon="inline-start" />
-              Descartar
-            </Button>
-          )}
-          <VoltarAoOriginal />
-          <Button
-            type="button"
-            size="sm"
-            onClick={aplicar}
-            disabled={!pendentes}
-            data-testid="aplicar-no-site"
-          >
-            Aplicar no site
-          </Button>
+        <div className="ml-auto flex flex-wrap items-center justify-end gap-1">
+          <AnimatePresence mode="popLayout" initial={false}>
+            {itens.length > 0 && (
+              <motion.div key="sacola" {...botao}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => abrirSacola(true)}
+                  data-testid="botao-sacola-admin"
+                  className="tabular-nums"
+                >
+                  <ShoppingBagIcon data-icon="inline-start" />
+                  {itens.length} na sacola{" "}
+                  <span className="hidden sm:inline">· {emReais(totalSacola)}/mês</span>
+                </Button>
+              </motion.div>
+            )}
+            {pendentes && (
+              <motion.div key="descartar" {...botao}>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    descartar()
+                    toast("Alterações descartadas", {
+                      description: "O painel voltou ao que está aplicado no site.",
+                    })
+                  }}
+                >
+                  <Undo2Icon data-icon="inline-start" />
+                  Descartar
+                </Button>
+              </motion.div>
+            )}
+            <motion.div key="original" layout="position" transition={deslocar}>
+              <VoltarAoOriginal />
+            </motion.div>
+            <motion.div key="aplicar" layout="position" transition={deslocar}>
+              <Button
+                type="button"
+                size="sm"
+                onClick={aplicar}
+                disabled={!pendentes}
+                data-testid="aplicar-no-site"
+                className="active:scale-[0.97]"
+              >
+                {pendentes && itens.length > 0 ? "Revisar e aplicar" : "Aplicar no site"}
+              </Button>
+            </motion.div>
+          </AnimatePresence>
         </div>
       </div>
     </div>

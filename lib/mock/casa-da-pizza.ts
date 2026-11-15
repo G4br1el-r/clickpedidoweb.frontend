@@ -346,7 +346,12 @@ const pizza = (
   preco: number,
   imagem: StaticImageData,
   extra: Partial<ProdutoPizzaria> = {},
-) => item("pizza", id, nome, descricao, preco, imagem, { grupos: [grupoBorda], ...extra })
+) =>
+  item("pizza", id, nome, descricao, preco, imagem, {
+    grupos: [grupoBorda],
+    medida: "Grande · 8 fatias",
+    ...extra,
+  })
 
 function metade(numero: 1 | 2, itens: ItemOpcao[]): GrupoOpcao<"pizzaria"> {
   return {

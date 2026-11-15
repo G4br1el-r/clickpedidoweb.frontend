@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next"
-import { Bricolage_Grotesque, Figtree } from "next/font/google"
+import { Geist } from "next/font/google"
 import type { ReactNode } from "react"
 import { Provedores } from "@/components/provedores"
 import { clienteAtual } from "@/lib/cliente"
@@ -7,13 +7,10 @@ import { cssDasLojas, SCRIPT_LOJA } from "@/lib/loja-atual"
 import { corDaBarra, temaParaCss } from "@/lib/tema"
 import "./globals.css"
 
-const fonteTitulo = Bricolage_Grotesque({
-  subsets: ["latin"],
-  variable: "--fonte-titulo",
-  weight: ["600", "700", "800"],
-})
+/* A vitrine fala numa família só, em dois pesos: o título e o texto são a mesma Geist. */
+const fonteTitulo = Geist({ subsets: ["latin"], variable: "--fonte-titulo" })
 
-const fonteTexto = Figtree({ subsets: ["latin"], variable: "--fonte-texto" })
+const fonteTexto = Geist({ subsets: ["latin"], variable: "--fonte-texto" })
 
 export const metadata: Metadata = {
   title: `${clienteAtual.nome} · Cardápio`,

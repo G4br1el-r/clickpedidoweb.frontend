@@ -104,6 +104,8 @@ describe("FormularioProduto: salvar", () => {
     expect(await campos.findByText("Informe o nome do produto.")).toBeInTheDocument()
     expect(campos.getByText("Escolha a categoria.")).toBeInTheDocument()
     expect(campos.getByText("Informe o preço.")).toBeInTheDocument()
+    // Perto do botão, o resumo: o painel é longo e o erro pode estar fora da vista.
+    expect(campos.getByText("Confira 3 campos antes de salvar.")).toBeInTheDocument()
   })
 
   test("cria um produto com grupo de opções", async () => {

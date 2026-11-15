@@ -600,8 +600,7 @@ test("grupos da barra lateral abrem e fecham com animação", async ({ page }, i
 
   // Mede a altura do conteúdo enquanto fecha: precisa passar por valores intermediários.
   const alturas = await telas.evaluate(async (botao) => {
-    const item = botao.closest("li") as HTMLElement
-    const conteudo = () => item.querySelector(":scope > div.overflow-hidden")
+    const conteudo = () => document.getElementById(botao.getAttribute("aria-controls") ?? "")
     const cheia = conteudo()?.getBoundingClientRect().height ?? 0
     ;(botao as HTMLElement).click()
     const medidas: number[] = []
@@ -712,4 +711,85 @@ test("não mostra erro no console do painel", async ({ page }) => {
   await page.waitForTimeout(400)
   // O aviso do next-themes sobre o <script> de tema é do React 19 e aparece em todo o site.
   expect(erros.filter((erro) => !erro.includes("Encountered a script tag"))).toEqual([])
+})
+
+test("o painel fala a mesma família da vitrine, título e texto", async ({ page }) => {
+  await page.goto("/admin/pedidos")
+  const titulo = page.getByRole("heading", { level: 1, name: "Pedidos" })
+  await expect(titulo).toBeVisible()
+  const fontes = await titulo.evaluate((el) => ({
+    titulo: getComputedStyle(el).fontFamily,
+    texto: getComputedStyle(document.body).fontFamily,
+  }))
+  expect(fontes.titulo).toMatch(/Geist/)
+  expect(fontes.texto).toMatch(/Geist/)
+})
+
+test("fila: ao avançar, o pedido anda de uma coluna para a outra", async ({ page }, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a fila usa abas")
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/fila")
+  const novos = page.getByRole("region", { name: /^Novos, / })
+  const preparo = page.getByRole("region", { name: /^Em preparo, / })
+  await expect(novos).toBeVisible({ timeout: 15_000 })
+  const cartao = novos.getByRole("article").first()
+  const titulo = (await cartao.getAttribute("aria-labelledby")) ?? ""
+  const xNovos = (await novos.boundingBox())?.x ?? 0
+  const xPreparo = (await preparo.boundingBox())?.x ?? 0
+
+  // Anota, quadro a quadro, onde está o cartão desse pedido.
+  await page.evaluate((id) => {
+    const w = window as unknown as { posicoes: number[] }
+    w.posicoes = []
+    const inicio = performance.now()
+    const anotar = () => {
+      const el = document.querySelector(`[aria-labelledby="${id}"]`)
+      if (el) w.posicoes.push(el.getBoundingClientRect().x)
+      if (performance.now() - inicio < 2000) requestAnimationFrame(anotar)
+    }
+    requestAnimationFrame(anotar)
+  }, titulo)
+  await cartao.getByRole("button", { name: "Iniciar preparo" }).click()
+  await expect(preparo.locator(`[aria-labelledby="${titulo}"]`)).toBeVisible()
+  await page.waitForTimeout(800)
+  const posicoes = await page.evaluate(() => (window as unknown as { posicoes: number[] }).posicoes)
+  // Passou pelo meio do caminho: nem na coluna de origem, nem já parado na de destino.
+  const noCaminho = posicoes.filter((x) => x > xNovos + 24 && x < xPreparo - 24)
+  expect(noCaminho.length).toBeGreaterThan(2)
+})
+
+test("cozinha: ao iniciar o preparo, o ticket anda de uma coluna para a outra", async ({
+  page,
+}, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a cozinha usa abas")
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha")
+  const aFazer = page.getByRole("region", { name: /^A fazer, / })
+  const preparando = page.getByRole("region", { name: /^Preparando, / })
+  await expect(aFazer.getByRole("article").first()).toBeVisible({ timeout: 15_000 })
+  const ticket = aFazer.getByRole("article").first()
+  const nome = (await ticket.getAttribute("aria-label")) ?? ""
+  const xAFazer = (await aFazer.boundingBox())?.x ?? 0
+  const xPreparando = (await preparando.boundingBox())?.x ?? 0
+
+  // Anota, quadro a quadro, onde está o ticket desse pedido.
+  await page.evaluate((rotulo) => {
+    const w = window as unknown as { posicoes: number[] }
+    w.posicoes = []
+    const inicio = performance.now()
+    const anotar = () => {
+      for (const el of document.querySelectorAll(`article[aria-label="${rotulo}"]`)) {
+        w.posicoes.push(el.getBoundingClientRect().x)
+      }
+      if (performance.now() - inicio < 2000) requestAnimationFrame(anotar)
+    }
+    requestAnimationFrame(anotar)
+  }, nome)
+  await ticket.getByRole("button", { name: "Iniciar preparo" }).click()
+  await expect(preparando.locator(`article[aria-label="${nome}"]`)).toBeVisible()
+  await page.waitForTimeout(800)
+  const posicoes = await page.evaluate(() => (window as unknown as { posicoes: number[] }).posicoes)
+  // Passou pelo meio do caminho: nem na coluna de origem, nem já parado na de destino.
+  const noCaminho = posicoes.filter((x) => x > xAFazer + 24 && x < xPreparando - 24)
+  expect(noCaminho.length).toBeGreaterThan(2)
 })

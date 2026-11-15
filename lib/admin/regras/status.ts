@@ -64,3 +64,36 @@ export function rotuloAcao(tipo: TipoPedido, status: StatusPedido): string | nul
 
 /** Nome do status sem depender do tipo do pedido: usado nos filtros. */
 export const rotuloStatusComum = (status: StatusPedido) => ROTULO_COMUM[status]
+
+/**
+ * Tom do traço de cada status, na ordem em que o pedido anda: esperando pagamento, novo
+ * (pede ação), em preparo, pronto, a caminho. Concluído sai da operação e fica apagado.
+ */
+export type TomStatus = "espera" | "novo" | "preparo" | "pronto" | "caminho" | "fim" | "cancelado"
+
+const TOM: Record<StatusPedido, TomStatus> = {
+  "aguardando-pagamento": "espera",
+  recebido: "novo",
+  "em-preparo": "preparo",
+  pronto: "pronto",
+  "saiu-para-entrega": "caminho",
+  concluido: "fim",
+  cancelado: "cancelado",
+}
+
+export const tomDoStatus = (status: StatusPedido): TomStatus => TOM[status]
+
+/**
+ * Etapas por que o pedido passa, do novo ao fim, conforme o tipo. Segue `proximoStatus`:
+ * só a entrega sai para entrega, e o atendimento do salão não tem "pronto".
+ */
+export function etapasDoCaminho(tipo: TipoPedido): StatusPedido[] {
+  const etapas: StatusPedido[] = ["recebido"]
+  let atual: StatusPedido | null = "recebido"
+  while (atual) {
+    // Mesa pronta só conclui ao fechar a conta: fora do `proximoStatus`, mas é o fim do caminho.
+    atual = proximoStatus(tipo, atual) ?? (atual === "pronto" ? "concluido" : null)
+    if (atual) etapas.push(atual)
+  }
+  return etapas
+}

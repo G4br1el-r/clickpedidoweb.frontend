@@ -3,6 +3,7 @@
 import { CheckIcon } from "lucide-react"
 import { AnimatePresence, motion } from "motion/react"
 import { cn } from "@/lib/utils"
+import { CURVA_SAIDA, CURVA_TELA } from "./movimento"
 
 export const PASSOS = [
   { id: "dados", nome: "Você" },
@@ -22,11 +23,14 @@ type PassosProps = {
   rotulos?: Partial<Record<PassoId, string>>
 }
 
-/** Barras que enchem a cada passo, com o nome de cada um logo abaixo. */
+/**
+ * Um fio fino por passo, que enche na cor da loja (o progresso), com o nome logo abaixo.
+ * O passo atual fica em peso maior; os feitos ganham um visto e dá para voltar a eles.
+ */
 export function Passos({ atual, alcancado, aoIr, rotulos }: PassosProps) {
   return (
     <nav aria-label="Passos para finalizar o pedido">
-      <ol className="grid grid-cols-4 gap-1.5 md:gap-2">
+      <ol className="grid grid-cols-4 gap-1.5 md:gap-2.5">
         {PASSOS.map((passo, indice) => {
           const feito = indice < atual
           const ativo = indice === atual
@@ -38,20 +42,20 @@ export function Passos({ atual, alcancado, aoIr, rotulos }: PassosProps) {
                 disabled={!liberado}
                 aria-current={ativo ? "step" : undefined}
                 onClick={() => aoIr(indice)}
-                className="group/passo flex min-h-11 w-full flex-col gap-2 rounded-lg pt-1 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default"
+                className="group/passo flex min-h-11 w-full flex-col gap-2.5 rounded-md pt-1.5 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-default"
               >
-                <span className="relative h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <span className="relative h-[3px] w-full overflow-hidden rounded-full bg-border">
                   <motion.span
                     className="absolute inset-0 origin-left rounded-full bg-primary"
                     initial={false}
                     animate={{ scaleX: feito || ativo ? 1 : 0 }}
-                    transition={{ type: "spring", duration: 0.55, bounce: 0.1 }}
+                    transition={{ duration: 0.45, ease: CURVA_TELA }}
                   />
                 </span>
                 <span
                   className={cn(
-                    "flex items-center gap-1 text-[13px] transition-colors duration-200 md:text-sm",
-                    ativo ? "font-bold text-foreground" : "font-medium text-muted-foreground",
+                    "flex items-center gap-1 text-[13px] tracking-[-0.005em] transition-colors duration-150 md:text-sm",
+                    ativo ? "font-semibold text-foreground" : "font-medium text-muted-foreground",
                     liberado && !ativo && "group-hover/passo:text-foreground",
                   )}
                 >
@@ -59,17 +63,13 @@ export function Passos({ atual, alcancado, aoIr, rotulos }: PassosProps) {
                     {feito && (
                       <motion.span
                         key="feito"
-                        initial={{ width: 0, opacity: 0, scale: 0.4 }}
-                        animate={{ width: "auto", opacity: 1, scale: 1 }}
-                        exit={{ width: 0, opacity: 0, scale: 0.4 }}
-                        transition={{ type: "spring", duration: 0.4, bounce: 0.3 }}
-                        className="flex shrink-0 overflow-hidden"
+                        initial={{ width: 0, opacity: 0 }}
+                        animate={{ width: "auto", opacity: 1 }}
+                        exit={{ width: 0, opacity: 0, transition: { duration: 0.12 } }}
+                        transition={{ duration: 0.22, ease: CURVA_SAIDA }}
+                        className="hidden shrink-0 overflow-hidden md:flex"
                       >
-                        <CheckIcon
-                          className="size-3.5 text-sucesso"
-                          strokeWidth={3}
-                          aria-hidden="true"
-                        />
+                        <CheckIcon className="size-3.5" strokeWidth={2.75} aria-hidden="true" />
                       </motion.span>
                     )}
                   </AnimatePresence>

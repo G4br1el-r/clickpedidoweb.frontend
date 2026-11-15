@@ -26,7 +26,12 @@ export function SeletorQuantidade({
 }: SeletorQuantidadeProps) {
   const noMinimo = valor <= 1
   const mostrarLixeira = noMinimo && Boolean(aoRemover)
-  const tamanhoBotao = cn("rounded-none", tamanho === "acao" ? "size-12" : "size-11")
+  const naLinha = tamanho === "linha"
+  // O ícone afunda um pouco ao toque: o retorno fica no que a pessoa apertou.
+  const tamanhoBotao = cn(
+    "rounded-none [&_svg]:transition-transform [&_svg]:duration-100 [&_svg]:ease-saida active:[&_svg]:scale-[0.85]",
+    naLinha ? "size-11 text-muted-foreground hover:text-foreground" : "size-12",
+  )
 
   function diminuir() {
     vibrar()
@@ -47,8 +52,9 @@ export function SeletorQuantidade({
       data-testid="seletor-quantidade"
       aria-label={`Quantidade de ${nome}`}
       className={cn(
-        "m-0 flex shrink-0 items-center overflow-hidden rounded-full border border-input bg-card p-0",
-        tamanho === "acao" ? "h-12" : "h-11",
+        "m-0 flex shrink-0 items-center overflow-hidden rounded-full border p-0",
+        // Na lista da sacola, o seletor é quieto: só o fio, sem superfície própria.
+        naLinha ? "h-11 border-border" : "h-12 border-input bg-card",
       )}
     >
       <Dica texto={mostrarLixeira ? "Remover" : "Diminuir"}>
@@ -66,7 +72,10 @@ export function SeletorQuantidade({
       </Dica>
       <span
         aria-live="polite"
-        className="flex min-w-6 items-center justify-center text-base font-semibold tabular-nums"
+        className={cn(
+          "flex min-w-6 items-center justify-center tabular-nums",
+          naLinha ? "text-[15px] font-medium" : "text-base font-semibold",
+        )}
       >
         <NumberFlow value={valor} />
       </span>

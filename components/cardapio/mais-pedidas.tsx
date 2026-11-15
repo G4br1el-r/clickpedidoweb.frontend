@@ -4,7 +4,6 @@ import { WheelGesturesPlugin } from "embla-carousel-wheel-gestures"
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react"
 import { useEffect, useState } from "react"
 import { Dica } from "@/components/dica"
-import { Entrada } from "@/components/entrada"
 import { Button } from "@/components/ui/button"
 import { Carousel, type CarouselApi, CarouselContent, CarouselItem } from "@/components/ui/carousel"
 import { useLoja } from "@/lib/loja-atual"
@@ -42,16 +41,12 @@ export function MaisPedidas({ produtos, aoAbrir }: MaisPedidasProps) {
   }, [api])
 
   const estiloSeta =
-    "rounded-full bg-card shadow-sm ring-1 ring-border hover:bg-accent disabled:opacity-35"
+    "rounded-full bg-background ring-1 ring-border hover:bg-muted disabled:opacity-35"
 
   return (
     <section aria-labelledby="mais-pedidas" data-testid="mais-pedidas">
-      <Entrada
-        atraso={0}
-        desfoque
-        className="flex items-end justify-between gap-4 px-4 pb-3 md:px-6"
-      >
-        <h2 id="mais-pedidas" className="text-2xl font-extrabold tracking-tight md:text-3xl">
+      <div className="flex items-end justify-between gap-4 px-4 pb-4 md:px-6">
+        <h2 id="mais-pedidas" className="text-lg font-semibold tracking-[-0.015em] md:text-xl">
           {textosDoSegmento(loja.segmento).destaques}
         </h2>
         <div className="hidden gap-2 md:flex">
@@ -82,7 +77,7 @@ export function MaisPedidas({ produtos, aoAbrir }: MaisPedidasProps) {
             </Button>
           </Dica>
         </div>
-      </Entrada>
+      </div>
 
       <Carousel
         setApi={setApi}
@@ -91,14 +86,12 @@ export function MaisPedidas({ produtos, aoAbrir }: MaisPedidasProps) {
         className="px-4 md:px-6"
       >
         <CarouselContent className="-ml-3 md:-ml-4">
-          {produtos.map((produto, indice) => (
+          {produtos.map((produto) => (
             <CarouselItem
               key={produto.id}
-              className="basis-[74%] pl-3 sm:basis-[46%] md:basis-[38%] md:pl-4 lg:basis-[31%] xl:basis-[24%] 2xl:basis-[19.5%]"
+              className="basis-[62%] pl-3 sm:basis-[40%] md:basis-[30%] md:pl-4 lg:basis-[24%]"
             >
-              <Entrada de="direita" atraso={0.06 + Math.min(indice, 5) * 0.07} duracao={0.8}>
-                <ProdutoDestaque produto={produto} aoAbrir={() => aoAbrir(produto)} />
-              </Entrada>
+              <ProdutoDestaque produto={produto} aoAbrir={() => aoAbrir(produto)} />
             </CarouselItem>
           ))}
         </CarouselContent>

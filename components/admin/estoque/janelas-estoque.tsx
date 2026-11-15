@@ -5,7 +5,6 @@ import { HistoryIcon } from "lucide-react"
 import { type FormEvent, type ReactNode, useId, useState } from "react"
 import { NumericFormat } from "react-number-format"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -204,6 +203,17 @@ function CampoCusto({
   )
 }
 
+/** Como fica o saldo depois do movimento; só aparece com uma quantidade válida. */
+function SaldoDepois({ produto, movimento }: { produto: Produto; movimento: number | null }) {
+  if (movimento === null) return null
+  const depois = saldoDepois(produto.estoque?.quantidade ?? 0, movimento)
+  return (
+    <span aria-live="polite" className="tabular-nums">
+      Saldo depois: {emQuantidade(depois, produto.unidade)}
+    </span>
+  )
+}
+
 const saldoAtual = (produto: Produto) =>
   `Saldo atual: ${emQuantidade(produto.estoque?.quantidade ?? 0, produto.unidade)}.`
 
@@ -250,6 +260,9 @@ export function JanelaEntrada({ produto, aoFechar }: { produto: Produto; aoFecha
         valor={quantidade}
         aoMudar={setQuantidade}
         erro={erro}
+        descricao={
+          <SaldoDepois produto={produto} movimento={numero === null || erro ? null : numero} />
+        }
       />
       <CampoCusto
         valor={custo}
@@ -304,6 +317,9 @@ export function JanelaSaida({ produto, aoFechar }: { produto: Produto; aoFechar:
         valor={quantidade}
         aoMudar={setQuantidade}
         erro={erro}
+        descricao={
+          <SaldoDepois produto={produto} movimento={numero === null || erro ? null : -numero} />
+        }
       />
       <FieldSet>
         <FieldLegend variant="label">Motivo</FieldLegend>
@@ -463,10 +479,12 @@ function LinhaMovimento({ movimento, produto }: { movimento: MovimentoEstoque; p
   return (
     <li className="flex items-start justify-between gap-3 py-3">
       <div className="flex min-w-0 flex-col gap-0.5">
-        <span className="flex items-center gap-2 font-medium">
+        <span className="flex items-baseline gap-2 text-sm font-medium">
           {ROTULO_MOVIMENTO[movimento.tipo]}
           {movimento.pedidoId !== undefined && (
-            <Badge variant="outline">Pedido #{movimento.pedidoId}</Badge>
+            <span className="text-xs font-normal text-muted-foreground tabular-nums">
+              Pedido #{movimento.pedidoId}
+            </span>
           )}
         </span>
         {detalhe && <span className="text-sm text-muted-foreground">{detalhe}</span>}
@@ -519,7 +537,7 @@ export function HistoricoEstoque({
               </EmptyHeader>
             </Empty>
           ) : (
-            <ul className="divide-y">
+            <ul className="divide-y divide-border/70">
               {movimentos.map((movimento) => (
                 <LinhaMovimento key={movimento.id} movimento={movimento} produto={produto} />
               ))}

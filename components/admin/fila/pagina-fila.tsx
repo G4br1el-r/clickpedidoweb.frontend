@@ -1,11 +1,11 @@
 "use client"
 
+import NumberFlow from "@number-flow/react"
 import { startOfDay } from "date-fns"
 import { BellRingIcon, InboxIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
@@ -38,14 +38,16 @@ import {
   useSomDoAparelho,
 } from "@/lib/admin/preferencias-fila"
 import { type ColunaFila, colunasDaFila, novosPedidos, resumoDaFila } from "@/lib/admin/regras/fila"
-import { rotuloStatus } from "@/lib/admin/regras/status"
+import { rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
 import { tocarAlerta } from "@/lib/admin/som"
 import { plural } from "@/lib/formato"
+import { CabecalhoPagina } from "../cabecalho-pagina"
 import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
+import { Traco } from "../traco"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
 
@@ -142,18 +144,22 @@ function Coluna({
   return (
     <section
       aria-label={`${coluna.titulo}, ${coluna.pedidos.length}`}
-      className="flex min-w-0 flex-col gap-3 rounded-xl bg-muted/50 p-2"
+      // Coluna sem bandeja: os cartões ficam direto na folha, e um fio separa as colunas.
+      className="flex min-w-0 flex-col gap-2.5 lg:px-3 lg:first:pl-0 lg:last:pr-0"
     >
       {comTitulo && (
-        <h2 className="flex items-center gap-2 px-1 pt-1 text-sm font-semibold">
+        <h2 className="flex items-center gap-2 pb-1 text-sm font-semibold">
+          <Traco tom={tomDoStatus(coluna.status)} />
           {coluna.titulo}
-          <Badge variant="secondary" className="tabular-nums">
-            {coluna.pedidos.length}
-          </Badge>
+          <span className="ml-auto text-[13px] font-medium text-muted-foreground tabular-nums">
+            <NumberFlow value={coluna.pedidos.length} />
+          </span>
         </h2>
       )}
       {coluna.pedidos.length === 0 ? (
-        <p className="px-1 py-6 text-center text-sm text-muted-foreground">Nenhum pedido aqui.</p>
+        <p className="rounded-xl border border-dashed border-border px-3 py-8 text-center text-[13px] text-muted-foreground">
+          Nenhum pedido aqui.
+        </p>
       ) : (
         <AnimatePresence initial={false}>
           {coluna.pedidos.map((pedido) => (
@@ -233,11 +239,12 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
   const temEntrega = temModulo(segmento, "motoboys")
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Fila de pedidos</h1>
-        <p className="text-sm text-muted-foreground" aria-live="polite">
-          {resumo
+    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
+      <CabecalhoPagina
+        titulo="Fila de pedidos"
+        vivo
+        resumo={
+          resumo
             ? [
                 `${resumo.emAndamento} em andamento`,
                 `${resumo.concluidosHoje} concluídos hoje`,
@@ -247,11 +254,11 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
               ]
                 .filter(Boolean)
                 .join(" · ")
-            : "Carregando a fila…"}
-        </p>
-      </div>
+            : "Carregando a fila…"
+        }
+      />
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border bg-card px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-y border-border/70 py-3">
         <ChaveDaLoja loja={loja} agora={agora} />
         {temEntrega && (
           <Chave
@@ -342,7 +349,7 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
         </Empty>
       ) : telaGrande ? (
         <div
-          className="grid items-start gap-3"
+          className="grid items-stretch divide-x divide-border/70"
           style={{ gridTemplateColumns: `repeat(${colunas.length}, minmax(0, 1fr))` }}
         >
           {colunas.map((coluna) => (
@@ -362,9 +369,10 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
         </div>
       ) : (
         <Tabs defaultValue={colunas[0].id}>
-          <TabsList className="w-full">
+          <TabsList className="sem-barra w-full justify-start overflow-x-auto">
             {colunas.map((coluna) => (
               <TabsTrigger key={coluna.id} value={coluna.id} className="gap-1.5">
+                <Traco tom={tomDoStatus(coluna.status)} className="h-3" />
                 {coluna.titulo}
                 <span className="text-xs tabular-nums text-muted-foreground">
                   {coluna.pedidos.length}

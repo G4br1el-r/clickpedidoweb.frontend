@@ -47,11 +47,15 @@ function DrawerOverlay({
 function DrawerContent({
   className,
   children,
+  overlayClassName,
   ...props
-}: React.ComponentProps<typeof DrawerPrimitive.Content>) {
+}: React.ComponentProps<typeof DrawerPrimitive.Content> & {
+  /** Classes extras do fundo escurecido. */
+  overlayClassName?: string
+}) {
   return (
     <DrawerPortal data-slot="drawer-portal">
-      <DrawerOverlay />
+      <DrawerOverlay className={overlayClassName} />
       <DrawerPrimitive.Content
         data-slot="drawer-content"
         className={cn(

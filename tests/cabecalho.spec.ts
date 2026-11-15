@@ -3,17 +3,24 @@ import {
   abrirCardapio,
   caixa,
   esperarAnimacoes,
+  esperarParado,
   verificarAcessibilidade,
   verificarSemRolagemHorizontal,
 } from "./apoio"
 
 test.describe("cabeçalho e barra", () => {
-  test("o painel fica centrado na divisória entre a foto e a página", async ({ page }) => {
+  test("a foto da loja fica ao fundo do topo, com o nome por cima e a régua logo abaixo", async ({
+    page,
+  }) => {
     await abrirCardapio(page)
-    const divisoria = await caixa(page.getByTestId("divisoria-painel"))
+    const foto = await caixa(page.getByTestId("foto-da-loja"))
+    const nome = await caixa(page.getByRole("heading", { level: 1 }))
     const painel = await caixa(page.getByTestId("painel-loja"))
-    const linha = divisoria.y + divisoria.height / 2
-    expect(Math.abs(painel.y + painel.height / 2 - linha)).toBeLessThanOrEqual(1)
+    expect(nome.y, "o nome fica dentro da foto").toBeGreaterThanOrEqual(foto.y)
+    expect(nome.y + nome.height, "o nome fica dentro da foto").toBeLessThanOrEqual(
+      foto.y + foto.height,
+    )
+    expect(painel.y, "a régua vem depois da foto").toBeGreaterThanOrEqual(foto.y + foto.height - 1)
     await verificarSemRolagemHorizontal(page)
   })
 
@@ -32,8 +39,8 @@ test.describe("cabeçalho e barra", () => {
     const sacola = await caixa(page.getByTestId("icone-sacola-fixo"))
     const chips = await caixa(barra.locator('[aria-current="true"]').locator(".."))
     const acoes = await caixa(barra.getByRole("button", { name: /busca/i }))
-    // Conteúdo da barra: até 1320 px (1640 px a partir de 1536 px), com 24 px de respiro.
-    const larguraMaxima = largura >= 1536 ? 1640 : 1320
+    // Coluna de leitura central: até 1120 px em qualquer tela, com 24 px de respiro.
+    const larguraMaxima = 1120
     const borda = Math.max(0, (largura - larguraMaxima) / 2) + 24
     const folgaDireita = largura - (sacola.x + sacola.width)
     expect(Math.abs(folgaDireita - borda), "sacola na borda direita").toBeLessThanOrEqual(2)
@@ -63,6 +70,7 @@ test.describe("cabeçalho e barra", () => {
     await page.evaluate(() => window.scrollTo(0, 900))
     const mais = page.getByRole("button", { name: "Mais opções" })
     await expect(mais).toBeVisible()
+    await esperarParado(mais)
     await mais.click()
     const menu = page.getByRole("menu")
     await expect(menu.getByRole("menuitem", { name: "A loja" })).toBeVisible()
@@ -77,6 +85,7 @@ test.describe("cabeçalho e barra", () => {
   }) => {
     await abrirCardapio(page)
     await page.evaluate(() => window.scrollTo(0, 900))
+    await esperarParado(page.getByRole("button", { name: "Abrir busca" }))
     await page.getByRole("button", { name: "Abrir busca" }).click()
     const barra = page.getByTestId("barra-navegacao")
     const campo = barra.getByRole("searchbox", { name: "Buscar no cardápio" })
@@ -85,17 +94,18 @@ test.describe("cabeçalho e barra", () => {
     await page.waitForTimeout(1500)
     await expect(campo, "ainda aberta antes dos 3 s").toBeVisible()
     await expect(campo).toHaveCount(0, { timeout: 3000 })
-    // O texto continua valendo: a lista segue filtrada e a lupa avisa.
-    await expect(barra.getByRole("button", { name: "Abrir busca, buscando cal" })).toBeVisible()
+    // O texto continua valendo: a lista segue filtrada e a lupa avisa (no celular, na barra de baixo).
+    await expect(page.getByRole("button", { name: "Abrir busca, buscando cal" })).toBeVisible()
     await expect(page.getByTestId("produto-calzone")).toBeVisible()
     await expect(page.getByTestId("produto-mussarela")).toHaveCount(0)
   })
 
-  test("Pedidos aparece em destaque sobre a foto", async ({ page }) => {
+  test("Pedidos é um botão contornado sobre a foto", async ({ page }) => {
     await abrirCardapio(page)
     const pedidos = page.getByTestId("barra-topo").getByRole("link", { name: "Pedidos" })
     await expect(pedidos).toBeVisible()
-    await expect(pedidos).toHaveCSS("background-color", "rgb(255, 255, 255)")
+    await expect(pedidos).toHaveCSS("border-top-width", "1px")
+    await expect(pedidos).toHaveCSS("background-color", "rgba(0, 0, 0, 0)")
   })
 
   test("botões de ícone mostram dica no hover e tudo que clica tem a mãozinha", async ({
@@ -116,7 +126,11 @@ test.describe("cabeçalho e barra", () => {
     expect(cursores).toEqual(["pointer", "pointer", "pointer"])
   })
 
-  test("trocar categorias pela busca não mexe em nada: tudo no mesmo eixo", async ({ page }) => {
+  test("trocar categorias pela busca não mexe em nada: tudo no mesmo eixo", async ({
+    page,
+    viewport,
+  }) => {
+    test.skip((viewport?.width ?? 0) < 768, "no celular a lupa mora na barra de baixo")
     await abrirCardapio(page)
     await page.evaluate(() => window.scrollTo(0, 900))
     const barra = page.getByTestId("barra-navegacao")
@@ -136,6 +150,7 @@ test.describe("cabeçalho e barra", () => {
       barraAntes.y + barraAntes.height,
     )
 
+    await esperarParado(barra.getByRole("button", { name: "Abrir busca" }))
     await barra.getByRole("button", { name: "Abrir busca" }).click()
     const campo = barra.getByRole("searchbox", { name: "Buscar no cardápio" })
     await expect(campo).toBeVisible()

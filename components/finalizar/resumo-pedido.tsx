@@ -9,9 +9,7 @@ import { Foto } from "@/components/foto"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { useLoja } from "@/lib/loja-atual"
 import { contarItens, type ItemSacola, totalDoItem } from "@/lib/sacola"
-import { cn } from "@/lib/utils"
-
-const CURVA = [0.23, 1, 0.32, 1] as const
+import { CURVA_TELA } from "./movimento"
 
 export type ValoresResumo = {
   itens: ItemSacola[]
@@ -22,27 +20,42 @@ export type ValoresResumo = {
   retirada: boolean
 }
 
+const LINK =
+  "flex min-h-11 items-center text-sm font-medium text-marca-texto underline decoration-marca-texto/40 underline-offset-4 hover:decoration-marca-texto"
+
+/** Preço na língua da etiqueta da vitrine: o traço da cor da loja e o número tabular. */
+function Preco({ valor }: { valor: number }) {
+  return (
+    <span className="flex shrink-0 items-center gap-2 text-sm font-semibold tabular-nums">
+      <span aria-hidden="true" className="h-3.5 w-[3px] rounded-full bg-primary" />
+      {emReais(valor)}
+    </span>
+  )
+}
+
 function ListaItens({ itens }: { itens: ItemSacola[] }) {
   return (
-    <ul className="flex flex-col gap-3">
+    <ul className="flex flex-col gap-3.5">
       {itens.map((item) => (
-        <li key={item.chave} className="flex gap-3">
-          <span className="relative shrink-0">
-            <Foto src={item.imagem} alt="" sizes="48px" className="size-12 rounded-xl" />
-            <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-foreground px-1 text-[11px] font-bold text-background tabular-nums">
-              {item.quantidade}
-            </span>
-          </span>
+        <li key={item.chave} className="flex items-start gap-3">
+          <Foto src={item.imagem} alt="" sizes="44px" className="size-11 shrink-0 rounded-lg" />
           <div className="min-w-0 flex-1">
-            <p className="text-sm leading-snug font-semibold">{item.nome}</p>
+            <p className="text-sm leading-snug font-medium">
+              <span className="text-muted-foreground tabular-nums">{item.quantidade}× </span>
+              {item.nome}
+            </p>
             {item.resumo.length > 0 && (
-              <p className="text-xs text-muted-foreground">{item.resumo.join(" · ")}</p>
+              <p className="text-[13px] leading-snug text-muted-foreground">
+                {item.resumo.join(" · ")}
+              </p>
             )}
             {item.observacao && (
-              <p className="text-xs text-muted-foreground">Obs.: {item.observacao}</p>
+              <p className="text-[13px] leading-snug text-muted-foreground">
+                Obs.: {item.observacao}
+              </p>
             )}
           </div>
-          <span className="text-sm font-semibold tabular-nums">{emReais(totalDoItem(item))}</span>
+          <Preco valor={totalDoItem(item)} />
         </li>
       ))}
     </ul>
@@ -51,14 +64,14 @@ function ListaItens({ itens }: { itens: ItemSacola[] }) {
 
 function Totais({ subtotal, taxa, total, retirada }: Omit<ValoresResumo, "itens">) {
   return (
-    <dl className="flex flex-col gap-1.5 text-sm">
+    <dl className="flex flex-col gap-1.5 text-sm tabular-nums">
       <div className="flex justify-between">
         <dt className="text-muted-foreground">Subtotal</dt>
-        <dd className="tabular-nums">{emReais(subtotal)}</dd>
+        <dd>{emReais(subtotal)}</dd>
       </div>
       <div className="flex justify-between">
         <dt className="text-muted-foreground">{retirada ? "Retirada" : "Entrega"}</dt>
-        <dd className="tabular-nums">
+        <dd>
           {retirada ? (
             <span className="font-medium text-sucesso">Grátis</span>
           ) : taxa === null ? (
@@ -68,9 +81,12 @@ function Totais({ subtotal, taxa, total, retirada }: Omit<ValoresResumo, "itens"
           )}
         </dd>
       </div>
-      <div className="mt-1 flex items-baseline justify-between border-t pt-3 text-base font-bold">
-        <dt>Total</dt>
-        <dd className="text-xl tabular-nums" data-testid="total-resumo">
+      <div className="mt-2 flex items-baseline justify-between border-t border-border/70 pt-3">
+        <dt className="text-base font-semibold tracking-[-0.01em]">Total</dt>
+        <dd
+          className="text-xl font-semibold tracking-[-0.02em] tabular-nums"
+          data-testid="total-resumo"
+        >
           <NumberFlow value={total} locales="pt-BR" format={formatoMoeda} aria-hidden="true" />
           <span className="sr-only">{emReais(total)}</span>
         </dd>
@@ -79,7 +95,7 @@ function Totais({ subtotal, taxa, total, retirada }: Omit<ValoresResumo, "itens"
   )
 }
 
-/** No computador: o pedido sempre à vista ao lado dos passos. */
+/** No computador: o pedido sempre à vista ao lado dos passos, separado só por um fio. */
 export function ResumoLateral(valores: ValoresResumo) {
   const lojaEscolhida = useLoja()
   const quantidade = contarItens(valores.itens)
@@ -87,25 +103,26 @@ export function ResumoLateral(valores: ValoresResumo) {
   return (
     <aside
       aria-labelledby="titulo-resumo"
-      className="sombra-flutuante sticky top-24 hidden flex-col gap-4 self-start rounded-3xl bg-card p-5 lg:flex"
+      className="sticky top-24 hidden flex-col gap-5 self-start border-l border-border/70 pl-8 lg:flex"
     >
       <div className="flex items-baseline justify-between gap-2">
-        <h2 id="titulo-resumo" className="text-xl font-bold">
-          Seu pedido
-        </h2>
-        <Link
-          href="/"
-          className="-my-2 flex min-h-11 items-center text-sm font-semibold text-marca-texto underline underline-offset-4"
-        >
+        <div>
+          <h2 id="titulo-resumo" className="text-lg font-semibold tracking-[-0.015em]">
+            Seu pedido
+          </h2>
+          <p className="text-[13px] text-muted-foreground">{plural(quantidade, "item", "itens")}</p>
+        </div>
+        <Link href="/" className={`-my-2 ${LINK}`}>
           Alterar itens
         </Link>
       </div>
-      <p className="-mt-3 text-sm text-muted-foreground">{plural(quantidade, "item", "itens")}</p>
-      <div className="-mt-2 max-h-[38dvh] overflow-y-auto pt-2 pr-2">
+      <div className="-mr-2 max-h-[40dvh] overflow-y-auto border-t border-border/70 pt-4 pr-2">
         <ListaItens itens={valores.itens} />
       </div>
-      <Totais {...valores} />
-      <p className="flex items-center gap-2 rounded-xl bg-secondary px-3 py-2.5 text-sm text-muted-foreground">
+      <div className="border-t border-border/70 pt-4">
+        <Totais {...valores} />
+      </div>
+      <p className="flex items-center gap-2 text-[13px] text-muted-foreground">
         <ClockIcon className="size-4 shrink-0" aria-hidden="true" />
         {lojaEscolhida.aceitaEntrega === false
           ? "Atendimento no salão, no horário marcado"
@@ -117,41 +134,41 @@ export function ResumoLateral(valores: ValoresResumo) {
   )
 }
 
-/** No celular e no tablet: uma linha que abre a lista de itens e os valores. */
+/** No celular e no tablet: uma linha entre fios que abre a lista de itens e os valores. */
 export function ResumoCompacto(valores: ValoresResumo) {
   const [aberto, setAberto] = useState(false)
   const quantidade = contarItens(valores.itens)
 
   return (
-    <section className="overflow-hidden rounded-2xl border bg-card lg:hidden">
+    <section className="border-y border-border/70 lg:hidden">
       <button
         type="button"
         aria-expanded={aberto}
         aria-controls="resumo-compacto"
         onClick={() => setAberto((atual) => !atual)}
-        className="flex min-h-14 w-full items-center gap-3 px-4 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+        className="flex min-h-14 w-full items-center gap-3 rounded-md text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
       >
-        <span className="flex -space-x-2.5" aria-hidden="true">
+        <span className="flex -space-x-2" aria-hidden="true">
           {valores.itens.slice(0, 3).map((item) => (
             <Foto
               key={item.chave}
               src={item.imagem}
               alt=""
-              sizes="32px"
-              className="size-8 rounded-full ring-2 ring-card"
+              sizes="28px"
+              className="size-7 rounded-md ring-2 ring-background"
             />
           ))}
         </span>
-        <span className="min-w-0 flex-1 text-sm font-semibold">
+        <span className="min-w-0 flex-1 text-sm font-medium">
           {aberto ? "Esconder itens" : `Ver ${plural(quantidade, "item", "itens")}`}
         </span>
-        <span className="text-base font-bold tabular-nums">
+        <span className="text-[15px] font-semibold tabular-nums">
           <NumberFlow value={valores.total} locales="pt-BR" format={formatoMoeda} />
         </span>
         <motion.span
           aria-hidden="true"
           animate={{ rotate: aberto ? 180 : 0 }}
-          transition={{ type: "spring", duration: 0.35, bounce: 0.2 }}
+          transition={{ duration: 0.24, ease: CURVA_TELA }}
         >
           <ChevronDownIcon className="size-5 text-muted-foreground" />
         </motion.span>
@@ -160,18 +177,18 @@ export function ResumoCompacto(valores: ValoresResumo) {
         {aberto && (
           <motion.div
             id="resumo-compacto"
+            className="overflow-hidden"
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.32, ease: CURVA }}
+            exit={{ height: 0, opacity: 0, transition: { duration: 0.2, ease: CURVA_TELA } }}
+            transition={{ duration: 0.3, ease: CURVA_TELA }}
           >
-            <div className={cn("flex flex-col gap-4 border-t px-4 pt-4 pb-4")}>
+            <div className="flex flex-col gap-4 border-t border-border/70 pt-4 pb-3">
               <ListaItens itens={valores.itens} />
-              <Totais {...valores} />
-              <Link
-                href="/"
-                className="-my-2 flex min-h-11 w-fit items-center text-sm font-semibold text-marca-texto underline underline-offset-4"
-              >
+              <div className="border-t border-border/70 pt-3">
+                <Totais {...valores} />
+              </div>
+              <Link href="/" className={`-my-1 w-fit ${LINK}`}>
                 Alterar itens
               </Link>
             </div>

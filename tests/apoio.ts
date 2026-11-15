@@ -31,6 +31,25 @@ export async function abrirSoOEsqueleto(page: Page) {
  * Espera as animações de entrada terminarem. Medir ou checar contraste no meio delas
  * pega elementos deslocados ou meio transparentes. Animações infinitas são ignoradas.
  */
+/**
+ * Espera um elemento parar de se mexer: o Motion anima o layout em JavaScript, fora do
+ * `getAnimations`. Clicar num botão grudado ainda deslizando faz o Playwright rolar a página
+ * até o lugar original dele, coisa que um toque de verdade não faz.
+ */
+export async function esperarParado(alvo: Locator) {
+  await expect
+    .poll(
+      async () => {
+        const antes = await alvo.boundingBox()
+        await alvo.page().waitForTimeout(120)
+        const depois = await alvo.boundingBox()
+        return JSON.stringify(antes) === JSON.stringify(depois)
+      },
+      { timeout: 5000 },
+    )
+    .toBe(true)
+}
+
 export async function esperarAnimacoes(page: Page) {
   await page.waitForFunction(
     () =>
@@ -123,11 +142,20 @@ async function escolher(painel: Locator, titulo: string, opcao: string) {
   await lista.getByTestId(opcao).click()
 }
 
+/** Escolher não muda de passo: quem leva ao próximo é o botão "Avançar". */
+export async function avancar(painel: Locator) {
+  const acao = painel.getByTestId("cta-adicionar")
+  await expect(acao).toContainText("Avançar")
+  await acao.click()
+}
+
 /** Monta uma pizza meio a meio e deixa o painel aberto, pronto para adicionar. */
 export async function montarMeioAMeio(page: Page) {
   const painel = await abrirMeioAMeio(page)
   await escolher(painel, "Escolha o 1º sabor", "opcao-calabresa")
+  await avancar(painel)
   await escolher(painel, "Escolha o 2º sabor", "opcao-pepperoni")
+  await avancar(painel)
   await escolher(painel, "Escolha a borda", "opcao-catupiry")
   return painel
 }

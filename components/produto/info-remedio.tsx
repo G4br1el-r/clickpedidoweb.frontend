@@ -1,4 +1,5 @@
 import { FileTextIcon, ShieldAlertIcon, SnowflakeIcon, StoreIcon } from "lucide-react"
+import type { ReactNode } from "react"
 import type { DadosMedicamento, Tarja } from "@/lib/admin/dados/tipos"
 import { comoVender, formatarRegistroMs, type ModoVenda } from "@/lib/farmacia"
 import { cn } from "@/lib/utils"
@@ -66,7 +67,28 @@ export function SeloRemedio({
   )
 }
 
-/** Ficha do remédio, na janela do produto: o que a pessoa precisa saber antes de pedir. */
+/** Um fato da ficha: o rótulo pequeno em cima, o valor embaixo. */
+function Fato({
+  rotulo,
+  children,
+  className,
+}: {
+  rotulo: string
+  children: ReactNode
+  className?: string
+}) {
+  return (
+    <div className={cn("flex min-w-0 flex-col gap-0.5 py-2.5", className)}>
+      <dt className="text-xs text-muted-foreground">{rotulo}</dt>
+      <dd className="text-sm font-medium wrap-anywhere">{children}</dd>
+    </div>
+  )
+}
+
+/**
+ * Ficha do remédio, na folha do produto: o que a pessoa precisa saber antes de pedir.
+ * Os fatos ficam numa régua entre fios, como na vitrine; o aviso do pedido fecha a ficha.
+ */
 export function InfoRemedio({ medicamento }: { medicamento: DadosMedicamento }) {
   const venda = comoVender(medicamento)
   const Icone =
@@ -74,25 +96,19 @@ export function InfoRemedio({ medicamento }: { medicamento: DadosMedicamento }) 
   return (
     <div className="flex flex-col gap-3">
       <SeloRemedio medicamento={medicamento} />
-      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 rounded-2xl bg-muted/60 p-3 text-sm">
-        <div className="col-span-2">
-          <dt className="text-xs text-muted-foreground">Princípio ativo</dt>
-          <dd className="font-medium">{medicamento.principioAtivo}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Apresentação</dt>
-          <dd>{medicamento.apresentacao}</dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted-foreground">Tipo e laboratório</dt>
-          <dd>
-            {TIPO[medicamento.tipo]} · {medicamento.laboratorio}
-          </dd>
-        </div>
-        <div className="col-span-2">
-          <dt className="text-xs text-muted-foreground">Registro na Anvisa</dt>
-          <dd className="tabular-nums">MS {formatarRegistroMs(medicamento.registroMs)}</dd>
-        </div>
+      <dl className="grid grid-cols-2 border-y border-border/70">
+        <Fato rotulo="Princípio ativo" className="col-span-2 border-b border-border/70">
+          {medicamento.principioAtivo}
+        </Fato>
+        <Fato rotulo="Apresentação" className="pr-3">
+          {medicamento.apresentacao}
+        </Fato>
+        <Fato rotulo="Tipo e laboratório" className="border-l border-border/70 pl-3">
+          {TIPO[medicamento.tipo]} · {medicamento.laboratorio}
+        </Fato>
+        <Fato rotulo="Registro na Anvisa" className="col-span-2 border-t border-border/70">
+          <span className="tabular-nums">MS {formatarRegistroMs(medicamento.registroMs)}</span>
+        </Fato>
       </dl>
       {medicamento.refrigerado && (
         <p className="flex items-center gap-2 text-sm text-sky-700 dark:text-sky-300">
@@ -102,10 +118,10 @@ export function InfoRemedio({ medicamento }: { medicamento: DadosMedicamento }) 
       )}
       <p
         className={cn(
-          "flex items-start gap-2 rounded-2xl p-3 text-sm",
+          "flex items-start gap-2.5 rounded-xl p-3 text-sm leading-snug",
           venda === "livre"
             ? "bg-accent text-accent-foreground"
-            : "bg-amber-50 text-amber-950 ring-1 ring-amber-200 dark:bg-amber-400/10 dark:text-amber-100 dark:ring-amber-400/30",
+            : "bg-amber-50 text-amber-950 dark:bg-amber-400/10 dark:text-amber-100",
         )}
       >
         <Icone className="mt-0.5 size-4 shrink-0" aria-hidden="true" />

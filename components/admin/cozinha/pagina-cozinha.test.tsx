@@ -103,8 +103,11 @@ describe("PaginaCozinha", () => {
     const preparando = await coluna("Preparando")
     expect(await preparando.findByRole("article", { name: /^Mesa 50 ·/ })).toBeInTheDocument()
 
+    // Dentro da coluna: o ticket que andou ainda sai da coluna anterior enquanto anima.
     await usuario.click(
-      within(await ticket("Mesa 50")).getByRole("button", { name: "Marcar pronto" }),
+      within(await preparando.findByRole("article", { name: /^Mesa 50 ·/ })).getByRole("button", {
+        name: "Marcar pronto",
+      }),
     )
     const prontos = await coluna("Prontos")
     const pronto = within(await prontos.findByRole("article", { name: /^Mesa 50 ·/ }))
@@ -188,6 +191,45 @@ describe("PaginaCozinha", () => {
     await comandaNaMesa(53)
     expect(await ticket("Mesa 53")).toBeInTheDocument()
     expect(tocar).toHaveBeenCalled()
+  })
+
+  test("cada coluna marca a etapa com o traço do tom e a contagem", async () => {
+    telaGrande()
+    await comandaNaMesa(54)
+    renderizar()
+    await ticket("Mesa 54")
+
+    for (const [nome, tom] of [
+      ["A fazer", "novo"],
+      ["Preparando", "preparo"],
+      ["Prontos", "pronto"],
+    ]) {
+      const titulo = (await coluna(nome)).getByRole("heading", { name: new RegExp(`^${nome}`) })
+      expect(titulo.querySelector("[data-traco]")).toHaveAttribute("data-tom", tom)
+    }
+  })
+
+  test("coluna vazia ensina o que chega nela", async () => {
+    telaGrande()
+    await comandaNaMesa(55)
+    renderizar()
+    await ticket("Mesa 55")
+
+    expect(
+      (await coluna("Prontos")).getByText("Marque um ticket como pronto e ele vem para cá."),
+    ).toBeInTheDocument()
+  })
+
+  test("ticket atrasado mostra o atraso no tempo, sem borda grossa", async () => {
+    telaGrande()
+    await comandaNaMesa(56)
+    vi.setSystemTime(new Date(2026, 10, 13, 21, 0))
+    renderizar()
+
+    const atrasado = await ticket("Mesa 56")
+    expect(atrasado).toHaveAttribute("data-urgencia", "atrasado")
+    expect(within(atrasado).getByText(/30 min/)).toHaveTextContent("30 min, atrasado")
+    expect(atrasado.innerHTML).not.toMatch(/border-l-4/)
   })
 
   test("tela cheia para a TV da cozinha", async () => {

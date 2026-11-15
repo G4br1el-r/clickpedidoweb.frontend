@@ -1,11 +1,13 @@
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { beforeEach, describe, expect, test } from "vitest"
+import { beforeEach, describe, expect, test, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { useLojaAtual } from "@/lib/loja-atual"
+import { cardapioCasaDaPizza } from "@/lib/mock/casa-da-pizza"
 import { cardapioDrogariaBemEstar } from "@/lib/mock/drogaria-bem-estar"
 import { useSacola } from "@/lib/sacola"
 import type { Produto } from "@/lib/tipos"
+import { useVoos } from "@/lib/voo"
 import { ProdutoSheet } from "./produto-sheet"
 
 const produto = (id: string) => {
@@ -27,6 +29,7 @@ function abrir(id: string) {
 beforeEach(() => {
   useLojaAtual.setState({ id: "drogaria-bem-estar", hidratada: true })
   useSacola.setState({ ...useSacola.getInitialState(), hidratada: true }, true)
+  useVoos.setState({ voos: [] })
 })
 
 describe("ProdutoSheet na farmácia", () => {
@@ -38,6 +41,26 @@ describe("ProdutoSheet na farmácia", () => {
     expect(useSacola.getState().itens[0]).toMatchObject({
       produtoId: "amoxicilina-500",
       venda: "receita-retida",
+    })
+  })
+
+  test("a etiqueta da vitrine vem logo abaixo do nome: a embalagem e o preço", async () => {
+    abrir("amoxicilina-500")
+    const etiqueta = await screen.findByTestId("etiqueta-folha")
+    expect(within(etiqueta).getByText("500 mg, 21 cápsulas")).toBeInTheDocument()
+    expect(within(etiqueta).getByText("R$ 27,90")).toBeInTheDocument()
+  })
+
+  test("ao adicionar, a etiqueta com o total sai do preço do botão rumo à sacola", async () => {
+    abrir("amoxicilina-500")
+    const preco = await screen.findByTestId("preco-folha")
+    vi.spyOn(preco, "getBoundingClientRect").mockReturnValue(new DOMRect(300, 700, 80, 20))
+    await userEvent.setup().click(screen.getByTestId("cta-adicionar"))
+    expect(useVoos.getState().voos).toHaveLength(1)
+    expect(useVoos.getState().voos[0]).toMatchObject({
+      // O Intl separa o símbolo do valor com espaço não separável.
+      rotulo: "R$ 27,90",
+      de: { x: 340, y: 710 },
     })
   })
 
@@ -74,7 +97,7 @@ describe("ProdutoSheet no açougue", () => {
         <ProdutoSheet produto={picanha} aberto aoMudar={() => {}} />
       </TooltipProvider>,
     )
-    expect(await screen.findByText("R$ 89,90 o quilo")).toBeInTheDocument()
+    expect(await screen.findByTestId("etiqueta-folha")).toHaveTextContent(/R\$\s89,90\s*o quilo/)
     const pesos = screen.getByRole("radiogroup", { name: "Peso" })
     expect(within(pesos).getByRole("radio", { name: "500 g" })).toBeChecked()
 
@@ -187,7 +210,7 @@ describe("ProdutoSheet no açougue com preparo", () => {
         <ProdutoSheet produto={moida} aberto aoMudar={() => {}} />
       </TooltipProvider>,
     )
-    expect(await screen.findByText("R$ 38,90 o quilo")).toBeInTheDocument()
+    expect(await screen.findByTestId("etiqueta-folha")).toHaveTextContent(/R\$\s38,90\s*o quilo/)
     await usuario.click(screen.getByRole("radio", { name: "Moída 1 vez" }))
     const pesos = screen.getByRole("radiogroup", { name: "Peso" })
     await usuario.click(within(pesos).getByRole("radio", { name: "1 kg" }))
@@ -197,5 +220,24 @@ describe("ProdutoSheet no açougue com preparo", () => {
       precoUnitario: 38.9,
       resumo: ["1 kg", "Moída 1 vez"],
     })
+  })
+})
+
+describe("ProdutoSheet na pizzaria", () => {
+  const meioAMeio = cardapioCasaDaPizza
+    .flatMap((categoria) => categoria.produtos)
+    .find((item) => item.id === "meio-a-meio") as Produto
+
+  test("quem monta com opções pagas lê na etiqueta o preço de partida", async () => {
+    useLojaAtual.setState({ id: "casa-da-pizza", hidratada: true })
+    render(
+      <TooltipProvider>
+        <ProdutoSheet produto={meioAMeio} aberto aoMudar={() => {}} />
+      </TooltipProvider>,
+    )
+    const etiqueta = await screen.findByTestId("etiqueta-folha")
+    expect(within(etiqueta).getByText("8 fatias")).toBeInTheDocument()
+    expect(within(etiqueta).getByText("A partir de")).toBeInTheDocument()
+    expect(within(etiqueta).getByText("R$ 58,00")).toBeInTheDocument()
   })
 })

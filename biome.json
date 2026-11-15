@@ -12,7 +12,9 @@
       "!next-env.d.ts",
       "!coverage",
       "!test-results",
-      "!playwright-report"
+      "!playwright-report",
+      "!.impeccable",
+      "!DESIGN.md"
     ]
   },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },

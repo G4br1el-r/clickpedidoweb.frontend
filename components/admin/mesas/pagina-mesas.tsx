@@ -1,16 +1,19 @@
 "use client"
 
-import { ArmchairIcon, ClockIcon, UserIcon } from "lucide-react"
+import NumberFlow from "@number-flow/react"
+import { ArmchairIcon } from "lucide-react"
 import { useState } from "react"
-import { Badge } from "@/components/ui/badge"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAgora } from "@/hooks/use-agora"
 import { useFila } from "@/lib/admin/dados/consultas"
 import { useMesas } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa, Pedido } from "@/lib/admin/dados/tipos"
-import { emReais, plural } from "@/lib/formato"
+import { estadoDaMesa } from "@/lib/admin/regras/mesas"
+import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
+import { CabecalhoPagina } from "../cabecalho-pagina"
+import { Traco } from "../traco"
 import { ComandaMesa } from "./comanda-mesa"
 import { NovaMesa } from "./nova-mesa"
 
@@ -35,6 +38,7 @@ function CartaoMesa({
   aoAbrir: () => void
 }) {
   const ocupada = mesa.status === "ocupada"
+  const estado = estadoDaMesa(mesa, comanda)
   const itens = comanda?.itens.reduce((soma, item) => soma + item.quantidade, 0) ?? 0
   return (
     <button
@@ -43,47 +47,55 @@ function CartaoMesa({
       aria-labelledby={`mesa-${mesa.id}`}
       aria-describedby={`mesa-${mesa.id}-detalhes`}
       className={cn(
-        "flex h-full w-full flex-col gap-2 rounded-xl border p-3 text-left transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        "flex h-full min-h-32 w-full cursor-pointer flex-col gap-1.5 rounded-xl p-3 text-left outline-none",
+        "transition-[transform,box-shadow,background-color] duration-150 ease-saida active:scale-[0.98] motion-reduce:transition-none",
+        "focus-visible:ring-3 focus-visible:ring-ring/50",
         ocupada
-          ? "bg-card shadow-xs hover:bg-accent/60"
-          : "border-dashed bg-muted/30 hover:bg-muted",
+          ? "bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 ring-border/80 hover:ring-foreground/25"
+          : "bg-foreground/[0.03] hover:bg-foreground/[0.06]",
       )}
     >
       <span className="flex items-center gap-2">
-        <span id={`mesa-${mesa.id}`} className="text-base font-semibold">
+        <span id={`mesa-${mesa.id}`} className="text-[15px] font-semibold">
           Mesa {mesa.numero}
         </span>
-        <Badge variant={ocupada ? "default" : "outline"} className="ml-auto">
-          {ocupada ? "Ocupada" : "Livre"}
-        </Badge>
+        <span
+          className={cn(
+            "ml-auto flex items-center gap-1.5 text-xs font-medium",
+            !ocupada && "text-muted-foreground",
+          )}
+        >
+          <Traco tom={estado.tom} />
+          {estado.rotulo}
+        </span>
       </span>
       <span id={`mesa-${mesa.id}-detalhes`} className="sr-only">
-        {[ocupada ? "Ocupada" : "Livre", mesa.clienteNome, comanda ? emReais(comanda.total) : null]
+        {[estado.rotulo, mesa.clienteNome, comanda ? emReais(comanda.total) : null]
           .filter(Boolean)
           .join(", ")}
       </span>
-      {!nomePadrao(mesa) && <span className="text-xs text-muted-foreground">{mesa.nome}</span>}
+      {!nomePadrao(mesa) && (
+        <span className="-mt-1 truncate text-xs text-muted-foreground">{mesa.nome}</span>
+      )}
       {ocupada ? (
         <>
-          <span className="flex items-center gap-1 text-sm font-medium">
-            <UserIcon className="size-3.5 text-muted-foreground" aria-hidden="true" />
-            <span className="truncate">{mesa.clienteNome}</span>
-          </span>
-          <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
-            {mesa.ocupadaEm && agora && (
-              <span className="flex items-center gap-1 tabular-nums">
-                <ClockIcon className="size-3" aria-hidden="true" />
-                {tempoDesde(mesa.ocupadaEm, agora)}
-              </span>
-            )}
+          <span className="truncate text-sm font-medium">{mesa.clienteNome}</span>
+          <span className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground tabular-nums">
+            {mesa.ocupadaEm && agora && <span>{tempoDesde(mesa.ocupadaEm, agora)}</span>}
+            {mesa.ocupadaEm && agora && comanda?.mesa?.garcom && <span aria-hidden="true">·</span>}
             {comanda?.mesa?.garcom && <span>Garçom {comanda.mesa.garcom}</span>}
           </span>
           {comanda && (
-            <span className="mt-auto flex items-baseline justify-between pt-1 text-sm">
+            <span className="mt-auto flex items-baseline justify-between gap-2 border-t border-border/70 pt-2">
               <span className="text-xs text-muted-foreground">
                 {plural(itens, "item", "itens")}
               </span>
-              <span className="font-semibold tabular-nums">{emReais(comanda.total)}</span>
+              <NumberFlow
+                value={comanda.total}
+                locales="pt-BR"
+                format={formatoMoeda}
+                className="text-[15px] font-semibold tabular-nums"
+              />
             </span>
           )}
         </>
@@ -104,30 +116,37 @@ export function PaginaMesas() {
   const comandas = new Map(
     (fila ?? []).filter((pedido) => pedido.tipo === "mesa").map((p) => [p.id, p]),
   )
+  const comandaDa = (mesa: Mesa) =>
+    mesa.pedidoAtivoId ? comandas.get(mesa.pedidoAtivoId) : undefined
   const ocupadas = mesas?.filter((mesa) => mesa.status === "ocupada").length ?? 0
+  const naCozinha =
+    mesas?.filter((mesa) => estadoDaMesa(mesa, comandaDa(mesa)).tom === "preparo").length ?? 0
   const aberta = mesas?.find((mesa) => mesa.id === abertaId) ?? null
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Mesas</h1>
-          <p className="text-sm text-muted-foreground" aria-live="polite">
-            {mesas
-              ? `${plural(ocupadas, "ocupada", "ocupadas")} · ${plural(mesas.length - ocupadas, "livre", "livres")}`
-              : "Carregando as mesas…"}
-          </p>
-        </div>
-        <div className="ml-auto">
-          <NovaMesa />
-        </div>
-      </div>
+    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
+      <CabecalhoPagina
+        titulo="Mesas"
+        vivo
+        resumo={
+          mesas
+            ? [
+                plural(ocupadas, "ocupada", "ocupadas"),
+                plural(mesas.length - ocupadas, "livre", "livres"),
+                naCozinha > 0 ? `${naCozinha} com rodada na cozinha` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")
+            : "Carregando as mesas…"
+        }
+        acoes={<NovaMesa />}
+      />
 
       {!mesas ? (
         <div
           role="status"
           aria-label="Carregando as mesas"
-          className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5"
+          className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
         >
           {Array.from({ length: 10 }, (_, indice) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: esqueleto fixo
@@ -135,24 +154,27 @@ export function PaginaMesas() {
           ))}
         </div>
       ) : mesas.length === 0 ? (
-        <Empty className="border">
+        <Empty className="border border-dashed">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <ArmchairIcon />
             </EmptyMedia>
             <EmptyTitle>Nenhuma mesa cadastrada</EmptyTitle>
             <EmptyDescription>
-              Crie as mesas do salão para o garçom lançar os pedidos.
+              Crie as mesas do salão em Nova mesa para o garçom lançar os pedidos.
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
-        <ul aria-label="Mesas" className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+        <ul
+          aria-label="Mesas"
+          className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+        >
           {mesas.map((mesa) => (
             <li key={mesa.id}>
               <CartaoMesa
                 mesa={mesa}
-                comanda={mesa.pedidoAtivoId ? comandas.get(mesa.pedidoAtivoId) : undefined}
+                comanda={comandaDa(mesa)}
                 agora={agora}
                 aoAbrir={() => setAbertaId(mesa.id)}
               />

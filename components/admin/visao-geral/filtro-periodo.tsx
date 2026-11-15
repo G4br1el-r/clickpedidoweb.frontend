@@ -64,17 +64,18 @@ export function FiltroPeriodo() {
   const [rascunho, setRascunho] = useState<DateRange | undefined>()
 
   return (
-    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+    <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center">
       <ToggleGroup
         type="single"
-        variant="outline"
+        variant="segmento"
         size="sm"
         aria-label="Período"
         value={periodo?.atalho ?? ""}
         onValueChange={(valor) => {
           if (agora && valor) escolher(periodoDoAtalho(valor as Atalho, agora))
         }}
-        className="flex-wrap"
+        // Uma linha só: no celular estreito, o trilho rola de lado em vez de quebrar.
+        className="sem-barra max-w-full flex-nowrap overflow-x-auto"
       >
         {ATALHOS.map(({ id, rotulo }) => (
           <ToggleGroupItem key={id} value={id} className="cursor-pointer">

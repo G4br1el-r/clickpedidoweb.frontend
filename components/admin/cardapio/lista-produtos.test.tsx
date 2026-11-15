@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter, type OnUrlUpdateFunction } from "nuqs/adapters/testing"
@@ -101,6 +101,26 @@ describe("PaginaCardapio", () => {
     await usuario.clear(preco)
     await usuario.type(preco, "99{Escape}")
     expect(preco).toHaveValue("R$ 12,50")
+  })
+
+  test("o preço salvo se confirma na própria linha", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    const pastel = await linha("Pastel de Carne")
+    const preco = pastel.getByRole("textbox", { name: "Preço" })
+
+    await usuario.clear(preco)
+    await usuario.type(preco, "13{Enter}")
+    // O aviso já está na linha (vazio) para o leitor de tela anunciar quando muda.
+    await waitFor(() => expect(pastel.getByRole("status")).toHaveTextContent("Salvo"))
+  })
+
+  test("o cabeçalho da categoria diz quantos produtos ela tem", async () => {
+    renderizar()
+    await linha("Pastel de Carne")
+    const pasteis = screen.getByRole("region", { name: /^Pastéis/ })
+    expect(pasteis).toHaveAccessibleName("Pastéis, 12 produtos")
+    expect(within(pasteis).getAllByRole("listitem")).toHaveLength(12)
   })
 
   test("copiar e excluir pelo menu do produto, excluir com confirmação", async () => {

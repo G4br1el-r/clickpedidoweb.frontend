@@ -118,6 +118,19 @@ describe("PaginaGarcom", () => {
     expect(bandeja().getByText("Escolha a mesa.")).toBeInTheDocument()
   })
 
+  test("cada toque avisa o que entrou na bandeja, e a bandeja diz para qual mesa vai", async () => {
+    await api().mesas.criar({ numero: 73 })
+    const usuario = await abrir()
+    const { simples } = await produtos()
+    await usuario.click(botao(simples.nome))
+    expect(bandeja().getByRole("status")).toHaveTextContent(`${simples.nome}: 1 na bandeja`)
+    await usuario.click(botao(simples.nome))
+    expect(bandeja().getByRole("status")).toHaveTextContent(`${simples.nome}: 2 na bandeja`)
+
+    await escolherMesa(usuario, 73)
+    expect(bandeja().getByRole("heading", { name: /Mesa 73/ })).toBeInTheDocument()
+  })
+
   test("monta a bandeja e envia para a cozinha com garçom e cliente", async () => {
     const mesa = await api().mesas.criar({ numero: 70 })
     const usuario = await abrir()

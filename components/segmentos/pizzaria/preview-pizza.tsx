@@ -1,6 +1,6 @@
 "use client"
 
-import { motion, useAnimationControls } from "motion/react"
+import { motion, useAnimationControls, useReducedMotion } from "motion/react"
 import { useEffect, useRef } from "react"
 import type { Selecoes } from "@/lib/produto"
 import type { GrupoOpcao, ItemOpcao, Produto } from "@/lib/tipos"
@@ -47,25 +47,29 @@ export function PreviewPizza({
       ? [escolhido(esquerda, selecoes)?.nome ?? null, escolhido(direita, selecoes)?.nome ?? null]
       : [produto.nome]
 
-  // Um assentar curto a cada escolha: a pizza "pula" de leve no prato.
+  // Um assentar curto a cada escolha: a pizza "pula" de leve no prato e gira um pouco,
+  // como quem ajeita a pizza na pá. Com movimento reduzido, ela só muda o recheio.
+  const reduzido = useReducedMotion()
   const pulo = useAnimationControls()
   const chave = JSON.stringify(selecoes)
   const anterior = useRef(chave)
   useEffect(() => {
     if (chave === anterior.current) return
     anterior.current = chave
+    if (reduzido) return
     void pulo.start({
       y: [0, -6, 0],
       rotate: [0, -4, 0],
-      transition: { duration: 0.5, ease: CURVA },
+      scale: [1, 1.03, 1],
+      transition: { duration: 0.42, ease: CURVA },
     })
-  }, [chave, pulo])
+  }, [chave, pulo, reduzido])
 
   return (
     <div className="flex w-full flex-col items-center" data-testid="preview-produto">
       <motion.div
         animate={pulo}
-        className="relative size-32 sm:size-40 md:size-44 [@media(max-height:700px)]:size-28"
+        className="relative size-32 sm:size-40 md:size-44 [@media(max-height:700px)]:size-28 [@media(max-height:500px)]:size-16"
       >
         {/* Sombra de prato, para a pizza não flutuar. */}
         <div

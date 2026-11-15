@@ -3,27 +3,10 @@
 import NumberFlow from "@number-flow/react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import {
-  ActivityIcon,
-  ChevronDownIcon,
-  ReceiptTextIcon,
-  TrendingDownIcon,
-  TrendingUpIcon,
-  TrophyIcon,
-  WalletIcon,
-} from "lucide-react"
+import { ChevronDownIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { type ReactNode, useId, useState } from "react"
-import { Badge } from "@/components/ui/badge"
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -40,9 +23,12 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { Resumo } from "@/lib/admin/regras/dashboard"
 import { diasNoPeriodo, type Periodo } from "@/lib/admin/regras/periodo"
 import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
-import { rotuloStatus } from "@/lib/admin/regras/status"
 import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
+import { cn } from "@/lib/utils"
+import { BlocoSecao } from "../bloco-secao"
+import { SeloStatus } from "../pedidos/selos"
+import { AoVivo, Indicador, Regua } from "../regua"
 import type { MedidaDoGrafico } from "./grafico-por-dia"
 
 // Recharts pesa: o gráfico chega depois, só no navegador, com o esqueleto no lugar.
@@ -81,33 +67,6 @@ function Numero({ valor, moeda = false }: { valor: number; moeda?: boolean }) {
   )
 }
 
-function Indicador({
-  rotulo,
-  icone: Icone,
-  children,
-  detalhe,
-}: {
-  rotulo: string
-  icone?: typeof WalletIcon
-  children: ReactNode
-  detalhe?: ReactNode
-}) {
-  return (
-    <Card className="gap-2 py-4">
-      <CardHeader className="px-4">
-        <CardDescription className="flex items-center gap-1.5">
-          {Icone && <Icone className="size-3.5" aria-hidden="true" />}
-          {rotulo}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-1 px-4">
-        <span className="text-2xl font-semibold tracking-tight">{children}</span>
-        {detalhe && <span className="text-xs text-muted-foreground">{detalhe}</span>}
-      </CardContent>
-    </Card>
-  )
-}
-
 /** Seção com título que vira região para leitores de tela. */
 function Secao({
   titulo,
@@ -115,45 +74,20 @@ function Secao({
   children,
 }: {
   titulo: string
-  descricao?: string
+  descricao?: ReactNode
   children: ReactNode
 }) {
   const id = useId()
   return (
     <section aria-labelledby={id} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <h2 id={id} className="text-base font-semibold tracking-tight">
+        <h2 id={id} className="text-[15px] font-semibold tracking-[-0.01em]">
           {titulo}
         </h2>
-        {descricao && <p className="text-sm text-muted-foreground">{descricao}</p>}
+        {descricao && <p className="text-[13px] text-muted-foreground">{descricao}</p>}
       </div>
       {children}
     </section>
-  )
-}
-
-/** Cartão com título que também é uma região nomeada. */
-function CartaoSecao({
-  titulo,
-  descricao,
-  acao,
-  children,
-}: {
-  titulo: string
-  descricao?: string
-  acao?: ReactNode
-  children: ReactNode
-}) {
-  const id = useId()
-  return (
-    <Card aria-labelledby={id} role="region" className="min-w-0 gap-4">
-      <CardHeader>
-        <CardTitle id={id}>{titulo}</CardTitle>
-        {descricao && <CardDescription>{descricao}</CardDescription>}
-        {acao && <CardAction>{acao}</CardAction>}
-      </CardHeader>
-      <CardContent>{children}</CardContent>
-    </Card>
   )
 }
 
@@ -183,6 +117,7 @@ function ListaDeFatias({
             </span>
           </div>
           <Progress
+            className="h-1.5"
             value={item.percentual}
             aria-label={`${item.nome}: ${Math.round(item.percentual)}%`}
           />
@@ -239,17 +174,13 @@ export function PainelVisaoGeral({
   const Tendencia = (kpi.variacao ?? 0) >= 0 ? TrendingUpIcon : TrendingDownIcon
 
   return (
-    <div className="flex flex-col gap-8">
-      <Secao titulo="Hoje" descricao="Ao vivo, desde a abertura">
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Indicador rotulo={`${n.Pedidos} hoje`} icone={ReceiptTextIcon}>
+    <div className="flex flex-col gap-10">
+      <Secao titulo="Hoje" descricao={<AoVivo>Ao vivo, desde a abertura</AoVivo>}>
+        <Regua>
+          <Indicador rotulo={`${n.Pedidos} hoje`}>
             <Numero valor={hoje.pedidos} />
           </Indicador>
-          <Indicador
-            rotulo="Faturamento hoje"
-            icone={WalletIcon}
-            detalhe="Sem cancelados e pagamentos pendentes"
-          >
+          <Indicador rotulo="Faturamento hoje" detalhe="Sem cancelados e pagamentos pendentes">
             <Numero valor={hoje.faturamento} moeda />
           </Indicador>
           <Indicador rotulo="Ticket médio hoje">
@@ -257,7 +188,6 @@ export function PainelVisaoGeral({
           </Indicador>
           <Indicador
             rotulo="Em andamento"
-            icone={ActivityIcon}
             detalhe={
               <Link href="/admin/fila" className="underline-offset-4 hover:underline">
                 Ver na fila
@@ -266,7 +196,7 @@ export function PainelVisaoGeral({
           >
             <Numero valor={hoje.emAndamento} />
           </Indicador>
-        </div>
+        </Regua>
         {(hoje.aguardandoPagamento > 0 || hoje.cancelados > 0) && (
           <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
             {hoje.aguardandoPagamento > 0 && (
@@ -280,15 +210,19 @@ export function PainelVisaoGeral({
       </Secao>
 
       <Secao titulo="Desempenho do período" descricao={dias === 1 ? "1 dia" : `${dias} dias`}>
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <Regua>
           <Indicador
             rotulo="Faturamento"
-            icone={WalletIcon}
             detalhe={
               kpi.variacao === null ? (
                 "Sem vendas no período anterior"
               ) : (
-                <span className="inline-flex items-center gap-1">
+                <span
+                  className={cn(
+                    "inline-flex items-center gap-1",
+                    (kpi.variacao ?? 0) >= 0 ? "text-(--tom-pronto)" : "text-(--tom-cancelado)",
+                  )}
+                >
                   <Tendencia className="size-3.5" aria-hidden="true" />
                   {porcentagem.format(kpi.variacao / 100)} sobre {anteriores}
                 </span>
@@ -299,7 +233,6 @@ export function PainelVisaoGeral({
           </Indicador>
           <Indicador
             rotulo={n.Pedidos}
-            icone={ReceiptTextIcon}
             detalhe={`${inteiro.format(kpi.mediaPorDia)} por dia · ${plural(kpi.cancelados, "cancelado", "cancelados")}`}
           >
             <Numero valor={kpi.pedidos} />
@@ -309,28 +242,27 @@ export function PainelVisaoGeral({
           </Indicador>
           <Indicador
             rotulo="Melhor dia"
-            icone={TrophyIcon}
             detalhe={
               kpi.melhorDia
                 ? `${emReais(kpi.melhorDia.faturamento)} em ${plural(kpi.melhorDia.pedidos, n.pedido, n.pedidos)}`
                 : undefined
             }
           >
-            <span className="text-lg">
+            <span className="text-xl first-letter:uppercase">
               {kpi.melhorDia
                 ? format(kpi.melhorDia.data, "EEEE, dd/MM", { locale: ptBR })
                 : "Sem vendas"}
             </span>
           </Indicador>
-        </div>
+        </Regua>
 
-        <CartaoSecao
+        <BlocoSecao
           titulo={medida === "faturamento" ? "Faturamento por dia" : `${n.Pedidos} por dia`}
           descricao="Toque num dia para ver os pedidos dele"
           acao={
             <ToggleGroup
               type="single"
-              variant="outline"
+              variant="segmento"
               size="sm"
               aria-label="O que mostrar no gráfico"
               value={medida}
@@ -346,11 +278,11 @@ export function PainelVisaoGeral({
           }
         >
           <GraficoPorDia serie={resumo.serie} medida={medida} />
-        </CartaoSecao>
+        </BlocoSecao>
       </Secao>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <CartaoSecao titulo="Formas de pagamento" descricao="No período">
+      <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
+        <BlocoSecao titulo="Formas de pagamento" descricao="No período">
           <ListaDeFatias
             vazio="Nenhuma venda no período."
             itens={resumo.pagamentos.map((fatia) => ({
@@ -359,8 +291,8 @@ export function PainelVisaoGeral({
               nome: rotuloPagamento(fatia.forma),
             }))}
           />
-        </CartaoSecao>
-        <CartaoSecao titulo="Canais de venda" descricao="No período">
+        </BlocoSecao>
+        <BlocoSecao titulo="Canais de venda" descricao="No período">
           <ListaDeFatias
             vazio="Nenhuma venda no período."
             itens={resumo.canais.map((fatia) => ({
@@ -369,12 +301,12 @@ export function PainelVisaoGeral({
               nome: rotuloCanal(fatia.tipo),
             }))}
           />
-        </CartaoSecao>
+        </BlocoSecao>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
         <Tabs defaultValue="periodo" className="contents">
-          <CartaoSecao
+          <BlocoSecao
             titulo="Mais vendidos"
             acao={
               <TabsList>
@@ -389,10 +321,10 @@ export function PainelVisaoGeral({
             <TabsContent value="hoje">
               <ListaMaisVendidos produtos={resumo.maisVendidos.hoje} />
             </TabsContent>
-          </CartaoSecao>
+          </BlocoSecao>
         </Tabs>
 
-        <CartaoSecao
+        <BlocoSecao
           titulo={`${n.Pedidos} recentes`}
           acao={
             <Link href="/admin/pedidos" className="text-sm underline-offset-4 hover:underline">
@@ -422,29 +354,27 @@ export function PainelVisaoGeral({
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{emReais(pedido.total)}</TableCell>
                   <TableCell className="hidden sm:table-cell">
-                    <Badge variant={pedido.status === "cancelado" ? "outline" : "secondary"}>
-                      {rotuloStatus(pedido.tipo, pedido.status)}
-                    </Badge>
+                    <SeloStatus pedido={pedido} />
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-        </CartaoSecao>
+        </BlocoSecao>
       </div>
 
       <Collapsible open={tabelaAberta} onOpenChange={setTabelaAberta}>
-        <Card className="gap-0 py-0">
-          <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between px-6 py-4 text-left text-sm font-medium">
+        <div className="border-y border-border/70">
+          <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between py-4 text-left text-[15px] font-semibold tracking-[-0.01em] outline-none focus-visible:ring-2 focus-visible:ring-ring">
             Dia a dia do período, em tabela
             <ChevronDownIcon
               aria-hidden="true"
-              className="size-4 transition-transform duration-300 data-[state=open]:rotate-180"
+              className="size-4 text-muted-foreground transition-transform duration-200 ease-saida data-[state=open]:rotate-180"
               data-state={tabelaAberta ? "open" : "closed"}
             />
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <CardContent className="pb-4">
+            <div className="pb-4">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -471,9 +401,9 @@ export function PainelVisaoGeral({
                   ))}
                 </TableBody>
               </Table>
-            </CardContent>
+            </div>
           </CollapsibleContent>
-        </Card>
+        </div>
       </Collapsible>
     </div>
   )

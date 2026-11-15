@@ -138,8 +138,8 @@ function Tela({ className }: { className?: string }) {
           className={cn(
             "relative overflow-hidden",
             celular
-              ? "rounded-[44px] shadow-[0_0_0_7px_#1d1d22,0_0_0_8px_var(--border),0_30px_60px_-20px_rgb(0_0_0/0.45)]"
-              : "rounded-xl shadow-[0_0_0_1px_var(--border),0_24px_50px_-24px_rgb(0_0_0/0.4)]",
+              ? "rounded-[44px] shadow-[0_0_0_6px_#1d1d22,0_0_0_7px_var(--border),0_24px_48px_-28px_rgb(0_0_0/0.4)]"
+              : "rounded-lg shadow-[0_0_0_1px_var(--border),0_20px_40px_-28px_rgb(0_0_0/0.35)]",
           )}
           data-testid="previa-tela"
           data-dispositivo={dispositivo}
@@ -198,7 +198,7 @@ function BarraFerramentas({ aoAmpliar }: { aoAmpliar?: () => void }) {
       </Select>
       <ToggleGroup
         type="single"
-        variant="outline"
+        variant="segmento"
         size="sm"
         value={dispositivo}
         onValueChange={(valor) => valor && definirDispositivo(valor as Dispositivo)}

@@ -115,8 +115,9 @@ test.describe("botão de adicionar", () => {
     expect(seletor.x).toBeGreaterThanOrEqual(medidaCartao.x)
     expect(seletor.x + seletor.width).toBeLessThanOrEqual(medidaCartao.x + medidaCartao.width)
     expect(seletor.y + seletor.height).toBeLessThanOrEqual(medidaCartao.y + medidaCartao.height)
-    expect(preco.y + preco.height, "o preço termina acima do seletor").toBeLessThanOrEqual(
-      seletor.y,
+    // O seletor mora no canto da foto; o nome e a etiqueta ficam embaixo dela, sem cobrir nada.
+    expect(preco.y, "a etiqueta começa abaixo do seletor").toBeGreaterThanOrEqual(
+      seletor.y + seletor.height,
     )
   })
 

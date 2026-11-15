@@ -5,7 +5,7 @@ import { ImageUpIcon, Trash2Icon } from "lucide-react"
 import Image from "next/image"
 import { useId, useRef, useState } from "react"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
+
 import { Button } from "@/components/ui/button"
 import {
   Field,
@@ -19,6 +19,7 @@ import { useConfig, useOpcaoPro } from "@/lib/admin/config"
 import { textoSobre } from "@/lib/tema"
 import { cn } from "@/lib/utils"
 import { avisarSacola, SeloPro } from "./campos"
+import { Traco } from "./traco"
 
 /** Reduz a imagem antes de guardar: o navegador só aceita alguns megabytes salvos. */
 async function reduzirImagem(arquivo: File, ladoMaximo: number): Promise<string> {
@@ -78,7 +79,7 @@ export function CampoImagem({
   return (
     <Field
       data-pro-liberada={liberada || undefined}
-      className={cn(liberada && "opcao-pro -m-2 w-auto rounded-2xl p-2")}
+      className={cn(liberada && "opcao-pro -m-2 w-auto rounded-xl p-2")}
     >
       <FieldContent>
         <FieldTitle className="flex items-center gap-2">
@@ -102,7 +103,7 @@ export function CampoImagem({
           }}
           className={cn(
             "relative grid shrink-0 place-items-center overflow-hidden bg-muted ring-1 ring-border transition-[box-shadow] duration-200",
-            formato === "quadrado" ? "size-20 rounded-2xl" : "h-20 w-36 rounded-2xl",
+            formato === "quadrado" ? "size-20 rounded-xl" : "h-20 w-36 rounded-xl",
             arrastando && "ring-2 ring-primary",
           )}
         >
@@ -183,11 +184,17 @@ export function CampoCor({ campo, titulo, descricao, contrasteCom }: CampoCorPro
         <FieldLabel htmlFor={id}>{titulo}</FieldLabel>
         <FieldDescription>{descricao}</FieldDescription>
       </FieldContent>
-      <div className="flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-3">
         {contraste !== null && (
-          <Badge variant={contraste >= 4.5 ? "secondary" : "destructive"} className="tabular-nums">
+          <span
+            className={cn(
+              "flex items-center gap-1.5 text-xs font-medium",
+              contraste >= 4.5 ? "text-muted-foreground" : "text-foreground",
+            )}
+          >
+            <Traco tom={contraste >= 4.5 ? "pronto" : "cancelado"} className="h-3" />
             {contraste >= 4.5 ? "Boa leitura" : "Pouco contraste"}
-          </Badge>
+          </span>
         )}
         <InputGroup className="w-36">
           <InputGroupAddon>

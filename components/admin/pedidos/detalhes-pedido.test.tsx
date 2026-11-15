@@ -66,6 +66,25 @@ afterEach(() => {
 })
 
 describe("DetalhesPedido", () => {
+  test("mostra o caminho do pedido: o que já passou, a etapa atual e o que falta", async () => {
+    const pedido = await umPedido((p) => p.tipo === "entrega" && p.status === "em-preparo")
+    renderizar(pedido.id)
+    const detalhes = await painel(pedido)
+
+    const caminho = within(detalhes.getByRole("list", { name: "Caminho do pedido" }))
+    const etapas = caminho.getAllByRole("listitem")
+    expect(etapas.map((etapa) => etapa.textContent)).toEqual([
+      "Novo",
+      "Em preparo",
+      "Pronto",
+      "Saiu para entrega",
+      "Entregue",
+    ])
+    expect(etapas[1]).toHaveAttribute("aria-current", "step")
+    expect(etapas[0]).toHaveAttribute("data-feita")
+    expect(etapas[2]).not.toHaveAttribute("data-feita")
+  })
+
   test("entrega: itens, endereço com mapa e WhatsApp do cliente", async () => {
     const pedido = await umPedido((p) => p.tipo === "entrega" && p.status === "em-preparo")
     renderizar(pedido.id)

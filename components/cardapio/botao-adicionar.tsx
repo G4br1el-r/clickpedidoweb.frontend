@@ -7,6 +7,7 @@ import { type MouseEvent, useState } from "react"
 import { toast } from "sonner"
 import { Dica } from "@/components/dica"
 import { comoVender } from "@/lib/farmacia"
+import { emReais } from "@/lib/formato"
 import { vibrar } from "@/lib/haptico"
 import { montarItemSacola } from "@/lib/produto"
 import { useSacola } from "@/lib/sacola"
@@ -17,10 +18,10 @@ import { lancarParaSacola } from "@/lib/voo"
 const MOLA = { type: "spring", duration: 0.42, bounce: 0.22 } as const
 const TOQUE = { type: "spring", duration: 0.22, bounce: 0.5 } as const
 const SURGIR = {
-  initial: { opacity: 0, scale: 0.5 },
-  animate: { opacity: 1, scale: 1 },
-  exit: { opacity: 0, scale: 0.5 },
-  whileTap: { scale: 0.82 },
+  initial: { opacity: 0, scale: 0.85, filter: "blur(2px)" },
+  animate: { opacity: 1, scale: 1, filter: "blur(0px)" },
+  exit: { opacity: 0, scale: 0.85, filter: "blur(2px)", transition: { duration: 0.12 } },
+  whileTap: { scale: 0.92 },
   transition: TOQUE,
 } as const
 
@@ -83,7 +84,17 @@ export function BotaoAdicionar({
       aoAbrir()
       return
     }
-    lancarParaSacola(evento.currentTarget, produto.imagem)
+    // O que desliza até a sacola sai da etiqueta do produto, quando há uma à vista.
+    const etiqueta =
+      evento.currentTarget
+        .closest("article")
+        ?.querySelector<HTMLElement>(`[data-testid="etiqueta-${produto.id}"]`) ??
+      evento.currentTarget
+    lancarParaSacola(
+      etiqueta,
+      produto.imagem,
+      emReais(ultimo ? ultimo.precoUnitario : produto.preco),
+    )
     setPulso(Date.now())
     if (temOpcoes && ultimo) {
       alterarQuantidade(ultimo.chave, ultimo.quantidade + 1)
@@ -207,7 +218,7 @@ export function BotaoAdicionar({
                   ? `Aumentar quantidade de ${produto.nome}`
                   : `Adicionar ${produto.nome}`
           }
-          whileTap={{ scale: 0.82 }}
+          whileTap={{ scale: 0.92 }}
           transition={TOQUE}
         >
           {pulso !== null && (
@@ -221,10 +232,7 @@ export function BotaoAdicionar({
               onAnimationComplete={() => setPulso(null)}
             />
           )}
-          <PlusIcon
-            strokeWidth={2.5}
-            className="size-5 transition-transform duration-300 ease-saida group-hover/botao:rotate-90"
-          />
+          <PlusIcon strokeWidth={2.5} className="size-5" />
         </motion.button>
       </Dica>
     </motion.div>

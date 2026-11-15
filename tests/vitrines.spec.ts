@@ -160,8 +160,9 @@ test("adega: combo com energético e dois sabores de gelo", async ({ page }) => 
   await combo.click()
 
   const ficha = page.getByRole("dialog")
-  // 1º passo: o energético, uma escolha só, que já leva ao próximo passo.
+  // 1º passo: o energético, uma escolha só; o botão Avançar leva ao próximo passo.
   await ficha.getByRole("radio").first().click()
+  await ficha.getByTestId("cta-adicionar").click()
   const gelos = ficha.getByRole("group", { name: "Sabores do Gelo" })
   await expect(gelos.getByText(/Escolha até 2/)).toBeVisible()
   await gelos.getByRole("checkbox").nth(0).click()
@@ -170,4 +171,48 @@ test("adega: combo com energético e dois sabores de gelo", async ({ page }) => 
   await expect(gelos.getByRole("checkbox").nth(2)).toBeDisabled()
   await ficha.getByTestId("cta-adicionar").click()
   await expect(ficha).toBeHidden()
+})
+
+test("farmácia: oferta com embalagem comprida não alarga a página no celular", async ({ page }) => {
+  await abrirLoja(page, "Drogaria Bem Estar")
+  // A etiqueta do medidor junta a apresentação longa, o preço antigo e o novo.
+  await page.getByTestId("produto-glicosimetro").scrollIntoViewIfNeeded()
+  await verificarSemRolagemHorizontal(page)
+})
+
+test("folha com opções: tudo rola junto, a foto sai e os passos ficam presos no topo", async ({
+  page,
+}) => {
+  await abrirLoja(page, "Quiosque do Mineiro")
+  await esperarAnimacoes(page)
+  const pastel = page
+    .getByTestId("produto-pastel-escolha-o-sabor")
+    .getByRole("button", { name: /^Escolher opções de / })
+  await pastel.scrollIntoViewIfNeeded()
+  await pastel.click()
+  const ficha = page.getByTestId("painel-produto")
+  await expect(ficha).toBeVisible()
+  await page.waitForTimeout(600)
+
+  const corpo = ficha.getByTestId("corpo-folha")
+  await corpo.evaluate((elemento) => elemento.scrollTo({ top: 400, behavior: "instant" }))
+  await page.waitForTimeout(200)
+
+  const caixaFicha = await ficha.boundingBox()
+  const passos = await ficha.getByRole("tablist", { name: "Passos do produto" }).boundingBox()
+  const fechar = await ficha.getByRole("button", { name: "Fechar" }).boundingBox()
+  if (!caixaFicha || !passos || !fechar) throw new Error("sem medida")
+  // Os passos continuam à vista, presos perto do topo da folha.
+  expect(passos.y).toBeGreaterThanOrEqual(caixaFicha.y)
+  expect(passos.y).toBeLessThan(caixaFicha.y + 120)
+  // E nada fica por cima deles: as setas e o fechar moram na barra de cima.
+  expect(fechar.y + fechar.height, "o fechar termina antes dos passos").toBeLessThanOrEqual(
+    passos.y,
+  )
+  // O nome grande saiu de cena; o nome pequeno aparece na barra de cima.
+  await expect(ficha.getByTestId("nome-na-barra")).toHaveText("Pastel (Escolha o Sabor)")
+  await expect(ficha.getByTestId("nome-na-barra")).toHaveCSS("opacity", "1")
+  await expect(
+    ficha.getByRole("heading", { name: "Pastel (Escolha o Sabor)", exact: true }),
+  ).not.toBeInViewport()
 })

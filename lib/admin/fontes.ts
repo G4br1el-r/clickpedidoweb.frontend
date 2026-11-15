@@ -9,7 +9,10 @@ import {
 } from "next/font/google"
 import type { FonteTexto, FonteTitulo } from "./config"
 
-/* Só o painel carrega estas fontes: a loja continua baixando apenas as dela. */
+/*
+ * Fontes que o lojista pode escolher no editor de aparência. O painel em si fala Geist,
+ * como a vitrine; estas só vestem a prévia e as amostras do editor.
+ */
 const bricolage = Bricolage_Grotesque({
   subsets: ["latin"],
   variable: "--fonte-bricolage",

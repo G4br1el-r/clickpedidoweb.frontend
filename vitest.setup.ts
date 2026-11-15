@@ -54,6 +54,7 @@ vi.mock("next/font/google", () => {
     DM_Sans: fonte,
     Figtree: fonte,
     Fraunces: fonte,
+    Geist: fonte,
     Outfit: fonte,
     Playfair_Display: fonte,
     Space_Grotesk: fonte,

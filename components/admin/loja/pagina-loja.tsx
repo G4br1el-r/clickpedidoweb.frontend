@@ -1,7 +1,8 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import { CopyIcon, PlugIcon, PrinterIcon, Volume2Icon, XIcon } from "lucide-react"
+import { CopyIcon, MoonIcon, PrinterIcon, Undo2Icon, Volume2Icon, XIcon } from "lucide-react"
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react"
 import { type ReactNode, useEffect, useId, useState } from "react"
 import {
   type Control,
@@ -14,7 +15,7 @@ import { NumericFormat, PatternFormat } from "react-number-format"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -33,11 +34,15 @@ import { useConectarPagamento, useSalvarLoja } from "@/lib/admin/dados/consultas
 import type { ConfigLoja, FormaPagamento, SomAlerta } from "@/lib/admin/dados/tipos"
 import { esquemaLoja, type FormularioLoja } from "@/lib/admin/regras/esquema-loja"
 import { copiarParaTodos, textoDoHorario } from "@/lib/admin/regras/loja"
+import { resumoDasAlteracoes, secoesAlteradas } from "@/lib/admin/regras/secoes-loja"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo, temRecurso } from "@/lib/admin/segmentos-painel"
 import { tocarAlerta } from "@/lib/admin/som"
 import { cn } from "@/lib/utils"
+import { CabecalhoPagina } from "../cabecalho-pagina"
+import { semRelogioDoNavegador } from "../entrega/linha-animada"
 import { Cupom, pedidoDeTeste, useImpressora } from "../impressao/cupom"
+import { Traco } from "../traco"
 
 type Controle = Control<FormularioLoja, unknown, ConfigLoja>
 
@@ -45,6 +50,7 @@ const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sáb
 /** Na tela, a semana começa na segunda. */
 const ORDEM = [1, 2, 3, 4, 5, 6, 0]
 const noDia = (dia: number) => `${dia === 0 || dia === 6 ? "no" : "na"} ${DIAS[dia]}`
+const CURVA = [0.23, 1, 0.32, 1] as const
 
 const SONS: { valor: SomAlerta; rotulo: string }[] = [
   { valor: "suave", rotulo: "Suave" },
@@ -62,6 +68,10 @@ const dinheiro = {
   fixedDecimalScale: true,
 }
 
+/**
+ * Seção plana das configurações: fio no topo; no desktop, o título e a explicação ficam na
+ * coluna da esquerda e os campos na da direita, para o olho descer só pela coluna dos campos.
+ */
 function Secao({
   titulo,
   descricao,
@@ -75,16 +85,30 @@ function Secao({
   return (
     <section
       aria-labelledby={id}
-      className="flex flex-col gap-4 rounded-xl border bg-card p-4 md:p-5"
+      className="grid min-w-0 gap-4 border-t border-border/70 pt-5 pb-3 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-10 lg:pt-6"
     >
-      <div className="flex flex-col gap-1">
-        <h2 id={id} className="font-semibold">
+      <div className="flex min-w-0 flex-col gap-1">
+        <h2 id={id} className="text-[15px] font-semibold tracking-[-0.01em]">
           {titulo}
         </h2>
-        {descricao && <p className="text-sm text-muted-foreground">{descricao}</p>}
+        {descricao && <p className="text-[13px] text-pretty text-muted-foreground">{descricao}</p>}
       </div>
-      {children}
+      <div className="flex min-w-0 flex-col gap-5">{children}</div>
     </section>
+  )
+}
+
+/** Grade dos campos: uma coluna no celular, duas do tablet em diante. */
+function Grade({ children }: { children: ReactNode }) {
+  return <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2">{children}</div>
+}
+
+/** Linhas de chaves (liga/desliga) separadas por fios. */
+function Linhas({ children }: { children: ReactNode }) {
+  return (
+    <div className="flex flex-col divide-y divide-border/70 border-b border-border/70">
+      {children}
+    </div>
   )
 }
 
@@ -98,6 +122,7 @@ function CampoTexto({
   placeholder,
   erro,
   multilinha,
+  className,
 }: {
   controle: Controle
   nome:
@@ -115,10 +140,11 @@ function CampoTexto({
   placeholder?: string
   erro?: ErroDoCampo
   multilinha?: boolean
+  className?: string
 }) {
   const id = useId()
   return (
-    <Field data-invalid={Boolean(erro)}>
+    <Field data-invalid={Boolean(erro)} className={className}>
       <FieldLabel htmlFor={id}>{rotulo}</FieldLabel>
       <Controller
         control={controle}
@@ -174,6 +200,7 @@ function CampoTelefone({
             customInput={Input}
             format={field.value.length > 10 ? "(##) #####-####" : "(##) ####-#####"}
             inputMode="tel"
+            className="tabular-nums"
             aria-invalid={Boolean(erro)}
             value={field.value}
             onValueChange={({ value }) => field.onChange(value)}
@@ -208,6 +235,7 @@ function CampoDinheiro({
           <NumericFormat
             {...dinheiro}
             id={id}
+            className="tabular-nums"
             aria-invalid={Boolean(erro)}
             value={field.value}
             onValueChange={({ floatValue }) => field.onChange(floatValue ?? 0)}
@@ -220,12 +248,14 @@ function CampoDinheiro({
   )
 }
 
+/** Uma linha de liga/desliga: rótulo e explicação à esquerda, a chave à direita. */
 function Chave({
   controle,
   nome,
   rotulo,
   descricao,
   desabilitada,
+  erro,
 }: {
   controle: Controle
   nome:
@@ -237,6 +267,7 @@ function Chave({
   rotulo: string
   descricao?: string
   desabilitada?: boolean
+  erro?: string
 }) {
   const id = useId()
   return (
@@ -244,12 +275,13 @@ function Chave({
       control={controle}
       name={nome}
       render={({ field }) => (
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-0.5">
+        <div className="flex min-h-14 items-center justify-between gap-4 py-3">
+          <div className="flex min-w-0 flex-col gap-0.5">
             <label htmlFor={id} className="text-sm font-medium">
               {rotulo}
             </label>
-            {descricao && <span className="text-xs text-muted-foreground">{descricao}</span>}
+            {descricao && <span className="text-[13px] text-muted-foreground">{descricao}</span>}
+            {erro && <FieldError>{erro}</FieldError>}
           </div>
           <Switch
             id={id}
@@ -284,7 +316,7 @@ function CampoHora({
       mask="_"
       inputMode="numeric"
       placeholder="18:00"
-      className="w-[4.5rem] text-center tabular-nums sm:w-20"
+      className="w-[4.25rem] px-2 text-center tabular-nums sm:w-[4.75rem]"
       aria-label={rotulo}
       aria-invalid={invalido}
       value={valor}
@@ -294,6 +326,7 @@ function CampoHora({
   )
 }
 
+/** A semana em linhas com fio: chave, dia, abre e fecha, e o atalho de copiar para todos. */
 function Horarios({
   controle,
   copiar,
@@ -307,7 +340,7 @@ function Horarios({
 }) {
   const horarios = useWatch({ control: controle, name: "horarios" })
   return (
-    <ul className="flex flex-col divide-y">
+    <ul className="flex flex-col divide-y divide-border/70 border-b border-border/70">
       {ORDEM.map((dia) => {
         const indice = horarios.findIndex((item) => item.dia === dia)
         const horario = horarios[indice]
@@ -315,7 +348,10 @@ function Horarios({
         const madrugada =
           horario.aberto && horario.fecha <= horario.abre && horario.fecha !== horario.abre
         return (
-          <li key={dia} className="flex flex-wrap items-center gap-x-2 gap-y-1 py-2 sm:gap-x-3">
+          <li
+            key={dia}
+            className="flex min-h-12 flex-wrap items-center gap-x-2.5 gap-y-1 py-2 sm:gap-x-3"
+          >
             <Controller
               control={controle}
               name={`horarios.${indice}.aberto`}
@@ -327,11 +363,16 @@ function Horarios({
                 />
               )}
             />
-            <span className="w-14 shrink-0 text-sm sm:w-20 font-medium first-letter:uppercase">
+            <span
+              className={cn(
+                "w-[3.75rem] shrink-0 text-sm font-medium first-letter:uppercase sm:w-20",
+                !horario.aberto && "text-muted-foreground",
+              )}
+            >
               {DIAS[dia]}
             </span>
             {horario.aberto ? (
-              <>
+              <span className="flex items-center gap-1.5 sm:gap-2">
                 <Controller
                   control={controle}
                   name={`horarios.${indice}.abre`}
@@ -345,7 +386,7 @@ function Horarios({
                     />
                   )}
                 />
-                <span className="text-sm text-muted-foreground">às</span>
+                <span className="text-[13px] text-muted-foreground">às</span>
                 <Controller
                   control={controle}
                   name={`horarios.${indice}.fecha`}
@@ -359,27 +400,31 @@ function Horarios({
                     />
                   )}
                 />
-                {madrugada && (
-                  <Badge variant="secondary" className="order-last ml-16 sm:order-none sm:ml-0">
-                    passa da meia-noite
-                  </Badge>
-                )}
-              </>
+              </span>
             ) : (
-              <span className="text-sm text-muted-foreground">Fechado</span>
+              <span className="flex h-8 items-center gap-1.5 text-sm text-muted-foreground">
+                <MoonIcon className="size-3.5" aria-hidden="true" />
+                Fechado
+              </span>
+            )}
+            {madrugada && (
+              <span className="order-last w-full pl-[6.5rem] text-[13px] text-muted-foreground sm:order-none sm:w-auto sm:pl-0">
+                até o dia seguinte
+              </span>
             )}
             <Button
               type="button"
               variant="ghost"
               size="icon-sm"
-              className="ml-auto"
+              className="relative ml-auto text-muted-foreground after:absolute after:-inset-2 hover:text-foreground sm:after:hidden"
               aria-label={`Copiar o horário de ${DIAS[dia]} para todos`}
+              title="Copiar para todos os dias"
               onClick={() => copiar(dia)}
             >
               <CopyIcon />
             </Button>
             {(erro?.abre || erro?.fecha) && (
-              <p role="alert" className="w-full text-sm text-destructive">
+              <p role="alert" className="w-full text-[13px] text-destructive sm:pl-[7.5rem]">
                 {erro?.abre?.message ?? erro?.fecha?.message}
               </p>
             )}
@@ -410,12 +455,12 @@ function Cidades({ controle }: { controle: Controle }) {
               <ul className="flex flex-wrap gap-1.5">
                 {field.value.map((cidade) => (
                   <li key={cidade}>
-                    <Badge variant="secondary" className="gap-1 pr-1">
+                    <Badge variant="secondary" className="h-7 gap-1 pr-1 text-[13px]">
                       {cidade}
                       <button
                         type="button"
                         aria-label={`Tirar ${cidade}`}
-                        className="rounded-sm p-0.5 hover:bg-background/60"
+                        className="rounded-sm p-0.5 outline-none hover:bg-background/60 focus-visible:ring-2 focus-visible:ring-ring/50"
                         onClick={() =>
                           field.onChange(field.value.filter((item) => item !== cidade))
                         }
@@ -468,6 +513,54 @@ const valoresIniciais = (loja: ConfigLoja): FormularioLoja => ({
   videoBanner: loja.videoBanner ?? "",
 })
 
+/**
+ * Barra de salvar: flutua no pé da tela enquanto houver alteração, diz em que seções e
+ * reúne descartar e salvar. Ao sair, some para o leitor de tela na hora.
+ */
+function BarraSalvar({
+  resumo,
+  salvando,
+  aoDescartar,
+}: {
+  resumo: string
+  salvando: boolean
+  aoDescartar: () => void
+}) {
+  const presente = useIsPresent()
+  const semMovimento = useReducedMotion()
+  return (
+    <motion.section
+      aria-label={presente ? "Alterações não salvas" : undefined}
+      aria-hidden={presente ? undefined : true}
+      inert={!presente}
+      // Com `onUpdate`, o Motion anima no próprio relógio em vez do WAAPI: a saída termina
+      // no tempo certo mesmo com o relógio da página parado (testes com `page.clock`).
+      onUpdate={semRelogioDoNavegador}
+      initial={{ opacity: 0, y: semMovimento ? 0 : 16 }}
+      animate={{ opacity: 1, y: 0, transition: { duration: 0.22, ease: CURVA } }}
+      exit={{ opacity: 0, y: semMovimento ? 0 : 10, transition: { duration: 0.15, ease: CURVA } }}
+      className="sticky bottom-4 z-20 mt-2 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-2xl bg-popover p-2.5 pl-4 shadow-[0_18px_40px_-20px_rgb(0_0_0/0.45)] ring-1 ring-border/80"
+    >
+      <div className="mr-auto flex min-w-0 items-center gap-3">
+        <Traco tom="novo" className="h-8" />
+        <div className="flex min-w-0 flex-col">
+          <span className="text-sm font-semibold">Alterações não salvas</span>
+          <span className="truncate text-[13px] text-muted-foreground">{resumo}</span>
+        </div>
+      </div>
+      <div className="flex flex-1 justify-end gap-2 sm:flex-none">
+        <Button type="button" variant="ghost" onClick={aoDescartar}>
+          <Undo2Icon data-icon="inline-start" />
+          Descartar
+        </Button>
+        <Button type="submit" disabled={salvando}>
+          Salvar alterações
+        </Button>
+      </div>
+    </motion.section>
+  )
+}
+
 function Formulario({ loja }: { loja: ConfigLoja }) {
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const agora = useAgora(60_000)
@@ -495,6 +588,7 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
   // Conectar e desconectar salvam na hora: vale o que está no servidor, não o rascunho.
   const conectado = Boolean(loja.pagamentoOnlineConectado)
   const comEntrega = temModulo(segmento, "motoboys")
+  const salao = segmento === "salao"
 
   // Fechar a aba com alteração pendente pede confirmação do navegador.
   useEffect(() => {
@@ -515,9 +609,9 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
   )
 
   return (
-    <form onSubmit={enviar} noValidate className="flex flex-col gap-5">
-      <Secao titulo="Loja">
-        <FieldGroup className="grid gap-4 md:grid-cols-2">
+    <form onSubmit={enviar} noValidate className="flex flex-col gap-3">
+      <Secao titulo="Loja" descricao="Como a loja aparece no site e no cupom.">
+        <Grade>
           <CampoTexto
             controle={controle}
             nome="nome"
@@ -544,42 +638,39 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
             rotulo="WhatsApp"
             erro={erros.whatsapp}
           />
-          <div className="md:col-span-2">
-            <CampoTexto
-              controle={controle}
-              nome="endereco"
-              rotulo="Endereço"
-              maximo={140}
-              erro={erros.endereco}
-            />
-          </div>
-          <div className="md:col-span-2">
-            <CampoTexto
-              controle={controle}
-              nome="textoHorario"
-              rotulo="Texto do horário"
-              maximo={140}
-              placeholder={textoDoHorario(horarios)}
-              descricao={
-                !textoHorario?.trim() ? `Vazio, aparece: ${textoDoHorario(horarios)}` : undefined
-              }
-              erro={erros.textoHorario}
-            />
-          </div>
+          <CampoTexto
+            controle={controle}
+            nome="endereco"
+            rotulo="Endereço"
+            maximo={140}
+            erro={erros.endereco}
+            className="sm:col-span-2"
+          />
+          <CampoTexto
+            controle={controle}
+            nome="textoHorario"
+            rotulo="Texto do horário"
+            maximo={140}
+            placeholder={textoDoHorario(horarios)}
+            descricao={
+              !textoHorario?.trim() ? `Vazio, aparece: ${textoDoHorario(horarios)}` : undefined
+            }
+            erro={erros.textoHorario}
+            className="sm:col-span-2"
+          />
           {temRecurso(segmento, "video") && (
-            <div className="md:col-span-2">
-              <CampoTexto
-                controle={controle}
-                nome="videoBanner"
-                rotulo="Vídeo do banner"
-                maximo={200}
-                placeholder="https://www.youtube.com/shorts/…"
-                descricao="Link do YouTube, Shorts ou Reels. Envio de arquivo fica para quando houver servidor."
-                erro={erros.videoBanner}
-              />
-            </div>
+            <CampoTexto
+              controle={controle}
+              nome="videoBanner"
+              rotulo="Vídeo do banner"
+              maximo={200}
+              placeholder="https://www.youtube.com/shorts/…"
+              descricao="Link do YouTube, Shorts ou Reels. Envio de arquivo fica para quando houver servidor."
+              erro={erros.videoBanner}
+              className="sm:col-span-2"
+            />
           )}
-        </FieldGroup>
+        </Grade>
       </Secao>
 
       {temRecurso(segmento, "vitrines") && (
@@ -587,14 +678,14 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
           titulo="Vitrines"
           descricao="As faixas de produtos em destaque e em oferta do cardápio."
         >
-          <FieldGroup className="grid gap-4 md:grid-cols-2">
+          <Grade>
             {(
               [
                 ["destaques", "Destaques"],
                 ["ofertas", "Ofertas"],
               ] as const
             ).map(([chave, nome]) => (
-              <div key={chave} className="flex flex-col gap-2">
+              <div key={chave} className="flex flex-col gap-3">
                 <Controller
                   control={controle}
                   name={`vitrines.${chave}.titulo`}
@@ -612,7 +703,7 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
                   control={controle}
                   name={`vitrines.${chave}.ativo`}
                   render={({ field }) => (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2.5">
                       <Switch
                         id={`vitrine-${chave}-ativo`}
                         checked={field.value}
@@ -626,7 +717,7 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
                 />
               </div>
             ))}
-          </FieldGroup>
+          </Grade>
         </Secao>
       )}
 
@@ -641,12 +732,14 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
             setValue("horarios", copiarParaTodos(getValues("horarios"), dia), { shouldDirty: true })
           }
         />
-        <Chave
-          controle={controle}
-          nome="controleAutomatico"
-          rotulo="Abrir e fechar sozinha pelo horário"
-          descricao="Desligado, a loja abre e fecha só pela chave da Fila."
-        />
+        <Linhas>
+          <Chave
+            controle={controle}
+            nome="controleAutomatico"
+            rotulo="Abrir e fechar sozinha pelo horário"
+            descricao="Desligado, a loja abre e fecha só pela chave da Fila."
+          />
+        </Linhas>
         <CampoTexto
           controle={controle}
           nome="mensagemFechada"
@@ -657,17 +750,22 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
         />
       </Secao>
 
-      <Secao titulo="Entrega e retirada">
-        <FieldGroup className="grid gap-4 md:grid-cols-2">
+      <Secao
+        titulo="Entrega e retirada"
+        descricao={
+          salao ? "Como o salão recebe as clientes." : "Como o pedido chega a quem comprou."
+        }
+      >
+        <Linhas>
           {comEntrega && <Chave controle={controle} nome="aceitaEntrega" rotulo="Aceita entrega" />}
-          <div className="flex flex-col gap-1">
-            <Chave
-              controle={controle}
-              nome="aceitaRetirada"
-              rotulo={segmento === "salao" ? "Atendimento no salão" : "Aceita retirada"}
-            />
-            {erros.aceitaRetirada && <FieldError>{erros.aceitaRetirada.message}</FieldError>}
-          </div>
+          <Chave
+            controle={controle}
+            nome="aceitaRetirada"
+            rotulo={salao ? "Atendimento no salão" : "Aceita retirada"}
+            erro={erros.aceitaRetirada?.message}
+          />
+        </Linhas>
+        <Grade>
           {comEntrega && (
             <CampoDinheiro
               controle={controle}
@@ -695,12 +793,12 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
           <CampoTexto
             controle={controle}
             nome="tempoRetirada"
-            rotulo={segmento === "salao" ? "Texto do atendimento" : "Tempo de retirada"}
+            rotulo={salao ? "Texto do atendimento" : "Tempo de retirada"}
             maximo={40}
             placeholder="20 min"
             erro={erros.tempoRetirada}
           />
-          {segmento === "salao" && (
+          {salao && (
             <Controller
               control={controle}
               name="capacidadeAtendimentos"
@@ -712,6 +810,7 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
                     type="number"
                     min={1}
                     max={20}
+                    className="tabular-nums"
                     value={field.value ?? 1}
                     onChange={(evento) => field.onChange(Number(evento.target.value) || 1)}
                   />
@@ -722,12 +821,15 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
               )}
             />
           )}
-        </FieldGroup>
+        </Grade>
         {comEntrega && <Cidades controle={controle} />}
       </Secao>
 
-      <Secao titulo="Formas de pagamento">
-        <div className="flex flex-col gap-3">
+      <Secao
+        titulo="Formas de pagamento"
+        descricao="O que a loja aceita no site. Pix e cartão online dependem da conta online."
+      >
+        <Linhas>
           {PAGAMENTOS.filter(
             ({ forma }) =>
               forma !== "pagar-apos-pesagem" || temRecurso(segmento, "pagarAposPesagem"),
@@ -737,13 +839,19 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
               control={controle}
               name={`pagamentos.${forma}`}
               render={({ field }) => (
-                <div className="flex items-center justify-between gap-4">
-                  <span className="flex flex-col">
-                    <span className="text-sm font-medium" id={`pagamento-${forma}`}>
+                <div className="flex min-h-14 items-center justify-between gap-4 py-3">
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <span
+                      className={cn(
+                        "text-sm font-medium",
+                        online && !conectado && "text-muted-foreground",
+                      )}
+                      id={`pagamento-${forma}`}
+                    >
                       {rotulo}
                     </span>
                     {online && !conectado && (
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-[13px] text-muted-foreground">
                         Precisa da conta online conectada.
                       </span>
                     )}
@@ -761,62 +869,67 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
               )}
             />
           ))}
-          {erros.pagamentos?.root?.message || erros.pagamentos?.message ? (
-            <FieldError>{erros.pagamentos.root?.message ?? erros.pagamentos.message}</FieldError>
-          ) : null}
-        </div>
+        </Linhas>
+        {erros.pagamentos?.root?.message || erros.pagamentos?.message ? (
+          <FieldError>{erros.pagamentos.root?.message ?? erros.pagamentos.message}</FieldError>
+        ) : null}
       </Secao>
 
       <Secao
         titulo="Pagamento online"
         descricao="No protótipo, a conexão é de demonstração: nenhuma chave ou token é digitado nem guardado aqui."
       >
-        <div className="flex flex-wrap items-center gap-3">
-          <PlugIcon className="size-4 text-muted-foreground" aria-hidden="true" />
-          <span className="text-sm font-medium">Mercado Pago</span>
-          <Badge variant={conectado ? "default" : "outline"}>
-            {conectado ? "Conectada" : "Não conectada"}
-          </Badge>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            className="ml-auto"
-            disabled={conectar.isPending}
-            onClick={() =>
-              conectar.mutate(!conectado, {
-                onSuccess: (atualizada) => {
-                  // Já está salvo no servidor: o formulário passa a partir daí, sem contar como alteração.
-                  resetField("pagamentoOnlineConectado", {
-                    defaultValue: atualizada.pagamentoOnlineConectado,
-                  })
-                  resetField("pagamentos", { defaultValue: atualizada.pagamentos })
-                  toast.success(
-                    atualizada.pagamentoOnlineConectado
-                      ? "Conta conectada."
-                      : "Conta desconectada.",
-                  )
-                },
-                onError: (erro) => toast.error(erro.message),
-              })
-            }
-          >
-            {conectado ? "Desconectar" : "Conectar"}
-          </Button>
-        </div>
+        <Linhas>
+          <div className="flex min-h-14 flex-wrap items-center gap-x-4 gap-y-2 py-3">
+            <div className="flex min-w-0 flex-col gap-1">
+              <span className="text-sm font-medium">Mercado Pago</span>
+              <span className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
+                <Traco tom={conectado ? "pronto" : "fim"} />
+                {conectado ? "Conectada" : "Não conectada"}
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="ml-auto"
+              disabled={conectar.isPending}
+              onClick={() =>
+                conectar.mutate(!conectado, {
+                  onSuccess: (atualizada) => {
+                    // Já está salvo no servidor: o formulário passa a partir daí, sem contar como alteração.
+                    resetField("pagamentoOnlineConectado", {
+                      defaultValue: atualizada.pagamentoOnlineConectado,
+                    })
+                    resetField("pagamentos", { defaultValue: atualizada.pagamentos })
+                    toast.success(
+                      atualizada.pagamentoOnlineConectado
+                        ? "Conta conectada."
+                        : "Conta desconectada.",
+                    )
+                  },
+                  onError: (erro) => toast.error(erro.message),
+                })
+              }
+            >
+              {conectado ? "Desconectar" : "Conectar"}
+            </Button>
+          </div>
+        </Linhas>
       </Secao>
 
       <Secao
         titulo="Impressão"
         descricao="O cupom sai pela impressora configurada neste computador."
       >
-        <Chave
-          controle={controle}
-          nome="impressaoAutomatica"
-          rotulo="Imprimir os pedidos novos sozinho"
-          descricao="Na Fila, cada pedido novo sai uma vez só."
-        />
-        <Chave controle={controle} nome="cortarPapel" rotulo="Cortar o papel no fim do cupom" />
+        <Linhas>
+          <Chave
+            controle={controle}
+            nome="impressaoAutomatica"
+            rotulo="Imprimir os pedidos novos sozinho"
+            descricao="Na Fila, cada pedido novo sai uma vez só."
+          />
+          <Chave controle={controle} nome="cortarPapel" rotulo="Cortar o papel no fim do cupom" />
+        </Linhas>
         <Button type="button" variant="outline" className="self-start" onClick={() => imprimir()}>
           <PrinterIcon data-icon="inline-start" />
           Imprimir cupom de teste
@@ -856,23 +969,45 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
         </div>
       </Secao>
 
-      {formState.isDirty && (
-        <section
-          aria-label="Alterações não salvas"
-          className={cn(
-            "sticky bottom-4 z-20 flex flex-wrap items-center gap-2 rounded-xl border bg-background/95 px-4 py-3 shadow-lg backdrop-blur",
-          )}
-        >
-          <span className="mr-auto text-sm font-medium">Alterações não salvas</span>
-          <Button type="button" variant="ghost" onClick={() => reset(valoresIniciais(loja))}>
-            Descartar
-          </Button>
-          <Button type="submit" disabled={salvar.isPending}>
-            Salvar alterações
-          </Button>
-        </section>
-      )}
+      <AnimatePresence>
+        {formState.isDirty && (
+          <BarraSalvar
+            key="salvar"
+            resumo={resumoDasAlteracoes(secoesAlteradas(formState.dirtyFields))}
+            salvando={salvar.isPending}
+            aoDescartar={() => reset(valoresIniciais(loja))}
+          />
+        )}
+      </AnimatePresence>
     </form>
+  )
+}
+
+/** Esqueleto no formato da página: seções com fio, o título à esquerda e os campos. */
+function EsqueletoFormulario() {
+  return (
+    <div role="status" aria-label="Carregando as configurações" className="flex flex-col gap-3">
+      {[4, 7, 3].map((campos) => (
+        <div
+          key={campos}
+          className="grid gap-4 border-t border-border/70 pt-6 pb-3 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-10"
+        >
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-3 w-40" />
+          </div>
+          <div className="grid gap-x-4 gap-y-5 sm:grid-cols-2">
+            {Array.from({ length: campos }, (_, indice) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: campos fixos do esqueleto.
+              <div key={indice} className="flex flex-col gap-2">
+                <Skeleton className="h-3.5 w-20" />
+                <Skeleton className="h-8 w-full" />
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
   )
 }
 
@@ -880,22 +1015,12 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
 export function PaginaLoja() {
   const { data: loja } = useLoja()
   return (
-    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Configurações da loja</h1>
-        <p className="text-sm text-muted-foreground">
-          Tudo é salvo junto, pelo botão que aparece quando algo muda.
-        </p>
-      </div>
-      {loja ? (
-        <Formulario key={loja.nome} loja={loja} />
-      ) : (
-        <Skeleton
-          role="status"
-          aria-label="Carregando as configurações"
-          className="h-[40rem] rounded-xl"
-        />
-      )}
+    <div className="flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 md:p-6 lg:px-8">
+      <CabecalhoPagina
+        titulo="Configurações da loja"
+        resumo="Tudo é salvo junto, pelo botão que aparece quando algo muda."
+      />
+      {loja ? <Formulario key={loja.nome} loja={loja} /> : <EsqueletoFormulario />}
     </div>
   )
 }

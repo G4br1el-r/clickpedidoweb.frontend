@@ -113,7 +113,8 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .opcao-pro::after {
-    animation: giro-pro 4.5s linear infinite;
+    /* Uma volta só, ao liberar: o painel não tem movimento contínuo. */
+    animation: giro-pro 1.6s cubic-bezier(0.23, 1, 0.32, 1) 1 both;
   }
 
   .opcao-pro::before {
@@ -121,7 +122,7 @@
   }
 
   .selo-pro[data-pro-liberada] {
-    animation: brilho-selo 3s linear infinite;
+    animation: brilho-selo 1.6s cubic-bezier(0.23, 1, 0.32, 1) 1 both;
   }
 
   .botao-brilho::after {
@@ -186,4 +187,37 @@
   --primary: #f4f4f5;
   --primary-foreground: #18181c;
   --ring: #a1a1aa;
+}
+
+/*
+ * Tons do traço de status do painel. Fixos (não mudam por loja), na ordem em que o pedido
+ * anda; no escuro, clareados para ler sobre a superfície.
+ */
+:root {
+  --tom-espera: #7357d1;
+  /* Novo pede ação: a cor da ação primária, a tinta. O laranja fica só para atenção. */
+  --tom-novo: #1f1e24;
+  --atencao: #d9480f;
+  --tom-preparo: #c98a00;
+  --tom-pronto: #13854a;
+  --tom-caminho: #2e6bd6;
+  --tom-fim: #b4b4ae;
+  --tom-cancelado: #c2362b;
+  /* Texto sobre o fundo de preparo (atraso leve): o âmbar do traço não tem contraste no claro. */
+  --tom-preparo-texto: #8a5c00;
+  /* Dourado do plano Pro e das estrelas do wireframe. */
+  --dourado: #c27c00;
+}
+
+.dark {
+  --tom-espera: #a993f2;
+  --tom-novo: #f4f4f5;
+  --atencao: #ff7a45;
+  --tom-preparo: #f0b43a;
+  --tom-pronto: #3fd28a;
+  --tom-caminho: #6fa1f6;
+  --tom-fim: #5e5e66;
+  --tom-cancelado: #f2766b;
+  --tom-preparo-texto: #f0b43a;
+  --dourado: #f5b700;
 }

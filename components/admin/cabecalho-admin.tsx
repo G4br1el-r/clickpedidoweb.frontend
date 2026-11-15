@@ -24,9 +24,12 @@ export type Trilha = { titulo: string; href?: string; modulo?: ModuloId }[]
 export function CabecalhoAdmin({ trilha, acoes }: { trilha: Trilha; acoes?: ReactNode }) {
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   return (
-    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background/90 px-3 backdrop-blur md:px-4">
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-border/70 bg-card/90 px-3 backdrop-blur md:rounded-t-2xl md:px-4">
       <SidebarTrigger className="-ml-1" />
-      <Separator orientation="vertical" className="mr-1 data-[orientation=vertical]:h-4" />
+      <Separator
+        orientation="vertical"
+        className="mr-1 data-[orientation=vertical]:h-4 data-[orientation=vertical]:self-center"
+      />
       <Breadcrumb className="min-w-0">
         <BreadcrumbList className="flex-nowrap">
           {trilha.map(({ modulo, ...resto }, indice) => {

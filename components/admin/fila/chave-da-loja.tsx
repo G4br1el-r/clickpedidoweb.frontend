@@ -12,7 +12,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { useDefinirAberta } from "@/lib/admin/dados/consultas"
@@ -46,7 +45,7 @@ export function ChaveDaLoja({ loja, agora }: { loja: ConfigLoja | undefined; ago
       <Label htmlFor="loja-aberta" className="cursor-pointer">
         Loja aberta
       </Label>
-      {automatico && <Badge variant="secondary">Pelo horário</Badge>}
+      {automatico && <span className="text-[13px] text-muted-foreground">Pelo horário</span>}
 
       <AlertDialog open={pergunta !== null} onOpenChange={(aberto) => !aberto && setPergunta(null)}>
         <AlertDialogContent>

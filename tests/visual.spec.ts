@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test"
+import { expect, type Page, test } from "@playwright/test"
 import { abrirCardapio, abrirSoOEsqueleto, esperarAnimacoes } from "./apoio"
 
 /**
@@ -6,6 +6,17 @@ import { abrirCardapio, abrirSoOEsqueleto, esperarAnimacoes } from "./apoio"
  * Para não multiplicar imagens, roda só em um celular e um computador.
  */
 const TELAS_VISUAIS = ["celular-390", "desktop-1920"]
+
+/**
+ * A barra de categorias gruda no topo e cai por cima da seção numa altura que varia de uma
+ * rodada para outra. Ela tem a própria foto; na foto da seção, fica de fora. A sacola também.
+ */
+async function esconderFlutuantes(page: Page) {
+  await page.addStyleTag({
+    content:
+      "[data-testid=barra-navegacao],[data-testid=barra-sacola]{visibility:hidden!important}",
+  })
+}
 
 test.describe("visual", () => {
   test.beforeEach(() => {
@@ -35,6 +46,7 @@ test.describe("visual", () => {
           `${loja}-cabecalho-${tema}.png`,
           { animations: "disabled" },
         )
+        await esconderFlutuantes(page)
         await primeira.scrollIntoViewIfNeeded()
         await esperarAnimacoes(page)
         await expect(primeira).toHaveScreenshot(`${loja}-primeira-categoria-${tema}.png`, {
@@ -61,6 +73,7 @@ test.describe("visual", () => {
         `farmacia-cabecalho-${tema}.png`,
         { animations: "disabled" },
       )
+      await esconderFlutuantes(page)
       await antibioticos.scrollIntoViewIfNeeded()
       await esperarAnimacoes(page)
       await expect(antibioticos).toHaveScreenshot(`farmacia-antibioticos-${tema}.png`, {
@@ -73,14 +86,8 @@ test.describe("visual", () => {
       await abrirCardapio(page)
       const barra = page.getByTestId("barra-navegacao")
       await barra.scrollIntoViewIfNeeded()
-      // A foto redonda da categoria ativa carrega à parte: espera ela chegar antes da foto da barra.
-      await expect
-        .poll(() =>
-          barra
-            .locator("[aria-current] img")
-            .evaluate((foto: HTMLImageElement) => foto.complete && foto.naturalWidth > 0),
-        )
-        .toBe(true)
+      // As abas são só texto: basta a ativa estar marcada.
+      await expect(barra.locator("[aria-current]")).toBeVisible()
 
       await expect(barra).toHaveScreenshot(`barra-categorias-${tema}.png`, {
         animations: "disabled",

@@ -4,9 +4,11 @@ import { AnimatePresence, motion } from "motion/react"
 import type { ReactNode } from "react"
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
 import { cn } from "@/lib/utils"
+import { CURVA_SAIDA } from "./movimento"
 
 /** Altura e cantos de todos os campos do checkout: confortáveis para o dedo. */
-export const ESTILO_CAMPO = "h-12 rounded-xl bg-background px-3.5 text-base md:text-base"
+export const ESTILO_CAMPO =
+  "h-12 rounded-xl bg-background px-3.5 text-base transition-[border-color,box-shadow] duration-150 md:text-base"
 
 type CampoProps = {
   id: string
@@ -21,8 +23,8 @@ type CampoProps = {
 /** Rótulo, campo, dica e erro; o erro abre e fecha com animação, sem empurrar de repente. */
 export function Campo({ id, rotulo, opcional, erro, dica, className, children }: CampoProps) {
   return (
-    <Field data-invalid={Boolean(erro) || undefined} className={cn("gap-1.5", className)}>
-      <FieldLabel htmlFor={id} className="text-sm font-semibold">
+    <Field data-invalid={Boolean(erro) || undefined} className={cn("gap-2", className)}>
+      <FieldLabel htmlFor={id} className="text-sm font-medium">
         {rotulo}
         {opcional && <span className="font-normal text-muted-foreground">(opcional)</span>}
       </FieldLabel>
@@ -31,10 +33,11 @@ export function Campo({ id, rotulo, opcional, erro, dica, className, children }:
         {erro ? (
           <motion.div
             key="erro"
+            // O erro desce do campo, curto: o aviso chega sem empurrar a tela de repente.
             initial={{ height: 0, opacity: 0, y: -4 }}
             animate={{ height: "auto", opacity: 1, y: 0 }}
-            exit={{ height: 0, opacity: 0, y: -4 }}
-            transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+            exit={{ height: 0, opacity: 0, transition: { duration: 0.14 } }}
+            transition={{ duration: 0.2, ease: CURVA_SAIDA }}
             className="overflow-hidden"
           >
             <FieldError id={`${id}-erro`}>{erro}</FieldError>

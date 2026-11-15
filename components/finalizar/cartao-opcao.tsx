@@ -23,8 +23,9 @@ type CartaoOpcaoProps = {
 }
 
 /**
- * Cartão de escolha do shadcn (FieldLabel + RadioGroupItem), grande e fácil de tocar:
- * ícone, título, detalhe e, à direita, preço ou prazo. Vai dentro de um RadioGroup.
+ * Opção de escolha (FieldLabel + RadioGroupItem do shadcn), grande e fácil de tocar:
+ * ícone, título, detalhe e, à direita, preço ou prazo. Plana, só com o fio; escolhida,
+ * o fio e o rádio ganham a cor da loja. Vai dentro de um RadioGroup.
  */
 export function CartaoOpcao({
   valor,
@@ -43,29 +44,35 @@ export function CartaoOpcao({
       onClick={(evento) => {
         if (evento.detail > 0) vibrar()
       }}
-      className="w-full rounded-2xl transition-[border-color,background-color,transform] duration-200 ease-saida active:scale-[0.99]"
+      className={cn(
+        "w-full cursor-pointer rounded-xl border-border! bg-transparent! hover:bg-muted/40! transition-[border-color,box-shadow,transform] duration-150 ease-saida active:scale-[0.985]",
+        // Escolhida: o fio vira a cor da loja e engrossa por dentro, sem mudar o tamanho.
+        "has-data-checked:border-primary! has-data-checked:shadow-[inset_0_0_0_1px_var(--primary)]",
+      )}
     >
-      <Field orientation="horizontal" className="min-h-[72px] items-center gap-3 p-3! pr-4!">
+      <Field orientation="horizontal" className="min-h-16 items-center gap-3.5 px-4! py-3!">
         <span
           aria-hidden="true"
           className={cn(
-            "flex size-11 shrink-0 items-center justify-center rounded-xl transition-colors duration-200 [&_svg]:size-5",
-            selecionado ? "bg-primary text-primary-foreground" : "bg-secondary text-foreground",
+            "flex shrink-0 transition-colors duration-150 [&_svg]:size-5",
+            selecionado ? "text-marca-texto" : "text-muted-foreground",
           )}
         >
           {icone}
         </span>
-        <FieldContent className="min-w-0">
-          <FieldTitle className="text-base">{titulo}</FieldTitle>
-          <FieldDescription>{detalhe}</FieldDescription>
+        <FieldContent className="min-w-0 gap-0.5">
+          <FieldTitle className="text-[15px] font-medium tracking-[-0.01em]">{titulo}</FieldTitle>
+          <FieldDescription className="text-[13px] leading-snug">{detalhe}</FieldDescription>
         </FieldContent>
-        {lateral && <span className="shrink-0 text-sm font-semibold tabular-nums">{lateral}</span>}
+        {lateral && (
+          <span className="shrink-0 text-[13px] font-medium tabular-nums">{lateral}</span>
+        )}
         <RadioGroupItem
           value={valor}
           id={id}
           data-testid={testId}
           aria-label={titulo}
-          className="size-5"
+          className="size-5 [&_[data-slot=radio-group-indicator]]:size-5"
         />
       </Field>
     </FieldLabel>

@@ -1,9 +1,8 @@
 "use client"
 
 import { zodResolver } from "@hookform/resolvers/zod"
-import NumberFlow from "@number-flow/react"
-import { ArrowLeftIcon, ArrowRightIcon, Loader2Icon, SendIcon, ShoppingBagIcon } from "lucide-react"
-import { AnimatePresence, motion, useAnimationControls } from "motion/react"
+import { ArrowLeftIcon, ShoppingBagIcon } from "lucide-react"
+import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from "motion/react"
 import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -11,6 +10,7 @@ import { useEffect, useRef, useState } from "react"
 import { type FieldErrors, FormProvider, useForm, useWatch } from "react-hook-form"
 import { AlternarTema } from "@/components/alternar-tema"
 import { Dica } from "@/components/dica"
+import { registroSegmentos } from "@/components/segmentos/registro"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { duracaoDaSacola } from "@/lib/agendar"
@@ -24,12 +24,15 @@ import {
   valoresIniciais,
 } from "@/lib/checkout"
 import { receitaDaSacola } from "@/lib/farmacia"
-import { emReais, formatoMoeda } from "@/lib/formato"
+import { emReais } from "@/lib/formato"
 import { vibrar } from "@/lib/haptico"
 import { useLoja } from "@/lib/loja-atual"
 import { calcularSubtotal, type DadosLembrados, faltaParaMinimo, useSacola } from "@/lib/sacola"
+import { textosDoSegmento } from "@/lib/segmentos"
+import { AcaoCheckout } from "./acao-checkout"
 import { AnexarReceita, type ReceitaAnexada } from "./anexar-receita"
 import { CarregamentoEnvio, DURACAO_ENVIO_MS } from "./carregamento-envio"
+import { CURVA_SAIDA, retornoDeErro, variantesDoPasso } from "./movimento"
 import { PassoDados } from "./passo-dados"
 import { PassoEntrega } from "./passo-entrega"
 import { PassoHorario } from "./passo-horario"
@@ -38,14 +41,11 @@ import { PassoRevisao } from "./passo-revisao"
 import { PASSOS, type PassoId, Passos } from "./passos"
 import { ResumoCompacto, ResumoLateral } from "./resumo-pedido"
 
-const CURVA = [0.23, 1, 0.32, 1] as const
-const TREMOR = { x: [0, -6, 6, -4, 4, 0], transition: { duration: 0.32 } }
-
 function Cabecalho() {
   const lojaEscolhida = useLoja()
   return (
-    <header className="sticky top-0 z-30 border-b bg-background/85 backdrop-blur-xl backdrop-saturate-150">
-      <div className="mx-auto flex h-16 w-full max-w-[1180px] items-center gap-2 px-2 md:px-6">
+    <header className="sticky top-0 z-30 border-b border-border/70 bg-background">
+      <div className="mx-auto flex h-16 w-full max-w-[1120px] items-center gap-2 px-2 md:px-6">
         <Dica texto="Voltar ao cardápio">
           <Button asChild variant="ghost" size="toque" className="rounded-full">
             <Link href="/" aria-label="Voltar ao cardápio">
@@ -54,28 +54,43 @@ function Cabecalho() {
           </Button>
         </Dica>
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-lg leading-tight font-extrabold tracking-tight md:text-xl">
+          <h1 className="truncate text-[17px] leading-tight font-semibold tracking-[-0.015em] md:text-lg">
             Finalizar pedido
           </h1>
-          <p className="truncate text-sm text-muted-foreground">{lojaEscolhida.nome}</p>
+          <p className="truncate text-[13px] text-muted-foreground">{lojaEscolhida.nome}</p>
         </div>
         <AlternarTema />
-        <span className="relative mr-2 size-10 shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-border">
-          <Image src={lojaEscolhida.logo} alt="" fill sizes="40px" />
+        <span className="relative mr-2 size-9 shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-border/70">
+          <Image src={lojaEscolhida.logo} alt="" fill sizes="36px" />
         </span>
       </div>
     </header>
   )
 }
 
+/** Enquanto a sacola é lida do aparelho: o carregador do nicho e a frase do ofício. */
+function Esperando() {
+  const { segmento } = useLoja()
+  const { Carregador } = registroSegmentos[segmento]
+  const { carregando } = textosDoSegmento(segmento)
+  return (
+    <div role="status" aria-label={carregando} className="grid min-h-[60dvh] place-items-center">
+      <p className="flex items-center gap-2.5 text-[15px] font-medium text-muted-foreground">
+        <Carregador className="size-7" />
+        {carregando}
+      </p>
+    </div>
+  )
+}
+
 function SacolaVazia({ falta }: { falta: number }) {
   return (
-    <Empty className="min-h-[60dvh]">
+    <Empty className="min-h-[60dvh] gap-5">
       <EmptyHeader>
-        <EmptyMedia variant="icon">
+        <EmptyMedia variant="icon" className="size-11 rounded-full [&_svg]:size-5">
           <ShoppingBagIcon />
         </EmptyMedia>
-        <EmptyTitle>
+        <EmptyTitle className="text-lg font-semibold tracking-[-0.015em]">
           {falta > 0 ? "Falta pouco para o pedido mínimo" : "Sua sacola está vazia"}
         </EmptyTitle>
         <EmptyDescription>
@@ -97,6 +112,7 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
   const itens = useSacola((estado) => estado.itens)
   const finalizar = useSacola((estado) => estado.finalizar)
   const tremor = useAnimationControls()
+  const reduzido = useReducedMotion() ?? false
   const refConteudo = useRef<HTMLDivElement>(null)
   const [passo, setPasso] = useState(0)
   const [alcancado, setAlcancado] = useState(0)
@@ -135,7 +151,8 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
     const titulo = refConteudo.current?.querySelector<HTMLElement>("[data-titulo-passo]")
     if (!titulo) return
     const espera = setTimeout(() => titulo.focus({ preventScroll: true }), 260)
-    if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: "smooth" })
+    const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    if (window.scrollY > 0) window.scrollTo({ top: 0, behavior: reduzido ? "auto" : "smooth" })
     return () => clearTimeout(espera)
   }, [passo])
 
@@ -151,7 +168,7 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
 
   function avisarErro() {
     vibrar(20)
-    void tremor.start(TREMOR)
+    void tremor.start(retornoDeErro(reduzido))
   }
 
   async function avancar() {
@@ -211,14 +228,13 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
     avisarErro()
   }
 
-  const rotuloAcao = enviando ? "Enviando…" : ultimo ? "Enviar pedido" : "Continuar"
-  const iconeEnvio = enviando ? <Loader2Icon className="animate-spin" /> : <SendIcon />
   const valores = { itens, subtotal, taxa, total, retirada }
+  const variantes = variantesDoPasso(reduzido)
 
   return (
     <FormProvider {...formulario}>
-      <div className="mx-auto w-full max-w-[1180px] px-4 pt-4 pb-36 md:px-6 md:pt-8 md:pb-16 lg:grid lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-8">
-        <div className="flex min-w-0 flex-col gap-4 md:gap-5">
+      <div className="mx-auto w-full max-w-[1120px] px-4 pt-5 pb-36 md:px-6 md:pt-10 md:pb-16 lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-16">
+        <div className="flex min-w-0 flex-col gap-5 md:gap-8">
           <Passos
             atual={passo}
             alcancado={alcancado}
@@ -235,25 +251,26 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
               if (ultimo) void handleSubmit(enviar, aoFalhar)(evento)
               else void avancar()
             }}
-            // `overflow-clip` corta o deslize entre passos sem impedir as ações de grudarem embaixo.
-            className="sombra-flutuante relative overflow-clip rounded-3xl bg-card"
+            className="relative"
           >
-            <div ref={refConteudo} className="relative p-4 md:p-7">
+            {/* `overflow-x-clip` corta o deslize entre passos sem impedir as ações de grudarem embaixo;
+                a margem negativa deixa o anel de foco dos campos inteiro. */}
+            <div ref={refConteudo} className="relative -mx-2 overflow-x-clip px-2 pb-2">
               <AnimatePresence mode="wait" initial={false} custom={direcao}>
                 <motion.div
                   key={PASSOS[passo].id}
                   custom={direcao}
-                  initial={{ opacity: 0, x: direcao * 36, filter: "blur(4px)" }}
-                  animate={{ opacity: 1, x: 0, filter: "blur(0px)" }}
-                  exit={{ opacity: 0, x: direcao * -36, filter: "blur(4px)" }}
-                  transition={{ duration: 0.24, ease: CURVA }}
+                  variants={variantes}
+                  initial="entrar"
+                  animate="parado"
+                  exit="sair"
                 >
                   {PASSOS[passo].id === "dados" && <PassoDados lembrado={Boolean(lembrados)} />}
                   {PASSOS[passo].id === "entrega" &&
                     (lojaEscolhida.segmento === "salao" ? <PassoHorario /> : <PassoEntrega />)}
                   {PASSOS[passo].id === "pagamento" && <PassoPagamento total={total} />}
                   {PASSOS[passo].id === "revisao" && (
-                    <div className="flex flex-col gap-5">
+                    <div className="flex flex-col gap-7">
                       {exigida && (
                         <AnexarReceita
                           exigida={exigida}
@@ -269,13 +286,13 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
               </AnimatePresence>
             </div>
 
-            {/* No tablet e no computador, as ações ficam no fim do cartão. */}
-            <div className="sticky bottom-0 z-10 hidden items-center justify-between gap-3 rounded-b-3xl border-t bg-card/90 px-7 py-4 backdrop-blur-xl md:flex">
+            {/* No tablet e no computador, as ações ficam no fim do passo, grudadas embaixo. */}
+            <div className="sticky bottom-0 z-10 mt-8 hidden items-center justify-between gap-3 border-t border-border/70 bg-background py-4 md:flex">
               {passo > 0 ? (
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-12 rounded-full px-4 text-base font-semibold"
+                  className="h-12 rounded-full px-4 text-[15px] font-medium"
                   onClick={() => irPara(passo - 1)}
                 >
                   <ArrowLeftIcon data-icon="inline-start" />
@@ -285,29 +302,14 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
                 <span />
               )}
               <motion.div animate={tremor}>
-                <Button
-                  type="submit"
-                  size="cta"
-                  className="min-w-56 justify-between gap-4"
-                  data-testid="acao-checkout"
-                  aria-busy={enviando || undefined}
-                >
-                  <span>{rotuloAcao}</span>
-                  {ultimo ? (
-                    <span className="flex items-center gap-2 tabular-nums">
-                      <NumberFlow
-                        value={total}
-                        locales="pt-BR"
-                        format={formatoMoeda}
-                        aria-hidden="true"
-                      />
-                      <span className="sr-only">{emReais(total)}</span>
-                      {iconeEnvio}
-                    </span>
-                  ) : (
-                    <ArrowRightIcon />
-                  )}
-                </Button>
+                <AcaoCheckout
+                  ultimo={ultimo}
+                  enviando={enviando}
+                  total={total}
+                  mostrarTotal
+                  testId="acao-checkout"
+                  className="min-w-64"
+                />
               </motion.div>
             </div>
           </form>
@@ -316,49 +318,49 @@ function FormularioCheckout({ lembrados }: { lembrados: DadosLembrados | null })
         <ResumoLateral {...valores} />
       </div>
 
-      {/* No celular, a ação fica na área do polegar. */}
-      <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-background/90 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur-xl md:hidden">
-        <div className="mx-auto flex max-w-[640px] items-center gap-3">
-          {passo > 0 && (
-            <Dica texto="Passo anterior" lado="top">
-              <Button
-                type="button"
-                variant="secondary"
-                size="toque"
-                className="size-12 shrink-0 rounded-full"
-                aria-label="Voltar ao passo anterior"
-                onClick={() => irPara(passo - 1)}
+      {/* No celular, a ação fica na área do polegar, sempre com o total. */}
+      <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border/70 bg-background px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
+        <div className="mx-auto flex max-w-[640px] items-center gap-2.5">
+          <AnimatePresence initial={false}>
+            {passo > 0 && (
+              <motion.div
+                key="voltar"
+                className="shrink-0"
+                initial={reduzido ? { opacity: 0 } : { opacity: 0, scale: 0.9 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, transition: { duration: 0.1 } }}
+                transition={{ duration: 0.2, ease: CURVA_SAIDA }}
               >
-                <ArrowLeftIcon />
-              </Button>
-            </Dica>
-          )}
+                <Dica texto="Passo anterior" lado="top">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="toque"
+                    className="size-12 rounded-full border-border bg-background"
+                    aria-label="Voltar ao passo anterior"
+                    onClick={() => irPara(passo - 1)}
+                  >
+                    <ArrowLeftIcon />
+                  </Button>
+                </Dica>
+              </motion.div>
+            )}
+          </AnimatePresence>
           <motion.div animate={tremor} className="min-w-0 flex-1">
-            <Button
-              type="submit"
+            <AcaoCheckout
+              ultimo={ultimo}
+              enviando={enviando}
+              total={total}
+              mostrarTotal
               form="formulario-checkout"
-              size="cta"
-              className="w-full justify-between"
-              data-testid="acao-checkout-celular"
-              aria-busy={enviando || undefined}
-            >
-              <span>{rotuloAcao}</span>
-              <span className="flex items-center gap-2 tabular-nums">
-                <NumberFlow
-                  value={total}
-                  locales="pt-BR"
-                  format={formatoMoeda}
-                  aria-hidden="true"
-                />
-                <span className="sr-only">{emReais(total)}</span>
-                {ultimo ? iconeEnvio : <ArrowRightIcon />}
-              </span>
-            </Button>
+              testId="acao-checkout-celular"
+              className="w-full"
+            />
           </motion.div>
         </div>
       </div>
 
-      {/* Envio temático de 5 segundos: na pizzaria, a pizza é montada e vai ao forno. */}
+      {/* Envio temático de 5 segundos: cada nicho tem a sua arte, em quatro etapas. */}
       <AnimatePresence>
         {enviando && <CarregamentoEnvio key="envio" itens={itensEnviados} />}
       </AnimatePresence>
@@ -384,7 +386,9 @@ export function Finalizar() {
   return (
     <div className="min-h-dvh bg-background">
       <Cabecalho />
-      {!hidratada ? null : !pode && !jaPodia ? (
+      {!hidratada ? (
+        <Esperando />
+      ) : !pode && !jaPodia ? (
         <SacolaVazia falta={subtotal > 0 ? falta : 0} />
       ) : (
         <FormularioCheckout lembrados={lembrados} />

@@ -28,14 +28,20 @@ test.describe("categorias com rolagem lateral", () => {
     ])
   })
 
-  test("com mouse, as setas levam pelas categorias", async ({ page, isMobile }) => {
+  test("com mouse, as setas levam pelas categorias", async ({ page, isMobile, viewport }) => {
     test.skip(isMobile, "no toque não há setas")
     await abrirCardapio(page)
     const barra = page.getByTestId("barra-navegacao")
-    await barra.scrollIntoViewIfNeeded()
     const anterior = barra.getByRole("button", { name: "Ver categorias anteriores" })
     const proxima = barra.getByRole("button", { name: "Ver próximas categorias" })
 
+    // Parada, a barra usa a coluna inteira: em tela larga as 12 categorias cabem e não há seta.
+    if ((viewport?.width ?? 0) >= 1366) await expect(proxima).toBeHidden()
+
+    // Grudada, as categorias ficam na faixa central e não cabem todas: aí as setas aparecem.
+    await page.evaluate(() => window.scrollTo(0, 900))
+    await expect(barra).toHaveAttribute("data-grudada", "true")
+    await page.waitForTimeout(500)
     await expect(proxima).toBeVisible()
     await expect(anterior).toBeHidden()
 
@@ -179,4 +185,27 @@ test("farmácia: num deslize rápido, a pílula pula as categorias do meio", asy
     "Dor e febre",
     "Antibióticos",
   ])
+})
+
+test.describe("faixa de categorias corrida", () => {
+  test("sem esmaecimento nas pontas; no celular, corre de borda a borda da tela", async ({
+    page,
+    viewport,
+  }) => {
+    await abrirCardapio(page)
+    await page.evaluate(() => window.scrollTo(0, 900))
+    const barra = page.getByTestId("barra-navegacao")
+    await expect(barra).toHaveAttribute("data-grudada", "true")
+    await page.waitForTimeout(500)
+    const trilho = barra.locator('[aria-current="true"]').locator("..")
+    // Nada some em degradê: a faixa termina reta.
+    await expect(trilho).toHaveCSS("mask-image", "none")
+    if ((viewport?.width ?? 0) < 768) {
+      const medida = await caixa(trilho)
+      expect(medida.x, "começa na borda esquerda").toBeLessThanOrEqual(0.5)
+      expect(medida.x + medida.width, "vai até a borda direita").toBeGreaterThanOrEqual(
+        (viewport?.width ?? 0) - 0.5,
+      )
+    }
+  })
 })

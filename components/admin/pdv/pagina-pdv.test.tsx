@@ -118,6 +118,23 @@ describe("PaginaPdv", () => {
     expect(item.getByRole("spinbutton", { name: "Quantidade" })).toHaveValue(2)
   })
 
+  test("venda vazia ensina o que fazer", async () => {
+    await abrir()
+    expect(caixa().getByText("Nenhum item na venda.")).toBeInTheDocument()
+    expect(
+      caixa().getByText("Toque num produto do cardápio para começar a venda."),
+    ).toBeInTheDocument()
+  })
+
+  test("cada toque avisa o que entrou na venda", async () => {
+    const usuario = await abrir()
+    const { simples } = await produtos()
+    await usuario.click(botao(simples.nome))
+    expect(caixa().getByRole("status")).toHaveTextContent(`${simples.nome}: 1 na venda`)
+    await usuario.click(botao(simples.nome))
+    expect(caixa().getByRole("status")).toHaveTextContent(`${simples.nome}: 2 na venda`)
+  })
+
   test("estoque no mínimo mostra quantos restam; com folga, nada", async () => {
     const { simples } = await produtos()
     const api = servidorDo("pizzaria").estoque

@@ -1,10 +1,10 @@
 "use client"
 
+import NumberFlow from "@number-flow/react"
 import { ChefHatIcon, MaximizeIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
 import { useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
@@ -28,7 +28,10 @@ import {
   rodadasNaCozinha,
   rodadasNovas,
 } from "@/lib/admin/regras/cozinha"
+import { tomDoStatus } from "@/lib/admin/regras/status"
 import { tocarAlerta } from "@/lib/admin/som"
+import { CabecalhoPagina } from "../cabecalho-pagina"
+import { Traco } from "../traco"
 import { TicketCozinha } from "./ticket-cozinha"
 
 const FILTROS: { valor: FiltroCozinha; rotulo: string }[] = [
@@ -37,6 +40,13 @@ const FILTROS: { valor: FiltroCozinha; rotulo: string }[] = [
   { valor: "entrega", rotulo: "Entrega" },
   { valor: "retirada", rotulo: "Retirada" },
 ]
+
+/** O que chega em cada coluna: a coluna vazia ensina, em vez de só dizer "nada". */
+const VAZIA: Record<ColunaCozinha["id"], string> = {
+  afazer: "Os pedidos novos e as rodadas das mesas chegam aqui.",
+  preparando: "Toque em Iniciar preparo num ticket de A fazer.",
+  prontos: "Marque um ticket como pronto e ele vem para cá.",
+}
 
 /** Toca o alerta quando chega pedido novo ou rodada nova de uma comanda. */
 function useAlertaDeRodadas(pedidos: Pedido[] | undefined) {
@@ -70,18 +80,22 @@ function Coluna({
   return (
     <section
       aria-label={`${coluna.titulo}, ${coluna.pedidos.length}`}
-      className="flex min-w-0 flex-col gap-3 rounded-xl bg-muted/50 p-2"
+      // Coluna sem bandeja: os tickets ficam direto na folha, e um fio separa as colunas.
+      className="flex min-w-0 flex-col gap-2.5 md:px-3 md:first:pl-0 md:last:pr-0"
     >
       {comTitulo && (
-        <h2 className="flex items-center gap-2 px-1 pt-1 text-base font-semibold">
+        <h2 className="flex items-center gap-2 pb-1 text-[15px] font-semibold">
+          <Traco tom={tomDoStatus(coluna.status)} />
           {coluna.titulo}
-          <Badge variant="secondary" className="tabular-nums">
-            {coluna.pedidos.length}
-          </Badge>
+          <span className="ml-auto text-[13px] font-medium text-muted-foreground tabular-nums">
+            <NumberFlow value={coluna.pedidos.length} />
+          </span>
         </h2>
       )}
       {coluna.pedidos.length === 0 ? (
-        <p className="px-1 py-6 text-center text-sm text-muted-foreground">Nada aqui.</p>
+        <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-[13px] text-balance text-muted-foreground">
+          {VAZIA[coluna.id]}
+        </p>
       ) : (
         <AnimatePresence initial={false}>
           {coluna.pedidos.map((pedido) => (
@@ -126,32 +140,33 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
   const emAndamento = avancar.isPending ? avancar.variables?.id : undefined
 
   return (
-    <div ref={quadro} className="flex flex-1 flex-col gap-5 bg-background p-4 md:p-6">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Cozinha</h1>
-          <p className="text-sm text-muted-foreground" aria-live="polite">
-            {colunas
-              ? `${colunas[0].pedidos.length} a fazer · ${colunas[1].pedidos.length} preparando`
-              : "Carregando a cozinha…"}
-          </p>
-        </div>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          className="ml-auto"
-          onClick={() => void quadro.current?.requestFullscreen?.()}
-        >
-          <MaximizeIcon data-icon="inline-start" />
-          Tela cheia
-        </Button>
-      </div>
+    // Em tela cheia o quadro vira a página toda: precisa do próprio fundo.
+    <div ref={quadro} className="flex flex-1 flex-col gap-5 bg-background p-4 md:p-6 lg:px-8">
+      <CabecalhoPagina
+        titulo="Cozinha"
+        vivo
+        resumo={
+          colunas
+            ? `${colunas[0].pedidos.length} a fazer · ${colunas[1].pedidos.length} preparando`
+            : "Carregando a cozinha…"
+        }
+        acoes={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void quadro.current?.requestFullscreen?.()}
+          >
+            <MaximizeIcon data-icon="inline-start" />
+            Tela cheia
+          </Button>
+        }
+      />
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 rounded-xl border bg-card px-4 py-3">
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-y border-border/70 py-3">
         <ToggleGroup
           type="single"
-          variant="outline"
+          variant="segmento"
           size="sm"
           aria-label="Mostrar"
           value={filtro}
@@ -180,13 +195,18 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
       </div>
 
       {!colunas || !agora ? (
-        <div role="status" aria-label="Carregando a cozinha" className="grid gap-3 lg:grid-cols-3">
+        // Esqueleto no formato do quadro: as pistas com o título e dois tickets.
+        <div role="status" aria-label="Carregando a cozinha" className="grid gap-3 md:grid-cols-3">
           {[0, 1, 2].map((indice) => (
-            <Skeleton key={indice} className="h-96 rounded-xl" />
+            <div key={indice} className="flex flex-col gap-2.5 max-md:not-first:hidden">
+              <Skeleton className="mb-1 h-4 w-24" />
+              <Skeleton className="h-48 rounded-xl" />
+              <Skeleton className="h-36 rounded-xl" />
+            </div>
           ))}
         </div>
       ) : colunas.every((coluna) => coluna.pedidos.length === 0) ? (
-        <Empty className="border">
+        <Empty className="border border-dashed">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <ChefHatIcon />
@@ -198,7 +218,7 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
           </EmptyHeader>
         </Empty>
       ) : telaGrande ? (
-        <div className="grid grid-cols-3 items-start gap-3">
+        <div className="grid grid-cols-3 items-stretch divide-x divide-border/70">
           {colunas.map((coluna) => (
             <Coluna
               key={coluna.id}
@@ -220,6 +240,7 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
                 value={coluna.id}
                 className="gap-1.5 text-foreground/80 dark:text-foreground/80"
               >
+                <Traco tom={tomDoStatus(coluna.status)} />
                 {coluna.titulo}
                 <span className="text-xs tabular-nums">{coluna.pedidos.length}</span>
               </TabsTrigger>

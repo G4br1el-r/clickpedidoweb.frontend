@@ -8,8 +8,8 @@ export function PreviewFoto({ produto }: { produto: Produto }) {
       src={produto.imagem}
       alt=""
       sizes="(min-width: 768px) 560px, 100vw"
-      // Baixa o bastante para os passos e o botão de adicionar caberem na tela do celular.
-      className="h-[22dvh] max-h-60 w-full max-w-md rounded-2xl md:h-60"
+      // Baixa: a foto apresenta, mas quem precisa de espaço são as opções. Ela sobe com a rolagem.
+      className="h-36 w-full rounded-xl md:h-44"
     />
   )
 }

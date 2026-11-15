@@ -3,8 +3,8 @@
 import { type ComponentProps, type CSSProperties, useEffect, useRef, useState } from "react"
 import { cn } from "@/lib/utils"
 
-/** Curva com leve passada do ponto, para o "zoom" parecer uma mola. */
-const CURVA_MOLA = "cubic-bezier(0.34, 1.5, 0.64, 1)"
+/** Curva de saída sem passar do ponto: o "zoom" assenta, não quica. */
+const CURVA_ZOOM = "cubic-bezier(0.23, 1, 0.32, 1)"
 
 type EntradaProps = ComponentProps<"div"> & {
   /** Segundos depois da primeira pintura da página. */
@@ -24,7 +24,7 @@ export function Entrada({
   atraso = 0,
   de = "baixo",
   desfoque = false,
-  duracao = 0.7,
+  duracao = 0.3,
   className,
   style,
   ...props
@@ -33,7 +33,7 @@ export function Entrada({
     "--entrada": desfoque ? `entrada-${de}, entrada-desfoque` : `entrada-${de}`,
     "--entrada-atraso": `${atraso}s`,
     "--entrada-duracao": `${duracao}s`,
-    ...(de === "zoom" ? { "--entrada-curva": CURVA_MOLA } : {}),
+    ...(de === "zoom" ? { "--entrada-curva": CURVA_ZOOM } : {}),
     ...style,
   } as CSSProperties
 

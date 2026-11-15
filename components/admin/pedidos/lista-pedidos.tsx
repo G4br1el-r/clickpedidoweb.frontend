@@ -290,7 +290,7 @@ export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
           )}
         </Empty>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="border-t border-border/70">
           <Table>
             <TableHeader>
               {tabela.getHeaderGroups().map((grupo) => (

@@ -51,9 +51,10 @@ export type SegmentoId = keyof Segmentos
 export type TipoProdutoDe<S extends SegmentoId> = Segmentos[S]["tiposProduto"][number]
 export type TipoOpcaoDe<S extends SegmentoId> = Segmentos[S]["tiposOpcao"][number]
 
-/** O que a vitrine e o acompanhamento dizem em cada segmento. */
+/** O que a vitrine, o carregamento e o acompanhamento dizem em cada segmento. */
 const TEXTOS = {
   pizzaria: {
+    carregando: "Acendendo o forno",
     busca: "Buscar pizza, borda, bebida",
     destaques: "Mais pedidas",
     buscaVazia: "Tente buscar por outro sabor ou produto.",
@@ -64,6 +65,7 @@ const TEXTOS = {
     fimCurto: "Bom apetite!",
   },
   farmacia: {
+    carregando: "Organizando as prateleiras",
     busca: "Buscar remédio ou princípio ativo",
     destaques: "Mais vendidos",
     buscaVazia: "Tente pelo nome do remédio ou pelo princípio ativo.",
@@ -74,6 +76,7 @@ const TEXTOS = {
     fimCurto: "Melhoras!",
   },
   adega: {
+    carregando: "Gelando as bebidas",
     busca: "Buscar cerveja, destilado, combo",
     destaques: "Mais vendidos",
     buscaVazia: "Tente buscar pelo nome da bebida ou da marca.",
@@ -84,6 +87,7 @@ const TEXTOS = {
     fimCurto: "Saúde!",
   },
   acougue: {
+    carregando: "Afiando as facas",
     busca: "Buscar corte, linguiça, carvão",
     destaques: "Mais pedidos",
     buscaVazia: "Tente buscar pelo nome do corte.",
@@ -94,6 +98,7 @@ const TEXTOS = {
     fimCurto: "Bom churrasco!",
   },
   salao: {
+    carregando: "Preparando a bancada",
     busca: "Buscar serviço",
     destaques: "Mais procurados",
     buscaVazia: "Tente buscar pelo nome do serviço.",
@@ -104,6 +109,7 @@ const TEXTOS = {
     fimCurto: "Volte sempre!",
   },
   lanchonete: {
+    carregando: "Esquentando a chapa",
     busca: "Buscar lanche, pastel, bebida",
     destaques: "Mais pedidos",
     buscaVazia: "Tente buscar por outro lanche ou bebida.",

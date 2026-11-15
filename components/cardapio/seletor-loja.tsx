@@ -7,9 +7,11 @@ import {
   PizzaIcon,
   SandwichIcon,
   ScissorsIcon,
+  ShoppingBagIcon,
   WineIcon,
 } from "lucide-react"
 import { useState } from "react"
+import { MOVIMENTO_DO_MODAL, RAIO_DO_MODAL, VEU_DO_MODAL } from "@/components/modal"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -116,17 +118,36 @@ export function SeletorLoja({ className }: { className?: string }) {
       </DropdownMenu>
 
       <AlertDialog open={pendente !== null} onOpenChange={(aberto) => !aberto && setPendente(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Trocar para {destino?.nome}?</AlertDialogTitle>
-            <AlertDialogDescription>
+        {/* Confirmação no mesmo mundo dos outros modais: véu, raio, título e ações em pílula. */}
+        <AlertDialogContent
+          overlayClassName={VEU_DO_MODAL}
+          className={cn(
+            RAIO_DO_MODAL,
+            MOVIMENTO_DO_MODAL,
+            "gap-5 p-6 ring-0 data-[size=default]:sm:max-w-[400px]",
+          )}
+        >
+          <AlertDialogHeader className="gap-2 text-left sm:text-left">
+            <span
+              aria-hidden="true"
+              className="mb-1 flex size-11 items-center justify-center rounded-full bg-accent text-marca-texto [&_svg]:size-5"
+            >
+              <ShoppingBagIcon />
+            </span>
+            <AlertDialogTitle className="text-lg leading-snug font-semibold tracking-[-0.015em]">
+              Trocar para {destino?.nome}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-sm leading-relaxed">
               A sacola é de uma loja só: {plural(contarItens(itens), "item", "itens")} da{" "}
               {loja.nome} sai da sacola.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Continuar na {loja.nome}</AlertDialogCancel>
+          <AlertDialogFooter className="m-0 flex-col-reverse gap-2 rounded-none border-0 bg-transparent p-0 sm:flex-col-reverse">
+            <AlertDialogCancel className="h-12 w-full rounded-full text-[15px] font-medium">
+              Continuar na {loja.nome}
+            </AlertDialogCancel>
             <AlertDialogAction
+              className="h-12 w-full rounded-full text-[15px] font-semibold"
               onClick={() => {
                 if (!pendente) return
                 esvaziar()

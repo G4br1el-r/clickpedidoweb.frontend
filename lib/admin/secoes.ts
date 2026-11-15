@@ -13,7 +13,7 @@ import {
   TypeIcon,
   UtensilsIcon,
 } from "lucide-react"
-import type { SecaoConfig } from "./config"
+import type { Config, SecaoConfig } from "./config"
 
 /** Telas da loja que a prévia sabe desenhar. */
 export type TelaPrevia =
@@ -175,4 +175,15 @@ export function normalizar(texto: string) {
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .trim()
+}
+
+/** Seções em que o rascunho do editor difere do que está publicado no site. */
+export function secoesAlteradas(rascunho: Config, publicada: Config): InfoSecao[] {
+  return SECOES.filter(({ id }) => JSON.stringify(rascunho[id]) !== JSON.stringify(publicada[id]))
+}
+
+/** Onde estão as mudanças: "em Identidade", "em Identidade e Cores e botões" ou "em 3 seções". */
+export function ondeMudou(secoes: Pick<InfoSecao, "titulo">[]): string {
+  if (secoes.length > 2) return `em ${secoes.length} seções`
+  return `em ${secoes.map((secao) => secao.titulo).join(" e ")}`
 }

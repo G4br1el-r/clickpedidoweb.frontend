@@ -43,6 +43,18 @@ describe("Personalizar loja na barra lateral", () => {
     expect(abrirEm("/admin/configuracoes/cores")).toHaveAttribute("aria-expanded", "true")
   })
 
+  test("aberto e parado, o conteúdo não corta o contorno dos itens nem o foco da busca", () => {
+    const titulo = abrirEm("/admin/configuracoes/cores")
+    const conteudo = document.getElementById(titulo.getAttribute("aria-controls") ?? "")
+    expect(conteudo?.style.overflow).toBe("visible")
+  })
+
+  test("fechado, o conteúdo fica recortado na altura zero", () => {
+    const titulo = abrirEm("/admin/fila")
+    const conteudo = document.getElementById(titulo.getAttribute("aria-controls") ?? "")
+    expect(conteudo?.style.overflow).toBe("hidden")
+  })
+
   test("abre e fecha ao tocar no título", async () => {
     const titulo = abrirEm("/admin/fila")
     const usuario = userEvent.setup()

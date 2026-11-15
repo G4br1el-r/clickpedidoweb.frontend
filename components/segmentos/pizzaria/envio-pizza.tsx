@@ -1,16 +1,8 @@
 "use client"
 
-import { motion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import type { ItemSacola } from "@/lib/sacola"
-import { PizzaSvg } from "./pizza-svg"
-
-/** Sabores da primeira pizza do pedido: as escolhas que não são borda, ou o próprio nome. */
-function saboresDoPedido(itens: ItemSacola[]): [string | null] | [string | null, string | null] {
-  const pizza = itens.find((item) => item.resumo.some((parte) => !parte.startsWith("Borda")))
-  if (!pizza) return [itens[0]?.nome ?? "calabresa"]
-  const sabores = pizza.resumo.filter((parte) => !parte.startsWith("Borda"))
-  return sabores.length >= 2 ? [sabores[0], sabores[1]] : [sabores[0] ?? pizza.nome]
-}
+import { MOLA, Palco, Pronto, SAIDA } from "../artes-envio"
 
 export const MENSAGENS_ENVIO_PIZZA = [
   "Abrindo a massa",
@@ -19,266 +11,297 @@ export const MENSAGENS_ENVIO_PIZZA = [
   "Saindo quentinha!",
 ]
 
-const CURVA = [0.23, 1, 0.32, 1] as const
-const VAI_E_VEM = [0.65, 0, 0.35, 1] as const
+/* Paleta de ilustração da pizza: só dentro da arte. */
+const MASSA = "#EED7AE"
+const BORDA = "#DDB27A"
+const MOLHO = "#C8452C"
+const QUEIJO = "#F5D27A"
+const CORTE = "#FBEFD6"
 
-/**
- * Giro da pizza em cada etapa. Termina num quarto de volta: a fatia que se solta no fim
- * é desenhada à esquerda e, girada, sobe para cima.
- */
-const GIRO = [360, 450, 450, 450]
+/** Centro e raios da pizza no desenho de 200 × 200. */
+const CX = 100
+const CY = 106
+const R_BORDA = 66
+const R_MOLHO = 57
 
-/** Cortes: quatro diâmetros, oito fatias. Ângulos em graus, no desenho de 100 × 100. */
-const CORTES = [22.5, 67.5, 112.5, 157.5].map((angulo) => {
-  const rad = (angulo * Math.PI) / 180
-  const dx = Math.cos(rad) * 47
-  const dy = Math.sin(rad) * 47
-  return { x1: 50 - dx, y1: 50 - dy, x2: 50 + dx, y2: 50 + dy }
-})
+type Cobertura = "calabresa" | "queijo" | "frango" | "marguerita" | "portuguesa"
 
-/** Fatia da esquerda (entre 157,5° e 202,5°) e o resto da pizza, recortados em CSS. */
-const FATIA = "polygon(50% 50%, -19.3% 78.7%, -19.3% 21.3%)"
-const SEM_FATIA =
-  "polygon(50% 50%, -19.3% 21.3%, -20% -20%, 120% -20%, 120% 120%, -20% 120%, -19.3% 78.7%)"
-
-/** Massa crua, girando e abrindo, com o molho entrando em espiral. */
-function MassaCrua() {
-  return (
-    <svg viewBox="0 0 100 100" className="absolute inset-0 size-full" aria-hidden="true">
-      <motion.g
-        style={{ transformOrigin: "50px 50px" }}
-        initial={{ scale: 0.55 }}
-        animate={{ scale: 1 }}
-        transition={{ duration: 0.9, ease: CURVA }}
-      >
-        <circle cx={50} cy={50} r={47} fill="#EED7AE" />
-        <circle cx={50} cy={50} r={47} fill="none" stroke="#DDBF8A" strokeWidth={2.4} />
-        {[
-          [36, 38],
-          [62, 34],
-          [58, 64],
-          [33, 60],
-          [48, 50],
-        ].map(([x, y]) => (
-          <circle key={`${x}-${y}`} cx={x} cy={y} r={2.4} fill="#F6E6C6" />
-        ))}
-        {/* Molho espalhado com a concha, do centro para fora. */}
-        <motion.path
-          d="M50 50 m0 -3 a3 3 0 1 1 -0.1 0 M50 50 m0 -9 a9 9 0 1 1 -0.1 0 M50 50 m0 -16 a16 16 0 1 1 -0.1 0 M50 50 m0 -24 a24 24 0 1 1 -0.1 0 M50 50 m0 -32 a32 32 0 1 1 -0.1 0 M50 50 m0 -38 a38 38 0 1 1 -0.1 0"
-          fill="none"
-          stroke="#C8452C"
-          strokeWidth={7.5}
-          strokeLinecap="round"
-          initial={{ pathLength: 0, opacity: 0.9 }}
-          animate={{ pathLength: 1 }}
-          transition={{ duration: 0.7, delay: 0.45, ease: "easeInOut" }}
-        />
-      </motion.g>
-    </svg>
-  )
+/** A cobertura de cada metade sai do sabor do pedido; sem pista, vai calabresa. */
+function coberturaDo(sabor: string | null): Cobertura {
+  const nome = (sabor ?? "").toLowerCase()
+  if (/mussarela|queijo|quatro/.test(nome)) return "queijo"
+  if (/frango/.test(nome)) return "frango"
+  if (/marguerita|napolitana|tomate/.test(nome)) return "marguerita"
+  if (/portuguesa/.test(nome)) return "portuguesa"
+  return "calabresa"
 }
 
-/** Farinha que sobe quando a massa é aberta. */
-function Farinha() {
+/** Sabores da primeira pizza do pedido: as escolhas que não são borda, ou o próprio nome. */
+function saboresDoPedido(itens: ItemSacola[]): [Cobertura, Cobertura] {
+  const pizza = itens.find((item) => item.resumo.some((parte) => !parte.startsWith("Borda")))
+  const sabores = pizza?.resumo.filter((parte) => !parte.startsWith("Borda")) ?? []
+  const primeiro = coberturaDo(sabores[0] ?? pizza?.nome ?? itens[0]?.nome ?? null)
+  return [primeiro, coberturaDo(sabores[1] ?? sabores[0] ?? null) ?? primeiro]
+}
+
+/** Pontos de cobertura de uma metade (esquerda: x < CX). */
+const PONTOS_ESQUERDA = [
+  [72, 86],
+  [80, 112],
+  [66, 128],
+  [88, 136],
+  [86, 76],
+  [62, 104],
+]
+const espelhar = ([x, y]: number[]) => [2 * CX - x, y]
+
+function Cobertura({
+  tipo,
+  pontos,
+  atraso,
+}: {
+  tipo: Cobertura
+  pontos: number[][]
+  atraso: number
+}) {
   return (
-    <svg
-      viewBox="0 0 100 100"
-      className="absolute inset-0 size-full overflow-visible"
-      aria-hidden="true"
-    >
-      {Array.from({ length: 12 }, (_, indice) => {
-        const angulo = (indice / 12) * Math.PI * 2
-        return (
+    <>
+      {pontos.map(([x, y], indice) => {
+        const transicao = { ...MOLA, delay: atraso + indice * 0.05 }
+        const chave = `${x}-${y}`
+        const origem = { transformOrigin: `${x}px ${y}px` }
+        const entrada = { initial: { scale: 0.3, opacity: 0 }, animate: { scale: 1, opacity: 1 } }
+        if (tipo === "calabresa")
+          return (
+            <motion.g key={chave} style={origem} {...entrada} transition={transicao}>
+              <circle cx={x} cy={y} r={7} fill="#B3302B" />
+              <circle cx={x - 2} cy={y - 2} r={1.6} fill="#E8826E" />
+            </motion.g>
+          )
+        if (tipo === "queijo")
+          return (
+            <motion.ellipse
+              key={chave}
+              cx={x}
+              cy={y}
+              rx={8}
+              ry={5}
+              fill="#FFF3C4"
+              style={origem}
+              {...entrada}
+              transition={transicao}
+            />
+          )
+        if (tipo === "frango")
+          return (
+            <motion.rect
+              key={chave}
+              x={x - 6}
+              y={y - 4}
+              width={12}
+              height={8}
+              rx={3}
+              fill="#E9C9A0"
+              style={origem}
+              {...entrada}
+              transition={transicao}
+            />
+          )
+        if (tipo === "marguerita")
+          return indice % 2 ? (
+            <motion.path
+              key={chave}
+              d={`M${x - 6} ${y} q6 -8 12 0 q-6 6 -12 0 Z`}
+              fill="#5E8C3A"
+              style={origem}
+              {...entrada}
+              transition={transicao}
+            />
+          ) : (
+            <motion.circle
+              key={chave}
+              cx={x}
+              cy={y}
+              r={7}
+              fill="#E0533B"
+              stroke="#F3A08F"
+              strokeWidth={1.5}
+              style={origem}
+              {...entrada}
+              transition={transicao}
+            />
+          )
+        return indice % 2 ? (
           <motion.circle
-            // biome-ignore lint/suspicious/noArrayIndexKey: partículas fixas, só decorativas
-            key={indice}
-            cx={50 + Math.cos(angulo) * 40}
-            cy={50 + Math.sin(angulo) * 40}
-            r={indice % 3 === 0 ? 1.6 : 1}
-            fill="#FFFFFF"
-            initial={{ opacity: 0 }}
-            animate={{
-              opacity: [0, 0.9, 0],
-              x: Math.cos(angulo) * 12,
-              y: Math.sin(angulo) * 12 - 4,
-            }}
-            transition={{ duration: 0.9, delay: 0.15 + (indice % 4) * 0.06, ease: "easeOut" }}
+            key={chave}
+            cx={x}
+            cy={y}
+            r={4}
+            fill="#2E2A25"
+            style={origem}
+            {...entrada}
+            transition={transicao}
           />
+        ) : (
+          <motion.g key={chave} style={origem} {...entrada} transition={transicao}>
+            <circle cx={x} cy={y} r={7} fill="#FFFFFF" />
+            <circle cx={x} cy={y} r={3.2} fill="#F2B233" />
+          </motion.g>
         )
       })}
-    </svg>
+    </>
   )
 }
 
-/** Cortes riscados na pizza e o cortador passando por cima de cada um. */
-function Cortes({ cortando, pronta }: { cortando: boolean; pronta: boolean }) {
-  const passo = 0.28
-  const caminho = CORTES.flatMap(({ x1, y1, x2, y2 }) => [
-    [x1, y1],
-    [x2, y2],
-  ])
-  return (
-    <svg
-      viewBox="0 0 100 100"
-      className="absolute inset-0 size-full overflow-visible"
-      aria-hidden="true"
-    >
-      {CORTES.map(({ x1, y1, x2, y2 }, indice) => (
-        <motion.line
-          key={x1}
-          x1={x1}
-          y1={y1}
-          x2={x2}
-          y2={y2}
-          stroke="#7A3B12"
-          strokeWidth={0.9}
-          strokeLinecap="round"
-          initial={{ pathLength: 0, opacity: 0 }}
-          animate={
-            cortando || pronta
-              ? { pathLength: 1, opacity: pronta ? 0.35 : 0.55 }
-              : { pathLength: 0, opacity: 0 }
-          }
-          transition={{
-            pathLength: { duration: passo * 0.8, delay: indice * passo, ease: "easeInOut" },
-            opacity: { duration: 0.2, delay: pronta ? 0 : indice * passo },
-          }}
-        />
-      ))}
-      {cortando && (
-        <motion.g
-          initial={{ opacity: 0, x: caminho[0][0], y: caminho[0][1] }}
-          animate={{
-            opacity: [0, 1, 1, 1, 1, 1, 1, 1, 0],
-            x: [caminho[0][0], ...caminho.map(([x]) => x)],
-            y: [caminho[0][1], ...caminho.map(([, y]) => y)],
-          }}
-          transition={{ duration: passo * 4 + 0.1, ease: "easeInOut" }}
-        >
-          {/* Cortador de pizza: disco de metal girando e o cabo. */}
-          <rect x={4} y={-2.2} width={16} height={4.4} rx={2.2} fill="#7C2D12" />
-          <motion.g animate={{ rotate: 720 }} transition={{ duration: passo * 4, ease: "linear" }}>
-            <circle r={6.5} fill="#E5E7EB" stroke="#9CA3AF" strokeWidth={0.8} />
-            <line x1={-6} x2={6} stroke="#9CA3AF" strokeWidth={0.6} />
-            <circle r={1.6} fill="#6B7280" />
-          </motion.g>
-        </motion.g>
-      )}
-    </svg>
-  )
+/** A fatia de cima à direita (de -90° a -45°), em coordenadas do desenho. */
+function setor(raio: number) {
+  const fim = (-45 * Math.PI) / 180
+  const x = CX + Math.cos(fim) * raio
+  const y = CY + Math.sin(fim) * raio
+  return `M${CX} ${CY} L${CX} ${CY - raio} A${raio} ${raio} 0 0 1 ${x} ${y} Z`
 }
 
 /**
- * Arte do envio na pizzaria: o preparo da pizza do pedido, visto de cima, numa tábua.
- * 1. A massa gira e abre, solta farinha, e o molho entra em espiral.
- * 2. O queijo derrete e os ingredientes caem, com a pizza girando devagar.
- * 3. O cortador risca as oito fatias.
- * 4. Uma fatia se solta e sobe o vapor: pronta.
+ * Pizzaria: a massa abre, o recheio entra metade a metade (pela cobertura de cada sabor),
+ * a pizza é cortada em oito e uma fatia sai fumegando. Desenho plano, no mesmo palco,
+ * traço e selo dos outros nichos.
  */
 export function ArteEnvioPizza({ etapa, itens }: { etapa: number; itens: ItemSacola[] }) {
-  const sabores = saboresDoPedido(itens)
-  const montada = etapa >= 1
-  const cortando = etapa === 2
-  const pronta = etapa === 3
+  const reduzido = useReducedMotion()
+  const [esquerda, direita] = saboresDoPedido(itens)
+  const cortes = [0, 45, 90, 135]
 
   return (
-    <div className="relative grid size-72 place-items-center md:size-80" data-etapa={etapa}>
-      {/* Tábua de madeira, com a sombra no balcão. */}
-      <div
-        aria-hidden="true"
-        className="absolute inset-[2%] rounded-full bg-black/25 blur-xl dark:bg-black/60"
-        style={{ transform: "translateY(6%)" }}
-      />
-      <div
-        aria-hidden="true"
-        className="absolute inset-[3%] rounded-full shadow-inner"
-        style={{
-          background:
-            "repeating-radial-gradient(circle at 50% 50%, #C99360 0 6px, #BF8752 6px 7px, #C99360 7px 13px), #C99360",
-        }}
-      />
+    <Palco segmento="pizzaria" etapa={etapa}>
+      <defs>
+        <clipPath id="pizza-metade-esquerda">
+          <rect x={0} y={0} width={CX} height={200} />
+        </clipPath>
+        <clipPath id="pizza-metade-direita">
+          <rect x={CX} y={0} width={100} height={200} />
+        </clipPath>
+      </defs>
 
-      <motion.div
-        className="relative size-[80%]"
-        initial={{ rotate: 0 }}
-        animate={{
-          rotate: GIRO[etapa] ?? 450,
-          scale: pronta ? [1, 1.05, 1] : 1,
-        }}
-        transition={{
-          rotate:
-            etapa === 0 ? { duration: 1.15, ease: CURVA } : { duration: 1.2, ease: VAI_E_VEM },
-          scale: { duration: 0.5, ease: CURVA },
-        }}
+      {/* A massa aberta, com a borda */}
+      <motion.g
+        data-parte="massa"
+        style={{ transformOrigin: `${CX}px ${CY}px` }}
+        initial={{ scale: 0.85, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={MOLA}
       >
-        {!montada ? (
-          <>
-            <MassaCrua />
-            <Farinha />
-          </>
-        ) : (
-          <motion.div
-            className="absolute inset-0"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.25 }}
-          >
-            {/* A pizza sem a fatia da esquerda… */}
-            <div className="absolute inset-0" style={{ clipPath: SEM_FATIA }}>
-              <PizzaSvg sabores={sabores} className="size-full drop-shadow-md" />
-            </div>
-            {/* …e a fatia, que se solta no fim (girada, ela sobe). */}
-            <motion.div
-              className="absolute inset-0"
-              style={{ clipPath: FATIA }}
-              animate={pronta ? { x: "-9%", scale: 1.04 } : { x: "0%", scale: 1 }}
-              transition={{ type: "spring", duration: 0.7, bounce: 0.3 }}
-            >
-              <PizzaSvg sabores={sabores} className="size-full drop-shadow-lg" />
-            </motion.div>
-            <Cortes cortando={cortando} pronta={pronta} />
-          </motion.div>
-        )}
-      </motion.div>
+        <circle cx={CX} cy={CY} r={R_BORDA} fill={BORDA} />
+        <circle cx={CX} cy={CY} r={R_BORDA - 6} fill={MASSA} />
+      </motion.g>
 
-      {/* Vapor fora do giro, para subir sempre para cima. */}
-      {pronta && (
-        <svg
-          viewBox="0 0 100 40"
-          className="pointer-events-none absolute inset-x-[25%] top-[-6%] overflow-visible"
-          aria-hidden="true"
-        >
-          {[
-            { x: 36, atraso: 0 },
-            { x: 50, atraso: 0.3 },
-            { x: 64, atraso: 0.15 },
-          ].map(({ x, atraso }) => (
+      {/* Molho do centro para fora, queijo e a cobertura de cada metade */}
+      <AnimatePresence>
+        {etapa >= 1 && (
+          <motion.g key="recheio" data-parte="recheio">
+            <motion.circle
+              cx={CX}
+              cy={CY}
+              r={R_MOLHO}
+              fill={MOLHO}
+              style={{ transformOrigin: `${CX}px ${CY}px` }}
+              initial={{ scale: 0.2 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.55, ease: SAIDA }}
+            />
+            <motion.circle
+              cx={CX}
+              cy={CY}
+              r={R_MOLHO - 5}
+              fill={QUEIJO}
+              style={{ transformOrigin: `${CX}px ${CY}px` }}
+              initial={{ scale: 0.4, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.5, delay: 0.2, ease: SAIDA }}
+            />
+            <g clipPath="url(#pizza-metade-esquerda)">
+              <Cobertura tipo={esquerda} pontos={PONTOS_ESQUERDA} atraso={0.4} />
+            </g>
+            <g clipPath="url(#pizza-metade-direita)">
+              <Cobertura tipo={direita} pontos={PONTOS_ESQUERDA.map(espelhar)} atraso={0.55} />
+            </g>
+          </motion.g>
+        )}
+      </AnimatePresence>
+
+      {/* Oito fatias: quatro cortes riscados um depois do outro */}
+      <AnimatePresence>
+        {etapa >= 2 && (
+          <g key="cortes" data-parte="cortes">
+            {cortes.map((angulo, indice) => {
+              const rad = (angulo * Math.PI) / 180
+              const dx = Math.cos(rad) * (R_BORDA - 2)
+              const dy = Math.sin(rad) * (R_BORDA - 2)
+              return (
+                <motion.line
+                  key={angulo}
+                  x1={CX - dx}
+                  y1={CY - dy}
+                  x2={CX + dx}
+                  y2={CY + dy}
+                  stroke={CORTE}
+                  strokeWidth={2.4}
+                  strokeLinecap="round"
+                  initial={{ pathLength: 0 }}
+                  animate={{ pathLength: 1 }}
+                  transition={{ duration: 0.3, delay: indice * 0.18, ease: SAIDA }}
+                />
+              )
+            })}
+          </g>
+        )}
+      </AnimatePresence>
+
+      {/* A fatia sai: o lugar dela fica vazio e ela se afasta, inteira */}
+      <AnimatePresence>
+        {etapa >= 3 && (
+          <g key="fatia" data-parte="fatia">
+            <path d={setor(R_BORDA + 1)} fill="var(--accent)" />
+            <motion.g
+              initial={{ x: 0, y: 0, rotate: 0 }}
+              animate={{ x: 16, y: -16, rotate: 6 }}
+              style={{ transformOrigin: `${CX}px ${CY}px` }}
+              transition={MOLA}
+            >
+              <path d={setor(R_BORDA)} fill={BORDA} />
+              <path d={setor(R_BORDA - 6)} fill={MASSA} />
+              <path d={setor(R_MOLHO)} fill={MOLHO} />
+              <path d={setor(R_MOLHO - 5)} fill={QUEIJO} />
+              <circle cx={CX + 18} cy={CY - 34} r={6} fill="#B3302B" />
+            </motion.g>
+          </g>
+        )}
+      </AnimatePresence>
+
+      {/* Vapor saindo da fatia quente */}
+      {etapa >= 3 && (
+        <g data-parte="vapor">
+          {[118, 130, 142].map((x, indice) => (
             <motion.path
               key={x}
-              d={`M ${x} 36 q -5 -7 0 -14 t 0 -14`}
+              d={`M${x} 46 c-4 -6 4 -9 0 -15 c-4 -6 4 -9 0 -15`}
               fill="none"
-              stroke="var(--muted-foreground)"
-              strokeWidth={2.4}
+              stroke="var(--marca-acento)"
+              strokeWidth={2.6}
               strokeLinecap="round"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: [0, 0.75, 0], y: [8, -2, -12] }}
-              transition={{ duration: 1.4, delay: 0.25 + atraso, repeat: 2, ease: "easeOut" }}
+              initial={{ opacity: reduzido ? 0.6 : 0 }}
+              animate={reduzido ? undefined : { opacity: [0, 0.8, 0], y: [6, -2, -10] }}
+              transition={{
+                duration: 1.5,
+                repeat: Number.POSITIVE_INFINITY,
+                delay: indice * 0.3,
+                ease: "easeOut",
+              }}
             />
           ))}
-        </svg>
+        </g>
       )}
 
-      {/* Brilho de "ficou pronta". */}
-      {pronta && (
-        <motion.div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-[15%] rounded-full"
-          style={{ background: "radial-gradient(circle, rgb(255 230 160 / 0.5), transparent 65%)" }}
-          initial={{ opacity: 0, scale: 0.6 }}
-          animate={{ opacity: [0, 1, 0], scale: [0.6, 1.2, 1.35] }}
-          transition={{ duration: 1, delay: 0.2, ease: "easeOut" }}
-        />
-      )}
-    </div>
+      <Pronto x={48} y={52} visivel={etapa >= 3} />
+    </Palco>
   )
 }

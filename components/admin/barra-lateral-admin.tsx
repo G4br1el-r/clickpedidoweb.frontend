@@ -24,7 +24,6 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Collapsible, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
@@ -64,9 +63,9 @@ function CartaoPro() {
 
   if (pro) {
     return (
-      <div className="opcao-pro rounded-xl bg-card p-3 group-data-[collapsible=icon]:hidden">
+      <div className="rounded-xl bg-card p-3 shadow-[0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.05)] group-data-[collapsible=icon]:hidden">
         <p className="flex items-center gap-1.5 text-sm font-semibold">
-          <SparklesIcon className="size-4 text-[#D98E00]" />
+          <SparklesIcon className="size-4 text-(--dourado)" />
           Pro liberado
         </p>
         <p className="mt-0.5 text-xs text-muted-foreground">Todos os recursos estão disponíveis.</p>
@@ -102,21 +101,24 @@ function CartaoPro() {
     )
   }
   return (
-    <div className="rounded-xl bg-muted p-3 group-data-[collapsible=icon]:hidden">
-      <p className="text-sm font-semibold">Plano Pro</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">
-        {compradas.length > 0
-          ? `${compradas.length} ${compradas.length === 1 ? "recurso contratado" : "recursos contratados"}. Libere o resto de uma vez.`
-          : "Modelos de card, animações e recursos de venda extras."}
-      </p>
+    // Uma linha só: o cartão não rouba altura do menu, que em alguns segmentos é longo.
+    <div className="flex items-center gap-2.5 rounded-xl bg-card py-2 pr-2 pl-3 shadow-[0_0_0_1px_var(--border),0_1px_2px_rgb(0_0_0/0.05)] group-data-[collapsible=icon]:hidden">
+      <SparklesIcon aria-hidden="true" className="size-4 shrink-0 text-(--dourado)" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <p className="text-sm leading-tight font-semibold">Plano Pro</p>
+        <p className="truncate text-xs text-muted-foreground">
+          {compradas.length > 0
+            ? `${compradas.length} ${compradas.length === 1 ? "contratado" : "contratados"}`
+            : "Extras"}
+        </p>
+      </div>
       <Button
         type="button"
         size="sm"
-        className="botao-brilho mt-2.5 w-full bg-linear-to-r from-[#F5B700] to-[#FF8A4C] text-[#2A1700] hover:opacity-95"
+        className="shrink-0"
         onClick={liberarPro}
         data-testid="liberar-todos"
       >
-        <SparklesIcon data-icon="inline-start" />
         Liberar todos
       </Button>
     </div>
@@ -136,14 +138,19 @@ function ConteudoAnimado({
   aberto: boolean
   children: ReactNode
 }) {
+  // Recorta só enquanto a altura anima ou fechado: aberto e parado, o contorno do item ativo
+  // e o foco da busca passam da borda sem serem cortados.
+  const [assentado, setAssentado] = useState(aberto)
   // Fica sempre montado (o gatilho aponta para o id); fechado, sai do teclado e do leitor de tela.
   return (
     <motion.div
       id={id}
-      className="overflow-hidden"
+      style={{ overflow: aberto && assentado ? "visible" : "hidden" }}
       initial={false}
       animate={aberto ? { height: "auto", opacity: 1 } : { height: 0, opacity: 0 }}
-      transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
+      transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+      onAnimationStart={() => setAssentado(false)}
+      onAnimationComplete={() => setAssentado(true)}
       inert={!aberto}
     >
       {children}
@@ -220,7 +227,7 @@ export function BarraLateralAdmin() {
     : []
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" variant="inset">
       <SidebarHeader>
         <MarcaLoja />
       </SidebarHeader>
@@ -292,12 +299,10 @@ export function BarraLateralAdmin() {
 
       <SidebarFooter>
         <CartaoPro />
-        <Badge
-          variant="outline"
-          className="mx-2 mb-1 self-start group-data-[collapsible=icon]:hidden"
-        >
+        <p className="flex items-center gap-2 px-2 pb-1 text-xs text-muted-foreground group-data-[collapsible=icon]:hidden">
+          <span aria-hidden="true" className="size-1.5 shrink-0 rounded-full bg-(--tom-preparo)" />
           Protótipo · salvo neste navegador
-        </Badge>
+        </p>
       </SidebarFooter>
       <SidebarRail />
     </Sidebar>

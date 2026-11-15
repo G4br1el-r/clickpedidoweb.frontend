@@ -1,22 +1,31 @@
-import { Badge } from "@/components/ui/badge"
 import type { Pedido, SituacaoPagamento } from "@/lib/admin/dados/tipos"
-import { rotuloStatus } from "@/lib/admin/regras/status"
+import { rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
+import { cn } from "@/lib/utils"
+import { Traco } from "../traco"
 
-/** Selo do status do pedido: novo em destaque, cancelado apagado, o resto neutro. */
-export function SeloStatus({ pedido }: { pedido: Pick<Pedido, "tipo" | "status"> }) {
-  const variante =
-    pedido.status === "recebido"
-      ? "default"
-      : pedido.status === "cancelado"
-        ? "outline"
-        : "secondary"
+/**
+ * Status do pedido como etiqueta: o traço na cor da etapa e o nome ao lado, na tinta.
+ * Cancelado e concluído ficam no texto suave: já saíram da operação.
+ */
+export function SeloStatus({
+  pedido,
+  className,
+}: {
+  pedido: Pick<Pedido, "tipo" | "status">
+  className?: string
+}) {
+  const tom = tomDoStatus(pedido.status)
   return (
-    <Badge
-      variant={variante}
-      className={pedido.status === "cancelado" ? "text-muted-foreground" : undefined}
+    <span
+      className={cn(
+        "inline-flex items-center gap-2 text-[13px] leading-none font-medium whitespace-nowrap",
+        tom === "fim" || tom === "cancelado" ? "text-muted-foreground" : "text-foreground",
+        className,
+      )}
     >
+      <Traco tom={tom} />
       {rotuloStatus(pedido.tipo, pedido.status)}
-    </Badge>
+    </span>
   )
 }
 

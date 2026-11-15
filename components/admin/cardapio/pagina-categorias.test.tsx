@@ -59,6 +59,14 @@ describe("PaginaCategorias", () => {
     const promocoes = within(screen.getByRole("listitem", { name: "Promoções" }))
     await usuario.click(promocoes.getByRole("button", { name: "Subir" }))
     expect(nomes()).toEqual([...antes.slice(0, -2), "Promoções", antes.at(-2)])
+    // A lanchonete tem 12 categorias; com a nova, 13. O leitor de tela ouve a nova posição.
+    expect(await screen.findByText("Promoções subiu para a posição 12 de 13.")).toBeInTheDocument()
+  })
+
+  test("cada linha mostra a posição na ordem das abas", async () => {
+    await abrir()
+    const pasteis = within(screen.getByRole("listitem", { name: "Pastéis" }))
+    expect(pasteis.getByText("1")).toBeInTheDocument()
   })
 
   test("renomeia na linha e oculta pela chave", async () => {

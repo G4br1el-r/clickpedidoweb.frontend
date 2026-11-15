@@ -1,4 +1,7 @@
+import { registroSegmentos } from "@/components/segmentos/registro"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useLoja } from "@/lib/loja-atual"
+import { textosDoSegmento } from "@/lib/segmentos"
 import { cn } from "@/lib/utils"
 import { MOSAICO } from "./banners-loja"
 
@@ -32,47 +35,53 @@ function BannersSkeleton() {
 
 /** Mesmo formato do cardápio, para a tela não pular quando os dados chegam. */
 export function CardapioSkeleton() {
+  const loja = useLoja()
+  const { Carregador } = registroSegmentos[loja.segmento]
+  const { carregando } = textosDoSegmento(loja.segmento)
+
   return (
     <div
       role="status"
       aria-label="Carregando cardápio"
       // Os mesmos espaços do cardápio carregado: o primeiro bloco começa no mesmo lugar.
-      className="flex flex-col gap-8 pt-6 md:gap-10 md:pt-8"
+      className="flex flex-col gap-10 pt-7 md:gap-14 md:pt-10"
     >
-      <BannersSkeleton />
-      <div className="flex flex-col gap-3 px-4 md:px-6">
-        <Skeleton className="h-6 w-36" />
-        <div className="flex gap-3 overflow-hidden">
-          {CARTOES.map((chave) => (
+      <div className="flex flex-col px-4 md:px-6">
+        {/* No lugar do título, o carregador do nicho e a frase do ofício, na mesma altura. */}
+        <p className="flex h-7 items-center gap-2.5 text-[15px] font-medium text-muted-foreground">
+          <Carregador className="size-7" />
+          {carregando}
+        </p>
+        <div className="mt-1 grid grid-cols-1 md:grid-cols-2 md:gap-x-10">
+          {LINHAS.map((chave) => (
             <div
               key={chave}
-              className="flex w-[72vw] max-w-72 shrink-0 flex-col gap-2 md:w-1/3 md:max-w-none"
+              data-testid={`esqueleto-${chave}`}
+              className="flex gap-4 border-b border-border/70 py-4"
             >
-              <Skeleton className="h-72 w-full rounded-3xl md:h-80" />
+              <Skeleton className="size-[104px] shrink-0 rounded-xl md:size-28" />
+              <div className="flex flex-1 flex-col gap-2 pt-0.5">
+                <Skeleton className="h-4 w-3/5" />
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-4/5" />
+                <div className="mt-auto flex items-end justify-between">
+                  <Skeleton className="h-5 w-24" />
+                  <Skeleton className="size-11 rounded-full" />
+                </div>
+              </div>
             </div>
           ))}
         </div>
       </div>
+      <BannersSkeleton />
       <div className="flex flex-col gap-4 px-4 md:px-6">
-        <Skeleton className="h-7 w-40" />
-        <div className="grid gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3">
-          {LINHAS.map((chave) => (
-            <div
-              key={chave}
-              className="flex flex-col gap-2.5 rounded-3xl p-2.5 ring-1 ring-border/70 md:gap-3 md:p-3"
-            >
-              <div className="flex gap-3.5 md:gap-4">
-                <Skeleton className="size-[88px] shrink-0 rounded-[18px] md:size-28" />
-                <div className="flex flex-1 flex-col gap-2 pt-1">
-                  <Skeleton className="h-5 w-3/5" />
-                  <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-4/5" />
-                </div>
-              </div>
-              <div className="flex items-end justify-between pl-1.5">
-                <Skeleton className="h-9 w-24" />
-                <Skeleton className="size-11 rounded-full" />
-              </div>
+        <Skeleton className="h-6 w-36" />
+        <div className="flex gap-3 overflow-hidden md:gap-4">
+          {CARTOES.map((chave) => (
+            <div key={chave} className="flex w-[62%] shrink-0 flex-col gap-2 sm:w-[40%] md:w-[30%]">
+              <Skeleton className="aspect-[4/5] w-full rounded-2xl" />
+              <Skeleton className="h-4 w-3/5" />
+              <Skeleton className="h-4 w-2/5" />
             </div>
           ))}
         </div>

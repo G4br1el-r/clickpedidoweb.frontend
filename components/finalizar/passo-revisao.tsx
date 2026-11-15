@@ -1,7 +1,7 @@
 "use client"
 
 import { BikeIcon, CreditCardIcon, StoreIcon, UserRoundIcon } from "lucide-react"
-import { motion } from "motion/react"
+import { motion, useReducedMotion } from "motion/react"
 import type { ReactNode } from "react"
 import { useFormContext, useWatch } from "react-hook-form"
 import { Button } from "@/components/ui/button"
@@ -13,9 +13,11 @@ import { descricaoDoTroco } from "@/lib/pedido"
 import { cn } from "@/lib/utils"
 import { CabecalhoPasso } from "./cabecalho-passo"
 import { Campo } from "./campo"
+import { CURVA_SAIDA } from "./movimento"
 import type { PassoId } from "./passos"
 
-const CURVA = [0.23, 1, 0.32, 1] as const
+/** Atrasos curtos e não uniformes: os blocos chegam juntos, um tiquinho depois do outro. */
+const ATRASOS = [0.04, 0.09, 0.13]
 
 function Bloco({
   icone,
@@ -30,27 +32,28 @@ function Bloco({
   aoAlterar: () => void
   children: ReactNode
 }) {
+  const reduzido = useReducedMotion()
   return (
     <motion.section
-      initial={{ opacity: 0, y: 14 }}
+      initial={reduzido ? { opacity: 0 } : { opacity: 0, y: 6 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.4, delay: 0.05 + indice * 0.06, ease: CURVA }}
-      className="flex items-start gap-3 rounded-2xl border bg-background p-3.5"
+      transition={{ duration: 0.28, delay: ATRASOS[indice] ?? 0, ease: CURVA_SAIDA }}
+      className="flex items-start gap-3.5 py-4"
     >
       <span
         aria-hidden="true"
-        className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-marca-texto [&_svg]:size-5"
+        className="mt-0.5 flex shrink-0 text-muted-foreground [&_svg]:size-5"
       >
         {icone}
       </span>
       <div className="min-w-0 flex-1">
-        <h3 className="font-sans text-sm font-semibold text-muted-foreground">{titulo}</h3>
-        <div className="text-[15px]">{children}</div>
+        <h3 className="font-sans text-[13px] font-medium text-muted-foreground">{titulo}</h3>
+        <div className="mt-0.5 text-[15px] leading-snug">{children}</div>
       </div>
       <Button
         type="button"
         variant="ghost"
-        className="-my-1 -mr-1 h-11 shrink-0 rounded-full px-3 text-sm font-semibold text-marca-texto hover:bg-accent"
+        className="-my-2.5 -mr-3 h-11 shrink-0 rounded-full px-3 text-sm font-medium text-marca-texto hover:bg-muted"
         onClick={aoAlterar}
         aria-label={`Alterar ${titulo.toLowerCase()}`}
       >
@@ -74,26 +77,26 @@ export function PassoRevisao({ total, aoIr }: { total: number; aoIr: (passo: Pas
   const entrega = dados.tipo === "entrega"
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <CabecalhoPasso titulo="Confira e envie" descricao="Se algo estiver errado, é só alterar." />
 
       {!lojaEscolhida.status.aberta && (
         <p
           role="alert"
-          className="rounded-xl bg-destructive/10 px-3 py-2.5 text-sm text-destructive"
+          className="rounded-xl bg-destructive/10 px-3.5 py-3 text-sm text-destructive"
         >
           A loja está fechada agora. Os pedidos voltam assim que abrirmos.
         </p>
       )}
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col divide-y divide-border/70 border-y border-border/70">
         <Bloco
           icone={<UserRoundIcon />}
           titulo="Seus dados"
           indice={0}
           aoAlterar={() => aoIr("dados")}
         >
-          <p className="font-semibold">{dados.nome}</p>
+          <p className="font-medium">{dados.nome}</p>
           <p className="text-muted-foreground tabular-nums">{dados.whatsapp}</p>
         </Bloco>
         <Bloco
@@ -104,7 +107,7 @@ export function PassoRevisao({ total, aoIr }: { total: number; aoIr: (passo: Pas
         >
           {entrega ? (
             <>
-              <p className="font-semibold">
+              <p className="font-medium">
                 {dados.rua}, {dados.numero}
                 {dados.complemento ? `, ${dados.complemento}` : ""}
               </p>
@@ -119,9 +122,9 @@ export function PassoRevisao({ total, aoIr }: { total: number; aoIr: (passo: Pas
           ) : (
             <>
               {dados.agendamento ? (
-                <p className="font-semibold">{textoDoHorario(dados.agendamento)}</p>
+                <p className="font-medium">{textoDoHorario(dados.agendamento)}</p>
               ) : (
-                <p className="font-semibold">Balcão da {lojaEscolhida.nome}</p>
+                <p className="font-medium">Balcão da {lojaEscolhida.nome}</p>
               )}
               <p className="text-muted-foreground">{lojaEscolhida.endereco}</p>
               {!dados.agendamento && (
@@ -138,7 +141,7 @@ export function PassoRevisao({ total, aoIr }: { total: number; aoIr: (passo: Pas
           indice={2}
           aoAlterar={() => aoIr("pagamento")}
         >
-          <p className="font-semibold">{forma.titulo}</p>
+          <p className="font-medium">{forma.titulo}</p>
           <p className="text-muted-foreground">
             {dados.pagamento === "dinheiro"
               ? descricaoDoTroco(dados.troco, total)
@@ -162,7 +165,7 @@ export function PassoRevisao({ total, aoIr }: { total: number; aoIr: (passo: Pas
           maxLength={LIMITE_OBSERVACAO_PEDIDO}
           placeholder="Ex.: mandar guardanapo extra, tocar o interfone 2"
           aria-describedby="observacao-restante"
-          className="min-h-24 resize-none rounded-xl bg-background text-base md:text-base"
+          className="min-h-24 resize-none rounded-xl bg-background px-3.5 py-3 text-base md:text-base"
           {...register("observacao")}
         />
         <p

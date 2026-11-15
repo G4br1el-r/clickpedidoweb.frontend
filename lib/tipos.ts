@@ -55,6 +55,8 @@ export type Produto<S extends SegmentoId = SegmentoId> = {
   grupos?: GrupoOpcao<S>[]
   /** Açougue: "kg" quando o preço é do quilo e a pessoa escolhe o peso. Sem o campo, unidade. */
   unidade?: "un" | "kg"
+  /** Tamanho, volume, peso ou rendimento, como o lojista escreve: "Grande · 8 fatias", "350 ml". */
+  medida?: string
   /** Salão: quanto o serviço dura, para achar um horário livre. */
   duracaoMin?: number
   /** Farmácia: tarja, princípio ativo e registro. Decide se pede receita (lib/farmacia.ts). */

@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react"
+import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import type { StaticImageData } from "next/image"
 import { describe, expect, test, vi } from "vitest"
@@ -39,46 +39,19 @@ function abrir(ativa: string | null = "tradicionais") {
   return { aoEscolher, usuario: userEvent.setup() }
 }
 
-const fotoDo = (botao: HTMLElement) =>
-  decodeURIComponent(botao.querySelector("img")?.getAttribute("src") ?? "")
-
 describe("BarraNavegacao", () => {
-  // Seis categorias com foto não cabem na coluna central (640 px); só a ativa ganha a foto.
-  test("a categoria ativa mostra a foto do primeiro produto dela", () => {
+  // Abas de texto: a ativa ganha só o sublinhado na cor da loja, nenhuma leva foto.
+  test("nenhuma categoria leva foto, nem a ativa", () => {
     abrir("tradicionais")
 
-    expect(fotoDo(screen.getByRole("button", { name: "Tradicionais" }))).toContain(
-      "/fotos/calabresa.jpg",
-    )
-  })
-
-  test("as outras categorias ficam só com o nome", () => {
-    abrir("tradicionais")
-
+    expect(screen.getByRole("button", { name: "Tradicionais" }).querySelector("img")).toBeNull()
     expect(screen.getByRole("button", { name: "Bebidas" }).querySelector("img")).toBeNull()
   })
 
-  test("a foto acompanha a categoria ativa", () => {
-    abrir("bebidas")
+  test("o texto do botão é só o nome da categoria", () => {
+    abrir("tradicionais")
 
-    expect(fotoDo(screen.getByRole("button", { name: "Bebidas" }))).toContain(
-      "/fotos/refrigerante.jpg",
-    )
-    expect(screen.getByRole("button", { name: "Tradicionais" }).querySelector("img")).toBeNull()
-  })
-
-  test("a foto é decorativa: o nome do botão e o texto continuam só o da categoria", () => {
-    abrir()
-    const botao = screen.getByRole("button", { name: "Tradicionais" })
-
-    expect(within(botao).queryByRole("img")).not.toBeInTheDocument()
-    expect(botao).toHaveTextContent(/^Tradicionais$/)
-  })
-
-  test("categoria ativa sem produtos fica só com o nome", () => {
-    abrir("novidades")
-
-    expect(screen.getByRole("button", { name: "Novidades" }).querySelector("img")).toBeNull()
+    expect(screen.getByRole("button", { name: "Tradicionais" })).toHaveTextContent(/^Tradicionais$/)
   })
 
   test("marca a categoria ativa e avisa qual foi escolhida", async () => {

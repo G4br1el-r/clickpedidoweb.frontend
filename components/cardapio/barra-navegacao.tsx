@@ -31,6 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
+import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { compartilharLoja } from "@/lib/compartilhar"
 import { useLoja } from "@/lib/loja-atual"
 import { distanciaDaSeta, setasDaRolagem } from "@/lib/rolagem"
@@ -52,6 +53,8 @@ type BarraNavegacaoProps = {
   aoVerDetalhes: () => void
   /** Fecha o campo sem apagar o texto (a lista continua filtrada). */
   aoRecolherBusca: () => void
+  /** Avisa quando a barra gruda ou solta do topo (no celular, as ações vão para a barra de baixo). */
+  aoGrudar?: (grudada: boolean) => void
 }
 
 /** Detecta quando a barra encosta no topo, para ela mudar de visual. */
@@ -62,19 +65,33 @@ function useGrudada() {
   useEffect(() => {
     const marcador = refMarcador.current
     if (!marcador) return
-    const observador = new IntersectionObserver(([entrada]) => {
-      setGrudada(!entrada.isIntersecting && entrada.boundingClientRect.top < 0)
-    })
-    observador.observe(marcador)
-    return () => observador.disconnect()
+    // Mede a posição a cada rolagem, num quadro só. Um observador de interseção perde o caso
+    // em que o marcador nasce abaixo da dobra (celular deitado, com a foto da loja) e salta
+    // para acima da tela sem cruzá-la.
+    let quadro = 0
+    const medir = () => {
+      quadro = 0
+      setGrudada(marcador.getBoundingClientRect().top < 0)
+    }
+    const agendar = () => {
+      if (!quadro) quadro = requestAnimationFrame(medir)
+    }
+    medir()
+    window.addEventListener("scroll", agendar, { passive: true })
+    window.addEventListener("resize", agendar)
+    return () => {
+      window.removeEventListener("scroll", agendar)
+      window.removeEventListener("resize", agendar)
+      cancelAnimationFrame(quadro)
+    }
   }, [])
 
   return { refMarcador, grudada }
 }
 
 /**
- * Parada, a barra é transparente e deixa o painel de cima respirar.
- * Ao grudar no topo, ganha vidro fosco, sombra, borda de ponta a ponta e a marca da loja.
+ * Parada, a barra é transparente e as categorias são abas de texto.
+ * Ao grudar no topo, ganha o fundo da página, um fio embaixo e a marca da loja. Sem vidro nem sombra.
  */
 export function BarraNavegacao({
   categorias,
@@ -86,12 +103,16 @@ export function BarraNavegacao({
   aoBuscar,
   aoVerDetalhes,
   aoRecolherBusca,
+  aoGrudar,
 }: BarraNavegacaoProps) {
   const lojaEscolhida = useLoja()
   const refCategorias = useRef<HTMLDivElement>(null)
   const refChips = useRef(new Map<string, HTMLButtonElement>())
   const refCampo = useRef<HTMLInputElement>(null)
   const { refMarcador, grudada } = useGrudada()
+  // No celular, as ações (busca, mais opções, sacola) moram na barra de baixo; aqui só as categorias.
+  const telaGrande = useTelaGrande()
+  useEffect(() => aoGrudar?.(grudada), [grudada, aoGrudar])
   // A busca da barra só existe com a barra grudada; parada, a busca é a do painel da loja.
   const buscaAberta = buscando && grudada
 
@@ -144,18 +165,26 @@ export function BarraNavegacao({
   function rolarCategorias(direcao: 1 | -1) {
     const lista = refCategorias.current
     if (!lista) return
-    lista.scrollBy({ left: direcao * distanciaDaSeta(lista.clientWidth), behavior: "smooth" })
+    const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    lista.scrollBy({
+      left: direcao * distanciaDaSeta(lista.clientWidth),
+      behavior: reduzido ? "auto" : "smooth",
+    })
   }
 
   useEffect(() => {
     const lista = refCategorias.current
     const chip = ativa ? refChips.current.get(ativa) : null
     if (!lista || !chip) return
-    // Rola só a lista de categorias, sem interromper a rolagem da página.
-    lista.scrollTo({
-      left: chip.offsetLeft - (lista.clientWidth - chip.offsetWidth) / 2,
-      behavior: "smooth",
-    })
+    // Rola só a lista de categorias, e só quando a ativa sai de vista: o mínimo para ela
+    // aparecer com uma folga. Assim o sublinhado não disputa o movimento com o trilho.
+    const folga = 24
+    const inicio = chip.offsetLeft - folga
+    const fim = chip.offsetLeft + chip.offsetWidth + folga - lista.clientWidth
+    const destino = lista.scrollLeft > inicio ? inicio : Math.max(lista.scrollLeft, fim)
+    if (destino === lista.scrollLeft) return
+    const reduzido = window.matchMedia("(prefers-reduced-motion: reduce)").matches
+    lista.scrollTo({ left: Math.max(0, destino), behavior: reduzido ? "auto" : "smooth" })
   }, [ativa])
 
   // Entrada e saída discretas dos botões da barra: sem quique, só um leve crescer.
@@ -174,10 +203,8 @@ export function BarraNavegacao({
         data-testid="barra-navegacao"
         data-grudada={grudada || undefined}
         className={cn(
-          "sticky top-0 z-30 mt-3 overflow-x-clip border-b py-2.5 transition-[background-color,box-shadow,border-color,backdrop-filter] duration-300 md:mt-5",
-          grudada
-            ? "border-border bg-background/85 shadow-[0_14px_32px_-22px_rgb(14_26_43/0.55)] backdrop-blur-xl backdrop-saturate-150"
-            : "border-transparent bg-transparent",
+          "sticky top-0 z-30 mt-2 overflow-x-clip border-b py-2.5 transition-[background-color,border-color] duration-200 md:mt-4",
+          grudada ? "border-border bg-background" : "border-border/70 bg-background",
         )}
       >
         {/*
@@ -185,12 +212,17 @@ export function BarraNavegacao({
          * ações toda à direita. No celular, as categorias ocupam o espaço e as ações vêm à direita.
          */}
         <Entrada
-          atraso={0.42}
+          atraso={0.1}
           // As laterais nunca ficam menores que o que têm dentro (as ações não cobrem as categorias);
           // havendo espaço, ficam iguais e as categorias ficam no centro exato.
-          className="mx-auto flex h-11 w-full max-w-[1320px] items-center gap-2 px-4 md:grid md:grid-cols-[1fr_minmax(0,640px)_1fr] md:gap-4 md:px-6 2xl:max-w-[1640px]"
+          // Parada, as abas ocupam a coluna, alinhadas à esquerda como o resto da página.
+          // Grudada, viram três zonas: marca, categorias no centro e ações.
+          className={cn(
+            "mx-auto flex h-11 w-full max-w-[1120px] items-center gap-2 px-4 md:gap-4 md:px-6",
+            grudada && "md:grid md:grid-cols-[1fr_minmax(0,560px)_1fr]",
+          )}
         >
-          <div className="hidden min-w-0 md:flex md:justify-self-start">
+          <div className={cn("hidden min-w-0 md:justify-self-start", grudada && "md:flex")}>
             <AnimatePresence initial={false}>
               {grudada && (
                 <motion.div
@@ -202,10 +234,10 @@ export function BarraNavegacao({
                   exit={{ opacity: 0, x: -12 }}
                   transition={{ type: "spring", duration: 0.4, bounce: 0.1 }}
                 >
-                  <span className="relative size-9 shrink-0 overflow-hidden rounded-full bg-white ring-1 ring-border">
-                    <Image src={lojaEscolhida.logo} alt="" fill sizes="36px" />
+                  <span className="relative size-8 shrink-0 overflow-hidden rounded-lg bg-white ring-1 ring-border">
+                    <Image src={lojaEscolhida.logo} alt="" fill sizes="32px" />
                   </span>
-                  <span className="truncate font-heading text-base font-extrabold">
+                  <span className="truncate text-[15px] font-semibold tracking-[-0.01em]">
                     {lojaEscolhida.nome}
                   </span>
                 </motion.div>
@@ -235,7 +267,7 @@ export function BarraNavegacao({
                   }}
                   transition={{ duration: 0.3, ease: [0.23, 1, 0.32, 1] }}
                 >
-                  <InputGroup className="h-11 w-full rounded-full border-transparent bg-secondary dark:bg-secondary">
+                  <InputGroup className="h-11 w-full rounded-xl border-transparent bg-secondary dark:bg-secondary">
                     <InputGroupAddon className="pl-4">
                       <SearchIcon />
                     </InputGroupAddon>
@@ -263,13 +295,22 @@ export function BarraNavegacao({
                   exit={{ opacity: 0, transition: { duration: 0.15 } }}
                   transition={{ duration: 0.4, ease: [0.23, 1, 0.32, 1] }}
                 >
-                  <div className="flex min-w-0 md:justify-center">
+                  {/*
+                   * No celular, a faixa corre de borda a borda da tela (o respiro interno alinha o texto
+                   * da primeira aba à coluna). No computador, parada, o texto encosta na margem da coluna.
+                   */}
+                  <div
+                    className={cn(
+                      "-mx-4 flex min-w-0 md:mx-0",
+                      grudada ? "md:justify-center" : "md:-ml-3",
+                    )}
+                  >
                     <div className="relative flex max-w-full min-w-0">
                       {/*
                        * Trilho: as categorias ganham uma superfície em vez de flutuar soltas. Ele mesmo
                        * rola de lado, então termina sempre arredondado dentro da coluna. Tem a altura
                        * do campo de busca (44 px): trocar um pelo outro não mexe em nada.
-                       * A ponta que ainda tem categorias some num degradê, para mostrar que continua.
+                       * As pontas terminam retas: as categorias seguem corridas até a borda.
                        */}
                       <motion.div
                         // A pílula e as vizinhas animam dentro de um trilho que rola: o motion
@@ -277,17 +318,10 @@ export function BarraNavegacao({
                         layoutScroll
                         ref={refCategorias}
                         onScroll={medirSetas}
-                        style={{
-                          maskImage: mascaraDoTrilho(setas),
-                          WebkitMaskImage: mascaraDoTrilho(setas),
-                        }}
-                        className="sem-barra flex h-11 max-w-full min-w-0 gap-1 overflow-x-auto overscroll-x-contain rounded-full bg-card/80 shadow-[0_10px_28px_-18px_rgb(14_26_43/0.45)] ring-1 ring-border/70 ring-inset dark:bg-card/60 dark:shadow-[0_10px_28px_-18px_rgb(0_0_0/0.9)]"
+                        className="sem-barra flex h-11 max-w-full min-w-0 gap-1 overflow-x-auto overscroll-x-contain px-1 md:px-0"
                       >
                         {categorias.map((categoria) => {
                           const selecionada = ativa === categoria.id
-                          // A ativa ganha a foto do primeiro produto: dá cara à categoria em qualquer
-                          // segmento. Só ela, porque seis fotos não cabem na coluna central.
-                          const capa = selecionada ? categoria.produtos?.[0]?.imagem : undefined
                           return (
                             <button
                               key={categoria.id}
@@ -299,40 +333,23 @@ export function BarraNavegacao({
                               aria-current={selecionada ? "true" : undefined}
                               onClick={() => aoEscolher(categoria.id)}
                               className={cn(
-                                "group relative flex h-11 shrink-0 items-center gap-2 rounded-full text-sm font-semibold whitespace-nowrap outline-none transition-[color,background-color,transform] duration-150 ease-saida focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:scale-[0.96]",
-                                capa ? "pr-4 pl-1.5" : "px-4",
+                                "relative flex h-11 shrink-0 items-center rounded-lg px-3 text-sm font-medium whitespace-nowrap outline-none transition-[color,transform] duration-150 ease-saida focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset active:scale-[0.97]",
                                 selecionada
-                                  ? "text-primary-foreground"
-                                  : "text-foreground/70 hover:bg-muted hover:text-foreground",
+                                  ? "text-foreground"
+                                  : "text-muted-foreground hover:text-foreground",
                               )}
                             >
+                              {/* A barra na cor da loja é o único marcador; só ela viaja entre as abas. */}
                               {selecionada && (
                                 <motion.span
                                   layoutId="categoria-ativa"
-                                  className="absolute inset-0 rounded-full bg-primary shadow-lg shadow-primary/35 ring-1 ring-white/15 ring-inset"
-                                  transition={{ type: "spring", duration: 0.32, bounce: 0.12 }}
+                                  aria-hidden="true"
+                                  // Barra curta e centrada: só desliza entre as abas, sem mudar de largura.
+                                  className="absolute bottom-0 left-[calc(50%-10px)] h-0.5 w-5 rounded-full bg-primary"
+                                  transition={{ type: "spring", duration: 0.3, bounce: 0 }}
                                 />
                               )}
-                              {capa && (
-                                <motion.span
-                                  aria-hidden="true"
-                                  className="relative size-8 shrink-0 overflow-hidden rounded-full ring-2 ring-white/45"
-                                  initial={{ opacity: 0, scale: 0.6, rotate: -20 }}
-                                  animate={{ opacity: 1, scale: 1, rotate: 0 }}
-                                  transition={{ type: "spring", duration: 0.4, bounce: 0.25 }}
-                                >
-                                  <Image
-                                    src={capa}
-                                    alt=""
-                                    fill
-                                    sizes="32px"
-                                    className="object-cover"
-                                  />
-                                </motion.span>
-                              )}
-                              {/* Só a pílula viaja entre as categorias: os botões não animam a posição. Duas animações de
-                                layout aninhadas faziam a pílula começar deslocada e voltar no meio. */}
-                              <span className="relative">{categoria.nome}</span>
+                              {categoria.nome}
                             </button>
                           )
                         })}
@@ -355,101 +372,82 @@ export function BarraNavegacao({
            * Ações da barra grudada em dois grupos, com respiro e um fio entre eles:
            * utilidades leves (busca e mais opções) e as ações (Pedidos e a sacola, em destaque).
            */}
-          <div className="flex shrink-0 items-center gap-2 md:justify-self-end">
-            <div className="flex shrink-0 items-center gap-1">
-              {/* Um só botão: a lupa vira X no mesmo lugar, sem deslizar. */}
-              <AnimatePresence initial={false}>
-                {grudada && (
-                  <motion.div key="busca" className="shrink-0" {...surgir}>
-                    <Dica
-                      texto={
-                        buscaAberta
-                          ? "Fechar busca"
-                          : termo
-                            ? `Buscando “${termo}”`
-                            : "Buscar no cardápio"
-                      }
-                    >
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="toque"
-                        className="relative rounded-full"
-                        aria-label={
+          {telaGrande && (
+            <div className="flex shrink-0 items-center gap-2 md:justify-self-end">
+              <div className="flex shrink-0 items-center gap-1">
+                {/* Um só botão: a lupa vira X no mesmo lugar, sem deslizar. */}
+                <AnimatePresence initial={false}>
+                  {grudada && (
+                    <motion.div key="busca" className="shrink-0" {...surgir}>
+                      <Dica
+                        texto={
                           buscaAberta
                             ? "Fechar busca"
                             : termo
-                              ? `Abrir busca, buscando ${termo}`
-                              : "Abrir busca"
+                              ? `Buscando “${termo}”`
+                              : "Buscar no cardápio"
                         }
-                        onClick={() => aoAlternarBusca(!buscaAberta)}
                       >
-                        <AnimatePresence initial={false} mode="popLayout">
-                          <motion.span
-                            key={buscaAberta ? "fechar" : "lupa"}
-                            className="grid place-items-center"
-                            initial={{ opacity: 0, rotate: -60, scale: 0.6 }}
-                            animate={{ opacity: 1, rotate: 0, scale: 1 }}
-                            exit={{ opacity: 0, rotate: 60, scale: 0.6 }}
-                            transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
-                          >
-                            {buscaAberta ? <XIcon /> : <SearchIcon />}
-                          </motion.span>
-                        </AnimatePresence>
-                        {/* Busca recolhida com texto: o pontinho lembra que a lista está filtrada. */}
-                        {!buscaAberta && termo && (
-                          <span
-                            aria-hidden="true"
-                            className="absolute top-2 right-2 size-2 rounded-full bg-marca-acento ring-2 ring-background"
-                          />
-                        )}
-                      </Button>
-                    </Dica>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="toque"
+                          className="relative rounded-full"
+                          aria-label={
+                            buscaAberta
+                              ? "Fechar busca"
+                              : termo
+                                ? `Abrir busca, buscando ${termo}`
+                                : "Abrir busca"
+                          }
+                          onClick={() => aoAlternarBusca(!buscaAberta)}
+                        >
+                          <AnimatePresence initial={false} mode="popLayout">
+                            <motion.span
+                              key={buscaAberta ? "fechar" : "lupa"}
+                              className="grid place-items-center"
+                              initial={{ opacity: 0, scale: 0.8, filter: "blur(3px)" }}
+                              animate={{ opacity: 1, scale: 1, filter: "blur(0px)" }}
+                              exit={{ opacity: 0, scale: 0.8, filter: "blur(3px)" }}
+                              transition={{ duration: 0.22, ease: [0.23, 1, 0.32, 1] }}
+                            >
+                              {buscaAberta ? <XIcon /> : <SearchIcon />}
+                            </motion.span>
+                          </AnimatePresence>
+                          {/* Busca recolhida com texto: o pontinho lembra que a lista está filtrada. */}
+                          {!buscaAberta && termo && (
+                            <span
+                              aria-hidden="true"
+                              className="absolute top-2 right-2 size-2 rounded-full bg-marca-acento ring-2 ring-background"
+                            />
+                          )}
+                        </Button>
+                      </Dica>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+                <AnimatePresence initial={false}>
+                  {grudada && (
+                    <motion.div key="mais" className="shrink-0" {...surgir}>
+                      <MenuMais aoVerDetalhes={aoVerDetalhes} />
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
               <AnimatePresence initial={false}>
                 {grudada && (
-                  <motion.div key="mais" className="shrink-0" {...surgir}>
-                    <MenuMais aoVerDetalhes={aoVerDetalhes} />
+                  <motion.div key="acoes" className="flex shrink-0 items-center gap-2" {...surgir}>
+                    <span aria-hidden="true" className="mx-1 hidden h-6 w-px bg-border md:block" />
+                    <IconeSacola origemIcone="fixo" />
                   </motion.div>
                 )}
               </AnimatePresence>
             </div>
-            <AnimatePresence initial={false}>
-              {grudada && (
-                <motion.div key="acoes" className="flex shrink-0 items-center gap-2" {...surgir}>
-                  <span aria-hidden="true" className="mx-2 hidden h-6 w-px bg-border md:block" />
-                  <Button
-                    asChild
-                    variant="outline"
-                    size="toque"
-                    className="hidden w-auto gap-2 rounded-full px-4 text-sm font-semibold md:inline-flex"
-                  >
-                    <Link href="/pedidos">
-                      <ReceiptTextIcon data-icon="inline-start" />
-                      Pedidos
-                    </Link>
-                  </Button>
-                  <IconeSacola origemIcone="fixo" />
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+          )}
         </Entrada>
       </nav>
     </>
   )
-}
-
-/** Degradê nas pontas do trilho que ainda têm categorias escondidas. */
-function mascaraDoTrilho({ anterior, proxima }: { anterior: boolean; proxima: boolean }) {
-  if (!anterior && !proxima) return undefined
-  const inicio = anterior ? "transparent 0, transparent 28px, #000 64px" : "#000 0"
-  const fim = proxima
-    ? "#000 calc(100% - 64px), transparent calc(100% - 28px), transparent 100%"
-    : "#000 100%"
-  return `linear-gradient(to right, ${inicio}, ${fim})`
 }
 
 /** Seta sobre a ponta do trilho, do mesmo tamanho dele. Só existe para quem usa mouse. */
@@ -461,7 +459,7 @@ function SetaDoTrilho({ lado, aoClicar }: { lado: "anterior" | "proxima"; aoClic
       aria-label={anterior ? "Ver categorias anteriores" : "Ver próximas categorias"}
       onClick={aoClicar}
       className={cn(
-        "absolute top-0 hidden size-11 place-items-center rounded-full bg-card text-foreground shadow-md ring-1 ring-border/70 transition-[background-color,transform] duration-150 ease-saida outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.94] pointer-fine:grid [&_svg]:size-5",
+        "absolute top-0 hidden size-11 place-items-center rounded-full bg-background text-foreground ring-1 ring-border transition-[background-color,transform] duration-150 ease-saida outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring active:scale-[0.97] pointer-fine:grid [&_svg]:size-5",
         anterior ? "left-0" : "right-0",
       )}
     >
@@ -474,7 +472,14 @@ function SetaDoTrilho({ lado, aoClicar }: { lado: "anterior" | "proxima"; aoClic
  * Três pontinhos do cabeçalho grudado: "A loja", "Compartilhar" e o tema.
  * Traz também o tema; no celular, onde não cabem mais botões, traz ainda "Pedidos".
  */
-function MenuMais({ aoVerDetalhes }: { aoVerDetalhes: () => void }) {
+export function MenuMais({
+  aoVerDetalhes,
+  lado = "bottom",
+}: {
+  aoVerDetalhes: () => void
+  /** Na barra de baixo do celular, o menu abre para cima. */
+  lado?: "top" | "bottom"
+}) {
   const lojaEscolhida = useLoja()
   const { resolvedTheme, setTheme } = useTheme()
   const escuro = resolvedTheme === "dark"
@@ -513,7 +518,12 @@ function MenuMais({ aoVerDetalhes }: { aoVerDetalhes: () => void }) {
           </Button>
         </DropdownMenuTrigger>
       </Dica>
-      <DropdownMenuContent align="end" sideOffset={8} className="w-56 rounded-2xl p-1.5">
+      <DropdownMenuContent
+        align="end"
+        side={lado}
+        sideOffset={8}
+        className="w-56 rounded-2xl p-1.5"
+      >
         <DropdownMenuLabel className="text-xs font-medium text-muted-foreground">
           {lojaEscolhida.nome}
         </DropdownMenuLabel>
@@ -521,7 +531,7 @@ function MenuMais({ aoVerDetalhes }: { aoVerDetalhes: () => void }) {
         <DropdownMenuGroup>
           <DropdownMenuItem
             asChild
-            className="h-11 gap-3 rounded-xl text-[15px] font-semibold text-marca-texto md:hidden"
+            className="h-11 gap-3 rounded-xl text-[15px] font-semibold text-marca-texto"
           >
             <Link href="/pedidos">
               <ReceiptTextIcon />

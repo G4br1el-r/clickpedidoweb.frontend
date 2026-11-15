@@ -14,3 +14,14 @@ describe("textosDoSegmento", () => {
     })
   })
 })
+
+describe("espera de cada segmento", () => {
+  test("cada nicho tem a sua frase de carregamento, do próprio ofício", () => {
+    expect(textosDoSegmento("pizzaria").carregando).toBe("Acendendo o forno")
+    expect(textosDoSegmento("farmacia").carregando).toBe("Organizando as prateleiras")
+    expect(textosDoSegmento("adega").carregando).toBe("Gelando as bebidas")
+    expect(textosDoSegmento("acougue").carregando).toBe("Afiando as facas")
+    expect(textosDoSegmento("salao").carregando).toBe("Preparando a bancada")
+    expect(textosDoSegmento("lanchonete").carregando).toBe("Esquentando a chapa")
+  })
+})

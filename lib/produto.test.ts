@@ -1,6 +1,7 @@
 import type { StaticImageData } from "next/image"
 import { describe, expect, test } from "vitest"
 import {
+  acaoDoPasso,
   avisoDeFaltantes,
   escolhidosDe,
   gruposFaltantes,
@@ -259,5 +260,51 @@ describe("grupos com várias escolhas (quiosque e adega)", () => {
       adicionais: ["bacon", "ovo"],
     })
     expect(montarItemSacola(LANCHE, escolhidos, 1, "").resumo).toEqual(["Ao ponto", "Bacon", "Ovo"])
+  })
+})
+
+describe("acaoDoPasso: o botão principal da folha, passo a passo", () => {
+  const GRUPOS = [SABOR_1, SABOR_2, BORDA]
+
+  test("antes do último passo, o botão avança; escolher não pula de passo sozinho", () => {
+    expect(acaoDoPasso(GRUPOS, { "sabor-1": "calabresa" }, 0)).toEqual({
+      tipo: "avancar",
+      rotulo: "Avançar",
+      para: 1,
+    })
+  })
+
+  test("sem a escolha obrigatória do passo, avançar aponta o que falta nele", () => {
+    expect(acaoDoPasso(GRUPOS, {}, 0)).toEqual({
+      tipo: "falta",
+      rotulo: "Avançar",
+      grupo: SABOR_1,
+    })
+  })
+
+  test("passo opcional avança mesmo sem escolha", () => {
+    expect(acaoDoPasso([BORDA, SABOR_1], {}, 0)).toEqual({
+      tipo: "avancar",
+      rotulo: "Avançar",
+      para: 1,
+    })
+  })
+
+  test("no último passo, com tudo escolhido, o botão adiciona", () => {
+    expect(
+      acaoDoPasso(GRUPOS, { "sabor-1": "calabresa", "sabor-2": "mussarela", borda: "fina" }, 2),
+    ).toEqual({ tipo: "adicionar", rotulo: "Adicionar" })
+  })
+
+  test("no último passo, faltando algo antes, o botão adiciona mas leva ao que falta", () => {
+    expect(acaoDoPasso(GRUPOS, { borda: "fina" }, 2)).toEqual({
+      tipo: "falta",
+      rotulo: "Adicionar",
+      grupo: SABOR_1,
+    })
+  })
+
+  test("produto sem opções só adiciona", () => {
+    expect(acaoDoPasso([], {}, 0)).toEqual({ tipo: "adicionar", rotulo: "Adicionar" })
   })
 })

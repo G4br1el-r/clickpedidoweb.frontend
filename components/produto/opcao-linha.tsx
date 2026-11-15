@@ -1,6 +1,6 @@
 "use client"
 
-import { motion } from "motion/react"
+import { motion, useReducedMotion } from "motion/react"
 import type { MouseEvent } from "react"
 import { Foto } from "@/components/foto"
 import { registroSegmentos } from "@/components/segmentos/registro"
@@ -21,8 +21,9 @@ import { cn } from "@/lib/utils"
 const CURVA = [0.23, 1, 0.32, 1] as const
 
 /**
- * Imagem da opção. O segmento desenha a sua (a pizzaria desenha sabores e bordas em SVG).
- * Sem desenho do segmento, usa a foto; sem foto, a inicial do nome. Sempre aparece algo.
+ * Imagem da opção. O segmento desenha a sua (a pizzaria desenha sabores e bordas em SVG);
+ * sem desenho, usa a foto. Sem nenhum dos dois, não há imagem: a linha fica só com o texto,
+ * em vez de uma inicial que ocupa espaço e não diz nada.
  */
 function Miniatura({
   grupo,
@@ -35,18 +36,20 @@ function Miniatura({
 }) {
   const lojaEscolhida = useLoja()
   const { MiniaturaOpcao } = registroSegmentos[lojaEscolhida.segmento]
+  const reduzido = useReducedMotion()
+  if (!MiniaturaOpcao && !item.imagem) return null
 
   return (
-    <span className="relative flex size-14 shrink-0 items-center justify-center" aria-hidden="true">
+    <span
+      data-miniatura=""
+      className="relative flex size-14 shrink-0 items-center justify-center"
+      aria-hidden="true"
+    >
       <span className="size-12 overflow-hidden rounded-full">
         {MiniaturaOpcao ? (
           <MiniaturaOpcao grupo={grupo} item={item} />
-        ) : item.imagem ? (
-          <Foto src={item.imagem} alt="" sizes="48px" className="size-12" />
         ) : (
-          <span className="flex size-12 items-center justify-center bg-accent font-heading text-lg font-bold text-accent-foreground">
-            {item.nome.charAt(0)}
-          </span>
+          item.imagem && <Foto src={item.imagem} alt="" sizes="48px" className="size-12" />
         )}
       </span>
       <svg viewBox="0 0 56 56" className="absolute inset-0 size-full -rotate-90" aria-hidden="true">
@@ -59,8 +62,12 @@ function Miniatura({
           strokeWidth="2.5"
           strokeLinecap="round"
           initial={false}
-          animate={{ pathLength: selecionada ? 1 : 0, opacity: selecionada ? 1 : 0 }}
-          transition={{ duration: 0.35, ease: CURVA }}
+          // O anel se fecha em volta da escolha; com movimento reduzido, só aparece.
+          animate={{
+            pathLength: selecionada || reduzido ? 1 : 0,
+            opacity: selecionada ? 1 : 0,
+          }}
+          transition={{ duration: reduzido ? 0.15 : 0.28, ease: CURVA }}
         />
       </svg>
     </span>
@@ -76,6 +83,13 @@ type OpcaoLinhaProps = {
   aoClicar: (evento: MouseEvent<HTMLLabelElement>) => void
 }
 
+/**
+ * Linha de escolha, sem cartão: as opções se separam por um fio, como a lista da vitrine.
+ * A escolha aparece no rádio e no anel na cor da loja; o toque escurece a linha um instante.
+ */
+const CARTAO =
+  "w-full has-[>[data-slot=field]]:rounded-none has-[>[data-slot=field]]:border-0 has-[>[data-slot=field]]:border-b has-[>[data-slot=field]]:border-border/70 has-data-checked:bg-transparent dark:has-data-checked:bg-transparent has-[>[data-slot=field]]:has-[:focus-visible]:ring-inset transition-[background-color] duration-150 ease-saida active:bg-muted/70"
+
 /** Cartão de escolha do shadcn (FieldLabel + RadioGroupItem), com a miniatura desenhada. */
 export function OpcaoLinha({ grupo, item, selecionada, invalida, aoClicar }: OpcaoLinhaProps) {
   const id = `opcao-${grupo.id}-${item.id}`
@@ -84,20 +98,29 @@ export function OpcaoLinha({ grupo, item, selecionada, invalida, aoClicar }: Opc
     <FieldLabel
       htmlFor={id}
       onClick={aoClicar}
-      className={cn(
-        "w-full rounded-2xl transition-[border-color,background-color,transform] duration-200 ease-saida active:scale-[0.99]",
-        invalida && "border-destructive/70",
-      )}
+      className={cn(CARTAO, invalida && "border-destructive/70")}
     >
-      <Field orientation="horizontal" className="items-center gap-3 py-2! pr-3.5! pl-2!">
+      <Field
+        orientation="horizontal"
+        className="min-h-14 items-center gap-3 py-2! pr-3.5! pl-2! has-[>[data-slot=field-content]]:items-center"
+      >
         <Miniatura grupo={grupo} item={item} selecionada={selecionada} />
         <FieldContent className="min-w-0">
-          <FieldTitle className={cn("text-base", selecionada && "font-bold")}>
+          <FieldTitle className="text-[15px] font-medium tracking-[-0.01em]">
             {item.nome}
           </FieldTitle>
-          {item.descricao && <FieldDescription>{item.descricao}</FieldDescription>}
+          {item.descricao && (
+            <FieldDescription className="text-[13px] leading-snug">
+              {item.descricao}
+            </FieldDescription>
+          )}
         </FieldContent>
-        <span className="shrink-0 text-sm font-medium text-muted-foreground tabular-nums">
+        <span
+          className={cn(
+            "shrink-0 text-sm tabular-nums transition-colors duration-150",
+            selecionada ? "font-medium text-foreground" : "text-muted-foreground",
+          )}
+        >
           {item.extra > 0 ? `+ ${emReais(item.extra)}` : "Incluso"}
         </span>
         <RadioGroupItem
@@ -138,17 +161,32 @@ export function OpcaoCaixa({
     <FieldLabel
       htmlFor={id}
       className={cn(
-        "w-full rounded-2xl transition-[border-color,background-color,opacity] duration-200 ease-saida",
-        desligada && "opacity-55",
+        CARTAO,
+        "transition-[border-color,background-color,opacity,transform]",
+        desligada && "opacity-55 active:scale-100",
       )}
     >
-      <Field orientation="horizontal" className="items-center gap-3 py-2! pr-3.5! pl-2!">
+      <Field
+        orientation="horizontal"
+        className="min-h-14 items-center gap-3 py-2! pr-3.5! pl-2! has-[>[data-slot=field-content]]:items-center"
+      >
         <Miniatura grupo={grupo} item={item} selecionada={marcada} />
         <FieldContent className="min-w-0">
-          <FieldTitle className={cn("text-base", marcada && "font-bold")}>{item.nome}</FieldTitle>
-          {item.descricao && <FieldDescription>{item.descricao}</FieldDescription>}
+          <FieldTitle className="text-[15px] font-medium tracking-[-0.01em]">
+            {item.nome}
+          </FieldTitle>
+          {item.descricao && (
+            <FieldDescription className="text-[13px] leading-snug">
+              {item.descricao}
+            </FieldDescription>
+          )}
         </FieldContent>
-        <span className="shrink-0 text-sm font-medium text-muted-foreground tabular-nums">
+        <span
+          className={cn(
+            "shrink-0 text-sm tabular-nums transition-colors duration-150",
+            marcada ? "font-medium text-foreground" : "text-muted-foreground",
+          )}
+        >
           {item.extra > 0 && !gratis ? `+ ${emReais(item.extra)}` : "Grátis"}
         </span>
         <Checkbox

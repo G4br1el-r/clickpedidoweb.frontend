@@ -96,6 +96,8 @@ describe("PaginaReceitas", () => {
     expect(screen.queryByRole("article", { name: /Ana Paula Ferreira/ })).not.toBeInTheDocument()
     await usuario.click(screen.getByRole("tab", { name: /Aprovadas 1/ }))
     expect(receitaDe("Ana Paula Ferreira").getByText("Aprovada")).toBeInTheDocument()
+    const aprovada = screen.getByRole("article", { name: /Ana Paula Ferreira/ })
+    expect(aprovada.querySelector("[data-traco]")).toHaveAttribute("data-tom", "pronto")
   })
 
   test("recusa com um motivo e dá para desfazer", async () => {
@@ -112,6 +114,9 @@ describe("PaginaReceitas", () => {
     await usuario.click(screen.getByRole("tab", { name: /Recusadas 1/ }))
     const camila = receitaDe("Camila Rocha Lima")
     expect(camila.getByText("Recusada: Receita vencida")).toBeInTheDocument()
+    expect(
+      screen.getByRole("article", { name: /Camila Rocha Lima/ }).querySelector("[data-traco]"),
+    ).toHaveAttribute("data-tom", "cancelado")
     await usuario.click(camila.getByRole("button", { name: "Desfazer" }))
     expect(useFarmacia.getState().decisoes["rec-1003"]).toBeUndefined()
   })

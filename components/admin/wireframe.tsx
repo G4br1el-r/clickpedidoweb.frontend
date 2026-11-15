@@ -62,7 +62,7 @@ function Esqueleto({ id, exibicao }: { id: BlocoId; exibicao: ExibicaoBloco }) {
             key={item}
             className="flex h-7 flex-1 flex-col justify-center gap-1 rounded-md bg-foreground/8 px-1.5"
           >
-            <span className={cn(barra, "h-1 w-1/2 bg-[#F5B700]/70")} />
+            <span className={cn(barra, "h-1 w-1/2 bg-(--dourado)/70")} />
             <span className={cn(barra, "h-1 w-4/5")} />
           </div>
         ))}
@@ -132,8 +132,8 @@ function LinhaBloco({ bloco }: { bloco: Bloco }) {
       data-testid={`bloco-${bloco.id}`}
       {...eventos}
       className={cn(
-        "relative flex items-stretch gap-2 rounded-2xl bg-card p-2 ring-1 ring-border",
-        isDragging && "z-10 shadow-[0_18px_40px_-16px_rgb(0_0_0/0.45)] ring-2 ring-primary",
+        "relative flex items-stretch gap-2 rounded-xl bg-card p-2 ring-1 ring-border/80",
+        isDragging && "z-10 shadow-[0_16px_36px_-18px_rgb(0_0_0/0.4)] ring-2 ring-foreground",
         liberada && "opcao-pro",
       )}
     >
@@ -198,7 +198,7 @@ function LinhaBloco({ bloco }: { bloco: Bloco }) {
 
 function Fixo({ titulo, descricao }: { titulo: string; descricao: string }) {
   return (
-    <div className="flex items-center gap-3 rounded-2xl border border-dashed border-border px-3 py-2.5 text-muted-foreground">
+    <div className="flex items-center gap-3 rounded-xl border border-dashed border-border/80 px-3 py-2.5 text-muted-foreground">
       <LockIcon className="size-4 shrink-0" aria-hidden="true" />
       <div className="min-w-0 leading-tight">
         <p className="text-sm font-semibold text-foreground">{titulo}</p>
@@ -235,42 +235,44 @@ export function Wireframe() {
 
   return (
     <div className="flex flex-col gap-2" data-testid="wireframe">
-      <Fixo titulo="Cabeçalho" descricao="Banner, logo, nome e informações da loja" />
-      <DndContext
-        sensors={sensores}
-        collisionDetection={closestCenter}
-        // A página rola enquanto o bloco anda pelo teclado: mede de novo a cada passo.
-        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-        onDragEnd={soltar}
-        accessibility={{
-          announcements: {
-            onDragStart: ({ active }) => `Movendo ${nomeDoBloco(active.id as BlocoId)}.`,
-            onDragOver: ({ active, over }) =>
-              over
-                ? `${nomeDoBloco(active.id as BlocoId)} sobre ${nomeDoBloco(over.id as BlocoId)}.`
-                : "",
-            onDragEnd: ({ active }) =>
-              `${nomeDoBloco(active.id as BlocoId)} solto na nova posição.`,
-            onDragCancel: () => "Movimento cancelado.",
-          },
-          screenReaderInstructions: {
-            draggable:
-              "Para mover, aperte espaço, use as setas para cima e para baixo e aperte espaço de novo para soltar.",
-          },
-        }}
-      >
-        <SortableContext
-          items={blocos.map((bloco) => bloco.id)}
-          strategy={verticalListSortingStrategy}
+      <div className="flex flex-col gap-1.5 rounded-2xl bg-foreground/[0.03] p-2">
+        <Fixo titulo="Cabeçalho" descricao="Banner, logo, nome e informações da loja" />
+        <DndContext
+          sensors={sensores}
+          collisionDetection={closestCenter}
+          // A página rola enquanto o bloco anda pelo teclado: mede de novo a cada passo.
+          measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+          onDragEnd={soltar}
+          accessibility={{
+            announcements: {
+              onDragStart: ({ active }) => `Movendo ${nomeDoBloco(active.id as BlocoId)}.`,
+              onDragOver: ({ active, over }) =>
+                over
+                  ? `${nomeDoBloco(active.id as BlocoId)} sobre ${nomeDoBloco(over.id as BlocoId)}.`
+                  : "",
+              onDragEnd: ({ active }) =>
+                `${nomeDoBloco(active.id as BlocoId)} solto na nova posição.`,
+              onDragCancel: () => "Movimento cancelado.",
+            },
+            screenReaderInstructions: {
+              draggable:
+                "Para mover, aperte espaço, use as setas para cima e para baixo e aperte espaço de novo para soltar.",
+            },
+          }}
         >
-          <ul className="flex flex-col gap-2">
-            {blocos.map((bloco) => (
-              <LinhaBloco key={bloco.id} bloco={bloco} />
-            ))}
-          </ul>
-        </SortableContext>
-      </DndContext>
-      <Fixo titulo="Rodapé" descricao="Sempre no fim da página" />
+          <SortableContext
+            items={blocos.map((bloco) => bloco.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <ul className="flex flex-col gap-1.5">
+              {blocos.map((bloco) => (
+                <LinhaBloco key={bloco.id} bloco={bloco} />
+              ))}
+            </ul>
+          </SortableContext>
+        </DndContext>
+        <Fixo titulo="Rodapé" descricao="Sempre no fim da página" />
+      </div>
       <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
         <EyeIcon className="size-3.5" aria-hidden="true" />
         Blocos desligados continuam aqui, prontos para voltar quando quiser.

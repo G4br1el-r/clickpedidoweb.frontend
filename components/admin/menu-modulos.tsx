@@ -1,5 +1,6 @@
 "use client"
 
+import { motion } from "motion/react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
@@ -35,6 +36,16 @@ export function MenuModulos() {
               <SidebarMenuItem key={id}>
                 <SidebarMenuButton asChild isActive={ativo} tooltip={titulo}>
                   <Link href={href} aria-current={ativo ? "page" : undefined}>
+                    {/* O traço da Etiqueta marca onde você está e desliza ao trocar de página. */}
+                    {ativo && (
+                      <motion.span
+                        layoutId="traco-menu"
+                        data-traco-menu=""
+                        aria-hidden="true"
+                        className="absolute top-2 bottom-2 left-0 w-[3px] rounded-full bg-foreground group-data-[collapsible=icon]:hidden"
+                        transition={{ type: "spring", duration: 0.3, bounce: 0 }}
+                      />
+                    )}
                     <Icone />
                     <span>{titulo}</span>
                   </Link>

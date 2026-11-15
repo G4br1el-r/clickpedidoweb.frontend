@@ -9,8 +9,10 @@ import { useLoja } from "@/lib/admin/dados/consultas"
 import { useAgenda } from "@/lib/admin/dados/consultas-agenda"
 import { resumoDaAgenda } from "@/lib/admin/regras/agenda"
 import { emReais } from "@/lib/formato"
+import { CabecalhoPagina } from "../cabecalho-pagina"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
+import { Indicador } from "../regua"
 import { AgendaDoDia } from "./agenda-do-dia"
 import { ListaAgenda } from "./lista-agenda"
 import { NovoAgendamento } from "./novo-agendamento"
@@ -23,27 +25,18 @@ function useDiaDaAgenda(agora: Date | null) {
   return [dia, (novo: Date) => void setTexto(format(novo, "yyyy-MM-dd"))] as const
 }
 
-function Resumo({
-  titulo,
-  quantidade,
-  total,
-}: {
-  titulo: string
-  quantidade: number
-  total: number
-}) {
+/** Régua de três fatos, como a da visão geral: lado a lado entre fios, sem cartões. */
+const REGUA =
+  "grid grid-cols-3 border-y border-border/70 *:border-border/70 *:px-3 sm:*:px-4 [&>*:first-child]:pl-0 [&>*:not(:first-child)]:border-l"
+
+function EsqueletoAgenda() {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl border bg-card p-3 sm:p-4">
-      <span className="truncate text-xs text-muted-foreground sm:text-sm">{titulo}</span>
-      <span className="flex flex-wrap items-baseline gap-x-1.5">
-        <span className="text-2xl font-semibold tabular-nums">{quantidade}</span>
-        <span className="text-xs text-muted-foreground sm:text-sm">
-          {quantidade === 1 ? "atendimento" : "atendimentos"}
-        </span>
-      </span>
-      <span className="truncate text-xs tabular-nums text-muted-foreground sm:text-sm">
-        {emReais(total)}
-      </span>
+    <div role="status" aria-label="Carregando a agenda" className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-5 w-56" />
+        <Skeleton className="h-3.5 w-40" />
+      </div>
+      <Skeleton className="h-[40rem] rounded-2xl" />
     </div>
   )
 }
@@ -58,37 +51,54 @@ export function PaginaAgendamentos() {
   const resumo = pedidos && agora ? resumoDaAgenda(pedidos, agora) : null
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Agendamentos</h1>
-          <p className="text-sm text-muted-foreground">
-            Pelo dia do atendimento. Toque num horário para ver os detalhes.
-          </p>
-        </div>
-        {loja && agora && dia && (
-          <div className="ml-auto">
+    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
+      <CabecalhoPagina
+        titulo="Agendamentos"
+        resumo="Pelo dia do atendimento. Toque num horário para ver os detalhes."
+        acoes={
+          loja &&
+          agora &&
+          dia && (
             <NovoAgendamento dia={dia} agora={agora} horarios={loja.horarios} aoMarcar={mudarDia} />
-          </div>
-        )}
-      </div>
+          )
+        }
+      />
 
-      <section aria-label="Resumo da agenda" className="grid grid-cols-3 gap-2 sm:gap-3">
-        {resumo ? (
-          <>
-            <Resumo titulo="Hoje" {...resumo.hoje} />
-            <Resumo titulo="Amanhã" {...resumo.amanha} />
-            <Resumo titulo="Próximos 7 dias" {...resumo.semana} />
-          </>
-        ) : (
-          [0, 1, 2].map((indice) => <Skeleton key={indice} className="h-24 rounded-xl" />)
-        )}
+      <section aria-label="Resumo da agenda">
+        <dl className={REGUA}>
+          {(
+            [
+              ["Hoje", resumo?.hoje],
+              ["Amanhã", resumo?.amanha],
+              ["Próximos 7 dias", resumo?.semana],
+            ] as const
+          ).map(([titulo, contagem]) => (
+            <Indicador
+              key={titulo}
+              rotulo={titulo}
+              detalhe={
+                contagem ? (
+                  <span className="tabular-nums">
+                    <span className="max-sm:hidden">
+                      {contagem.quantidade === 1 ? "atendimento" : "atendimentos"} ·{" "}
+                    </span>
+                    {emReais(contagem.total)}
+                  </span>
+                ) : (
+                  <Skeleton className="h-3 w-16" />
+                )
+              }
+            >
+              {contagem ? contagem.quantidade : <Skeleton className="h-7 w-8" />}
+            </Indicador>
+          ))}
+        </dl>
       </section>
 
       {!pedidos || !loja || !agora || !dia ? (
-        <Skeleton role="status" aria-label="Carregando a agenda" className="h-[40rem] rounded-xl" />
+        <EsqueletoAgenda />
       ) : (
-        <Tabs defaultValue="dia">
+        <Tabs defaultValue="dia" className="gap-4">
           {/* Texto da aba inativa mais forte: o padrão não passa no contraste sobre o fundo cinza. */}
           <TabsList>
             <TabsTrigger value="dia" className="text-foreground/80 dark:text-foreground/80">
@@ -98,7 +108,7 @@ export function PaginaAgendamentos() {
               Lista
             </TabsTrigger>
           </TabsList>
-          <TabsContent value="dia" className="pt-3">
+          <TabsContent value="dia">
             <AgendaDoDia
               dia={dia}
               agora={agora}
@@ -108,7 +118,7 @@ export function PaginaAgendamentos() {
               aoAbrir={(pedido) => abrirPedido(pedido.id)}
             />
           </TabsContent>
-          <TabsContent value="lista" className="pt-3">
+          <TabsContent value="lista">
             <ListaAgenda
               pedidos={pedidos}
               agora={agora}

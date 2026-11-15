@@ -7,15 +7,18 @@ import { useSegmentoCarregado } from "@/lib/admin/segmento-atual"
 import { cn } from "@/lib/utils"
 import { BarraLateralAdmin } from "./barra-lateral-admin"
 
-/** Estrutura do painel: barra lateral do shadcn e a área principal ao lado. */
+/** Estrutura do painel: a barra lateral no fundo e a folha de trabalho ao lado. */
 export function ShellAdmin({ className, children }: { className?: string; children: ReactNode }) {
   useConfigCarregada()
   useSegmentoCarregado()
 
   return (
-    <SidebarProvider className={cn("bg-background", className)}>
+    <SidebarProvider className={cn("bg-sidebar", className)}>
       <BarraLateralAdmin />
-      <SidebarInset className="min-w-0">{children}</SidebarInset>
+      {/* A área de trabalho é uma folha sobre o fundo: plana, com fio, sem sombra. */}
+      <SidebarInset className="min-w-0 bg-card md:peer-data-[variant=inset]:rounded-2xl md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:ring-1 md:peer-data-[variant=inset]:ring-border/70">
+        {children}
+      </SidebarInset>
     </SidebarProvider>
   )
 }

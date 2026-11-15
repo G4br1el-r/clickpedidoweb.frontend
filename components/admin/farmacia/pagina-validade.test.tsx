@@ -68,6 +68,14 @@ describe("PaginaValidade", () => {
     expect(insulina.getByLabelText("Guardar na geladeira")).toBeInTheDocument()
   })
 
+  test("a situação do lote é um traço no tom e o texto ao lado", async () => {
+    await abrir()
+    const vencido = lotes().getByRole("row", { name: /DP25K09/ })
+    expect(vencido.querySelector("[data-traco]")).toHaveAttribute("data-tom", "cancelado")
+    const insulina = lotes().getByRole("row", { name: /Insulina humana NPH/ })
+    expect(insulina.querySelector("[data-traco]")).toHaveAttribute("data-tom", "preparo")
+  })
+
   test("filtra pela situação", async () => {
     const usuario = await abrir()
     await usuario.click(screen.getByRole("radio", { name: "Vencidos 2" }))

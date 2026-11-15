@@ -104,6 +104,13 @@ describe("PaginaAgendamentos", () => {
     expect(dora.style.width).toBe("100%")
   })
 
+  test("o dia diz quantos atendimentos tem e o horário do salão", async () => {
+    await marcar("Bruna Alves", terca(10))
+    await marcar("Carla Dias", terca(15))
+    await abrir()
+    expect(await dia().findByText("2 atendimentos · das 09:00 às 19:00")).toBeInTheDocument()
+  })
+
   test("anda entre os dias e avisa quando o salão não abre", async () => {
     const usuario = await abrir("?dia=2026-12-05")
     expect(

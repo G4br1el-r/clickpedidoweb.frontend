@@ -27,6 +27,7 @@ import {
   CampoSlider,
   CampoSwitch,
   CampoTexto,
+  CLASSE_OPCAO,
   SeloPro,
 } from "../campos"
 import { CampoCor, CampoImagem } from "../campos-midia"
@@ -160,7 +161,7 @@ function Paleta({ paleta }: { paleta: (typeof PALETAS)[number] }) {
     <FieldLabel
       htmlFor={id}
       data-pro-liberada={liberada || undefined}
-      className={cn("rounded-2xl", liberada && "opcao-pro")}
+      className={cn(CLASSE_OPCAO, liberada && "opcao-pro")}
     >
       <Field orientation="horizontal" className="items-center gap-3 p-3!">
         <span
@@ -263,6 +264,15 @@ export function SecaoCores() {
           min={0}
           max={24}
           formatar={(valor) => (valor === 0 ? "Retos" : `${valor} px`)}
+          amostra={(valor) => (
+            // O canto de cima à esquerda de um botão, em tamanho real.
+            <span
+              aria-hidden="true"
+              data-testid="amostra-cantos"
+              className="size-6 border-t-2 border-l-2 border-foreground/70 transition-[border-radius] duration-150 ease-saida"
+              style={{ borderTopLeftRadius: `${valor}px` }}
+            />
+          )}
         />
       </BlocoConfig>
       <BlocoConfig titulo="Tema" descricao="Como a loja abre para quem visita.">
@@ -302,7 +312,7 @@ export function SecaoTipografia() {
             rotulo: FONTES_TITULO[valor].nome,
             visual: (
               <span
-                className="flex h-16 items-center justify-center rounded-xl bg-muted text-3xl font-bold"
+                className="flex h-16 items-center justify-center rounded-lg bg-foreground/[0.04] text-3xl font-bold"
                 style={{ fontFamily: FONTES_TITULO[valor].css }}
               >
                 Aa

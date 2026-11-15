@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils"
 import { CabecalhoPasso } from "./cabecalho-passo"
 
 const PILULA =
-  "flex cursor-pointer flex-col items-center justify-center rounded-2xl border text-sm font-semibold transition-colors has-data-[state=checked]:border-primary has-data-[state=checked]:bg-primary has-data-[state=checked]:text-primary-foreground has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
+  "flex cursor-pointer flex-col items-center justify-center rounded-xl border border-border text-sm font-medium transition-[background-color,border-color,color,transform] duration-150 ease-saida active:scale-[0.97] has-data-[state=checked]:border-primary has-data-[state=checked]:bg-primary has-data-[state=checked]:text-primary-foreground has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
 
 /** 120 vira "2h"; 90, "1h30"; 45, "45 min". */
 function duracaoEmTexto(minutos: number) {
@@ -53,14 +53,14 @@ export function PassoHorario() {
     : []
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <CabecalhoPasso
         titulo="Quando você quer vir?"
         descricao={`Seu atendimento dura ${duracaoEmTexto(duracao)}.`}
       />
 
       <div className="flex flex-col gap-2">
-        <p id="titulo-dia" className="text-sm font-semibold">
+        <p id="titulo-dia" className="text-sm font-medium">
           Dia
         </p>
         <RadioGroup
@@ -89,7 +89,7 @@ export function PassoHorario() {
           const doDia = escolhido && dia && isSameDay(escolhido, dia)
           return (
             <div className="flex flex-col gap-2">
-              <p id="titulo-horario" className="text-sm font-semibold">
+              <p id="titulo-horario" className="text-sm font-medium">
                 Horário
               </p>
               {horas.length === 0 ? (
@@ -113,7 +113,7 @@ export function PassoHorario() {
                 </RadioGroup>
               )}
               {escolhido && doDia && (
-                <p className="flex items-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-sm text-accent-foreground">
+                <p className="flex items-center gap-2 pt-1 text-sm text-muted-foreground tabular-nums">
                   <CalendarClockIcon className="size-4 shrink-0" aria-hidden="true" />
                   {format(escolhido, "EEEE, dd/MM", { locale: ptBR })}, das{" "}
                   {format(escolhido, "HH:mm")} às {format(addMinutes(escolhido, duracao), "HH:mm")}

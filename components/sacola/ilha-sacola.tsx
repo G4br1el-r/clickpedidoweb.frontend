@@ -1,12 +1,13 @@
 "use client"
 
 import NumberFlow from "@number-flow/react"
-import { ShoppingBagIcon, XIcon } from "lucide-react"
+import { ShoppingBagIcon } from "lucide-react"
 import { AnimatePresence, motion, useAnimationControls } from "motion/react"
 import { Dialog } from "radix-ui"
 import { useEffect, useRef } from "react"
 import { create } from "zustand"
 import { Dica } from "@/components/dica"
+import { BotaoFecharPainel, VEU_DO_MODAL } from "@/components/modal"
 import { Button } from "@/components/ui/button"
 import { formatoMoeda, plural } from "@/lib/formato"
 import { calcularSubtotal, contarItens, useSacola } from "@/lib/sacola"
@@ -73,7 +74,7 @@ function devolverFoco(evento: Event) {
 /** Mola da transformação ícone ou barra ⇄ painel: rápida, com um assentamento quase imperceptível. */
 export const MOLA_ILHA = { type: "spring", duration: 0.5, bounce: 0.14 } as const
 /** Tempo do voo do produto até o ícone. */
-const CHEGADA_S = 0.52
+const CHEGADA_S = 0.3
 
 /**
  * Ícone da sacola: sobre a foto ("topo") com a barra parada, e na barra grudada ("fixo").
@@ -82,7 +83,7 @@ const CHEGADA_S = 0.52
  * o painel ao abrir, por isso a sacola parece crescer de dentro do botão.
  */
 export function IconeSacola({ origemIcone = "topo" }: { origemIcone?: "topo" | "fixo" }) {
-  const sobreFoto = origemIcone === "topo"
+  const noTopo = origemIcone === "topo"
   const abertaAqui = useIlhaSacola((estado) => estado.aberta && estado.de === origemIcone)
   const algumaAberta = useIlhaSacola((estado) => estado.aberta)
   const abrir = useIlhaSacola((estado) => estado.abrir)
@@ -90,19 +91,18 @@ export function IconeSacola({ origemIcone = "topo" }: { origemIcone?: "topo" | "
   const quantidade = useSacola((estado) => (hidratada ? contarItens(estado.itens) : 0))
   const subtotal = useSacola((estado) => (hidratada ? calcularSubtotal(estado.itens) : 0))
   const cheia = quantidade > 0
-  const destaque = !sobreFoto && cheia
+  const destaque = !noTopo && cheia
   const balanco = useAnimationControls()
   const anterior = useRef(quantidade)
 
-  // Quando um item chega voando, a sacola balança como se tivesse recebido peso.
+  // Quando a etiqueta chega, a sacola cresce um instante: recebeu o item.
   useEffect(() => {
     const aumentou = quantidade > anterior.current
     anterior.current = quantidade
     if (!aumentou) return
     void balanco.start({
-      rotate: [0, -14, 10, -5, 0],
-      scale: [1, 1.18, 0.96, 1],
-      transition: { duration: 0.55, delay: CHEGADA_S },
+      scale: [1, 1.14, 1],
+      transition: { duration: 0.35, delay: CHEGADA_S, ease: [0.23, 1, 0.32, 1] },
     })
   }, [quantidade, balanco])
 
@@ -115,12 +115,12 @@ export function IconeSacola({ origemIcone = "topo" }: { origemIcone?: "topo" | "
         aria-label={
           quantidade > 0 ? `Abrir sacola, ${plural(quantidade, "item", "itens")}` : "Abrir sacola"
         }
-        data-testid={sobreFoto ? "icone-sacola" : "icone-sacola-fixo"}
+        data-testid={noTopo ? "icone-sacola" : "icone-sacola-fixo"}
         data-alvo-sacola
         className={cn(
           "group/sacola relative flex h-11 w-11 shrink-0 items-center justify-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50 active:scale-95",
-          !sobreFoto && "md:w-auto md:gap-2 md:px-4",
-          sobreFoto ? "text-white" : destaque ? "text-primary-foreground" : "text-foreground",
+          !noTopo && "md:w-auto md:gap-2 md:px-4",
+          noTopo ? "text-white" : destaque ? "text-primary-foreground" : "text-foreground",
         )}
       >
         {!abertaAqui && (
@@ -128,27 +128,27 @@ export function IconeSacola({ origemIcone = "topo" }: { origemIcone?: "topo" | "
             layoutId={PECA_ILHA[origemIcone]}
             aria-hidden="true"
             className={cn(
-              "absolute inset-0 transition-[background-color,box-shadow] duration-300 group-hover/sacola:shadow-md",
-              sobreFoto
-                ? "bg-white/15 ring-1 ring-white/30 backdrop-blur-md group-hover/sacola:bg-white/25"
+              "absolute inset-0 transition-[background-color,filter] duration-200",
+              noTopo
+                ? "bg-white/10 ring-1 ring-white/30 group-hover/sacola:bg-white/20"
                 : destaque
-                  ? "bg-primary shadow-sm shadow-primary/30 group-hover/sacola:brightness-110"
-                  : "bg-card ring-1 ring-border group-hover/sacola:bg-accent",
+                  ? "bg-primary group-hover/sacola:brightness-110"
+                  : "bg-card ring-1 ring-border group-hover/sacola:bg-muted",
             )}
             style={{ borderRadius: 22 }}
             transition={MOLA_ILHA}
           />
         )}
-        {/* No hover a sacola sobe e inclina, como quem a levanta; o balanço da chegada fica por dentro. */}
+        {/* No hover a sacola sobe um pixel; o crescer da chegada fica por dentro. */}
         <span
           aria-hidden="true"
-          className="relative transition-transform duration-300 ease-saida group-hover/sacola:-translate-y-0.5 group-hover/sacola:-rotate-12 group-hover/sacola:scale-110"
+          className="relative transition-transform duration-200 ease-saida group-hover/sacola:-translate-y-px"
         >
           <motion.span animate={balanco} className="block">
             <ShoppingBagIcon className="size-5" />
           </motion.span>
         </span>
-        {!sobreFoto && (
+        {!noTopo && (
           <span
             aria-hidden="true"
             className="relative hidden text-sm font-semibold tabular-nums md:inline"
@@ -170,7 +170,7 @@ export function IconeSacola({ origemIcone = "topo" }: { origemIcone?: "topo" | "
               className={cn(
                 "absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold tabular-nums ring-2 ring-background",
                 // Na pílula, a quantidade já está escrita; o contador fica só no círculo.
-                sobreFoto
+                noTopo
                   ? "bg-primary text-primary-foreground"
                   : "bg-marca-acento text-white md:hidden",
               )}
@@ -208,7 +208,7 @@ export function IlhaSacola({ aoContinuar }: { aoContinuar: () => void }) {
           <Dialog.Portal forceMount>
             <Dialog.Overlay asChild forceMount>
               <motion.div
-                className="fixed inset-0 z-50 bg-black/20 backdrop-blur-[3px] dark:bg-black/50"
+                className={cn("fixed inset-0 z-50", VEU_DO_MODAL)}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -227,71 +227,74 @@ export function IlhaSacola({ aoContinuar }: { aoContinuar: () => void }) {
                 data-testid="ilha-sacola"
                 data-origem={de}
                 className={cn(
-                  "fixed inset-x-3 z-50 flex max-h-[calc(100dvh-24px)] outline-none md:inset-x-auto md:top-[74px] md:bottom-auto md:right-[max(1.5rem,calc((100vw-1320px)/2+1.5rem))] md:max-h-[min(680px,calc(100dvh-96px))] md:w-[420px] 2xl:right-[max(1.5rem,calc((100vw-1640px)/2+1.5rem))]",
+                  "fixed inset-x-3 z-50 flex max-h-[calc(100dvh-24px)] outline-none md:inset-x-auto md:top-[74px] md:bottom-auto md:right-[max(1.5rem,calc((100vw-1120px)/2+1.5rem))] md:max-h-[min(680px,calc(100dvh-96px))] md:w-[420px]",
                   // Vinda da barra, a sacola fica presa embaixo, perto do polegar, e cresce para cima.
                   deBarra ? "bottom-[max(0.75rem,env(safe-area-inset-bottom))]" : "top-3",
                 )}
               >
+                {/*
+                  O fundo é a peça que cresce a partir do botão, e o conteúdo mora dentro dele,
+                  recortado: nada aparece antes do fundo chegar. O `layout` do conteúdo desfaz a
+                  escala da peça, então o texto não estica; ele só é revelado enquanto o fundo cresce.
+                */}
                 <motion.div
                   layoutId={PECA_ILHA[de]}
-                  aria-hidden="true"
-                  className="absolute inset-0 overflow-hidden bg-card shadow-[0_30px_80px_-20px_rgb(0_0_0/0.45)] ring-1 ring-border"
-                  style={{ borderRadius: 28 }}
+                  data-parte="fundo"
+                  className="relative flex min-h-0 w-full flex-col overflow-hidden bg-card shadow-[0_30px_80px_-20px_rgb(0_0_0/0.45)] ring-1 ring-border"
+                  style={{ borderRadius: 20 }}
                   transition={MOLA_ILHA}
                 >
                   {/* O azul da barra se dissolve no fundo do painel enquanto ele cresce. */}
                   {deBarra && (
                     <motion.span
-                      className="absolute inset-0 bg-primary"
+                      aria-hidden="true"
+                      className="pointer-events-none absolute inset-0 z-10 bg-primary"
                       initial={{ opacity: 1 }}
                       animate={{ opacity: 0 }}
-                      transition={{ duration: 0.4, delay: 0.08, ease: "easeOut" }}
+                      transition={{ duration: 0.3, delay: 0.06, ease: "easeOut" }}
                     />
                   )}
-                </motion.div>
-                <motion.div
-                  className="relative flex min-h-0 w-full flex-col overflow-hidden rounded-[28px]"
-                  initial={{ opacity: 0, y: deBarra ? 14 : -10, filter: "blur(6px)" }}
-                  animate={{ opacity: 1, y: 0, filter: "blur(0px)" }}
-                  exit={{ opacity: 0, filter: "blur(4px)", transition: { duration: 0.12 } }}
-                  transition={{ duration: 0.28, delay: 0.22, ease: [0.23, 1, 0.32, 1] }}
-                >
-                  <div className="flex items-center justify-between gap-2 pt-3 pr-2 pb-1 pl-5">
-                    <div className="min-w-0">
-                      <Dialog.Title className="font-heading text-xl font-bold">
-                        Sua sacola
-                      </Dialog.Title>
-                      <Dialog.Description className="text-sm text-muted-foreground">
-                        {plural(quantidade, "item", "itens")}
-                      </Dialog.Description>
-                    </div>
-                    <Dica texto="Fechar sacola">
-                      <Dialog.Close asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="toque"
-                          className="rounded-full"
-                          aria-label="Fechar sacola"
-                        >
-                          <XIcon />
-                        </Button>
-                      </Dialog.Close>
-                    </Dica>
-                  </div>
-                  <ConteudoSacola
-                    aoContinuar={() => {
-                      fechar()
-                      aoContinuar()
+                  <motion.div
+                    layout
+                    data-parte="conteudo"
+                    className="relative flex min-h-0 w-full flex-col"
+                    initial={{ opacity: 0, y: deBarra ? 10 : -8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, transition: { duration: 0.1 } }}
+                    transition={{
+                      default: { duration: 0.26, delay: 0.12, ease: [0.23, 1, 0.32, 1] },
+                      layout: MOLA_ILHA,
                     }}
-                    botaoVazio={
-                      <Dialog.Close asChild>
-                        <Button type="button" size="cta" className="w-full">
-                          Ver cardápio
-                        </Button>
-                      </Dialog.Close>
-                    }
-                  />
+                  >
+                    <div className="flex items-center justify-between gap-2 pt-3 pr-2 pb-1 pl-5">
+                      <div className="min-w-0">
+                        <Dialog.Title className="text-lg font-semibold tracking-[-0.01em]">
+                          Sua sacola
+                        </Dialog.Title>
+                        <Dialog.Description className="text-sm text-muted-foreground">
+                          {plural(quantidade, "item", "itens")}
+                        </Dialog.Description>
+                      </div>
+                      <Dica texto="Fechar sacola">
+                        <Dialog.Close asChild>
+                          <BotaoFecharPainel aria-label="Fechar sacola" />
+                        </Dialog.Close>
+                      </Dica>
+                    </div>
+                    <ConteudoSacola
+                      aoContinuar={() => {
+                        fechar()
+                        aoContinuar()
+                      }}
+                      botaoVazio={
+                        <Dialog.Close asChild>
+                          <Button type="button" size="cta" className="w-full">
+                            Ver cardápio
+                          </Button>
+                        </Dialog.Close>
+                      }
+                    />
+                  </motion.div>
                 </motion.div>
               </div>
             </Dialog.Content>

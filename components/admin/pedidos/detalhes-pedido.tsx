@@ -57,11 +57,12 @@ import {
 } from "@/lib/admin/regras/mensagens"
 import { faltaPesar } from "@/lib/admin/regras/pesagem"
 import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
-import { rotuloAcao, rotuloStatus } from "@/lib/admin/regras/status"
+import { etapasDoCaminho, rotuloAcao, rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
 import { emReais } from "@/lib/formato"
 import { descricaoDoTroco } from "@/lib/pedido"
+import { cn } from "@/lib/utils"
 import { AcoesAgendamento } from "../agendamentos/acoes-agendamento"
 import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { usePedidoAberto } from "./estado-lista"
@@ -72,12 +73,56 @@ const dataEHora = (iso: string) => format(new Date(iso), "EEEE, dd/MM 'às' HH:m
 
 function Bloco({ titulo, children }: { titulo: string; children: ReactNode }) {
   return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-xs font-medium tracking-wide text-muted-foreground uppercase">
-        {titulo}
-      </h3>
+    <section className="flex flex-col gap-2.5 py-5 first:pt-4">
+      <h3 className="text-[13px] font-medium text-muted-foreground">{titulo}</h3>
       {children}
     </section>
+  )
+}
+
+/**
+ * Caminho do pedido: uma haste por etapa, no tom dela, acesa até onde o pedido chegou.
+ * Ao avançar, a próxima haste acende (a cor entra em 300 ms). Cancelado apaga o caminho.
+ */
+function CaminhoPedido({ pedido }: { pedido: Pedido }) {
+  const etapas = etapasDoCaminho(pedido.tipo)
+  const cancelado = pedido.status === "cancelado"
+  const atual = cancelado ? -1 : etapas.indexOf(pedido.status)
+  return (
+    <ol
+      aria-label="Caminho do pedido"
+      className="grid gap-1.5 pt-2"
+      style={{ gridTemplateColumns: `repeat(${etapas.length}, minmax(0, 1fr))` }}
+    >
+      {etapas.map((etapa, indice) => {
+        const feita = atual >= 0 && indice < atual
+        const agora = indice === atual
+        return (
+          <li
+            key={etapa}
+            aria-current={agora ? "step" : undefined}
+            data-feita={feita ? "" : undefined}
+            className="flex min-w-0 flex-col gap-1.5"
+          >
+            <span
+              aria-hidden="true"
+              className="h-[3px] rounded-full bg-foreground/10 transition-colors duration-300 ease-saida"
+              style={
+                feita || agora ? { backgroundColor: `var(--tom-${tomDoStatus(etapa)})` } : undefined
+              }
+            />
+            <span
+              className={cn(
+                "text-[11px] leading-tight",
+                agora ? "font-medium text-foreground" : "text-muted-foreground",
+              )}
+            >
+              {rotuloStatus(pedido.tipo, etapa)}
+            </span>
+          </li>
+        )
+      })}
+    </ol>
   )
 }
 
@@ -128,7 +173,7 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
 
   return (
     <>
-      <SheetHeader className="gap-1.5 border-b">
+      <SheetHeader className="gap-1.5 border-b border-border/70">
         <div className="flex items-center gap-2 pr-8">
           <SheetTitle className="text-lg">Pedido #{pedido.numero}</SheetTitle>
           <SeloStatus pedido={pedido} />
@@ -136,6 +181,7 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
         <SheetDescription className="first-letter:uppercase">
           {rotuloCanal(pedido.tipo)} · {dataEHora(pedido.criadoEm)}
         </SheetDescription>
+        <CaminhoPedido pedido={pedido} />
         <div className="flex items-center gap-2 pt-1">
           <Button
             type="button"
@@ -155,7 +201,7 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
         {impressao.elemento}
       </SheetHeader>
 
-      <div className="flex flex-1 flex-col gap-6 overflow-y-auto px-4 pb-2">
+      <div className="flex flex-1 flex-col divide-y divide-border/70 overflow-y-auto px-4 pb-2">
         <Bloco titulo="Itens">
           <ul className="flex flex-col gap-3">
             {pedido.itens.map((item) => (
@@ -189,7 +235,9 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
             <Linha rotulo="Total" valor={emReais(pedido.total)} forte />
           </div>
           {pedido.observacao && (
-            <p className="rounded-lg bg-muted px-3 py-2 text-sm">Obs.: {pedido.observacao}</p>
+            <p className="rounded-lg bg-foreground/[0.05] px-3 py-2 text-sm">
+              Obs.: {pedido.observacao}
+            </p>
           )}
         </Bloco>
 
@@ -320,7 +368,7 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
         )}
       </div>
 
-      <SheetFooter className="border-t sm:flex-row sm:flex-wrap">
+      <SheetFooter className="border-t border-border/70 sm:flex-row sm:flex-wrap">
         {acao ? (
           <Button
             type="button"

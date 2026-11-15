@@ -1,5 +1,6 @@
 "use client"
 
+import NumberFlow from "@number-flow/react"
 import {
   type ColumnDef,
   createSortedRowModel,
@@ -11,29 +12,21 @@ import {
   useTable,
 } from "@tanstack/react-table"
 import {
-  AlertTriangleIcon,
   ArrowDownIcon,
   ArrowUpIcon,
-  BoxesIcon,
   ChevronsUpDownIcon,
   ClipboardCheckIcon,
   HistoryIcon,
   type LucideIcon,
   MinusCircleIcon,
   MoreHorizontalIcon,
-  PackageXIcon,
   PlusCircleIcon,
   SearchIcon,
   SearchXIcon,
   Settings2Icon,
-  TrendingDownIcon,
-  WalletIcon,
 } from "lucide-react"
-import { type ReactNode, useDeferredValue, useMemo, useState } from "react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
+import { useDeferredValue, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -61,6 +54,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useCategorias, useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import type { Produto } from "@/lib/admin/dados/tipos"
 import {
@@ -69,8 +63,12 @@ import {
   type SituacaoEstoque,
   situacaoEstoque,
 } from "@/lib/admin/regras/estoque"
+import type { TomStatus } from "@/lib/admin/regras/status"
 import { emReais, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
+import { CabecalhoPagina } from "../cabecalho-pagina"
+import { Indicador, Regua } from "../regua"
+import { Traco } from "../traco"
 import {
   type AcaoEstoque,
   HistoricoEstoque,
@@ -95,15 +93,16 @@ const URGENCIA: Record<Situacao, number> = {
   "sem-controle": 4,
 }
 
-const SELO: Record<
-  Situacao,
-  { rotulo: string; variante: "outline" | "secondary" | "destructive" }
-> = {
-  ok: { rotulo: "OK", variante: "outline" },
-  baixo: { rotulo: "Baixo", variante: "secondary" },
-  zerado: { rotulo: "Zerado", variante: "destructive" },
-  negativo: { rotulo: "Negativo", variante: "destructive" },
-  "sem-controle": { rotulo: "Sem controle", variante: "outline" },
+/**
+ * Situação como etiqueta: traço na cor e o nome ao lado. Zerado e negativo usam o tom de
+ * cancelado; no mínimo, o de preparo; o que está em dia fica no cinza, para não gritar.
+ */
+const SELO: Record<Situacao, { rotulo: string; tom: TomStatus | null }> = {
+  ok: { rotulo: "OK", tom: "fim" },
+  baixo: { rotulo: "Baixo", tom: "preparo" },
+  zerado: { rotulo: "Zerado", tom: "cancelado" },
+  negativo: { rotulo: "Negativo", tom: "cancelado" },
+  "sem-controle": { rotulo: "Sem controle", tom: null },
 }
 
 const FILTROS: { valor: FiltroSituacao; rotulo: string }[] = [
@@ -133,14 +132,19 @@ const recursos = tableFeatures({
 type Meta = { classe?: string; rotuloOrdem?: string }
 
 function SeloSituacao({ situacao }: { situacao: Situacao }) {
-  const selo = SELO[situacao]
+  const { rotulo, tom } = SELO[situacao]
   return (
-    <Badge
-      variant={selo.variante}
-      className={cn(situacao === "sem-controle" && "text-muted-foreground")}
+    <span
+      className={cn(
+        "inline-flex items-center gap-2 text-[13px] leading-none font-medium whitespace-nowrap",
+        situacao === "ok" || situacao === "sem-controle"
+          ? "text-muted-foreground"
+          : "text-foreground",
+      )}
     >
-      {selo.rotulo}
-    </Badge>
+      {tom && <Traco tom={tom} />}
+      {rotulo}
+    </span>
   )
 }
 
@@ -161,6 +165,7 @@ function Acoes({ linha, aoEscolher }: { linha: Linha; aoEscolher: (acao: AcaoEst
           variant="ghost"
           size="icon-sm"
           aria-label={`Ações de ${linha.produto.nome}`}
+          className="max-md:size-11"
         >
           <MoreHorizontalIcon />
         </Button>
@@ -183,36 +188,52 @@ function Acoes({ linha, aoEscolher }: { linha: Linha; aoEscolher: (acao: AcaoEst
   )
 }
 
-function Numero({
-  rotulo,
-  icone: Icone,
-  children,
-  detalhe,
-}: {
-  rotulo: string
-  icone: LucideIcon
-  children: ReactNode
-  detalhe?: ReactNode
-}) {
+/** Número da régua com o traço do tom ao lado, só quando há algo a olhar. */
+function NumeroComTom({ valor, tom }: { valor: number; tom: TomStatus }) {
   return (
-    <Card className="gap-2 py-4">
-      <CardHeader className="px-4">
-        <CardDescription className="flex items-center gap-1.5">
-          <Icone className="size-3.5" aria-hidden="true" />
-          {rotulo}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="flex flex-col gap-1 px-4">
-        <span className="text-2xl font-semibold tracking-tight tabular-nums">{children}</span>
-        {detalhe && <span className="text-xs text-muted-foreground">{detalhe}</span>}
-      </CardContent>
-    </Card>
+    <span className="inline-flex items-center gap-2.5">
+      {valor > 0 && <Traco tom={tom} className="h-6" />}
+      <NumberFlow value={valor} locales="pt-BR" />
+    </span>
+  )
+}
+
+function EsqueletoEstoque() {
+  return (
+    <div
+      role="status"
+      aria-label="Carregando o estoque"
+      className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8"
+    >
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-7 w-32" />
+        <Skeleton className="h-4 w-96 max-w-full" />
+      </div>
+      <div className="grid grid-cols-2 border-y border-border/70 lg:grid-cols-4">
+        {["a", "b", "c", "d"].map((chave) => (
+          <div key={chave} className="flex flex-col gap-2 py-4 pr-4">
+            <Skeleton className="h-3.5 w-24" />
+            <Skeleton className="h-7 w-16" />
+          </div>
+        ))}
+      </div>
+      <Skeleton className="h-8 w-80 max-w-full" />
+      <div className="flex flex-col divide-y divide-border/70 border-t border-border/70">
+        {["a", "b", "c", "d", "e", "f", "g"].map((chave) => (
+          <div key={chave} className="flex items-center gap-4 py-3.5">
+            <Skeleton className="h-4 w-56" />
+            <Skeleton className="ml-auto h-4 w-14" />
+            <Skeleton className="hidden h-4 w-20 sm:block" />
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
 /**
- * Estoque da loja: o resumo, a lista dos produtos com saldo e situação, e as ações
- * de cada um (entrada, saída, contagem, histórico e configuração).
+ * Estoque da loja: a régua do que importa, a lista dos produtos com saldo e situação,
+ * e as ações de cada um (entrada, saída, contagem, histórico e configuração).
  */
 export function PaginaEstoque() {
   const { data: produtos } = useProdutos()
@@ -223,6 +244,24 @@ export function PaginaEstoque() {
   const [categoria, setCategoria] = useState("todas")
   const [ordenacao, setOrdenacao] = useState<SortingState>([])
   const [aberto, setAberto] = useState<{ acao: AcaoEstoque; id: string } | null>(null)
+
+  /** Quantos produtos há em cada situação: a contagem que aparece no filtro. */
+  const contagem = useMemo(() => {
+    const total: Record<FiltroSituacao, number> = {
+      controlados: 0,
+      ok: 0,
+      baixo: 0,
+      zerado: 0,
+      negativo: 0,
+      "sem-controle": 0,
+    }
+    for (const produto of produtos ?? []) {
+      const situacao = situacaoDe(produto)
+      total[situacao] += 1
+      if (situacao !== "sem-controle") total.controlados += 1
+    }
+    return total
+  }, [produtos])
 
   const linhas = useMemo(() => {
     const nomes = new Map(categorias.map((item) => [item.id, item.nome]))
@@ -256,7 +295,7 @@ export function PaginaEstoque() {
         accessorFn: (linha) => normalizar(linha.produto.nome),
         sortFn: "basic",
         cell: ({ row }) => (
-          <div className="flex min-w-0 flex-col gap-0.5">
+          <div className="flex min-w-0 flex-col gap-1">
             <span className="truncate font-medium">{row.original.produto.nome}</span>
             <span className="truncate text-xs text-muted-foreground">{row.original.categoria}</span>
             {/* No celular, a situação vem aqui, no lugar da coluna que some. */}
@@ -265,7 +304,14 @@ export function PaginaEstoque() {
             </span>
           </div>
         ),
-        meta: { classe: "max-w-44 sm:max-w-56", rotuloOrdem: "produto" } satisfies Meta,
+        meta: { classe: "max-w-36 sm:max-w-72", rotuloOrdem: "produto" } satisfies Meta,
+      },
+      {
+        id: "situacao",
+        header: "Situação",
+        enableSorting: false,
+        cell: ({ row }) => <SeloSituacao situacao={row.original.situacao} />,
+        meta: { classe: "hidden w-36 sm:table-cell" } satisfies Meta,
       },
       {
         id: "saldo",
@@ -278,7 +324,7 @@ export function PaginaEstoque() {
           const estoque = produto.estoque
           return (
             <div className="flex flex-col items-end gap-0.5 tabular-nums">
-              <span className="font-medium">
+              <span className="font-semibold">
                 {emQuantidade(estoque?.quantidade ?? 0, produto.unidade)}
               </span>
               <span className="text-xs text-muted-foreground md:hidden">
@@ -297,7 +343,9 @@ export function PaginaEstoque() {
           row.original.produto.estoque?.controlar
             ? emQuantidade(row.original.produto.estoque.minimo, row.original.produto.unidade)
             : "—",
-        meta: { classe: "hidden text-right tabular-nums md:table-cell" } satisfies Meta,
+        meta: {
+          classe: "hidden text-right text-muted-foreground tabular-nums md:table-cell",
+        } satisfies Meta,
       },
       {
         id: "custo",
@@ -307,14 +355,9 @@ export function PaginaEstoque() {
           const custo = row.original.produto.estoque?.custo
           return custo !== undefined ? emReais(custo) : "—"
         },
-        meta: { classe: "hidden text-right tabular-nums lg:table-cell" } satisfies Meta,
-      },
-      {
-        id: "situacao",
-        header: "Situação",
-        enableSorting: false,
-        cell: ({ row }) => <SeloSituacao situacao={row.original.situacao} />,
-        meta: { classe: "hidden sm:table-cell" } satisfies Meta,
+        meta: {
+          classe: "hidden text-right text-muted-foreground tabular-nums lg:table-cell",
+        } satisfies Meta,
       },
       {
         id: "acoes",
@@ -342,19 +385,7 @@ export function PaginaEstoque() {
     onSortingChange: setOrdenacao,
   })
 
-  if (!produtos) {
-    return (
-      <div className="flex flex-1 flex-col gap-5 p-4 md:p-6">
-        <Skeleton className="h-8 w-40" />
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          {["a", "b", "c", "d"].map((chave) => (
-            <Skeleton key={chave} className="h-24 rounded-xl" />
-          ))}
-        </div>
-        <Skeleton className="h-96 rounded-xl" />
-      </div>
-    )
-  }
+  if (!produtos) return <EsqueletoEstoque />
 
   const resumo = resumoDoEstoque(produtos)
   const negativos = produtos.filter((produto) => situacaoDe(produto) === "negativo")
@@ -363,72 +394,67 @@ export function PaginaEstoque() {
   const fechar = () => setAberto(null)
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Estoque</h1>
-        <p className="text-sm text-muted-foreground">
-          As vendas baixam o saldo sozinhas; aqui entram as compras, as perdas e a contagem.
-        </p>
-      </div>
+    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
+      <CabecalhoPagina
+        titulo="Estoque"
+        resumo="As vendas baixam o saldo sozinhas; aqui entram as compras, as perdas e a contagem."
+      />
 
-      <section aria-label="Resumo do estoque" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Numero rotulo="Controlados" icone={BoxesIcon}>
-          {resumo.controlados}
-        </Numero>
-        <Numero rotulo="Abaixo do mínimo" icone={TrendingDownIcon} detalhe="Hora de repor">
-          {resumo.baixos}
-        </Numero>
-        <Numero rotulo="Zerados" icone={PackageXIcon} detalhe="Esgotados para venda">
-          {resumo.zerados}
-        </Numero>
-        <Numero rotulo="Valor em estoque" icone={WalletIcon} detalhe="Saldo × custo">
-          {emReais(resumo.valorParado)}
-        </Numero>
+      <section aria-label="Resumo do estoque">
+        <Regua>
+          <Indicador rotulo="Controlados" detalhe="Com o saldo acompanhado">
+            <NumberFlow value={resumo.controlados} locales="pt-BR" />
+          </Indicador>
+          <Indicador rotulo="Abaixo do mínimo" detalhe="Hora de repor">
+            <NumeroComTom valor={resumo.baixos} tom="preparo" />
+          </Indicador>
+          <Indicador rotulo="Zerados" detalhe="Esgotados para venda">
+            <NumeroComTom valor={resumo.zerados} tom="cancelado" />
+          </Indicador>
+          <Indicador rotulo="Valor em estoque" detalhe="Saldo × custo">
+            {/* Dinheiro é o número mais largo: no celular encolhe para caber na coluna. */}
+            <span className="max-lg:text-[clamp(1rem,5.5vw,1.75rem)]">
+              <NumberFlow
+                value={resumo.valorParado}
+                locales="pt-BR"
+                format={{ style: "currency", currency: "BRL" }}
+              />
+            </span>
+          </Indicador>
+        </Regua>
       </section>
 
       {negativos.length > 0 && (
-        <Alert variant="destructive">
-          <AlertTriangleIcon />
-          <AlertTitle>
-            {plural(negativos.length, "produto", "produtos")} com saldo negativo
-          </AlertTitle>
-          <AlertDescription>
-            Pedidos do site entraram sem saldo ({negativos.map((item) => item.nome).join(", ")}).
-            Faça a contagem para acertar.
-          </AlertDescription>
-        </Alert>
+        <div role="alert" className="flex gap-3 text-sm">
+          <Traco tom="cancelado" className="mt-0.5 h-auto self-stretch" />
+          <div className="flex flex-col gap-0.5">
+            <p className="font-medium">
+              {plural(negativos.length, "produto", "produtos")} com saldo negativo
+            </p>
+            <p className="text-muted-foreground">
+              Pedidos do site entraram sem saldo ({negativos.map((item) => item.nome).join(", ")}
+              ). Faça a contagem para acertar.
+            </p>
+          </div>
+        </div>
       )}
 
-      <div className="flex flex-col gap-2 md:flex-row md:items-center">
-        <InputGroup className="md:max-w-xs">
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-          <InputGroupInput
-            type="search"
-            aria-label="Buscar produto"
-            placeholder="Buscar produto"
-            value={busca}
-            onChange={(evento) => setBusca(evento.target.value)}
-          />
-        </InputGroup>
-        <div className="flex gap-2">
-          <Select value={filtro} onValueChange={(valor) => setFiltro(valor as FiltroSituacao)}>
-            <SelectTrigger aria-label="Situação" className="w-40">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {FILTROS.map((item) => (
-                  <SelectItem key={item.valor} value={item.valor}>
-                    {item.rotulo}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
+      <div className="flex flex-col gap-3">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center">
+          <InputGroup className="md:max-w-xs">
+            <InputGroupAddon>
+              <SearchIcon />
+            </InputGroupAddon>
+            <InputGroupInput
+              type="search"
+              aria-label="Buscar produto"
+              placeholder="Buscar produto"
+              value={busca}
+              onChange={(evento) => setBusca(evento.target.value)}
+            />
+          </InputGroup>
           <Select value={categoria} onValueChange={setCategoria}>
-            <SelectTrigger aria-label="Categoria" className="w-44">
+            <SelectTrigger aria-label="Categoria" className="md:w-52">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -443,10 +469,34 @@ export function PaginaEstoque() {
             </SelectContent>
           </Select>
         </div>
+        {/* No celular o controle rola de lado dentro da própria faixa; a página não. */}
+        <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0">
+          <ToggleGroup
+            type="single"
+            variant="segmento"
+            size="sm"
+            aria-label="Situação"
+            value={filtro}
+            onValueChange={(valor) => valor && setFiltro(valor as FiltroSituacao)}
+          >
+            {FILTROS.map(({ valor, rotulo }) => (
+              <ToggleGroupItem
+                key={valor}
+                value={valor}
+                className="cursor-pointer gap-1.5 px-2.5 max-md:h-10"
+              >
+                {rotulo}{" "}
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  {contagem[valor]}
+                </span>
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
+        </div>
       </div>
 
       {linhas.length === 0 ? (
-        <Empty className="border">
+        <Empty className="border-t border-border/70">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <SearchXIcon />
@@ -455,12 +505,12 @@ export function PaginaEstoque() {
             <EmptyDescription>
               {filtro === "controlados" && resumo.controlados === 0
                 ? "Nenhum produto tem o estoque controlado. Escolha “Sem controle” e configure um."
-                : "Mude a busca ou os filtros."}
+                : "Mude a busca, a categoria ou a situação."}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
       ) : (
-        <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="border-t border-border/70">
           <Table aria-label="Estoque">
             <TableHeader>
               {tabela.getHeaderGroups().map((grupo) => (
@@ -530,7 +580,7 @@ export function PaginaEstoque() {
           </Table>
         </div>
       )}
-      <p className="text-sm text-muted-foreground" aria-live="polite">
+      <p className="text-[13px] text-muted-foreground tabular-nums" aria-live="polite">
         {plural(linhas.length, "produto", "produtos")}
       </p>
 

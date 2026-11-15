@@ -84,6 +84,17 @@ describe("PaginaLoja", () => {
     )
   })
 
+  test("a barra de salvar diz em que seções há alteração", async () => {
+    const usuario = await abrir()
+    const nome = screen.getByRole("textbox", { name: "Nome da loja" })
+    await usuario.type(nome, " Nova")
+    const barra = within(await screen.findByRole("region", { name: "Alterações não salvas" }))
+    expect(barra.getByText("Em Loja")).toBeInTheDocument()
+
+    await usuario.click(secao("Horários").getByRole("switch", { name: "Aberto no domingo" }))
+    expect(barra.getByText("Em Loja e Horários")).toBeInTheDocument()
+  })
+
   test("horários: copiar para todos e o texto montado sozinho", async () => {
     const usuario = await abrir()
     const horarios = secao("Horários")

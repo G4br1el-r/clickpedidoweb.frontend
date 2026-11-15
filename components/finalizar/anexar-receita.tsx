@@ -33,16 +33,14 @@ export function AnexarReceita({ exigida, receita, aoMudar, invalida = false }: A
     <section
       aria-labelledby={`${id}-titulo`}
       className={cn(
-        "flex flex-col gap-3 rounded-3xl bg-card p-4 ring-1 ring-border md:p-5",
-        invalida && !receita && "ring-2 ring-destructive",
+        "flex flex-col gap-3.5 rounded-2xl border border-border p-4 transition-[border-color,box-shadow] duration-150 md:p-5",
+        invalida && !receita && "border-destructive shadow-[inset_0_0_0_1px_var(--destructive)]",
       )}
     >
       <div className="flex items-start gap-3">
-        <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-accent text-accent-foreground">
-          <FileTextIcon className="size-5" aria-hidden="true" />
-        </span>
+        <FileTextIcon className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
         <div className="min-w-0">
-          <h2 id={`${id}-titulo`} className="text-lg font-bold">
+          <h2 id={`${id}-titulo`} className="text-base font-semibold tracking-[-0.01em]">
             Receita médica
           </h2>
           <p className="text-sm text-muted-foreground">
@@ -61,7 +59,7 @@ export function AnexarReceita({ exigida, receita, aoMudar, invalida = false }: A
       )}
 
       {receita ? (
-        <div className="flex items-center gap-3 rounded-2xl bg-muted/60 p-2.5">
+        <div className="flex items-center gap-3 rounded-xl bg-muted/60 p-2.5">
           {/* biome-ignore lint/performance/noImgElement: prévia local (blob:) da foto escolhida, fora do otimizador do Next. */}
           <img
             src={receita.url}
@@ -83,7 +81,7 @@ export function AnexarReceita({ exigida, receita, aoMudar, invalida = false }: A
       ) : (
         <label
           htmlFor={`${id}-arquivo`}
-          className="flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-border px-4 text-sm font-semibold text-marca-texto outline-none transition-colors hover:border-primary hover:bg-accent has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
+          className="flex min-h-14 cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-border px-4 text-sm font-medium text-marca-texto outline-none transition-[border-color,transform] duration-150 ease-saida hover:border-primary active:scale-[0.98] has-focus-visible:ring-3 has-focus-visible:ring-ring/50"
         >
           <CameraIcon className="size-5" aria-hidden="true" />
           Tirar foto ou escolher arquivo

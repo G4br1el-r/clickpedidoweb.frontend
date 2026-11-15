@@ -101,6 +101,26 @@ describe("PaginaMesas", () => {
     expect(mesa).toHaveTextContent("R$ 13,50")
   })
 
+  test("o estado de cada mesa se lê pelo traço: livre, ocupada ou com rodada na cozinha", async () => {
+    await mesaOcupada()
+    await api().mesas.criar({ numero: 62 })
+    const comCozinha = await api().mesas.criar({ numero: 63 })
+    await api().mesas.lancar({
+      mesaId: comCozinha.id,
+      enviarParaCozinha: true,
+      itens: [{ avulso: { nome: "Pizza", preco: 40 }, quantidade: 1 }],
+    })
+    await abrir()
+
+    const estado = async (numero: number) => {
+      const traco = (await cartao(numero)).querySelector("[data-traco]")
+      return { tom: traco?.getAttribute("data-tom"), texto: traco?.parentElement?.textContent }
+    }
+    expect(await estado(60)).toEqual({ tom: "caminho", texto: "Ocupada" })
+    expect(await estado(62)).toEqual({ tom: "fim", texto: "Livre" })
+    expect(await estado(63)).toEqual({ tom: "preparo", texto: "Na cozinha" })
+  })
+
   test("nova mesa com número; número repetido é recusado", async () => {
     const usuario = await abrir()
     await usuario.click(screen.getByRole("button", { name: "Nova mesa" }))

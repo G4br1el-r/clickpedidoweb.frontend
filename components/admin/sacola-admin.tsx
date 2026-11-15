@@ -1,19 +1,19 @@
 "use client"
 
+import NumberFlow from "@number-flow/react"
 import {
   CheckIcon,
   CreditCardIcon,
+  LockIcon,
   QrCodeIcon,
   ShoppingBagIcon,
-  SparklesIcon,
   Trash2Icon,
 } from "lucide-react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Dica } from "@/components/dica"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import {
@@ -24,7 +24,6 @@ import {
   FieldTitle,
 } from "@/components/ui/field"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Separator } from "@/components/ui/separator"
 import {
   Sheet,
   SheetContent,
@@ -37,6 +36,9 @@ import { Spinner } from "@/components/ui/spinner"
 import { OPCOES_PRO, PRECO_PRO_COMPLETO, useConfig, useSacolaAdmin } from "@/lib/admin/config"
 import { emReais } from "@/lib/formato"
 import { cn } from "@/lib/utils"
+import { CURVA_SAIDA } from "./barra-acoes"
+import { CLASSE_OPCAO, SeloPro } from "./campos"
+import { Traco } from "./traco"
 
 type Plano = "avulso" | "completo"
 type Etapa = "sacola" | "pagando" | "pronto"
@@ -63,15 +65,16 @@ function CartaoPlano({
 }) {
   const id = `plano-${valor}`
   return (
-    <FieldLabel htmlFor={id} className="rounded-2xl">
+    <FieldLabel htmlFor={id} className={CLASSE_OPCAO}>
       <Field orientation="horizontal" className="items-center gap-3 p-3!">
         <FieldContent>
           <FieldTitle className="flex flex-wrap items-center gap-2">
             {titulo}
             {destaque && (
-              <Badge className="selo-pro" data-pro-liberada>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                <Traco tom="pronto" className="h-3" />
                 {destaque}
-              </Badge>
+              </span>
             )}
           </FieldTitle>
           <FieldDescription>{detalhe}</FieldDescription>
@@ -101,6 +104,7 @@ export function SacolaAdmin() {
   const [pagamento, setPagamento] = useState("pix")
   const [etapa, setEtapa] = useState<Etapa>("sacola")
   const total = plano === "completo" ? PRECO_PRO_COMPLETO : subtotal
+  const reduzir = useReducedMotion()
 
   // Sugere o Pro completo quando a sacola já passa de boa parte do preço dele.
   useEffect(() => {
@@ -139,9 +143,9 @@ export function SacolaAdmin() {
         className="flex w-full flex-col gap-0 p-0 sm:max-w-[440px]"
         data-testid="sacola-admin"
       >
-        <SheetHeader className="border-b border-border">
-          <SheetTitle className="flex items-center gap-2 font-heading text-xl">
-            <ShoppingBagIcon className="size-5" />
+        <SheetHeader className="border-b border-border/70">
+          <SheetTitle className="flex items-center gap-2 text-base font-semibold">
+            <ShoppingBagIcon className="size-4" aria-hidden="true" />
             Sacola do painel
           </SheetTitle>
           <SheetDescription>
@@ -154,21 +158,21 @@ export function SacolaAdmin() {
             <motion.div
               key="pronto"
               className="flex flex-1 flex-col items-center justify-center gap-4 p-8 text-center"
-              initial={{ opacity: 0, scale: 0.96 }}
-              animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0 }}
+              initial={reduzir ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
+              animate={{ opacity: 1, scale: 1, transition: { duration: 0.25, ease: CURVA_SAIDA } }}
+              exit={{ opacity: 0, transition: { duration: 0.15 } }}
             >
               <motion.span
-                className="grid size-20 place-items-center rounded-full bg-[#F5B700] text-[#2A1700]"
-                initial={{ scale: 0.4, rotate: -30 }}
-                animate={{ scale: 1, rotate: 0 }}
-                transition={{ type: "spring", duration: 0.6, bounce: 0.5 }}
+                className="grid size-14 place-items-center rounded-full bg-(--tom-pronto)/12 text-(--tom-pronto)"
+                initial={reduzir ? false : { scale: 0.85, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
               >
-                <CheckIcon className="size-10" strokeWidth={3} />
+                <CheckIcon className="size-7" strokeWidth={2.5} aria-hidden="true" />
               </motion.span>
               <div>
-                <p className="font-heading text-2xl font-extrabold">Tudo certo!</p>
-                <p className="mt-1 text-muted-foreground">
+                <p className="text-xl font-semibold tracking-[-0.01em]">Tudo certo!</p>
+                <p className="mt-1 text-sm text-muted-foreground">
                   Recursos contratados e configurações aplicadas no site.
                 </p>
               </div>
@@ -206,7 +210,7 @@ export function SacolaAdmin() {
               <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-4">
                 {paraAplicar && (
                   <Alert>
-                    <SparklesIcon />
+                    <LockIcon />
                     <AlertTitle>Falta contratar para aplicar no site</AlertTitle>
                     <AlertDescription>
                       Estes recursos são Pro. Contrate agora ou aplique sem eles.
@@ -214,33 +218,36 @@ export function SacolaAdmin() {
                   </Alert>
                 )}
 
-                <ul className="flex flex-col" aria-label="Recursos na sacola">
+                <ul
+                  className="flex flex-col border-t border-border/60"
+                  aria-label="Recursos na sacola"
+                >
                   <AnimatePresence initial={false}>
                     {itens.map((item) => (
                       <motion.li
                         key={item.chave}
                         layout
                         initial={{ opacity: 0, height: 0 }}
-                        animate={{ opacity: 1, height: "auto" }}
-                        exit={{ opacity: 0, height: 0, transition: { duration: 0.2 } }}
-                        className="overflow-hidden"
+                        animate={{
+                          opacity: 1,
+                          height: "auto",
+                          transition: { duration: 0.2, ease: CURVA_SAIDA },
+                        }}
+                        exit={{ opacity: 0, height: 0, transition: { duration: 0.15 } }}
+                        className="overflow-hidden border-b border-border/60"
                       >
-                        <div className="flex items-center gap-3 py-2.5">
-                          <span className="grid size-9 shrink-0 place-items-center rounded-xl bg-[#F5B700]/15 text-[#B07600] dark:text-[#F5C542]">
-                            <SparklesIcon className="size-4" />
+                        <div className="flex min-h-12 items-center gap-3 py-2">
+                          <span className="flex min-w-0 flex-1 items-center gap-2">
+                            <span className="truncate text-sm font-medium">{item.nome}</span>
+                            <SeloPro liberada={false} />
                           </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block truncate text-sm font-semibold">
-                              {item.nome}
-                            </span>
-                            <span
-                              className={cn(
-                                "text-xs text-muted-foreground tabular-nums",
-                                plano === "completo" && "line-through",
-                              )}
-                            >
-                              {porMes(item.preco)}
-                            </span>
+                          <span
+                            className={cn(
+                              "shrink-0 text-sm text-muted-foreground tabular-nums transition-colors duration-150",
+                              plano === "completo" && "text-muted-foreground/60 line-through",
+                            )}
+                          >
+                            {porMes(item.preco)}
                           </span>
                           <Dica texto="Tirar da sacola">
                             <Button
@@ -255,7 +262,6 @@ export function SacolaAdmin() {
                             </Button>
                           </Dica>
                         </div>
-                        <Separator />
                       </motion.li>
                     ))}
                   </AnimatePresence>
@@ -301,7 +307,7 @@ export function SacolaAdmin() {
                       { valor: "pix", rotulo: "Pix", icone: QrCodeIcon },
                       { valor: "cartao", rotulo: "Cartão da conta", icone: CreditCardIcon },
                     ].map(({ valor, rotulo, icone: Icone }) => (
-                      <FieldLabel key={valor} htmlFor={`pagar-${valor}`} className="rounded-2xl">
+                      <FieldLabel key={valor} htmlFor={`pagar-${valor}`} className={CLASSE_OPCAO}>
                         <Field orientation="horizontal" className="items-center gap-2 p-3!">
                           <Icone className="size-4 shrink-0" aria-hidden="true" />
                           <FieldTitle className="flex-1">{rotulo}</FieldTitle>
@@ -316,10 +322,24 @@ export function SacolaAdmin() {
                 </section>
               </div>
 
-              <SheetFooter className="gap-2 border-t border-border">
-                <div className="flex items-baseline justify-between">
+              <SheetFooter className="gap-2 border-t border-border/70">
+                <div
+                  role="status"
+                  aria-label="Total"
+                  className="flex items-baseline justify-between gap-3"
+                >
                   <span className="text-sm text-muted-foreground">Total</span>
-                  <span className="text-xl font-bold tabular-nums">{porMes(total)}</span>
+                  <span className="text-lg font-semibold tracking-[-0.01em] tabular-nums">
+                    <span className="sr-only">{porMes(total)}</span>
+                    <span aria-hidden="true">
+                      <NumberFlow
+                        value={total}
+                        locales="pt-BR"
+                        format={{ style: "currency", currency: "BRL" }}
+                      />
+                      <span className="text-sm font-medium text-muted-foreground">/mês</span>
+                    </span>
+                  </span>
                 </div>
                 <Button
                   type="button"
@@ -327,7 +347,7 @@ export function SacolaAdmin() {
                   onClick={pagar}
                   disabled={etapa === "pagando"}
                   data-testid="contratar"
-                  className="botao-brilho h-12 bg-linear-to-r from-[#F5B700] to-[#FF8A4C] text-[#2A1700] hover:opacity-95"
+                  className="h-11 active:scale-[0.97]"
                 >
                   {etapa === "pagando" ? (
                     <>

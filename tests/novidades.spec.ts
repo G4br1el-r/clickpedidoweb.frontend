@@ -2,6 +2,7 @@ import { expect, type Page, test } from "@playwright/test"
 import {
   abrirCardapio,
   abrirMeioAMeio,
+  avancar,
   caixa,
   esperarAnimacoes,
   verificarAcessibilidade,
@@ -12,7 +13,9 @@ import {
 const largura = (page: Page) => page.viewportSize()?.width ?? 0
 
 test.describe("banners da vitrine", () => {
-  test("ficam antes de Mais pedidas, no mosaico de quatro colunas", async ({ page }) => {
+  test("vêm depois da primeira categoria e antes de Mais pedidas, no mosaico de quatro colunas", async ({
+    page,
+  }) => {
     await abrirCardapio(page)
     const secao = page.getByTestId("banners-loja")
     await expect(secao).toBeVisible()
@@ -23,6 +26,10 @@ test.describe("banners da vitrine", () => {
     )
     const maisPedidas = await caixa(page.getByTestId("mais-pedidas"))
     expect(grande.y).toBeLessThan(maisPedidas.y)
+    const primeiraCategoria = await caixa(page.locator("section[id^=categoria-]").first())
+    expect(grande.y, "depois da primeira categoria").toBeGreaterThan(
+      primeiraCategoria.y + primeiraCategoria.height,
+    )
 
     // Os dois quadrados, lado a lado e do mesmo tamanho.
     expect(Math.abs(doces.y - bebidas.y)).toBeLessThanOrEqual(0.5)
@@ -46,6 +53,12 @@ test.describe("banners da vitrine", () => {
     await verificarSemRolagemHorizontal(page)
     await verificarAreasDeToque(secao)
     await verificarAcessibilidade(page, "[data-testid=banners-loja]")
+  })
+
+  test("os banners não têm sobrelinha: o título fala sozinho", async ({ page }) => {
+    await abrirCardapio(page)
+    await expect(page.getByTestId("banner-meio-a-meio")).not.toContainText("Monte a sua")
+    await expect(page.getByTestId("banner-oferta-calabresa")).not.toContainText("Preço especial")
   })
 
   test("o grande abre o produto e o quadrado leva à categoria", async ({ page }) => {
@@ -127,8 +140,30 @@ test.describe("passar de um produto ao outro", () => {
   })
 })
 
+test.describe("cabeçalho da folha do produto", () => {
+  test("o nome e a descrição nunca passam por baixo das setas e do fechar", async ({ page }) => {
+    await abrirCardapio(page)
+    await page.getByTestId("produto-calabresa").getByRole("heading").click()
+    const painel = page.getByTestId("painel-produto")
+    await expect(painel).toBeVisible()
+    await page.waitForTimeout(500)
+    const setas = await caixa(painel.getByTestId("produto-anterior"))
+    for (const texto of [
+      painel.getByRole("heading", { name: "Calabresa Especial" }),
+      painel.getByText(/^Calabresa fatiada, cebola/),
+    ]) {
+      const medida = await caixa(texto)
+      const naMesmaAltura = medida.y < setas.y + setas.height && medida.y + medida.height > setas.y
+      if (naMesmaAltura)
+        expect(medida.x + medida.width, "o texto termina antes das setas").toBeLessThanOrEqual(
+          setas.x,
+        )
+    }
+  })
+})
+
 test.describe("troca de sabor", () => {
-  test("a escolha fica à vista antes de passar ao 2º sabor, que diz o que já foi escolhido", async ({
+  test("escolher não pula de passo; Avançar leva ao 2º sabor, que diz o que já foi escolhido", async ({
     page,
   }) => {
     await abrirCardapio(page)
@@ -137,13 +172,14 @@ test.describe("troca de sabor", () => {
       .getByRole("radiogroup", { name: "Escolha o 1º sabor" })
       .getByTestId("opcao-calabresa")
       .click()
-    // Logo depois do toque, ainda no 1º sabor, com a escolha marcada.
-    await page.waitForTimeout(300)
+    // Mesmo depois de um tempo, continua no 1º sabor, com a escolha marcada.
+    await page.waitForTimeout(1200)
     await expect(painel.getByRole("tab", { name: /1º sabor/ })).toHaveAttribute(
       "aria-selected",
       "true",
     )
-    // Depois, o 2º sabor, lembrando o 1º.
+    await avancar(painel)
+    // Agora o 2º sabor, lembrando o 1º.
     const segundo = painel.getByRole("tabpanel", { name: /2º sabor/ })
     await expect(painel.getByRole("tab", { name: /2º sabor/ })).toHaveAttribute(
       "aria-selected",
@@ -158,12 +194,16 @@ test.describe("acompanhe seu pedido", () => {
   test("sem pedidos neste celular, avisa com clareza", async ({ page }) => {
     await page.goto("/pedidos")
     await expect(page.getByRole("heading", { name: "Acompanhe seu pedido" })).toBeVisible()
-    await expect(page.getByRole("img", { name: "Entregador de moto a caminho" })).toBeVisible()
     await page.getByRole("button", { name: "Ver meu pedido" }).click()
     await expect(page.getByText("Digite o celular com DDD")).toBeVisible()
     await page.getByLabel("Celular (WhatsApp)").fill("12988887766")
     await page.getByRole("button", { name: "Ver meu pedido" }).click()
-    await expect(page.getByTestId("sem-pedidos")).toBeVisible({ timeout: 4000 })
+    // A espera e o aviso usam o desenho do nicho, não um ícone genérico.
+    const procurando = page.getByRole("status", { name: "Procurando seus pedidos" })
+    await expect(procurando.getByTestId("carregador-pizzaria")).toBeVisible()
+    const aviso = page.getByTestId("sem-pedidos")
+    await expect(aviso).toBeVisible({ timeout: 4000 })
+    await expect(aviso.getByTestId("carregador-pizzaria")).toBeVisible()
     await verificarSemRolagemHorizontal(page)
     await verificarAreasDeToque(page.locator("main"))
     await verificarAcessibilidade(page)

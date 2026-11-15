@@ -7,9 +7,9 @@ import {
   CalendarIcon,
   ClockIcon,
   MapPinIcon,
+  PanelRightOpenIcon,
   PrinterIcon,
   ScaleIcon,
-  SparklesIcon,
 } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { Badge } from "@/components/ui/badge"
@@ -20,15 +20,17 @@ import { textoCobranca, type Urgencia, urgencia } from "@/lib/admin/regras/fila"
 import { textoRetirada } from "@/lib/admin/regras/numero"
 import { itensParaPesar } from "@/lib/admin/regras/pesagem"
 import { rotuloCanal } from "@/lib/admin/regras/rotulos"
-import { rotuloAcao } from "@/lib/admin/regras/status"
+import { rotuloAcao, tomDoStatus } from "@/lib/admin/regras/status"
 import { cn } from "@/lib/utils"
+import { Traco } from "../traco"
 
 const CANAL_CURTO = { entrega: "Entrega", retirada: "Retirada", atendimento: "Salão" } as const
 
-const ESTILO_URGENCIA: Record<Urgencia, string> = {
-  normal: "",
-  atencao: "border-l-4 border-l-amber-500",
-  atrasado: "border-l-4 border-l-destructive",
+/** O atraso aparece no tempo (pílula colorida) e num anel fino no cartão, nunca numa borda grossa. */
+const ANEL_URGENCIA: Record<Urgencia, string> = {
+  normal: "ring-border/80",
+  atencao: "ring-(--tom-preparo)/45",
+  atrasado: "ring-(--tom-cancelado)/45",
 }
 
 function Tempo({ pedido, agora }: { pedido: Pedido; agora: Date }) {
@@ -52,9 +54,11 @@ function Tempo({ pedido, agora }: { pedido: Pedido; agora: Date }) {
   return (
     <span
       className={cn(
-        "flex items-center gap-1 tabular-nums",
-        nivel === "atencao" && "font-medium text-amber-700 dark:text-amber-400",
-        nivel === "atrasado" && "font-medium text-destructive",
+        "flex items-center gap-1 rounded-md whitespace-nowrap tabular-nums",
+        nivel !== "normal" && "-my-0.5 px-1.5 py-0.5 font-medium",
+        nivel === "atencao" && "bg-(--tom-preparo)/12 text-(--tom-preparo-texto)",
+        nivel === "atrasado" &&
+          "bg-(--tom-cancelado)/10 text-destructive dark:text-(--tom-cancelado)",
       )}
     >
       <Icone className="size-3.5" aria-hidden="true" />
@@ -95,36 +99,57 @@ export function CartaoFila({
 
   return (
     <motion.article
-      layout={!semMovimento}
+      // O mesmo id em todas as colunas: ao avançar, o cartão anda até a coluna seguinte.
+      layoutId={semMovimento ? undefined : `cartao-fila-${pedido.id}`}
       initial={semMovimento ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25, ease: [0.23, 1, 0.32, 1] }}
+      transition={{
+        default: { duration: 0.25, ease: [0.23, 1, 0.32, 1] },
+        layout: { duration: 0.25, ease: [0.23, 1, 0.32, 1] },
+      }}
       aria-labelledby={`pedido-${pedido.id}`}
+      className="relative"
     >
       <Card
         className={cn(
-          "gap-3 py-3",
-          ESTILO_URGENCIA[urgencia(pedido, agora)],
-          novo && "ring-2 ring-[var(--grafico)]",
+          "gap-3 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 transition-[box-shadow] duration-200",
+          ANEL_URGENCIA[urgencia(pedido, agora)],
+          novo && "ring-2 ring-(--atencao)/55",
         )}
       >
-        <CardHeader className="flex flex-row items-center gap-2 px-3">
+        {/* Chegou agora: um realce na cor de atenção que esmaece sozinho. */}
+        {novo && !semMovimento && (
+          <motion.span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 rounded-xl bg-(--atencao)"
+            initial={{ opacity: 0.1 }}
+            animate={{ opacity: 0 }}
+            transition={{ duration: 2.4, ease: "easeOut" }}
+          />
+        )}
+        <CardHeader className="flex flex-row flex-wrap items-center gap-x-2 gap-y-1 px-3">
+          {/* O traço da etapa: troca de cor quando o pedido anda para a coluna seguinte. */}
+          <Traco tom={tomDoStatus(pedido.status)} className="h-3" />
           <h3 id={`pedido-${pedido.id}`} className="text-base font-semibold tabular-nums">
             #{pedido.numero}
           </h3>
-          <Badge variant="outline" data-canal="" title={rotuloCanal(pedido.tipo)}>
+          <span
+            data-canal=""
+            title={rotuloCanal(pedido.tipo)}
+            className="text-[13px] text-muted-foreground"
+          >
             {canal}
-          </Badge>
+          </span>
           {aPesar && (
             <Badge variant="secondary" className="gap-1">
               <ScaleIcon aria-hidden="true" />A pesar
             </Badge>
           )}
           {novo && (
-            <Badge className="gap-1">
-              <SparklesIcon aria-hidden="true" />
+            <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">
+              <span aria-hidden="true" className="h-3 w-[3px] rounded-full bg-(--atencao)" />
               Chegou agora
-            </Badge>
+            </span>
           )}
           <span className="ml-auto text-xs text-muted-foreground">
             <Tempo pedido={pedido} agora={agora} />
@@ -160,7 +185,9 @@ export function CartaoFila({
             ))}
           </ul>
           {pedido.observacao && (
-            <p className="rounded-md bg-muted px-2 py-1 text-xs">Obs.: {pedido.observacao}</p>
+            <p className="rounded-md bg-foreground/[0.05] px-2 py-1.5 text-xs">
+              Obs.: {pedido.observacao}
+            </p>
           )}
           {pedido.dataRetirada && (
             <p className="flex items-center gap-1 text-xs font-medium">
@@ -183,12 +210,12 @@ export function CartaoFila({
           )}
         </CardContent>
 
-        <CardFooter className="gap-2 px-3">
+        <CardFooter className="gap-2 border-border/70 bg-transparent px-3 pt-3">
           {acao ? (
             <Button
               type="button"
               size="sm"
-              className="flex-1"
+              className="min-w-0 flex-1"
               disabled={ocupado}
               onClick={aoAvancar}
             >
@@ -206,8 +233,15 @@ export function CartaoFila({
           >
             <PrinterIcon />
           </Button>
-          <Button type="button" size="sm" variant="outline" onClick={aoAbrir}>
-            Detalhes
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="outline"
+            aria-label="Detalhes"
+            title={`Detalhes de #${pedido.numero}`}
+            onClick={aoAbrir}
+          >
+            <PanelRightOpenIcon />
           </Button>
         </CardFooter>
       </Card>

@@ -3,8 +3,7 @@
 import { SearchXIcon } from "lucide-react"
 import { motion } from "motion/react"
 import { useRouter } from "next/navigation"
-import { useEffect, useMemo, useRef, useState } from "react"
-import { EntradaAoRolar } from "@/components/entrada"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { ProdutoSheet } from "@/components/produto/produto-sheet"
 import { BarraSacola } from "@/components/sacola/barra-sacola"
 import { IlhaSacola } from "@/components/sacola/ilha-sacola"
@@ -49,6 +48,8 @@ export function Cardapio() {
   const [painelProdutoAberto, setPainelProdutoAberto] = useState(false)
   const [detalhesAbertos, setDetalhesAbertos] = useState(false)
   const [buscando, setBuscando] = useState(false)
+  // A barra de categorias grudada no topo: no celular, as ações descem para a barra de baixo.
+  const [grudada, setGrudada] = useState(false)
   const [termo, setTermo] = useState("")
   const [categoriaAtiva, setCategoriaAtiva] = useState<string | null>(null)
   // Rolando, a categoria sob a barra troca a cada seção que passa. Categorias curtas (a farmácia
@@ -195,14 +196,10 @@ export function Cardapio() {
         aoBuscar={setTermo}
         aoVerDetalhes={() => setDetalhesAbertos(true)}
         aoRecolherBusca={() => setBuscando(false)}
+        aoGrudar={setGrudada}
       />
       {/* Com busca ativa, a lista não encolhe abaixo da tela: a barra continua grudada. */}
-      <div
-        className={cn(
-          "mx-auto w-full max-w-[1320px] 2xl:max-w-[1640px]",
-          termoNormalizado && "min-h-dvh",
-        )}
-      >
+      <div className={cn("mx-auto w-full max-w-[1120px]", termoNormalizado && "min-h-dvh")}>
         <div className="min-w-0">
           <main>
             {!categorias ? (
@@ -212,24 +209,12 @@ export function Cardapio() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.2, ease: "easeOut" }}
-                className="flex flex-col gap-8 pt-6 md:gap-10 md:pt-8"
+                className="flex flex-col gap-10 pt-7 md:gap-14 md:pt-10"
               >
                 {termoNormalizado && (
                   <p aria-live="polite" className="px-4 text-sm text-muted-foreground md:px-6">
                     {plural(totalResultados, "resultado", "resultados")}
                   </p>
-                )}
-
-                {!termoNormalizado && lojaEscolhida.banners && (
-                  <BannersLoja
-                    banners={lojaEscolhida.banners}
-                    produtoDoBanner={produtoDoBanner}
-                    aoEscolher={escolherBanner}
-                  />
-                )}
-
-                {!termoNormalizado && destaques.length > 0 && (
-                  <MaisPedidas produtos={destaques} aoAbrir={abrirProduto} />
                 )}
 
                 {categoriasVisiveis.length === 0 ? (
@@ -248,57 +233,59 @@ export function Cardapio() {
                     </Button>
                   </Empty>
                 ) : (
-                  categoriasVisiveis.map((categoria) => (
-                    <section
-                      key={categoria.id}
-                      id={`categoria-${categoria.id}`}
-                      ref={(elemento) => {
-                        if (elemento) refsSecoes.current.set(categoria.id, elemento)
-                        else refsSecoes.current.delete(categoria.id)
-                      }}
-                      aria-labelledby={`titulo-${categoria.id}`}
-                      className="scroll-mt-[80px] px-4 md:px-6"
-                    >
-                      <EntradaAoRolar atraso={0.08}>
-                        <div className="flex items-center gap-3">
-                          <span
-                            aria-hidden="true"
-                            className="h-7 w-1.5 shrink-0 rounded-full bg-marca-acento md:h-8"
-                          />
+                  categoriasVisiveis.map((categoria, indice) => (
+                    <Fragment key={categoria.id}>
+                      <section
+                        id={`categoria-${categoria.id}`}
+                        ref={(elemento) => {
+                          if (elemento) refsSecoes.current.set(categoria.id, elemento)
+                          else refsSecoes.current.delete(categoria.id)
+                        }}
+                        aria-labelledby={`titulo-${categoria.id}`}
+                        className="scroll-mt-[80px] px-4 md:px-6"
+                      >
+                        <div className="flex items-baseline justify-between gap-4">
                           <h2
                             id={`titulo-${categoria.id}`}
-                            className="text-2xl font-extrabold tracking-tight md:text-3xl"
+                            className="text-lg font-semibold tracking-[-0.015em] md:text-xl"
                           >
                             {categoria.nome}
                           </h2>
-                          <span
-                            aria-hidden="true"
-                            className="h-px min-w-6 flex-1 bg-linear-to-r from-border to-transparent"
-                          />
-                          <span className="shrink-0 rounded-full bg-accent px-3 py-1 text-xs font-semibold text-accent-foreground tabular-nums">
+                          <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">
                             {plural(categoria.produtos.length, "opção", "opções")}
                           </span>
                         </div>
-                      </EntradaAoRolar>
-                      <ul
-                        className="mt-4 grid gap-3 md:grid-cols-2 md:gap-4 xl:grid-cols-3"
-                        data-testid="grade-produtos"
-                      >
-                        {categoria.produtos.map((produto, indice) => (
-                          <li key={produto.id}>
-                            <EntradaAoRolar
-                              atraso={0.14 + Math.min(indice, 4) * 0.06}
-                              className="h-full"
-                            >
+                        {/* Sem cartões: as linhas se separam por um fio; em duas colunas do tablet em diante. */}
+                        <ul
+                          className="mt-1 grid grid-cols-1 md:grid-cols-2 md:gap-x-10"
+                          data-testid="grade-produtos"
+                        >
+                          {categoria.produtos.map((produto) => (
+                            <li key={produto.id} className="border-b border-border/70">
                               <ProdutoLinha
                                 produto={produto}
                                 aoAbrir={() => abrirProduto(produto)}
                               />
-                            </EntradaAoRolar>
-                          </li>
-                        ))}
-                      </ul>
-                    </section>
+                            </li>
+                          ))}
+                        </ul>
+                      </section>
+                      {/* O cardápio abre a página; os banners e os mais pedidos vêm depois da primeira categoria. */}
+                      {indice === 0 && !termoNormalizado && (
+                        <>
+                          {lojaEscolhida.banners && (
+                            <BannersLoja
+                              banners={lojaEscolhida.banners}
+                              produtoDoBanner={produtoDoBanner}
+                              aoEscolher={escolherBanner}
+                            />
+                          )}
+                          {destaques.length > 0 && (
+                            <MaisPedidas produtos={destaques} aoAbrir={abrirProduto} />
+                          )}
+                        </>
+                      )}
+                    </Fragment>
                   ))
                 )}
               </motion.div>
@@ -319,7 +306,14 @@ export function Cardapio() {
       />
       <DetalhesLoja aberto={detalhesAbertos} aoMudar={setDetalhesAbertos} />
       <IlhaSacola aoContinuar={irParaFinalizar} />
-      <BarraSacola oculta={painelProdutoAberto} />
+      <BarraSacola
+        oculta={painelProdutoAberto}
+        grudada={grudada}
+        buscando={buscando}
+        termo={termo}
+        aoAlternarBusca={alternarBusca}
+        aoVerDetalhes={() => setDetalhesAbertos(true)}
+      />
 
       <VooParaSacola />
     </div>

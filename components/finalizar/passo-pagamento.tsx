@@ -29,8 +29,7 @@ import { cn } from "@/lib/utils"
 import { CabecalhoPasso } from "./cabecalho-passo"
 import { Campo, ESTILO_CAMPO } from "./campo"
 import { CartaoOpcao } from "./cartao-opcao"
-
-const CURVA = [0.23, 1, 0.32, 1] as const
+import { CURVA_SAIDA, CURVA_TELA } from "./movimento"
 
 const ICONES: Record<FormaPagamento, ReactNode> = {
   pix: <QrCodeIcon />,
@@ -42,8 +41,8 @@ const ICONES: Record<FormaPagamento, ReactNode> = {
 
 function Aviso({ children }: { children: ReactNode }) {
   return (
-    <p className="flex items-start gap-2 rounded-xl bg-secondary px-3 py-2.5 text-sm text-muted-foreground">
-      <InfoIcon className="mt-0.5 size-4 shrink-0" aria-hidden="true" />
+    <p className="flex items-start gap-2 text-sm leading-snug text-muted-foreground">
+      <InfoIcon className="mt-px size-4 shrink-0" aria-hidden="true" />
       <span>{children}</span>
     </p>
   )
@@ -51,7 +50,7 @@ function Aviso({ children }: { children: ReactNode }) {
 
 /** Chip de troco no ToggleGroup do shadcn: contorno em repouso, cor da marca quando escolhido. */
 const ESTILO_CHIP =
-  "h-11 rounded-full px-4 font-semibold tabular-nums data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
+  "h-11 rounded-full border-border px-4 text-[15px] font-medium tabular-nums transition-[background-color,border-color,color,transform] duration-150 ease-saida active:scale-[0.97] data-[state=on]:border-primary data-[state=on]:bg-primary data-[state=on]:text-primary-foreground"
 
 function BlocoTroco({ total }: { total: number }) {
   const {
@@ -70,7 +69,7 @@ function BlocoTroco({ total }: { total: number }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <p id="titulo-troco" className="text-sm font-semibold">
+      <p id="titulo-troco" className="text-sm font-medium">
         Precisa de troco?
       </p>
       <ToggleGroup
@@ -109,8 +108,8 @@ function BlocoTroco({ total }: { total: number }) {
           <motion.div
             initial={{ height: 0, opacity: 0 }}
             animate={{ height: "auto", opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.3, ease: CURVA }}
+            exit={{ height: 0, opacity: 0, transition: { duration: 0.16, ease: CURVA_TELA } }}
+            transition={{ duration: 0.26, ease: CURVA_TELA }}
             className="-mx-1 overflow-hidden px-1 pt-1"
           >
             <Campo id="troco" rotulo="Troco para quanto?" erro={errors.troco?.message}>
@@ -152,11 +151,11 @@ function BlocoTroco({ total }: { total: number }) {
         {troco !== null && troco >= total && (
           <motion.p
             key="troco"
-            initial={{ opacity: 0, y: 6 }}
+            initial={{ opacity: 0, y: 4 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.25, ease: CURVA }}
-            className="text-sm font-medium text-sucesso"
+            exit={{ opacity: 0, transition: { duration: 0.1 } }}
+            transition={{ duration: 0.22, ease: CURVA_SAIDA }}
+            className="text-sm font-medium text-sucesso tabular-nums"
             aria-live="polite"
           >
             Seu troco será de {emReais(troco - total)}
@@ -242,13 +241,13 @@ export function PassoPagamento({ total }: { total: number }) {
   ]
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <CabecalhoPasso
         titulo="Como você prefere pagar?"
         descricao={
           <>
             Total do pedido:{" "}
-            <strong className="text-foreground tabular-nums">{emReais(total)}</strong>
+            <strong className="font-semibold text-foreground tabular-nums">{emReais(total)}</strong>
           </>
         }
       />
@@ -260,11 +259,11 @@ export function PassoPagamento({ total }: { total: number }) {
             aria-label="Forma de pagamento"
             value={field.value}
             onValueChange={field.onChange}
-            className="flex flex-col gap-5"
+            className="flex flex-col gap-6"
           >
             {grupos.map(({ titulo, formas }) => (
               <div key={titulo} className="flex flex-col gap-2.5">
-                <p className="text-sm font-semibold text-muted-foreground">{titulo}</p>
+                <p className="text-[13px] font-medium text-muted-foreground">{titulo}</p>
                 {formas.map((forma) => (
                   <div key={forma} className="flex flex-col">
                     <CartaoOpcao
@@ -280,11 +279,15 @@ export function PassoPagamento({ total }: { total: number }) {
                         <motion.div
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: "auto", opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          transition={{ duration: 0.32, ease: CURVA }}
+                          exit={{
+                            height: 0,
+                            opacity: 0,
+                            transition: { duration: 0.18, ease: CURVA_TELA },
+                          }}
+                          transition={{ duration: 0.28, ease: CURVA_TELA }}
                           className="-mx-1 overflow-hidden px-1"
                         >
-                          <div className="pt-3 pb-1 pl-1">
+                          <div className="pt-4 pb-2 pl-1">
                             <Detalhe forma={forma} total={total} retirada={retirada} />
                           </div>
                         </motion.div>

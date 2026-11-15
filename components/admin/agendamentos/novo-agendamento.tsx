@@ -114,14 +114,14 @@ function Formulario({
 
       <FieldSet>
         <FieldLegend variant="label">Serviços</FieldLegend>
-        <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-lg border p-1">
+        <ul className="flex max-h-56 flex-col overflow-y-auto rounded-xl p-1 ring-1 ring-border/80">
           {disponiveis.map((produto) => {
             const id = `servico-${produto.id}`
             return (
               <li key={produto.id}>
                 <Label
                   htmlFor={id}
-                  className="flex cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 font-normal hover:bg-muted"
+                  className="flex min-h-10 cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 font-normal transition-colors duration-150 hover:bg-foreground/[0.04]"
                 >
                   <Checkbox
                     id={id}
@@ -171,7 +171,7 @@ function Formulario({
             <Label
               key={valor}
               htmlFor={`agenda-pagamento-${valor}`}
-              className="flex cursor-pointer flex-col items-center gap-1 rounded-lg border p-2 text-xs has-[[data-state=checked]]:border-primary has-[[data-state=checked]]:bg-accent"
+              className="flex min-h-14 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg bg-background p-2 text-xs ring-1 ring-border/80 transition-[box-shadow,background-color] duration-150 active:scale-[0.97] has-focus-visible:ring-3 has-focus-visible:ring-ring/50 has-[[data-state=checked]]:bg-foreground/[0.04] has-[[data-state=checked]]:ring-2 has-[[data-state=checked]]:ring-foreground"
             >
               <RadioGroupItem value={valor} id={`agenda-pagamento-${valor}`} className="sr-only" />
               <Icone className="size-4" aria-hidden="true" />

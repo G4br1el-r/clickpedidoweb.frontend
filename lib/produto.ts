@@ -95,3 +95,27 @@ export function textoDeBusca(produto: Produto): string {
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
 }
+
+/** O que o botão principal da folha faz no passo em que a pessoa está. */
+export type AcaoDoPasso =
+  | { tipo: "avancar"; rotulo: "Avançar"; para: number }
+  | { tipo: "adicionar"; rotulo: "Adicionar" }
+  | { tipo: "falta"; rotulo: "Avançar" | "Adicionar"; grupo: GrupoOpcao }
+
+/**
+ * Escolher uma opção nunca pula de passo: quem avança é a pessoa, pelo botão. Antes do último
+ * passo ele diz "Avançar" (e, se o passo é obrigatório e está vazio, aponta o que falta nele);
+ * no último, "Adicionar" (e, se faltou algo antes, leva até lá).
+ */
+export function acaoDoPasso(grupos: GrupoOpcao[], selecoes: Selecoes, passo: number): AcaoDoPasso {
+  const ultimo = passo >= grupos.length - 1
+  if (!ultimo) {
+    const atual = grupos[passo]
+    if (atual.obrigatorio && idsDo(selecoes, atual).length === 0)
+      return { tipo: "falta", rotulo: "Avançar", grupo: atual }
+    return { tipo: "avancar", rotulo: "Avançar", para: passo + 1 }
+  }
+  const [faltante] = gruposFaltantes(grupos, selecoes)
+  if (faltante) return { tipo: "falta", rotulo: "Adicionar", grupo: faltante }
+  return { tipo: "adicionar", rotulo: "Adicionar" }
+}

@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { type ReactNode, useState } from "react"
@@ -111,6 +111,44 @@ describe("PaginaMotoboys", () => {
       await screen.findByText("Diego Ramos tem entrega em andamento. Desative em vez de excluir."),
     ).toBeInTheDocument()
     expect(screen.getByRole("row", { name: /Diego Ramos/ })).toBeInTheDocument()
+  })
+
+  test("excluir sai da lista e o desfazer do aviso traz o motoboy de volta", async () => {
+    const usuario = await abrir()
+    await usuario.click(linha("Thiago Neves").getByRole("button", { name: "Excluir Thiago Neves" }))
+    await usuario.click(
+      within(screen.getByRole("alertdialog", { name: "Excluir Thiago Neves?" })).getByRole(
+        "button",
+        { name: "Excluir" },
+      ),
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole("row", { name: /Thiago Neves/ })).not.toBeInTheDocument(),
+    )
+    await usuario.click(await screen.findByRole("button", { name: "Desfazer" }))
+    expect(await screen.findByRole("row", { name: /Thiago Neves/ })).toBeInTheDocument()
+    const [thiago] = (await api().motoboys.listar()).filter((item) => item.nome === "Thiago Neves")
+    expect(thiago).toMatchObject({ id: "moto-2", telefone: "12992318844" })
+  })
+
+  test("sem motoboy, o vazio ensina e cadastra dali", async () => {
+    // Quem tem entrega em andamento não sai: cancela essas entregas antes.
+    const naRua = (await api().pedidos.listar({})).filter(
+      (pedido) => pedido.motoboyId && !["concluido", "cancelado"].includes(pedido.status),
+    )
+    for (const pedido of naRua) await api().pedidos.cancelar(pedido.id, pedido.status)
+    for (const motoboy of await api().motoboys.listar()) await api().motoboys.excluir(motoboy.id)
+    const usuario = userEvent.setup()
+    render(
+      <Provedores>
+        <PaginaMotoboys />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByText("Nenhum motoboy cadastrado", {}, { timeout: 8000 }),
+    ).toBeVisible()
+    await usuario.click(screen.getByRole("button", { name: "Cadastrar o primeiro motoboy" }))
+    expect(screen.getByRole("dialog", { name: "Novo motoboy" })).toBeInTheDocument()
   })
 
   test("avisa quando a loja não está aceitando entregas", async () => {

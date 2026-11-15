@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { CONFIG_PADRAO } from "./config"
-import { buscarSecao, GRUPOS, normalizar, SECOES } from "./secoes"
+import { buscarSecao, GRUPOS, normalizar, ondeMudou, SECOES, secoesAlteradas } from "./secoes"
 
 describe("buscarSecao", () => {
   test("acha a seção pelo id da rota", () => {
@@ -26,5 +26,36 @@ describe("normalizar", () => {
   test("ignora acento, maiúscula e espaço nas pontas", () => {
     expect(normalizar("  Animações ")).toBe("animacoes")
     expect(normalizar("Ç")).toBe("c")
+  })
+})
+
+describe("secoesAlteradas", () => {
+  test("sem mudança, nada está pendente", () => {
+    expect(secoesAlteradas(CONFIG_PADRAO, CONFIG_PADRAO)).toEqual([])
+  })
+
+  test("aponta só as seções em que o rascunho difere do que está publicado", () => {
+    const rascunho = {
+      ...CONFIG_PADRAO,
+      identidade: { ...CONFIG_PADRAO.identidade, nome: "Outra Pizza" },
+    }
+    expect(secoesAlteradas(rascunho, CONFIG_PADRAO).map((secao) => secao.id)).toEqual([
+      "identidade",
+    ])
+  })
+})
+
+describe("ondeMudou", () => {
+  const secao = (titulo: string) => ({ titulo }) as (typeof SECOES)[number]
+
+  test("uma ou duas seções aparecem pelo nome", () => {
+    expect(ondeMudou([secao("Identidade")])).toBe("em Identidade")
+    expect(ondeMudou([secao("Identidade"), secao("Cores e botões")])).toBe(
+      "em Identidade e Cores e botões",
+    )
+  })
+
+  test("três ou mais viram uma contagem", () => {
+    expect(ondeMudou([secao("A"), secao("B"), secao("C")])).toBe("em 3 seções")
   })
 })

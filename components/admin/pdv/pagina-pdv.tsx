@@ -1,5 +1,6 @@
 "use client"
 
+import NumberFlow from "@number-flow/react"
 import { format } from "date-fns"
 import { PlusIcon, PrinterIcon, ShoppingBasketIcon } from "lucide-react"
 import { useRef, useState } from "react"
@@ -46,8 +47,18 @@ import {
 } from "@/lib/admin/regras/pdv"
 import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
-import { emReais, plural } from "@/lib/formato"
-import { CAIXA_VAZIA, CaixaPdv, type EstadoCaixa, type ItemCaixa } from "./caixa-pdv"
+import { emReais, formatoMoeda, plural } from "@/lib/formato"
+import { BlocoSecao } from "../bloco-secao"
+import { CabecalhoPagina } from "../cabecalho-pagina"
+import {
+  type AvisoCaixa,
+  CAIXA_VAZIA,
+  CaixaPdv,
+  type EstadoCaixa,
+  type ItemCaixa,
+  linhaQueMudou,
+  Tecla,
+} from "./caixa-pdv"
 import { CatalogoBalcao } from "./catalogo-balcao"
 import { JanelaOpcoes } from "./janela-opcoes"
 
@@ -209,9 +220,22 @@ export function PaginaPdv() {
   const [caixaAberta, setCaixaAberta] = useState(false)
   const campoBusca = useRef<HTMLInputElement>(null)
 
+  const [aviso, setAviso] = useState<AvisoCaixa | null>(null)
+
   const mudar = (mudanca: Partial<EstadoCaixa>) => setCaixa((atual) => ({ ...atual, ...mudanca }))
-  const incluir = (item: Omit<ItemCaixa, "chave">) =>
-    setCaixa((atual) => ({ ...atual, itens: adicionarItem<ItemCaixa>(atual.itens, item) }))
+  const incluir = (item: Omit<ItemCaixa, "chave">) => {
+    const itens = adicionarItem<ItemCaixa>(caixa.itens, item)
+    setCaixa({ ...caixa, itens })
+    // A linha que entrou ou cresceu: acende na caixa e é anunciada.
+    const linha = linhaQueMudou(caixa.itens, itens)
+    if (linha) {
+      setAviso((atual) => ({
+        chave: linha.chave,
+        texto: `${linha.nome}: ${linha.quantidade} na venda`,
+        vez: (atual?.vez ?? 0) + 1,
+      }))
+    }
+  }
 
   const tocarProduto = (produto: Produto) => {
     if (produto.grupos.some((grupo) => grupo.ativo)) return setComOpcoes(produto)
@@ -250,6 +274,7 @@ export function PaginaPdv() {
         onSuccess: (pedido) => {
           setTicket(pedido)
           setCaixa(CAIXA_VAZIA)
+          setAviso(null)
           setCaixaAberta(false)
         },
         onError: (erro) => toast.error(erro.message),
@@ -271,22 +296,32 @@ export function PaginaPdv() {
       .reduce((soma, item) => soma + item.quantidade, 0)
 
   const painelDaCaixa = (
-    <CaixaPdv estado={caixa} mudar={mudar} aoFinalizar={fechar} finalizando={finalizar.isPending} />
+    <CaixaPdv
+      estado={caixa}
+      mudar={mudar}
+      aoFinalizar={fechar}
+      finalizando={finalizar.isPending}
+      aviso={aviso}
+    />
   )
 
   return (
     // No celular, espaço no fim para a barra "Ver venda" não cobrir os últimos produtos.
-    <div className="flex flex-1 flex-col gap-5 p-4 pb-24 md:p-6 lg:pb-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">PDV</h1>
-        <p className="text-sm text-muted-foreground">
-          Venda no balcão. Atalhos: <kbd className="rounded border px-1 text-xs">/</kbd> busca e{" "}
-          <kbd className="rounded border px-1 text-xs">F9</kbd> finaliza.
-        </p>
-      </div>
+    <div className="flex flex-1 flex-col gap-5 p-4 pb-24 md:p-6 lg:px-8 lg:pb-6">
+      <CabecalhoPagina
+        titulo="PDV"
+        resumo={
+          <>
+            Venda no balcão
+            <span className="max-lg:hidden">
+              . Atalhos: <Tecla>/</Tecla> busca e <Tecla>F9</Tecla> finaliza.
+            </span>
+          </>
+        }
+      />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_24rem]">
-        <div className="flex min-w-0 flex-col gap-4">
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_23rem] lg:gap-0">
+        <div className="flex min-w-0 flex-col gap-5 lg:pr-6">
           <CatalogoBalcao
             campoBusca={campoBusca}
             quantidadeNa={quantidadeNaCaixa}
@@ -305,14 +340,13 @@ export function PaginaPdv() {
             </CollapsibleContent>
           </Collapsible>
 
-          <section aria-labelledby="ultimas-vendas" className="flex flex-col gap-2">
-            <h2 id="ultimas-vendas" className="font-semibold">
-              Últimas vendas de hoje
-            </h2>
+          <BlocoSecao titulo="Últimas vendas de hoje">
             {ultimas.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Nenhuma venda no balcão hoje.</p>
+              <p className="text-sm text-muted-foreground">
+                Nenhuma venda no balcão hoje. Cada venda finalizada entra aqui, com o ticket.
+              </p>
             ) : (
-              <div className="overflow-hidden rounded-xl border bg-card">
+              <div className="-mt-1">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -341,24 +375,32 @@ export function PaginaPdv() {
                 </Table>
               </div>
             )}
-          </section>
+          </BlocoSecao>
         </div>
 
         {telaGrande ? (
-          <aside className="sticky top-20 rounded-xl border bg-card p-4">{painelDaCaixa}</aside>
+          // Caixa plana, separada do catálogo por um fio; acompanha a rolagem.
+          <aside className="lg:sticky lg:top-20 lg:border-l lg:border-border/70 lg:pl-6">
+            {painelDaCaixa}
+          </aside>
         ) : (
           <>
             <Button
               type="button"
               size="lg"
-              className="fixed inset-x-4 bottom-4 z-20 justify-between shadow-lg"
+              className="fixed inset-x-4 bottom-4 z-20 h-12 justify-between rounded-xl px-4 shadow-lg"
               onClick={() => setCaixaAberta(true)}
             >
               <span className="flex items-center gap-2">
                 <ShoppingBasketIcon data-icon="inline-start" />
                 Ver venda · {plural(totais.quantidade, "item", "itens")}
               </span>
-              <span className="tabular-nums">{emReais(totais.total)}</span>
+              <NumberFlow
+                value={totais.total}
+                locales="pt-BR"
+                format={formatoMoeda}
+                className="font-semibold tabular-nums"
+              />
             </Button>
             <Sheet open={caixaAberta} onOpenChange={setCaixaAberta}>
               <SheetContent side="bottom" className="h-[92dvh] overflow-y-auto p-4">

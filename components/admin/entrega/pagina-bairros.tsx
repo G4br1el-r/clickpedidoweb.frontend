@@ -9,7 +9,16 @@ import {
   type Updater,
   useTable,
 } from "@tanstack/react-table"
-import { MapPinIcon, PencilIcon, PlusIcon, SearchIcon, Trash2Icon } from "lucide-react"
+import {
+  EllipsisIcon,
+  MapPinIcon,
+  PencilIcon,
+  PlusIcon,
+  SearchIcon,
+  SearchXIcon,
+  Trash2Icon,
+} from "lucide-react"
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react"
 import { useDeferredValue, useMemo, useState } from "react"
 import { NumericFormat } from "react-number-format"
 import { toast } from "sonner"
@@ -22,7 +31,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -34,7 +42,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { InputGroup, InputGroupAddon, InputGroupInput } from "@/components/ui/input-group"
@@ -46,7 +67,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import {
   Table,
@@ -65,9 +85,19 @@ import {
 import type { Bairro } from "@/lib/admin/dados/tipos"
 import { normalizar } from "@/lib/admin/regras/filtro-pedidos"
 import { plural } from "@/lib/formato"
+import { cn } from "@/lib/utils"
+import { CabecalhoPagina } from "../cabecalho-pagina"
+import { Traco } from "../traco"
 import { AvisoSemEntrega } from "./aviso-sem-entrega"
+import {
+  ALVO_DE_TOQUE,
+  EsqueletoLinhas,
+  LinhaAnimada,
+  semRelogioDoNavegador,
+} from "./linha-animada"
 
 const recursos = tableFeatures({ rowSelectionFeature })
+const CURVA = [0.23, 1, 0.32, 1] as const
 
 const dinheiro = {
   customInput: Input,
@@ -81,7 +111,10 @@ const dinheiro = {
 
 const aoErrar = (erro: Error) => toast.error(erro.message)
 
-/** Taxa editada na linha: salva ao apertar Enter ou sair do campo, se mudou. */
+/**
+ * Taxa editada na linha: parece texto até o ponteiro ou o foco chegar, e salva ao apertar
+ * Enter ou sair do campo, se mudou.
+ */
 function TaxaNaLinha({ bairro }: { bairro: Bairro }) {
   const salvar = useSalvarBairro()
   const [valor, setValor] = useState<number | undefined>(bairro.taxa)
@@ -96,7 +129,11 @@ function TaxaNaLinha({ bairro }: { bairro: Bairro }) {
     <NumericFormat
       {...dinheiro}
       aria-label={`Taxa de ${bairro.nome}`}
-      className="h-8 w-[5.5rem] text-right tabular-nums sm:w-24"
+      className={cn(
+        "ml-auto h-8 w-[5.5rem] border-transparent bg-transparent text-right font-medium tabular-nums shadow-none sm:w-24 dark:bg-transparent",
+        "hover:border-border focus-visible:border-ring",
+        !bairro.ativo && "text-muted-foreground",
+      )}
       value={valor ?? ""}
       onValueChange={({ floatValue }) => setValor(floatValue)}
       onBlur={confirmar}
@@ -112,28 +149,55 @@ function TaxaNaLinha({ bairro }: { bairro: Bairro }) {
 
 function AcoesDaLinha({ bairro, aoEditar }: { bairro: Bairro; aoEditar: () => void }) {
   const excluir = useExcluirBairro()
+  const salvar = useSalvarBairro()
+  const [confirmando, setConfirmando] = useState(false)
   return (
     <div className="flex justify-end gap-1">
+      {/* Do tablet em diante cabem os dois botões; no celular, um menu só. */}
       <Button
         type="button"
         variant="ghost"
         size="icon-sm"
+        className="max-sm:hidden"
         aria-label={`Editar ${bairro.nome}`}
         onClick={aoEditar}
       >
         <PencilIcon />
       </Button>
-      <AlertDialog>
-        <AlertDialogTrigger asChild>
+      <Button
+        type="button"
+        variant="ghost"
+        size="icon-sm"
+        className="max-sm:hidden"
+        aria-label={`Excluir ${bairro.nome}`}
+        onClick={() => setConfirmando(true)}
+      >
+        <Trash2Icon />
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
           <Button
             type="button"
             variant="ghost"
             size="icon-sm"
-            aria-label={`Excluir ${bairro.nome}`}
+            className={cn("sm:hidden", ALVO_DE_TOQUE)}
+            aria-label={`Ações de ${bairro.nome}`}
           >
-            <Trash2Icon />
+            <EllipsisIcon />
           </Button>
-        </AlertDialogTrigger>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onSelect={aoEditar}>
+            <PencilIcon />
+            Editar
+          </DropdownMenuItem>
+          <DropdownMenuItem variant="destructive" onSelect={() => setConfirmando(true)}>
+            <Trash2Icon />
+            Excluir
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <AlertDialog open={confirmando} onOpenChange={setConfirmando}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Excluir {bairro.nome}?</AlertDialogTitle>
@@ -148,7 +212,18 @@ function AcoesDaLinha({ bairro, aoEditar }: { bairro: Bairro; aoEditar: () => vo
               variant="destructive"
               onClick={() =>
                 excluir.mutate(bairro.id, {
-                  onSuccess: () => toast.success(`${bairro.nome} excluído.`),
+                  onSuccess: () =>
+                    toast.success(`${bairro.nome} excluído.`, {
+                      // O mesmo cadastro volta, com o mesmo id e a mesma taxa.
+                      action: {
+                        label: "Desfazer",
+                        onClick: () =>
+                          salvar.mutate(bairro, {
+                            onSuccess: () => toast.success(`${bairro.nome} voltou para a lista.`),
+                            onError: aoErrar,
+                          }),
+                      },
+                    }),
                   onError: aoErrar,
                 })
               }
@@ -171,7 +246,7 @@ function JanelaBairro({ bairro, aoFechar }: { bairro: Bairro | null; aoFechar: (
     <Dialog open onOpenChange={(aberta) => !aberta && aoFechar()}>
       <DialogContent className="sm:max-w-sm">
         <form
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-5"
           onSubmit={(evento) => {
             evento.preventDefault()
             salvar.mutate(
@@ -190,37 +265,45 @@ function JanelaBairro({ bairro, aoFechar }: { bairro: Bairro | null; aoFechar: (
             <DialogTitle>{bairro ? "Editar bairro" : "Novo bairro"}</DialogTitle>
             <DialogDescription>A taxa entra no pedido de quem mora no bairro.</DialogDescription>
           </DialogHeader>
-          <FieldGroup>
+          <FieldGroup className="gap-4">
             <Field>
               <FieldLabel htmlFor="bairro-cidade">Cidade</FieldLabel>
               <Input
                 id="bairro-cidade"
                 maxLength={60}
+                autoComplete="off"
                 value={cidade}
                 onChange={(evento) => setCidade(evento.target.value)}
               />
             </Field>
-            <Field>
-              <FieldLabel htmlFor="bairro-nome">Bairro</FieldLabel>
-              <Input
-                id="bairro-nome"
-                maxLength={60}
-                value={nome}
-                onChange={(evento) => setNome(evento.target.value)}
-              />
-            </Field>
-            <Field>
-              <FieldLabel htmlFor="bairro-taxa">Taxa</FieldLabel>
-              <NumericFormat
-                {...dinheiro}
-                id="bairro-taxa"
-                placeholder="Grátis"
-                value={taxa ?? ""}
-                onValueChange={({ floatValue }) => setTaxa(floatValue)}
-              />
-            </Field>
+            <div className="grid grid-cols-[1fr_7.5rem] gap-3">
+              <Field>
+                <FieldLabel htmlFor="bairro-nome">Bairro</FieldLabel>
+                <Input
+                  id="bairro-nome"
+                  maxLength={60}
+                  autoComplete="off"
+                  value={nome}
+                  onChange={(evento) => setNome(evento.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="bairro-taxa">Taxa</FieldLabel>
+                <NumericFormat
+                  {...dinheiro}
+                  id="bairro-taxa"
+                  placeholder="Grátis"
+                  className="text-right tabular-nums"
+                  value={taxa ?? ""}
+                  onValueChange={({ floatValue }) => setTaxa(floatValue)}
+                />
+              </Field>
+            </div>
           </FieldGroup>
           <DialogFooter>
+            <Button type="button" variant="ghost" onClick={aoFechar}>
+              Cancelar
+            </Button>
             <Button type="submit" disabled={salvar.isPending}>
               Salvar
             </Button>
@@ -238,7 +321,7 @@ function MudarTaxa({ ids, aoFechar }: { ids: string[]; aoFechar: (aplicou: boole
     <Dialog open onOpenChange={(aberta) => !aberta && aoFechar(false)}>
       <DialogContent className="sm:max-w-sm">
         <form
-          className="flex flex-col gap-4"
+          className="flex flex-col gap-5"
           onSubmit={(evento) => {
             evento.preventDefault()
             if (taxa === undefined) return toast.error("Informe a nova taxa.")
@@ -263,11 +346,15 @@ function MudarTaxa({ ids, aoFechar }: { ids: string[]; aoFechar: (aplicou: boole
             <NumericFormat
               {...dinheiro}
               id="bairros-taxa"
+              className="tabular-nums"
               value={taxa ?? ""}
               onValueChange={({ floatValue }) => setTaxa(floatValue)}
             />
           </Field>
           <DialogFooter>
+            <Button type="button" variant="ghost" onClick={() => aoFechar(false)}>
+              Cancelar
+            </Button>
             <Button type="submit" disabled={mudar.isPending}>
               Aplicar
             </Button>
@@ -275,6 +362,55 @@ function MudarTaxa({ ids, aoFechar }: { ids: string[]; aoFechar: (aplicou: boole
         </form>
       </DialogContent>
     </Dialog>
+  )
+}
+
+/**
+ * Barra das ações em lote: flutua no pé da tela enquanto houver seleção. Ao sair, some
+ * para o leitor de tela na hora, mesmo enquanto ainda esmaece.
+ */
+function BarraSelecao({
+  quantos,
+  aoMudarTaxa,
+  aoAtivar,
+  aoLimpar,
+}: {
+  quantos: number
+  aoMudarTaxa: () => void
+  aoAtivar: (ativo: boolean) => void
+  aoLimpar: () => void
+}) {
+  const presente = useIsPresent()
+  const semMovimento = useReducedMotion()
+  const rotulo = plural(quantos, "bairro selecionado", "bairros selecionados")
+  return (
+    <motion.div
+      role={presente ? "toolbar" : undefined}
+      aria-label={presente ? rotulo : undefined}
+      aria-hidden={presente ? undefined : true}
+      inert={!presente}
+      // Com `onUpdate`, o Motion anima no próprio relógio em vez do WAAPI: a saída termina
+      // no tempo certo mesmo com o relógio da página parado (testes com `page.clock`).
+      onUpdate={semRelogioDoNavegador}
+      initial={{ opacity: 0, y: semMovimento ? 0 : 12 }}
+      animate={{ opacity: 1, y: 0, transition: { duration: 0.22, ease: CURVA } }}
+      exit={{ opacity: 0, y: semMovimento ? 0 : 8, transition: { duration: 0.15, ease: CURVA } }}
+      className="sticky bottom-4 z-20 mx-auto flex w-full max-w-2xl flex-wrap items-center gap-x-2 gap-y-1.5 rounded-2xl bg-popover p-2 pl-4 text-sm shadow-[0_18px_40px_-20px_rgb(0_0_0/0.45)] ring-1 ring-border/80"
+    >
+      <span className="mr-auto font-medium tabular-nums">{rotulo}</span>
+      <Button type="button" size="sm" variant="outline" onClick={aoMudarTaxa}>
+        Mudar taxa
+      </Button>
+      <Button type="button" size="sm" variant="outline" onClick={() => aoAtivar(true)}>
+        Ativar
+      </Button>
+      <Button type="button" size="sm" variant="outline" onClick={() => aoAtivar(false)}>
+        Desativar
+      </Button>
+      <Button type="button" size="sm" variant="ghost" onClick={aoLimpar}>
+        Limpar seleção
+      </Button>
+    </motion.div>
   )
 }
 
@@ -331,9 +467,23 @@ export function PaginaBairros() {
         id: "nome",
         header: "Bairro",
         cell: ({ row }) => (
-          <span className="block max-w-[7.5rem] truncate font-medium sm:max-w-none">
-            {row.original.nome}
-          </span>
+          <div className="flex min-w-0 items-center gap-3">
+            <Traco tom="fim" className={cn("h-8 md:h-4", row.original.ativo && "invisible")} />
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <span
+                className={cn(
+                  "block max-w-[7.5rem] truncate font-medium transition-colors duration-200 sm:max-w-none",
+                  !row.original.ativo && "text-muted-foreground",
+                )}
+              >
+                {row.original.nome}
+              </span>
+              {/* No celular a cidade vem embaixo do bairro, no lugar da coluna. */}
+              <span className="block max-w-[7.5rem] truncate text-[13px] text-muted-foreground md:hidden">
+                {row.original.cidade}
+              </span>
+            </div>
+          </div>
         ),
       },
       {
@@ -343,7 +493,7 @@ export function PaginaBairros() {
       },
       {
         id: "taxa",
-        header: "Taxa",
+        header: () => <span className="block pr-3 text-right">Taxa</span>,
         cell: ({ row }) => <TaxaNaLinha key={row.original.taxa} bairro={row.original} />,
       },
       {
@@ -380,158 +530,178 @@ export function PaginaBairros() {
       setSelecao((atual) => (typeof atualizar === "function" ? atualizar(atual) : atualizar)),
   })
   const selecionados = Object.keys(selecao).filter((id) => selecao[id])
+  const ativos = bairros?.filter((bairro) => bairro.ativo).length ?? 0
+  const filtrando = busca.trim() !== "" || cidade !== "todas"
+  const classeDaColuna = (id: string) =>
+    id === "cidade"
+      ? "hidden md:table-cell"
+      : id === "selecionar"
+        ? "w-10 pl-0"
+        : id === "taxa"
+          ? "w-28 text-right"
+          : id === "ativo"
+            ? "w-16"
+            : id === "acoes"
+              ? "w-20 pr-0"
+              : undefined
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6">
-      <div className="flex flex-wrap items-end gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight">Bairros e taxas</h1>
-          <p className="text-sm text-muted-foreground">
-            Sem bairro cadastrado, vale a taxa padrão das configurações da loja.
-          </p>
-        </div>
-        <Button type="button" size="sm" className="ml-auto" onClick={() => setEditando("novo")}>
-          <PlusIcon data-icon="inline-start" />
-          Novo bairro
-        </Button>
-      </div>
+    <div className="flex w-full max-w-5xl flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
+      <CabecalhoPagina
+        titulo="Bairros e taxas"
+        resumo={
+          bairros && bairros.length > 0
+            ? `${plural(ativos, "bairro atendido", "bairros atendidos")} de ${bairros.length}. Sem bairro cadastrado, vale a taxa padrão das configurações da loja.`
+            : "Sem bairro cadastrado, vale a taxa padrão das configurações da loja."
+        }
+        acoes={
+          <Button type="button" onClick={() => setEditando("novo")}>
+            <PlusIcon data-icon="inline-start" />
+            Novo bairro
+          </Button>
+        }
+      />
 
       <AvisoSemEntrega />
 
-      <div className="flex flex-wrap items-center gap-2">
-        <InputGroup className="max-w-xs">
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-          <InputGroupInput
-            type="search"
-            aria-label="Buscar bairro"
-            placeholder="Buscar bairro"
-            value={busca}
-            onChange={(evento) => setBusca(evento.target.value)}
-          />
-        </InputGroup>
-        <Select value={cidade} onValueChange={setCidade}>
-          <SelectTrigger size="sm" aria-label="Cidade" className="w-56">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectGroup>
-              <SelectItem value="todas">Todas as cidades</SelectItem>
-              {cidades.map((nome) => (
-                <SelectItem key={nome} value={nome}>
-                  {nome}
-                </SelectItem>
-              ))}
-            </SelectGroup>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {selecionados.length > 0 && (
-        <div
-          role="toolbar"
-          aria-label={`${plural(selecionados.length, "bairro selecionado", "bairros selecionados")}`}
-          className="flex flex-wrap items-center gap-2 rounded-xl border bg-muted/50 px-3 py-2 text-sm"
-        >
-          <span className="mr-auto font-medium">
-            {plural(selecionados.length, "bairro selecionado", "bairros selecionados")}
-          </span>
-          <Button type="button" size="sm" variant="outline" onClick={() => setMudandoTaxa(true)}>
-            Mudar taxa
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              mudar.mutate(
-                { ids: selecionados, mudanca: { ativo: true } },
-                { onSuccess: () => setSelecao({}), onError: aoErrar },
-              )
-            }
-          >
-            Ativar
-          </Button>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              mudar.mutate(
-                { ids: selecionados, mudanca: { ativo: false } },
-                { onSuccess: () => setSelecao({}), onError: aoErrar },
-              )
-            }
-          >
-            Desativar
-          </Button>
-          <Button type="button" size="sm" variant="ghost" onClick={() => setSelecao({})}>
-            Limpar seleção
-          </Button>
-        </div>
-      )}
-
       {!bairros ? (
-        <Skeleton role="status" aria-label="Carregando os bairros" className="h-64 rounded-xl" />
+        <EsqueletoLinhas rotulo="Carregando os bairros" linhas={8} />
       ) : bairros.length === 0 ? (
-        <Empty className="border">
+        <Empty className="border border-border/70">
           <EmptyHeader>
             <EmptyMedia variant="icon">
               <MapPinIcon />
             </EmptyMedia>
             <EmptyTitle>Nenhum bairro cadastrado</EmptyTitle>
-            <EmptyDescription>Sem bairros, todo pedido usa a taxa padrão da loja.</EmptyDescription>
+            <EmptyDescription>
+              Sem bairros, todo pedido usa a taxa padrão da loja. Cadastre os bairros que custam
+              mais ou menos para entregar.
+            </EmptyDescription>
           </EmptyHeader>
+          <EmptyContent>
+            <Button type="button" onClick={() => setEditando("novo")}>
+              <PlusIcon data-icon="inline-start" />
+              Cadastrar o primeiro bairro
+            </Button>
+          </EmptyContent>
         </Empty>
       ) : (
-        <div className="overflow-x-auto rounded-xl border bg-card">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <InputGroup className="w-full sm:max-w-xs">
+              <InputGroupAddon>
+                <SearchIcon />
+              </InputGroupAddon>
+              <InputGroupInput
+                type="search"
+                aria-label="Buscar bairro"
+                placeholder="Buscar bairro"
+                value={busca}
+                onChange={(evento) => setBusca(evento.target.value)}
+              />
+            </InputGroup>
+            <Select value={cidade} onValueChange={setCidade}>
+              <SelectTrigger aria-label="Cidade" className="w-full sm:w-56">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="todas">Todas as cidades</SelectItem>
+                  {cidades.map((nome) => (
+                    <SelectItem key={nome} value={nome}>
+                      {nome}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            {filtrando && (
+              <span className="text-[13px] text-muted-foreground tabular-nums sm:ml-auto">
+                {plural(visiveis.length, "bairro", "bairros")} de {bairros.length}
+              </span>
+            )}
+          </div>
+
           <Table aria-label="Bairros">
             <TableHeader>
               {tabela.getHeaderGroups().map((grupo) => (
-                <TableRow key={grupo.id}>
+                <TableRow key={grupo.id} className="hover:bg-transparent">
                   {grupo.headers.map((cabecalho) => (
-                    <TableHead
-                      key={cabecalho.id}
-                      className={
-                        cabecalho.column.id === "cidade"
-                          ? "hidden md:table-cell"
-                          : cabecalho.column.id === "selecionar"
-                            ? "w-10"
-                            : undefined
-                      }
-                    >
+                    <TableHead key={cabecalho.id} className={classeDaColuna(cabecalho.column.id)}>
                       <FlexRender header={cabecalho} />
                     </TableHead>
                   ))}
                 </TableRow>
               ))}
             </TableHeader>
-            <TableBody>
-              {tabela.getRowModel().rows.map((linha) => (
-                <TableRow
-                  key={linha.id}
-                  data-state={linha.getIsSelected() ? "selected" : undefined}
-                >
-                  {linha.getAllCells().map((celula) => (
-                    <TableCell
-                      key={celula.id}
-                      className={celula.column.id === "cidade" ? "hidden md:table-cell" : undefined}
-                    >
-                      <FlexRender cell={celula} />
-                    </TableCell>
-                  ))}
-                </TableRow>
-              ))}
+            {/* Trocar o filtro troca a lista de uma vez; só cadastrar e excluir animam. */}
+            <TableBody key={`${cidade}|${buscaAdiada}`}>
+              <AnimatePresence initial={false}>
+                {tabela.getRowModel().rows.map((linha) => (
+                  <LinhaAnimada
+                    key={linha.id}
+                    data-state={linha.getIsSelected() ? "selected" : undefined}
+                  >
+                    {linha.getAllCells().map((celula) => (
+                      <TableCell
+                        key={celula.id}
+                        className={cn(
+                          classeDaColuna(celula.column.id),
+                          celula.column.id === "nome" && "py-2.5",
+                        )}
+                      >
+                        <FlexRender cell={celula} />
+                      </TableCell>
+                    ))}
+                  </LinhaAnimada>
+                ))}
+              </AnimatePresence>
             </TableBody>
           </Table>
           {visiveis.length === 0 && (
-            <p className="py-8 text-center text-sm text-muted-foreground">
-              Nenhum bairro encontrado.
-            </p>
+            <Empty className="py-10">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <SearchXIcon />
+                </EmptyMedia>
+                <EmptyTitle>Nenhum bairro encontrado.</EmptyTitle>
+                <EmptyDescription>
+                  Confira a grafia ou procure em todas as cidades.
+                </EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setBusca("")
+                    setCidade("todas")
+                  }}
+                >
+                  Limpar a busca
+                </Button>
+              </EmptyContent>
+            </Empty>
           )}
         </div>
       )}
+
+      <AnimatePresence>
+        {selecionados.length > 0 && (
+          <BarraSelecao
+            key="selecao"
+            quantos={selecionados.length}
+            aoMudarTaxa={() => setMudandoTaxa(true)}
+            aoAtivar={(ativo) =>
+              mudar.mutate(
+                { ids: selecionados, mudanca: { ativo } },
+                { onSuccess: () => setSelecao({}), onError: aoErrar },
+              )
+            }
+            aoLimpar={() => setSelecao({})}
+          />
+        )}
+      </AnimatePresence>
 
       {editando && (
         <JanelaBairro

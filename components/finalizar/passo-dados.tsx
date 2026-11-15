@@ -16,13 +16,13 @@ export function PassoDados({ lembrado }: { lembrado: boolean }) {
   } = useFormContext<DadosCheckout>()
 
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-6">
       <CabecalhoPasso
         titulo="Para quem é o pedido?"
         descricao="Usamos seu WhatsApp só para avisar o andamento do pedido."
       />
       {lembrado && (
-        <p className="flex items-center gap-2 rounded-xl bg-accent px-3 py-2.5 text-sm font-medium text-accent-foreground">
+        <p className="-mt-2 flex items-center gap-2 text-sm text-muted-foreground">
           <SparklesIcon className="size-4 shrink-0" aria-hidden="true" />
           Preenchemos com os dados do seu último pedido.
         </p>

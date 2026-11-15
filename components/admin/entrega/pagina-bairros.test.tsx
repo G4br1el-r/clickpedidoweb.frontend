@@ -151,4 +151,34 @@ describe("PaginaBairros", () => {
       ).not.toBeInTheDocument(),
     )
   })
+
+  test("o desfazer do aviso traz o bairro excluído de volta, com a mesma taxa", async () => {
+    const [bairro] = await api().bairros.listar()
+    const usuario = await abrir()
+    await usuario.click(linha(bairro.nome).getByRole("button", { name: `Excluir ${bairro.nome}` }))
+    await usuario.click(
+      within(screen.getByRole("alertdialog", { name: `Excluir ${bairro.nome}?` })).getByRole(
+        "button",
+        { name: "Excluir" },
+      ),
+    )
+    await usuario.click(await screen.findByRole("button", { name: "Desfazer" }))
+    expect(
+      await screen.findByRole("row", { name: new RegExp(`^Selecionar ${bairro.nome}\\b`) }),
+    ).toBeInTheDocument()
+    expect((await api().bairros.listar()).find((item) => item.id === bairro.id)).toEqual(bairro)
+  })
+
+  test("sem bairro, o vazio explica a taxa padrão e cadastra dali", async () => {
+    for (const bairro of await api().bairros.listar()) await api().bairros.excluir(bairro.id)
+    const usuario = userEvent.setup()
+    render(
+      <Provedores>
+        <PaginaBairros />
+      </Provedores>,
+    )
+    expect(await screen.findByText("Nenhum bairro cadastrado", {}, { timeout: 8000 })).toBeVisible()
+    await usuario.click(screen.getByRole("button", { name: "Cadastrar o primeiro bairro" }))
+    expect(screen.getByRole("dialog", { name: "Novo bairro" })).toBeInTheDocument()
+  })
 })
