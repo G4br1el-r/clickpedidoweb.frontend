@@ -373,7 +373,7 @@ export const esquemaSalao: z.ZodType<ConfigSalao>
   - `lib/mock/admin/{adega,acougue,pizzaria,lanchonete}.ts`, que passam a usar `salaoDemo()`;
   - `lib/mock/admin/{salao,farmacia}.ts`, que recebem `salao` vazio para fechar o tipo.
 
-### Tarefa 1: migração pura da versão 2
+### Task 1 (Tarefa 1): migração pura da versão 2
 
 **Consome:** os tipos acima. **Entrega:** `migrarDaVersao2`.
 
@@ -420,7 +420,7 @@ Os demais valores padrão de `ConfigSalao` são `alertas: { semPedidoMin: 15, co
 - [ ] **Passo 4:** rodar de novo. Deve passar.
 - [ ] **Passo 5:** `git commit -m "feat(mesas): migração da base para áreas, lugares e configuração do salão"`.
 
-### Tarefa 2: o servidor lê a versão 2 sem perder nada
+### Task 2 (Tarefa 2): o servidor lê a versão 2 sem perder nada
 
 **Consome:** `migrarDaVersao2`. **Entrega:** `VERSAO = 3`. Lê a 2 migrando, e qualquer outra versão continua gerando do zero.
 
@@ -447,7 +447,7 @@ test("base da versão 2 é migrada: mesmos pedidos, mesa ocupada com a mesma com
 - [ ] **Passo 4:** rodar o arquivo inteiro. Deve passar.
 - [ ] **Passo 5:** commit `feat(mesas): servidor migra a base salva da versão 2`.
 
-### Tarefa 3: salão de demonstração
+### Task 3 (Tarefa 3): salão de demonstração
 
 **Consome:** os tipos e `tamanhoDaMesa` (criado aqui em `lib/admin/regras/salao.ts`). **Entrega:** `salaoDemo(segmento)`, usado pelos 4 mocks.
 
@@ -506,7 +506,7 @@ test("as três funções Pro vêm ligadas para a demonstração mostrar tudo", (
 - [ ] **Passo 4:** `pnpm vitest run`. Testes que contavam 8 mesas mudam de propósito: confira cada um e atualize o literal (é mudança de comportamento pedida, não ajuste para passar).
 - [ ] **Passo 5:** commit `feat(mesas): salão de demonstração com 20 mesas em 3 áreas`.
 
-### Tarefa 4: mesa nova com área, lugares, forma e posição
+### Task 4 (Tarefa 4): mesa nova com área, lugares, forma e posição
 
 **Consome:** `tamanhoDaMesa`. **Entrega:** `primeiraPosicaoLivre`. `mesas.criar` passa a aceitar `{ numero, nome?, areaId?, lugares?, forma? }`.
 
@@ -553,7 +553,7 @@ Se a Tarefa 7 ainda não estiver feita, leia a área por `salaoDemo(segmento).sa
 - [ ] **Passo 4:** rodar. Deve passar.
 - [ ] **Passo 5:** commit `feat(mesas): mesa nova nasce na área, com lugares, forma e posição livre`.
 
-### Tarefa 5: demonstração ao vivo com o salão cheio
+### Task 5 (Tarefa 5): demonstração ao vivo com o salão cheio
 
 **Consome:** `salaoDemo`. **Entrega:** a demonstração abre com 8 mesas ocupadas, todas com `mesa.pessoas`. A comanda mais antiga já pediu a conta, uma está para servir e uma mesa livre está em limpeza.
 
@@ -582,7 +582,7 @@ test("a mesa 9 está em limpeza há 3 min; a 20 continua bloqueada e nunca receb
 - [ ] **Passo 4:** `pnpm vitest run`. As contagens que mudarem por causa das 5 comandas novas (Fila, Cozinha, Início) são revisadas uma a uma e atualizadas com o literal novo.
 - [ ] **Passo 5:** commit `feat(mesas): demonstração abre com o salão cheio`.
 
-### Tarefa 6: estado completo da mesa
+### Task 6 (Tarefa 6): estado completo da mesa
 
 **Consome:** os campos novos. **Entrega:** `estadoDaMesa` com os 9 estados e a precedência da tabela de "Estados da mesa".
 
@@ -620,7 +620,7 @@ test("limpeza vence reserva: a mesa precisa ser limpa antes", () => {
 - [ ] **Passo 4:** em `pagina-mesas.test.tsx`, um teste de tela: com a demonstração carregada, o cartão da mesa 20 tem a descrição "Bloqueada", e o da comanda mais antiga, "Pediu a conta". Deve passar sem mudar o componente, que já mostra `estado.rotulo`. Se não passar, corrija o componente.
 - [ ] **Passo 5:** commit `feat(mesas): estado da mesa com bloqueio, limpeza, reserva, servir e conta pedida`.
 
-### Tarefa 7: configuração do salão no servidor
+### Task 7 (Tarefa 7): configuração do salão no servidor
 
 **Consome:** `ConfigSalao`. **Entrega:** `esquemaSalao`, `api.salao.config()`, `api.salao.salvar()`, `useConfigSalao()` e `useSalvarConfigSalao()`.
 
@@ -656,7 +656,7 @@ Em `consultas-mesas.test.tsx`: `useSalvarConfigSalao` invalida `useConfigSalao` 
 - [ ] **Passo 4:** rodar. Deve passar.
 - [ ] **Passo 5:** commit `feat(mesas): configuração do salão no servidor`.
 
-### Tarefa 8: fechamento da fase
+### Task 8 (Tarefa 8): fechamento da fase
 
 - [ ] **Passo 1:** `pnpm check`. Mostrar a saída: Biome, tsc e Vitest verdes.
 - [ ] **Passo 2:** `pnpm test:coverage`. Se a cobertura subiu, subir os mínimos em `vitest.config.mts`.
