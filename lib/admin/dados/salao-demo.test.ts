@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { GRADE_MAPA, tamanhoDaMesa } from "../regras/salao"
+import { GRADE_MAPA, mesasSeCruzam, tamanhoDaMesa } from "../regras/salao"
 import { salaoDemo } from "./salao-demo"
 
 describe("salaoDemo", () => {
@@ -58,15 +58,10 @@ describe("salaoDemo", () => {
         expect(r.y + r.altura).toBeLessThanOrEqual(GRADE_MAPA.linhas)
       }
       const sobrepostas: string[] = []
-      for (const [i, a] of retangulos.entries()) {
-        for (const b of retangulos.slice(i + 1)) {
-          if (a.areaId !== b.areaId) continue
-          const cruzam =
-            a.x < b.x + b.largura &&
-            b.x < a.x + a.largura &&
-            a.y < b.y + b.altura &&
-            b.y < a.y + a.altura
-          if (cruzam) sobrepostas.push(`${a.numero}/${b.numero}`)
+      for (const [i, a] of mesas.entries()) {
+        for (const b of mesas.slice(i + 1)) {
+          if (a.areaId === b.areaId && mesasSeCruzam(a, b))
+            sobrepostas.push(`${a.numero}/${b.numero}`)
         }
       }
       expect(sobrepostas).toEqual([])

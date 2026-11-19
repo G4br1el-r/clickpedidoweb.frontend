@@ -1,12 +1,13 @@
 import { describe, expect, test } from "vitest"
 import type { Mesa } from "../dados/tipos"
-import { GRADE_MAPA, primeiraPosicaoLivre, tamanhoDaMesa } from "./salao"
+import { GRADE_MAPA, mesasSeCruzam, primeiraPosicaoLivre, tamanhoDaMesa } from "./salao"
 
 describe("tamanhoDaMesa", () => {
   test("tamanho no mapa: quadrada e redonda 2 × 2, retangular 3 × 2, retangular grande 4 × 2", () => {
     expect(tamanhoDaMesa({ forma: "quadrada", lugares: 4 })).toEqual({ largura: 2, altura: 2 })
     expect(tamanhoDaMesa({ forma: "redonda", lugares: 2 })).toEqual({ largura: 2, altura: 2 })
     expect(tamanhoDaMesa({ forma: "retangular", lugares: 6 })).toEqual({ largura: 3, altura: 2 })
+    expect(tamanhoDaMesa({ forma: "retangular", lugares: 7 })).toEqual({ largura: 4, altura: 2 })
     expect(tamanhoDaMesa({ forma: "retangular", lugares: 8 })).toEqual({ largura: 4, altura: 2 })
   })
 
@@ -54,5 +55,29 @@ describe("primeiraPosicaoLivre", () => {
       x: 0,
       y: 0,
     })
+  })
+})
+
+describe("mesasSeCruzam", () => {
+  const quadrada = (x: number, y: number) => ({
+    forma: "quadrada" as const,
+    lugares: 4,
+    posicao: { x, y },
+  })
+
+  test("cruzam quando os retângulos se sobrepõem", () => {
+    expect(mesasSeCruzam(quadrada(0, 0), quadrada(1, 1))).toBe(true)
+    expect(mesasSeCruzam(quadrada(0, 0), quadrada(0, 0))).toBe(true)
+  })
+
+  test("encostar na borda não cruza", () => {
+    expect(mesasSeCruzam(quadrada(0, 0), quadrada(2, 0))).toBe(false)
+    expect(mesasSeCruzam(quadrada(0, 0), quadrada(0, 2))).toBe(false)
+  })
+
+  test("usa o tamanho de cada forma: retangular grande 4 × 2 cruza onde a quadrada não cruzaria", () => {
+    const grande = { forma: "retangular" as const, lugares: 8, posicao: { x: 0, y: 0 } }
+    expect(mesasSeCruzam(grande, quadrada(3, 0))).toBe(true)
+    expect(mesasSeCruzam(grande, quadrada(4, 0))).toBe(false)
   })
 })

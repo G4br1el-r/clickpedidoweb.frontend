@@ -48,6 +48,7 @@ import type {
   StatusPedido,
   TipoMovimento,
 } from "./tipos"
+import { FORMAS_MESA } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a 2 é migrada; qualquer outra é descartada e gerada de novo. */
 const VERSAO = 3
@@ -1177,12 +1178,13 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (!Number.isInteger(lugares) || lugares < 1 || lugares > 20) {
           throw new Error("Informe de 1 a 20 lugares.")
         }
-        if (!["quadrada", "redonda", "retangular"].includes(forma)) {
+        if (!FORMAS_MESA.includes(forma)) {
           throw new Error("Escolha a forma da mesa.")
         }
-        const area = areaId
-          ? base.salao.areas.find((item) => item.id === areaId)
-          : base.salao.areas.toSorted((a, b) => a.ordem - b.ordem)[0]
+        const area =
+          areaId !== undefined
+            ? base.salao.areas.find((item) => item.id === areaId)
+            : base.salao.areas.toSorted((a, b) => a.ordem - b.ordem)[0]
         if (!area) throw new Error("Escolha uma área do salão.")
         const posicao = primeiraPosicaoLivre(base.mesas, area.id, { forma, lugares })
         if (!posicao) throw new Error("Não cabe mais mesa nessa área do mapa.")

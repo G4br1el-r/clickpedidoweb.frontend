@@ -1085,17 +1085,6 @@ describe("servidor de demonstração", () => {
       const mesa = await api.mesas.criar({ numero: 30 })
       const salao = await api.salao.config()
       expect(mesa).toMatchObject({ areaId: salao.areas[0].id, lugares: 4, forma: "quadrada" })
-      const outras = (await api.mesas.listar()).filter(
-        (m) => m.id !== mesa.id && m.areaId === mesa.areaId,
-      )
-      const sobrepoe = outras.some(
-        (o) =>
-          mesa.posicao.x < o.posicao.x + 2 &&
-          o.posicao.x < mesa.posicao.x + 2 &&
-          mesa.posicao.y < o.posicao.y + 2 &&
-          o.posicao.y < mesa.posicao.y + 2,
-      )
-      expect(sobrepoe).toBe(false)
       // as mesas 1 e 2 do catálogo de teste estão em x 0 e 4: a primeira vaga é x 2
       expect(mesa.posicao).toEqual({ x: 2, y: 0 })
       expect(await api.mesas.criar({ numero: 31, lugares: 6, forma: "redonda" })).toMatchObject({
@@ -1112,6 +1101,9 @@ describe("servidor de demonstração", () => {
         "Informe de 1 a 20 lugares.",
       )
       await expect(servidor().mesas.criar({ numero: 31, areaId: "nada" })).rejects.toThrow(
+        "Escolha uma área do salão.",
+      )
+      await expect(servidor().mesas.criar({ numero: 31, areaId: "" })).rejects.toThrow(
         "Escolha uma área do salão.",
       )
       await expect(

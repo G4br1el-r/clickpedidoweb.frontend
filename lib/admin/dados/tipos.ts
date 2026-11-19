@@ -276,7 +276,8 @@ export type MovimentoControlado = {
   prescritor?: string
 }
 
-export type FormaMesa = "quadrada" | "redonda" | "retangular"
+export const FORMAS_MESA = ["quadrada", "redonda", "retangular"] as const
+export type FormaMesa = (typeof FORMAS_MESA)[number]
 
 /** Células da grade 24 × 16 da área. */
 export type PosicaoMesa = { x: number; y: number }
