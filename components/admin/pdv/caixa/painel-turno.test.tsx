@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter } from "nuqs/adapters/testing"
@@ -75,6 +75,8 @@ beforeEach(async () => {
   localStorage.clear()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
   useUsuarioSalvo.setState(useUsuarioSalvo.getInitialState(), true)
+  // Fora do ShellAdmin ninguém lê o navegador: o teste começa com ele já lido.
+  useUsuarioSalvo.setState({ hidratado: true })
   await api().caixa.abrir({ operadorId: "eq-marina", pin: "1111", fundo: 100 })
   useUsuarioSalvo.getState().entrar("pizzaria", "eq-marina")
 })
@@ -152,5 +154,30 @@ describe("PainelTurno", () => {
     await usuario.click(within(janela).getByRole("button", { name: "Registrar" }))
     expect(within(janela).getByText("A gaveta só tem R$ 100,00.")).toBeInTheDocument()
     expect(screen.queryByRole("dialog", { name: "Autorização do gerente" })).not.toBeInTheDocument()
+  })
+})
+
+describe("caixa de outra pessoa", () => {
+  test("João não vende, nem faz sangria, no caixa da Marina; o gerente sim", async () => {
+    useUsuarioSalvo.getState().entrar("pizzaria", "eq-joao")
+    render(
+      <Provedores>
+        <PaginaPdv />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole(
+        "heading",
+        { level: 1, name: "Este caixa está aberto por Marina S." },
+        { timeout: 8000 },
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("searchbox", { name: "Buscar no cardápio" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /Sangria ou suprimento/ })).not.toBeInTheDocument()
+
+    act(() => useUsuarioSalvo.getState().entrar("pizzaria", "eq-gerente"))
+    expect(
+      await screen.findByRole("searchbox", { name: "Buscar no cardápio" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
   })
 })

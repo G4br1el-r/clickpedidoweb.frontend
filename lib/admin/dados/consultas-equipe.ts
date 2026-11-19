@@ -53,12 +53,16 @@ export function useUsuarioAtual(): { membro: MembroEquipe | undefined; carregand
 
 /**
  * Perfil de quem está usando o painel. Sem ninguém salvo, é o Dono na hora; com
- * alguém salvo, `undefined` até a equipe carregar (para não mostrar o que não pode).
+ * alguém salvo, `undefined` até a equipe carregar (para não mostrar o que não pode). Antes de
+ * ler o navegador, também `undefined`.
  */
 export function usePerfilAtual(): PerfilAcesso | undefined {
   const segmento = useSegmento()
   const salvo = useUsuarioSalvo((estado) => estado.porSegmento[segmento])
+  const hidratado = useUsuarioSalvo((estado) => estado.hidratado)
   const { membro } = useUsuarioAtual()
+  // Antes de ler quem entrou neste navegador, não dá para saber: nada de menu do dono.
+  if (!hidratado) return undefined
   if (membro) return membro.perfil
   return salvo ? undefined : "dono"
 }

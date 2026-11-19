@@ -300,4 +300,24 @@ describe("caixa", () => {
     expect(await api.caixa.atual()).toEqual(turno)
     expect((await api.pdv.finalizar(venda("eq-marina"))).turnoId).toBe(turno.id)
   })
+
+  test("dias depois, o turno aberto não ganha turnos gerados por cima e continua o último", async () => {
+    const turno = await abrirMarina(servidor())
+    vi.setSystemTime(new Date(2026, 10, 17, 20, 30))
+    const api = servidor()
+    const { turnos, pedidos } = await api.base()
+    expect(turnos.filter((item) => item.abertoEm > turno.abertoEm)).toEqual([])
+    const vendasDepois = pedidos.filter(
+      (pedido) => pedido.origem === "pdv" && pedido.criadoEm > turno.abertoEm,
+    )
+    expect(vendasDepois.filter((pedido) => pedido.turnoId !== turno.id)).toEqual([])
+
+    await api.caixa.fechar({ operadorId: "eq-marina", contadoDinheiro: 100 })
+    const reaberto = await api.caixa.reabrir({
+      operadorId: "eq-marina",
+      turnoId: turno.id,
+      autorizacao: RAFAEL,
+    })
+    expect(reaberto.id).toBe(turno.id)
+  })
 })

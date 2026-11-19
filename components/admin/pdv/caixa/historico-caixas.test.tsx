@@ -17,6 +17,8 @@ beforeEach(async () => {
   localStorage.clear()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
   useUsuarioSalvo.setState(useUsuarioSalvo.getInitialState(), true)
+  // Fora do ShellAdmin ninguém lê o navegador: o teste começa com ele já lido.
+  useUsuarioSalvo.setState({ hidratado: true })
   await api().caixa.abrir({ operadorId: "eq-marina", pin: "1111", fundo: 100 })
   useUsuarioSalvo.getState().entrar("pizzaria", "eq-marina")
   await venderNoServidor(30)

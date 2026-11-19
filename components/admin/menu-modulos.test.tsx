@@ -33,6 +33,8 @@ beforeEach(async () => {
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
   localStorage.clear()
   useUsuarioSalvo.setState(useUsuarioSalvo.getInitialState(), true)
+  // Fora do ShellAdmin ninguém lê o navegador: o teste começa com ele já lido.
+  useUsuarioSalvo.setState({ hidratado: true })
 })
 describe("MenuModulos", () => {
   test("no salão aparece Agendamentos e somem mesas, garçom, cozinha e entrega", () => {
@@ -127,6 +129,20 @@ describe("menu por perfil", () => {
     useUsuarioSalvo.getState().sair("pizzaria")
     renderizar()
     expect(screen.getByRole("link", { name: "Equipe" })).toHaveAttribute("href", "/admin/equipe")
+  })
+
+  test("recarregar como caixa não mostra o menu do dono antes de ler quem entrou", async () => {
+    useUsuarioSalvo.setState({ hidratado: false })
+    localStorage.setItem(
+      "clickpedido-admin-usuario",
+      JSON.stringify({ state: { porSegmento: { pizzaria: "eq-marina" } }, version: 1 }),
+    )
+    renderizar()
+    expect(screen.queryByRole("link", { name: "Estoque" })).not.toBeInTheDocument()
+    await act(() => useUsuarioSalvo.persist.rehydrate())
+    await waitFor(() => expect(links()).toEqual(["Fila de pedidos", "PDV", "Pedidos"]), {
+      timeout: 5000,
+    })
   })
 
   test("trocar de segmento mostra o usuário daquele segmento", async () => {

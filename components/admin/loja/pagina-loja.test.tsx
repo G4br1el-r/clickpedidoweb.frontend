@@ -53,6 +53,8 @@ beforeEach(async () => {
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
   localStorage.clear()
   useUsuarioSalvo.setState(useUsuarioSalvo.getInitialState(), true)
+  // Fora do ShellAdmin ninguém lê o navegador: o teste começa com ele já lido.
+  useUsuarioSalvo.setState({ hidratado: true })
 })
 
 afterEach(() => {

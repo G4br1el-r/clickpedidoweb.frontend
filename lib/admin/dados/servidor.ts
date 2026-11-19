@@ -423,12 +423,19 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       ...(ultimo ? { ultimo } : {}),
       agendamentos: anteriores,
     })
-    // Os dias novos ganham os turnos deles; um turno que ficou aberto continua aberto.
-    const caixa = gerarTurnos({ pedidos: novos, agora })
+    // Os dias novos ganham os turnos deles; um turno que ficou aberto continua aberto e,
+    // como é um caixa por loja, nenhuma venda de PDV gerada depois da abertura dele.
+    const aberto = turnoAberto(base)
+    const semSobrepor = aberto
+      ? novos.filter((pedido) => pedido.origem !== "pdv" || pedido.criadoEm < aberto.abertoEm)
+      : novos
+    const caixa = gerarTurnos({ pedidos: semSobrepor, agora })
     const completa = abrirMesas({
       ...base,
       pedidos: [...anteriores, ...caixa.pedidos.map(marcarEmAndamento)],
-      turnos: [...base.turnos, ...caixa.turnos],
+      turnos: [...base.turnos, ...caixa.turnos].sort((a, b) =>
+        a.abertoEm.localeCompare(b.abertoEm),
+      ),
     })
     await salvar(completa)
     return completa
