@@ -483,6 +483,32 @@ test("estoque: contagem, a venda no PDV baixa e esgota, o cancelamento devolve",
   await page.getByRole("button", { name: "Cancelar pedido" }).click()
   await page.getByRole("button", { name: "Sim, cancelar" }).click()
   await expect(page.getByRole("button", { name: "Cancelar pedido" })).toHaveCount(0)
+  // O botão some na hora (otimista); navegar antes de o IndexedDB gravar o cancelamento
+  // perde a devolução. Espera a gravação, o que a pessoa não precisa fazer.
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          new Promise<string>((resolver, rejeitar) => {
+            const abertura = indexedDB.open("keyval-store")
+            abertura.onerror = () => rejeitar(abertura.error)
+            abertura.onsuccess = () => {
+              const leitura = abertura.result
+                .transaction("keyval")
+                .objectStore("keyval")
+                .get("clickpedido-admin-dados:adega")
+              leitura.onerror = () => rejeitar(leitura.error)
+              leitura.onsuccess = () => {
+                abertura.result.close()
+                const pedidos: { numero: number; status: string }[] =
+                  leitura.result?.base?.pedidos ?? []
+                resolver(pedidos.reduce((a, b) => (b.numero > a.numero ? b : a)).status)
+              }
+            }
+          }),
+      ),
+    )
+    .toBe("cancelado")
 
   linha = await linhaNoEstoque()
   await expect(linha.getByText("1 un", { exact: true })).toBeVisible()
