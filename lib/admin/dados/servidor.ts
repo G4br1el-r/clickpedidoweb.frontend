@@ -25,6 +25,7 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
+import { primeiraPosicaoLivre } from "../regras/salao"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearEstoque } from "./estoque-demo"
@@ -37,6 +38,7 @@ import type {
   Categoria,
   ConfigLoja,
   ConfigSalao,
+  FormaMesa,
   ItemPedido,
   Mesa,
   Motoboy,
@@ -1152,7 +1154,19 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return responder((await carregar()).mesas.toSorted((a, b) => a.numero - b.numero))
       },
 
-      async criar({ numero, nome }: { numero: number; nome?: string }): Promise<Mesa> {
+      async criar({
+        numero,
+        nome,
+        areaId,
+        lugares = 4,
+        forma = "quadrada",
+      }: {
+        numero: number
+        nome?: string
+        areaId?: string
+        lugares?: number
+        forma?: FormaMesa
+      }): Promise<Mesa> {
         if (!Number.isInteger(numero) || numero < 1 || numero > 999) {
           throw new Error("Informe o número da mesa.")
         }
@@ -1160,11 +1174,27 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (base.mesas.some((mesa) => mesa.numero === numero)) {
           throw new Error(`Já existe a mesa ${numero}.`)
         }
+        if (!Number.isInteger(lugares) || lugares < 1 || lugares > 20) {
+          throw new Error("Informe de 1 a 20 lugares.")
+        }
+        if (!["quadrada", "redonda", "retangular"].includes(forma)) {
+          throw new Error("Escolha a forma da mesa.")
+        }
+        const area = areaId
+          ? base.salao.areas.find((item) => item.id === areaId)
+          : base.salao.areas.toSorted((a, b) => a.ordem - b.ordem)[0]
+        if (!area) throw new Error("Escolha uma área do salão.")
+        const posicao = primeiraPosicaoLivre(base.mesas, area.id, { forma, lugares })
+        if (!posicao) throw new Error("Não cabe mais mesa nessa área do mapa.")
         const mesa: Mesa = {
           id: novoId("mesa")(),
           numero,
           nome: nome?.trim().slice(0, 40) || `Mesa ${String(numero).padStart(2, "0")}`,
           status: "livre",
+          areaId: area.id,
+          lugares,
+          forma,
+          posicao,
         }
         await substituir({ ...base, mesas: [...base.mesas, mesa] })
         return responder(mesa)

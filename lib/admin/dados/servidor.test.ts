@@ -1080,6 +1080,66 @@ describe("servidor de demonstração", () => {
       expect((await api.mesas.criar({ numero: 8, nome: " Varanda " })).nome).toBe("Varanda")
     })
 
+    test("mesa nova entra na primeira área, com 4 lugares, quadrada e na primeira posição livre", async () => {
+      const api = servidor()
+      const mesa = await api.mesas.criar({ numero: 30 })
+      const salao = await api.salao.config()
+      expect(mesa).toMatchObject({ areaId: salao.areas[0].id, lugares: 4, forma: "quadrada" })
+      const outras = (await api.mesas.listar()).filter(
+        (m) => m.id !== mesa.id && m.areaId === mesa.areaId,
+      )
+      const sobrepoe = outras.some(
+        (o) =>
+          mesa.posicao.x < o.posicao.x + 2 &&
+          o.posicao.x < mesa.posicao.x + 2 &&
+          mesa.posicao.y < o.posicao.y + 2 &&
+          o.posicao.y < mesa.posicao.y + 2,
+      )
+      expect(sobrepoe).toBe(false)
+      // as mesas 1 e 2 do catálogo de teste estão em x 0 e 4: a primeira vaga é x 2
+      expect(mesa.posicao).toEqual({ x: 2, y: 0 })
+      expect(await api.mesas.criar({ numero: 31, lugares: 6, forma: "redonda" })).toMatchObject({
+        lugares: 6,
+        forma: "redonda",
+      })
+    })
+
+    test("lugares fora de 1 a 20, forma inválida e área que não existe são recusados", async () => {
+      await expect(servidor().mesas.criar({ numero: 31, lugares: 0 })).rejects.toThrow(
+        "Informe de 1 a 20 lugares.",
+      )
+      await expect(servidor().mesas.criar({ numero: 31, lugares: 21 })).rejects.toThrow(
+        "Informe de 1 a 20 lugares.",
+      )
+      await expect(servidor().mesas.criar({ numero: 31, areaId: "nada" })).rejects.toThrow(
+        "Escolha uma área do salão.",
+      )
+      await expect(
+        servidor().mesas.criar({ numero: 31, forma: "triangular" as never }),
+      ).rejects.toThrow("Escolha a forma da mesa.")
+    })
+
+    test("área sem espaço no mapa recusa a mesa nova", async () => {
+      const chave = "clickpedido-admin-dados:lanchonete"
+      const api = servidor()
+      const [modelo] = await api.mesas.listar()
+      const guardado = (await get(chave)) as { base: { mesas: Mesa[] } }
+      // 96 mesas 2 × 2 enchem a grade 24 × 16
+      guardado.base.mesas = Array.from({ length: 96 }, (_, i) => ({
+        ...modelo,
+        id: `cheia-${i}`,
+        numero: 100 + i,
+        areaId: "area-salao",
+        forma: "quadrada" as const,
+        lugares: 4,
+        posicao: { x: (i % 12) * 2, y: Math.floor(i / 12) * 2 },
+      }))
+      await set(chave, guardado)
+      await expect(servidor().mesas.criar({ numero: 300 })).rejects.toThrow(
+        "Não cabe mais mesa nessa área do mapa.",
+      )
+    })
+
     test("só exclui mesa livre", async () => {
       const api = servidor()
       const livre = await api.mesas.criar({ numero: 9 })
