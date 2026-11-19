@@ -53,6 +53,7 @@ import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { BlocoSecao } from "../bloco-secao"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { AberturaCaixa } from "./caixa/abertura-caixa"
+import { PainelTurno } from "./caixa/painel-turno"
 import {
   type AvisoCaixa,
   CAIXA_VAZIA,
@@ -347,6 +348,8 @@ function TelaDeVenda() {
           </>
         }
       />
+
+      <PainelTurno />
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_23rem] lg:gap-0">
         <div className="flex min-w-0 flex-col gap-5 lg:pr-6">
