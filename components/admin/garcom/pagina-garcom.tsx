@@ -364,13 +364,15 @@ export function PaginaGarcom() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectGroup>
-                      {mesas.map((item) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          <Traco tom={estadoDaMesa(item, undefined).tom} />
-                          Mesa {item.numero} ·{" "}
-                          {item.status === "livre" ? "livre" : item.clienteNome}
-                        </SelectItem>
-                      ))}
+                      {mesas
+                        .filter((item) => !item.bloqueio)
+                        .map((item) => (
+                          <SelectItem key={item.id} value={item.id}>
+                            <Traco tom={estadoDaMesa(item, undefined).tom} />
+                            Mesa {item.numero} ·{" "}
+                            {item.status === "livre" ? "livre" : item.clienteNome}
+                          </SelectItem>
+                        ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>

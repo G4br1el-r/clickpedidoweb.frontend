@@ -5,9 +5,10 @@ import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { chaves, servidorDo } from "./consultas"
 import type { LancamentoMesa, PagamentoMesa, Servidor } from "./servidor"
-import type { Pedido } from "./tipos"
+import type { ConfigSalao, Pedido } from "./tipos"
 
 const chaveMesas = (segmento: SegmentoPainelId) => ["admin", segmento, "mesas"] as const
+const chaveSalao = (segmento: SegmentoPainelId) => ["admin", segmento, "salao"] as const
 
 const useSegmento = () => useSegmentoAtual((estado) => estado.segmento)
 
@@ -138,4 +139,17 @@ export function useFecharConta() {
 
 export function useLiberarMesa() {
   return useMudancaNasMesas((servidor, mesaId: string) => servidor.mesas.liberar(mesaId))
+}
+
+/** Configuração do salão: áreas, garçons, taxas e alertas. */
+export function useConfigSalao() {
+  const segmento = useSegmento()
+  return useQuery({
+    queryKey: chaveSalao(segmento),
+    queryFn: () => servidorDo(segmento).salao.config(),
+  })
+}
+
+export function useSalvarConfigSalao() {
+  return useMudancaNasMesas((servidor, config: ConfigSalao) => servidor.salao.salvar(config))
 }

@@ -217,6 +217,8 @@ describe("estoque: vendas", () => {
     // Só 1 X-Burger em estoque; o pedido aguardando pagamento online pede mais que isso.
     const api = servidor((catalogo) => {
       catalogo.produtos[0].estoque = controle(1)
+      // Só o X-Burger entra nos pedidos gerados: o aguardando sempre leva o produto do teste.
+      for (const produto of catalogo.produtos.slice(1)) produto.ativo = false
     })
     const [aguardando] = await api.pedidos.listar({ status: ["aguardando-pagamento"] })
     const pedidos = aguardando.itens

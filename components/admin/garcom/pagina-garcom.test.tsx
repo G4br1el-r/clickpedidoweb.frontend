@@ -110,6 +110,19 @@ afterEach(() => {
 })
 
 describe("PaginaGarcom", () => {
+  test("a mesa bloqueada não aparece para escolher", async () => {
+    const mesas = await api().mesas.listar()
+    const bloqueada = mesas.find((mesa) => mesa.bloqueio)
+    if (!bloqueada) throw new Error("A demonstração devia ter uma mesa bloqueada")
+    const usuario = await abrir()
+    await usuario.click(await screen.findByRole("combobox", { name: "Mesa" }))
+    const opcoes = await screen.findAllByRole("option")
+    expect(opcoes.length).toBe(mesas.length - 1)
+    expect(
+      screen.queryByRole("option", { name: new RegExp(`^Mesa ${bloqueada.numero}\b`) }),
+    ).not.toBeInTheDocument()
+  })
+
   test("sem mesa não dá para lançar", async () => {
     const usuario = await abrir()
     const { simples } = await produtos()

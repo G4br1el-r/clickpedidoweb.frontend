@@ -1,3 +1,4 @@
+import { CONFIG_SALAO_PADRAO } from "./migracao"
 import type { CatalogoLoja } from "./tipos"
 
 /** Lanchonete mínima: um lanche de R$ 20 com adicional obrigatório de R$ 3, entrega a R$ 5. */
@@ -73,9 +74,31 @@ export function catalogoDeTeste(): CatalogoLoja {
       },
     ],
     mesas: [
-      { id: "mesa-1", numero: 1, nome: "Mesa 01", status: "livre" },
-      { id: "mesa-2", numero: 2, nome: "Mesa 02", status: "livre" },
+      {
+        id: "mesa-1",
+        numero: 1,
+        nome: "Mesa 01",
+        status: "livre",
+        areaId: "area-salao",
+        lugares: 4,
+        forma: "quadrada",
+        posicao: { x: 0, y: 0 },
+      },
+      {
+        id: "mesa-2",
+        numero: 2,
+        nome: "Mesa 02",
+        status: "livre",
+        areaId: "area-salao",
+        lugares: 4,
+        forma: "quadrada",
+        posicao: { x: 4, y: 0 },
+      },
     ],
+    salao: {
+      ...CONFIG_SALAO_PADRAO,
+      areas: [{ id: "area-salao", nome: "Salão", ordem: 1 }],
+    },
     motoboys: [{ id: "moto-1", nome: "Carlos", telefone: "12991110000", ativo: true }],
     bairros: [
       { id: "bairro-centro", cidade: "Cachoeira Paulista", nome: "Centro", taxa: 5, ativo: true },

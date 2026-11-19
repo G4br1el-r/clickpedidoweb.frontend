@@ -75,23 +75,37 @@ const RUAS = [
   "Avenida Pedro de Toledo",
   "Rua Treze de Maio",
 ]
-const GARCONS = ["Lucas", "Paula", "Rafa", "Bia"]
 
 /**
  * Movimento de agora: a demonstração sempre abre com pedidos em todas as etapas
  * (aguardando pagamento, novo, em preparo, pronto, a caminho e mesa aberta).
  * `idade` em minutos antes de agora.
  */
-const AO_VIVO: readonly { idade: number; tipo: TipoPedido; pagamento: FormaPagamento }[] = [
+const AO_VIVO: readonly {
+  idade: number
+  tipo: TipoPedido
+  pagamento: FormaPagamento
+  /** Mesa que pediu a conta há tantos minutos. */
+  contaPedidaHa?: number
+  /** Mesa com o pedido pronto para servir há tantos minutos. */
+  servirHa?: number
+  /** No açougue, com carne no quilo, fica sempre para pagar depois de pesar. */
+  pesar?: boolean
+}[] = [
+  { idade: 95, tipo: "mesa", pagamento: "dinheiro", contaPedidaHa: 5 },
   { idade: 80, tipo: "mesa", pagamento: "dinheiro" },
+  { idade: 70, tipo: "mesa", pagamento: "dinheiro" },
   { idade: 64, tipo: "entrega", pagamento: "pix" },
   { idade: 52, tipo: "entrega", pagamento: "cartao-na-entrega" },
+  { idade: 48, tipo: "mesa", pagamento: "dinheiro" },
   { idade: 36, tipo: "entrega", pagamento: "dinheiro" },
+  { idade: 33, tipo: "mesa", pagamento: "dinheiro", servirHa: 4 },
   { idade: 31, tipo: "retirada", pagamento: "pix" },
   { idade: 21, tipo: "mesa", pagamento: "dinheiro" },
   { idade: 14, tipo: "entrega", pagamento: "cartao-na-entrega" },
+  { idade: 12, tipo: "mesa", pagamento: "dinheiro" },
   { idade: 7, tipo: "mesa", pagamento: "dinheiro" },
-  { idade: 5, tipo: "retirada", pagamento: "dinheiro" },
+  { idade: 5, tipo: "retirada", pagamento: "dinheiro", pesar: true },
   { idade: 2, tipo: "entrega", pagamento: "pix" },
 ]
 const OBSERVACOES = [
@@ -266,6 +280,9 @@ export function gerarPedidos({
   let numero = ultimo?.numero ?? 0
   let mesDoNumero = ultimo?.criadoEm ? new Date(ultimo.criadoEm) : undefined
   const mesasAbertas = new Set<string>()
+  // Mesa bloqueada não recebe comanda; o garçom vem dos ativos da loja.
+  const mesasUsaveis = catalogo.mesas.filter((item) => !item.bloqueio)
+  const garcons = catalogo.salao.garcons.filter((item) => item.ativo)
   // Salão: o que já ocupa a agenda, como "marcado", para respeitar a capacidade.
   let agenda: Pedido[] = (agendamentos ?? [])
     .filter((pedido) => pedido.agendamento && pedido.status !== "cancelado")
@@ -312,10 +329,13 @@ export function gerarPedidos({
         const sorteio = sorte.inteiro(1, 100)
         tipo = vivo?.tipo ?? (sorteio <= 55 ? "entrega" : sorteio > 85 ? "mesa" : "retirada")
         if (tipo === "entrega" && !entrega) tipo = "retirada"
-        // Sem mesa livre (ou sem salão), o cliente leva para viagem.
+        // Sem mesa livre (ou sem salão), o cliente leva para viagem. Fora do roteiro ao vivo,
+        // mesa com menos de 2 h ficaria aberta e tiraria o salão do roteiro: também vira retirada.
         if (
           tipo === "mesa" &&
-          (!temMesas || catalogo.mesas.every((item) => mesasAbertas.has(item.id)))
+          (!temMesas ||
+            mesasUsaveis.every((item) => mesasAbertas.has(item.id)) ||
+            (!vivo && agora.getTime() - criado.getTime() < 120 * 60_000))
         ) {
           tipo = "retirada"
         }
@@ -348,7 +368,7 @@ export function gerarPedidos({
         // No roteiro ao vivo, só quem não pagou online: assim há pedido aberto para pesar.
         (!vivo || (vivo.pagamento !== "pix" && vivo.pagamento !== "cartao-online")) &&
         itens.some((item) => item.pesoGramas) &&
-        sorte.chance(35)
+        (vivo?.pesar || sorte.chance(35))
       if (aposPesagem) pagamento = "pagar-apos-pesagem"
       const online = origem === "site" && (pagamento === "pix" || pagamento === "cartao-online")
 
@@ -389,9 +409,14 @@ export function gerarPedidos({
       // Mesa: no máximo uma comanda aberta por mesa.
       let mesa: Pedido["mesa"]
       if (tipo === "mesa") {
-        const livre = catalogo.mesas.find((item) => !mesasAbertas.has(item.id)) as Mesa
+        const livre = mesasUsaveis.find((item) => !mesasAbertas.has(item.id)) as Mesa
         if (status !== "concluido" && status !== "cancelado") mesasAbertas.add(livre.id)
-        mesa = { id: livre.id, numero: livre.numero, garcom: sorte.um(GARCONS) }
+        mesa = {
+          id: livre.id,
+          numero: livre.numero,
+          ...(garcons.length > 0 ? { garcom: sorte.um(garcons).nome } : {}),
+          pessoas: sorte.inteiro(1, livre.lugares),
+        }
       }
 
       const encerrado = status === "concluido" || status === "cancelado"
@@ -429,6 +454,12 @@ export function gerarPedidos({
             }
           : {}),
         ...(mesa ? { mesa } : {}),
+        ...(mesa && vivo?.contaPedidaHa
+          ? { contaPedidaEm: addMinutes(agora, -vivo.contaPedidaHa).toISOString() }
+          : {}),
+        ...(mesa && vivo?.servirHa
+          ? { servirDesde: addMinutes(agora, -vivo.servirHa).toISOString() }
+          : {}),
         itens,
         subtotal,
         desconto,

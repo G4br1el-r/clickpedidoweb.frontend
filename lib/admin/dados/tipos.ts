@@ -76,7 +76,7 @@ export type Pedido = {
   status: StatusPedido
   cliente: { nome: string; telefone: string }
   endereco?: EnderecoEntrega
-  mesa?: { id: string; numero: number; garcom?: string }
+  mesa?: { id: string; numero: number; garcom?: string; pessoas?: number }
   itens: ItemPedido[]
   subtotal: number
   desconto: number
@@ -102,6 +102,10 @@ export type Pedido = {
   pesagem?: { totalEstimado: number; diferenca: number; pesadoEm: string }
   /** O estoque já saiu por este pedido (para devolver no cancelamento uma vez só). */
   estoqueBaixado?: boolean
+  /** Mesa: quando a mesa pediu a conta. */
+  contaPedidaEm?: string
+  /** Mesa: desde quando há item pronto esperando para ser servido. */
+  servirDesde?: string
 }
 
 export type Categoria = {
@@ -272,6 +276,12 @@ export type MovimentoControlado = {
   prescritor?: string
 }
 
+export const FORMAS_MESA = ["quadrada", "redonda", "retangular"] as const
+export type FormaMesa = (typeof FORMAS_MESA)[number]
+
+/** Células da grade 24 × 16 da área. */
+export type PosicaoMesa = { x: number; y: number }
+
 export type Mesa = {
   id: string
   numero: number
@@ -280,6 +290,58 @@ export type Mesa = {
   pedidoAtivoId?: number
   clienteNome?: string
   ocupadaEm?: string
+  areaId: string
+  lugares: number
+  forma: FormaMesa
+  posicao: PosicaoMesa
+  bloqueio?: { motivo?: string }
+  limpezaDesde?: string
+  /** Mesa juntada: id da principal, que guarda a comanda. */
+  juntadaCom?: string
+}
+
+export type AreaSalao = { id: string; nome: string; ordem: number }
+
+export type Garcom = { id: string; nome: string; ativo: boolean }
+
+export type ConfigSalao = {
+  areas: AreaSalao[]
+  garcons: Garcom[]
+  taxaServico: { ativa: boolean; percentual: number }
+  couvert: { ativo: boolean; porPessoa: number }
+  limpeza: boolean
+  alertas: { semPedidoMin: number; contaPedidaMin: number; servirMin: number; abertaMin: number }
+  reservas: { antecedenciaMin: number; toleranciaMin: number }
+  qr: { aceite: "garcom" | "direto"; abrirMesaPeloQr: boolean }
+  funcoes: { mapa: boolean; reservas: boolean; qr: boolean }
+}
+
+export type Reserva = {
+  id: string
+  nome: string
+  telefone?: string
+  inicio: string
+  pessoas: number
+  mesaId?: string
+  status: "marcada" | "sentou" | "nao-compareceu" | "cancelada"
+}
+
+export type EntradaEspera = {
+  id: string
+  nome: string
+  pessoas: number
+  telefone?: string
+  chegouEm: string
+  chamadaEm?: string
+  status: "esperando" | "sentou" | "desistiu"
+}
+
+export type Chamado = {
+  id: string
+  mesaId: string
+  tipo: "garcom" | "conta"
+  criadoEm: string
+  atendidoEm?: string
 }
 
 export type Motoboy = { id: string; nome: string; telefone: string; ativo: boolean }
@@ -333,6 +395,7 @@ export type CatalogoLoja = {
   categorias: Categoria[]
   produtos: Produto[]
   mesas: Mesa[]
+  salao: ConfigSalao
   motoboys: Motoboy[]
   bairros: Bairro[]
   /** Nomes de clientes de exemplo, para os pedidos gerados. */
@@ -344,4 +407,7 @@ export type BaseLoja = CatalogoLoja & {
   pedidos: Pedido[]
   /** Histórico do estoque geral, do mais antigo para o mais novo. */
   movimentosEstoque: MovimentoEstoque[]
+  reservas: Reserva[]
+  espera: EntradaEspera[]
+  chamados: Chamado[]
 }

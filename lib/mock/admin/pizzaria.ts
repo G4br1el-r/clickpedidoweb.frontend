@@ -1,3 +1,4 @@
+import { salaoDemo } from "@/lib/admin/dados/salao-demo"
 import type { CatalogoLoja, GrupoOpcao, Produto } from "@/lib/admin/dados/tipos"
 import { cardapioCasaDaPizza, casaDaPizza } from "@/lib/mock/casa-da-pizza"
 import { clientesDemo } from "./clientes"
@@ -92,12 +93,7 @@ export const catalogoPizzaria: CatalogoLoja = {
     ativa: true,
   })),
   produtos,
-  mesas: Array.from({ length: 8 }, (_, indice) => ({
-    id: `mesa-${indice + 1}`,
-    numero: indice + 1,
-    nome: `Mesa ${String(indice + 1).padStart(2, "0")}`,
-    status: "livre" as const,
-  })),
+  ...salaoDemo("pizzaria"),
   motoboys: [
     { id: "moto-1", nome: "Diego Ramos", telefone: "12991457788", ativo: true },
     { id: "moto-2", nome: "Thiago Neves", telefone: "12992318844", ativo: true },
