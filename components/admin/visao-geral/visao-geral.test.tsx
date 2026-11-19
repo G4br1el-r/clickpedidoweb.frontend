@@ -8,7 +8,7 @@ import type { ReactNode } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores } from "@/lib/admin/dados/consultas"
-import { resumir } from "@/lib/admin/regras/dashboard"
+import { resumir } from "@/lib/admin/regras/dashboard/resumo"
 import {
   AGORA_DE_TESTE,
   PEDIDOS_DE_TESTE,

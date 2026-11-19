@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import type { Resumo } from "@/lib/admin/regras/dashboard"
+import type { Resumo } from "@/lib/admin/regras/dashboard/resumo"
 import { diasNoPeriodo, type Periodo } from "@/lib/admin/regras/periodo"
 import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
