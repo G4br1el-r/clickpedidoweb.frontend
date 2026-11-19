@@ -310,6 +310,17 @@ export type HorarioFuncionamento = { dia: number; aberto: boolean; abre: string;
 
 export type SomAlerta = "suave" | "alto" | "muito-alto"
 
+/**
+ * Taxa cobrada por forma de pagamento, em % do valor. Dinheiro e Pix no balcão não têm taxa;
+ * forma sem taxa informada conta como 0%.
+ */
+export type TaxasPagamento = {
+  pixOnline?: number
+  cartaoOnline?: number
+  /** Cartão na entrega ou no balcão, na maquininha. */
+  maquininha?: number
+}
+
 export type ConfigLoja = {
   nome: string
   slogan: string
@@ -333,6 +344,7 @@ export type ConfigLoja = {
   pagamentos: Record<FormaPagamento, boolean>
   /** Conta de pagamento online (Mercado Pago) conectada: libera Pix e cartão online. */
   pagamentoOnlineConectado?: boolean
+  taxasPagamento?: TaxasPagamento
   /** Salão: quantos atendimentos cabem ao mesmo tempo. Sem o campo, 1. */
   capacidadeAtendimentos?: number
   impressaoAutomatica: boolean

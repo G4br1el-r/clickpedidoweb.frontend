@@ -31,7 +31,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { useAgora } from "@/hooks/use-agora"
 import { useLoja } from "@/lib/admin/dados/consultas"
 import { useConectarPagamento, useSalvarLoja } from "@/lib/admin/dados/consultas-entrega"
-import type { ConfigLoja, FormaPagamento, SomAlerta } from "@/lib/admin/dados/tipos"
+import type { ConfigLoja, FormaPagamento, SomAlerta, TaxasPagamento } from "@/lib/admin/dados/tipos"
 import { esquemaLoja, type FormularioLoja } from "@/lib/admin/regras/esquema-loja"
 import { copiarParaTodos, textoDoHorario } from "@/lib/admin/regras/loja"
 import { resumoDasAlteracoes, secoesAlteradas } from "@/lib/admin/regras/secoes-loja"
@@ -239,6 +239,53 @@ function CampoDinheiro({
             aria-invalid={Boolean(erro)}
             value={field.value}
             onValueChange={({ floatValue }) => field.onChange(floatValue ?? 0)}
+            onBlur={field.onBlur}
+          />
+        )}
+      />
+      {erro && <FieldError>{erro.message}</FieldError>}
+    </Field>
+  )
+}
+
+const TAXAS: { forma: keyof TaxasPagamento; rotulo: string }[] = [
+  { forma: "pixOnline", rotulo: "Pix online" },
+  { forma: "cartaoOnline", rotulo: "Cartão online" },
+  { forma: "maquininha", rotulo: "Cartão na maquininha" },
+]
+
+/** Taxa de uma forma de pagamento, em %. Vazio fica sem taxa (conta como 0%). */
+function CampoTaxa({
+  controle,
+  forma,
+  rotulo,
+  erro,
+}: {
+  controle: Controle
+  forma: keyof TaxasPagamento
+  rotulo: string
+  erro?: ErroDoCampo
+}) {
+  const id = useId()
+  return (
+    <Field data-invalid={Boolean(erro)}>
+      <FieldLabel htmlFor={id}>{rotulo}</FieldLabel>
+      <Controller
+        control={controle}
+        name={`taxasPagamento.${forma}`}
+        render={({ field }) => (
+          <NumericFormat
+            customInput={Input}
+            inputMode="decimal"
+            suffix=" %"
+            decimalSeparator=","
+            decimalScale={2}
+            allowNegative={false}
+            id={id}
+            className="tabular-nums"
+            aria-invalid={Boolean(erro)}
+            value={field.value ?? ""}
+            onValueChange={({ floatValue }) => field.onChange(floatValue)}
             onBlur={field.onBlur}
           />
         )}
@@ -915,6 +962,23 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
             </Button>
           </div>
         </Linhas>
+      </Secao>
+
+      <Secao
+        titulo="Taxas de pagamento"
+        descricao="Quanto cada forma cobra, para o Financeiro estimar o que sobra das vendas. Em branco, conta como 0%. Dinheiro e Pix no balcão não têm taxa."
+      >
+        <Grade>
+          {TAXAS.map(({ forma, rotulo }) => (
+            <CampoTaxa
+              key={forma}
+              controle={controle}
+              forma={forma}
+              rotulo={rotulo}
+              erro={erros.taxasPagamento?.[forma]}
+            />
+          ))}
+        </Grade>
       </Secao>
 
       <Secao

@@ -295,6 +295,7 @@ export const catalogoLanchonete: CatalogoLoja = {
     tempoRetirada: "20–30 min",
     cidadesAtendidas: [],
     pagamentoOnlineConectado: true,
+    taxasPagamento: { pixOnline: 0.99, cartaoOnline: 4.98, maquininha: 2.39 },
     pagamentos: {
       pix: true,
       "cartao-online": true,
