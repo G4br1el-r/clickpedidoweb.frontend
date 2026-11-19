@@ -131,6 +131,8 @@ export type Pedido = {
   esperaAceite?: boolean
   /** Recusado no aceite ou cancelado depois: por quê e quando. */
   cancelamento?: Cancelamento
+  /** Minutos prometidos na chegada, com o acréscimo da hora. Sem o campo, vale o da loja. */
+  prazoMin?: number
 }
 
 export type Cancelamento = {

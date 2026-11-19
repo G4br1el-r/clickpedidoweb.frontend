@@ -48,6 +48,7 @@ import {
   pedidosDeDiasAnteriores,
   resumoDaFila,
 } from "@/lib/admin/regras/fila"
+import type { TemposDaLoja } from "@/lib/admin/regras/prazo"
 import { rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
@@ -180,6 +181,7 @@ function Coluna({
   novos,
   emAndamento,
   limiteAceiteMin,
+  tempos,
   acoes,
   comTitulo,
 }: {
@@ -189,6 +191,7 @@ function Coluna({
   novos: ReadonlySet<number>
   emAndamento: number | undefined
   limiteAceiteMin: number
+  tempos: TemposDaLoja
   acoes: AcoesDoCartao
   comTitulo: boolean
 }) {
@@ -222,6 +225,7 @@ function Coluna({
               novo={novos.has(pedido.id)}
               ocupado={emAndamento === pedido.id}
               limiteAceiteMin={limiteAceiteMin}
+              tempos={tempos}
               aoAceitar={() => acoes.aceitar(pedido)}
               aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
               aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
@@ -330,6 +334,10 @@ export function PaginaFila({
   const idEmAndamento =
     typeof emAndamento?.variables === "number" ? emAndamento.variables : emAndamento?.variables?.id
   const limiteAceiteMin = loja?.limiteAceiteMin ?? 5
+  const tempos = {
+    tempoEntrega: loja?.tempoEntrega ?? "",
+    tempoRetirada: loja?.tempoRetirada ?? "",
+  }
 
   const colunas = fila && agora ? colunasDaFila(fila, segmento, agora) : null
   const resumo = fila && agora ? resumoDaFila([...fila, ...concluidos], segmento, agora) : null
@@ -461,6 +469,7 @@ export function PaginaFila({
               novos={novos}
               emAndamento={idEmAndamento}
               limiteAceiteMin={limiteAceiteMin}
+              tempos={tempos}
               acoes={acoes}
               comTitulo
             />
@@ -488,6 +497,7 @@ export function PaginaFila({
                 novos={novos}
                 emAndamento={idEmAndamento}
                 limiteAceiteMin={limiteAceiteMin}
+                tempos={tempos}
                 acoes={acoes}
                 comTitulo={false}
               />

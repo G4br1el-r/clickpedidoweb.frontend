@@ -1,7 +1,8 @@
 import { isSameDay, parseISO, startOfDay } from "date-fns"
 import { emReais } from "@/lib/formato"
-import type { Pedido, StatusPedido } from "../dados/tipos"
+import type { ConfigLoja, Pedido, StatusPedido } from "../dados/tipos"
 import { type SegmentoPainelId, temModulo } from "../segmentos-painel"
+import { prazoDoPedido } from "./prazo"
 import { rotuloPagamento } from "./rotulos"
 
 export type ColunaFila = { id: string; titulo: string; status: StatusPedido; pedidos: Pedido[] }
@@ -85,14 +86,23 @@ export function colunasDaFila(
   }))
 }
 
-/** Âmbar a partir de 25 minutos, vermelho a partir de 40; no salão, quem passou da hora. */
-export function urgencia(pedido: Pedido, agora: Date): Urgencia {
+/** Âmbar nos 10 últimos minutos do prazo prometido, vermelho quando passa. */
+const AVISO_ANTES_MIN = 10
+
+/** Pelo prazo prometido; no salão, quem passou da hora marcada e não começou. */
+export function urgencia(
+  pedido: Pedido,
+  agora: Date,
+  loja: Pick<ConfigLoja, "tempoEntrega" | "tempoRetirada">,
+): Urgencia {
   if (pedido.agendamento) {
     return pedido.status === "recebido" && inicio(pedido) < agora.getTime() ? "atrasado" : "normal"
   }
-  const minutos = (agora.getTime() - criado(pedido)) / 60_000
-  if (minutos >= 40) return "atrasado"
-  if (minutos >= 25) return "atencao"
+  const prazo = prazoDoPedido(pedido, loja)
+  if (!prazo) return "normal"
+  const faltam = (prazo.getTime() - agora.getTime()) / 60_000
+  if (faltam <= 0) return "atrasado"
+  if (faltam <= AVISO_ANTES_MIN) return "atencao"
   return "normal"
 }
 
