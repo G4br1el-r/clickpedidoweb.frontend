@@ -323,7 +323,8 @@ export function gerarPedidos({
       const origem: OrigemPedido =
         tipo === "mesa"
           ? "garcom"
-          : !vivo && tipo !== "entrega" && temPdv && sorte.chance(35)
+          : // Hoje o caixa ainda não abriu: a venda do PDV fica só nos dias anteriores.
+            !vivo && tipo !== "entrega" && temPdv && sorte.chance(35) && !hoje
             ? "pdv"
             : "site"
       const cliente = sorte.um(catalogo.clientes)
