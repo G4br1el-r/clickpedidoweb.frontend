@@ -317,6 +317,39 @@ describe("PaginaFila", () => {
     expect(screen.getByRole("button", { name: "Pausar pedidos" })).toBeInTheDocument()
   })
 
+  test("métricas: tocar em Atrasados mostra só os atrasados; tocar de novo mostra todos", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const atrasados = await screen.findByRole("button", { name: /^Atrasados/ }, { timeout: 8000 })
+    await waitFor(() => expect(screen.getAllByRole("article").length).toBeGreaterThan(0))
+    const total = Number(atrasados.textContent?.match(/\d+/)?.[0])
+    expect(total).toBeGreaterThan(0)
+    const todos = screen.getAllByRole("article").length
+
+    await usuario.click(atrasados)
+    expect(atrasados).toHaveAttribute("aria-pressed", "true")
+    await waitFor(() => expect(screen.getAllByRole("article")).toHaveLength(total))
+    for (const cartao of screen.getAllByRole("article"))
+      expect(cartao).toHaveTextContent(/atrasado/)
+
+    await usuario.click(atrasados)
+    expect(atrasados).toHaveAttribute("aria-pressed", "false")
+    await waitFor(() => expect(screen.getAllByRole("article")).toHaveLength(todos))
+  })
+
+  test("métricas: concluídos e cancelados levam à lista de pedidos filtrada", async () => {
+    renderizar()
+    expect(
+      await screen.findByRole("link", { name: /^Concluídos/ }, { timeout: 8000 }),
+    ).toHaveAttribute("href", "/admin/pedidos?status=concluido")
+    expect(screen.getByRole("link", { name: /^Cancelados/ })).toHaveAttribute(
+      "href",
+      "/admin/pedidos?status=cancelado",
+    )
+    expect(screen.getByText("Preparo médio")).toBeInTheDocument()
+  })
+
   test("o aparelho que não escolheu o som usa o som da loja", async () => {
     telaGrande()
     const api = servidorDo("pizzaria")

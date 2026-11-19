@@ -4,6 +4,7 @@ import NumberFlow from "@number-flow/react"
 import { startOfDay } from "date-fns"
 import { BellRingIcon, InboxIcon, VolumeXIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
+import { parseAsStringLiteral, useQueryState } from "nuqs"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -48,6 +49,7 @@ import {
   pedidosDeDiasAnteriores,
   resumoDaFila,
 } from "@/lib/admin/regras/fila"
+import { FILTROS_DA_FILA, filtrarFila, metricasDaFila } from "@/lib/admin/regras/metricas-fila"
 import type { TemposDaLoja } from "@/lib/admin/regras/prazo"
 import { rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
@@ -63,6 +65,7 @@ import { AjustePrazo } from "./ajuste-prazo"
 import { AvisoDiasAnteriores } from "./aviso-dias-anteriores"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
+import { MetricasFila } from "./metricas-fila"
 import { PausaPedidos } from "./pausa-pedidos"
 
 const SONS: { valor: SomAlerta; rotulo: string }[] = [
@@ -263,6 +266,11 @@ export function PaginaFila({
   const { data: concluidos = [] } = usePedidos(hoje ? { concluidosEm: hoje } : undefined, {
     ativo: Boolean(hoje),
   })
+  const { data: criadosHoje = [] } = usePedidos(hoje ? { de: hoje, ate: hoje } : undefined, {
+    ativo: Boolean(hoje),
+  })
+  // Filtro das métricas ("só atrasados"), no endereço da página.
+  const [filtro, setFiltro] = useQueryState("ver", parseAsStringLiteral(FILTROS_DA_FILA))
   const avancar = useAvancarPedido()
   const aceitar = useAceitarPedido()
   const recusar = useRecusarPedido()
@@ -341,7 +349,19 @@ export function PaginaFila({
     tempoRetirada: loja?.tempoRetirada ?? "",
   }
 
-  const colunas = fila && agora ? colunasDaFila(fila, segmento, agora) : null
+  const colunas =
+    fila && agora ? colunasDaFila(filtrarFila(fila, filtro, agora, tempos), segmento, agora) : null
+  const metricas =
+    fila && agora
+      ? metricasDaFila({
+          ativos: fila,
+          concluidosHoje: concluidos,
+          criadosHoje,
+          segmento,
+          agora,
+          tempos,
+        })
+      : null
   const resumo = fila && agora ? resumoDaFila([...fila, ...concluidos], segmento, agora) : null
   const temEntrega = temModulo(segmento, "motoboys")
 
@@ -443,13 +463,15 @@ export function PaginaFila({
         </div>
       </div>
 
+      {metricas && <MetricasFila metricas={metricas} filtro={filtro} aoFiltrar={setFiltro} />}
+
       {!colunas || !agora ? (
         <div role="status" aria-label="Carregando a fila" className="grid gap-3 lg:grid-cols-4">
           {[0, 1, 2, 3].map((indice) => (
             <Skeleton key={indice} className="h-96 rounded-xl" />
           ))}
         </div>
-      ) : colunas.every((coluna) => coluna.pedidos.length === 0) ? (
+      ) : !filtro && colunas.every((coluna) => coluna.pedidos.length === 0) ? (
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
