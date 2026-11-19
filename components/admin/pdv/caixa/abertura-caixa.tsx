@@ -50,7 +50,7 @@ function ultimoFechamento(turno: TurnoCaixa, equipe: MembroEquipe[]) {
  * Abertura do turno de caixa: quem abre, o fundo de troco (a contagem por cédula é
  * opcional e, quando usada, vale ela) e o PIN. Quem abre passa a usar o painel.
  */
-export function AberturaCaixa() {
+export function AberturaCaixa({ aoVerHistorico }: { aoVerHistorico?: () => void }) {
   const { data: loja } = useLoja()
   const { data: equipe } = useEquipe()
   if (!loja || !equipe) {
@@ -65,10 +65,18 @@ export function AberturaCaixa() {
       </div>
     )
   }
-  return <Abertura loja={loja} equipe={equipe} />
+  return <Abertura loja={loja} equipe={equipe} aoVerHistorico={aoVerHistorico} />
 }
 
-function Abertura({ loja, equipe }: { loja: ConfigLoja; equipe: MembroEquipe[] }) {
+function Abertura({
+  loja,
+  equipe,
+  aoVerHistorico,
+}: {
+  loja: ConfigLoja
+  equipe: MembroEquipe[]
+  aoVerHistorico?: () => void
+}) {
   const id = useId()
   const { data: historico } = useHistoricoCaixas()
   const { membro: atual } = useUsuarioAtual()
@@ -119,6 +127,16 @@ function Abertura({ loja, equipe }: { loja: ConfigLoja; equipe: MembroEquipe[] }
           <p className="text-sm text-muted-foreground tabular-nums">
             {resumoAnterior ?? "Sem caixa aberto, o PDV não vende."}
           </p>
+          {aoVerHistorico && (
+            <Button
+              type="button"
+              variant="link"
+              className="h-auto self-start p-0 text-[13px]"
+              onClick={aoVerHistorico}
+            >
+              Histórico de caixas
+            </Button>
+          )}
         </div>
 
         <EscolherPessoa

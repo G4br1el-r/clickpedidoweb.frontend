@@ -3,6 +3,7 @@
 import NumberFlow from "@number-flow/react"
 import { format } from "date-fns"
 import { PlusIcon, PrinterIcon, ShoppingBasketIcon } from "lucide-react"
+import { parseAsStringLiteral, useQueryState } from "nuqs"
 import { useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { NumericFormat } from "react-number-format"
@@ -53,6 +54,8 @@ import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { BlocoSecao } from "../bloco-secao"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { AberturaCaixa } from "./caixa/abertura-caixa"
+import { FechamentoCaixa } from "./caixa/fechamento-caixa"
+import { HistoricoCaixas } from "./caixa/historico-caixas"
 import { PainelTurno } from "./caixa/painel-turno"
 import {
   type AvisoCaixa,
@@ -216,6 +219,16 @@ function ItemAvulso({ aoAdicionar }: { aoAdicionar: (item: Omit<ItemCaixa, "chav
 /** O PDV troca de tela conforme o caixa: fechado, abre; aberto, vende. */
 export function PaginaPdv() {
   const { data: turno, isPending } = useCaixaAtual()
+  const [tela, setTela] = useQueryState("tela", parseAsStringLiteral(TELAS))
+  const voltar = () => setTela(null)
+
+  if (tela === "caixas") {
+    return (
+      <Moldura>
+        <HistoricoCaixas aoVoltar={voltar} aoReabrir={voltar} />
+      </Moldura>
+    )
+  }
   if (isPending) {
     return (
       <div
@@ -230,15 +243,37 @@ export function PaginaPdv() {
   }
   if (!turno) {
     return (
-      <div className="flex flex-1 flex-col p-4 md:p-6 lg:px-8">
-        <AberturaCaixa />
-      </div>
+      <Moldura>
+        <AberturaCaixa aoVerHistorico={() => setTela("caixas")} />
+      </Moldura>
     )
   }
-  return <TelaDeVenda />
+  if (tela === "fechar") {
+    return (
+      <Moldura>
+        <FechamentoCaixa aoVoltar={voltar} aoFechado={voltar} />
+      </Moldura>
+    )
+  }
+  return (
+    <TelaDeVenda aoFecharCaixa={() => setTela("fechar")} aoVerCaixas={() => setTela("caixas")} />
+  )
 }
 
-function TelaDeVenda() {
+/** Telas do PDV além da venda, no endereço: `?tela=fechar` e `?tela=caixas`. */
+const TELAS = ["fechar", "caixas"] as const
+
+function Moldura({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-1 flex-col p-4 md:p-6 lg:px-8">{children}</div>
+}
+
+function TelaDeVenda({
+  aoFecharCaixa,
+  aoVerCaixas,
+}: {
+  aoFecharCaixa: () => void
+  aoVerCaixas: () => void
+}) {
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const telaGrande = useTelaGrande()
   const { data: ultimas = [] } = useUltimasVendas()
@@ -339,6 +374,11 @@ function TelaDeVenda() {
     <div className="flex flex-1 flex-col gap-5 p-4 pb-24 md:p-6 lg:px-8 lg:pb-6">
       <CabecalhoPagina
         titulo="PDV"
+        acoes={
+          <Button type="button" variant="ghost" size="sm" onClick={aoVerCaixas}>
+            Histórico de caixas
+          </Button>
+        }
         resumo={
           <>
             Venda no balcão
@@ -349,7 +389,7 @@ function TelaDeVenda() {
         }
       />
 
-      <PainelTurno />
+      <PainelTurno aoFecharCaixa={aoFecharCaixa} />
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_23rem] lg:gap-0">
         <div className="flex min-w-0 flex-col gap-5 lg:pr-6">

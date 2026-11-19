@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
+import { NuqsTestingAdapter } from "nuqs/adapters/testing"
 import { type ReactNode, useState } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
@@ -17,12 +18,15 @@ function Provedores({ children }: { children: ReactNode }) {
     () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
   )
   return (
-    <QueryClientProvider client={cliente}>
-      <TooltipProvider>
-        {children}
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    // O PDV lê a tela no endereço (`?tela=`).
+    <NuqsTestingAdapter hasMemory>
+      <QueryClientProvider client={cliente}>
+        <TooltipProvider>
+          {children}
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </NuqsTestingAdapter>
   )
 }
 
