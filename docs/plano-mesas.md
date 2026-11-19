@@ -36,17 +36,17 @@
 
 O estado aparece no cartão e no mapa como **rótulo + traço de tom** (`TomStatus`). A precedência vai do mais forte para o mais fraco:
 
-| Estado          | Rótulo            | Tom         | Quando                                                        |
-| --------------- | ----------------- | ----------- | ------------------------------------------------------------- |
-| `bloqueada`     | Bloqueada         | `cancelado` | `mesa.bloqueio` existe                                        |
-| `juntada`       | Com a mesa 4      | `caminho`   | `mesa.juntadaCom` aponta a principal                          |
-| `conta-pedida`  | Pediu a conta     | `novo`      | ocupada e `comanda.contaPedidaEm`                             |
-| `servir`        | Servir            | `pronto`    | ocupada e `comanda.servirDesde` (a cozinha terminou a rodada) |
-| `na-cozinha`    | Na cozinha        | `preparo`   | ocupada e a comanda está em `recebido` ou `em-preparo`        |
-| `ocupada`       | Ocupada           | `caminho`   | ocupada, sem nenhum dos acima                                 |
-| `limpeza`       | Limpeza           | `espera`    | livre e `mesa.limpezaDesde` (só com a limpeza ligada)         |
-| `reservada`     | Reservada 20:00   | `espera`    | livre e há reserva marcada a menos da antecedência (30 min)   |
-| `livre`         | Livre             | `fim`       | o resto                                                       |
+| Estado         | Rótulo          | Tom         | Quando                                                        |
+| -------------- | --------------- | ----------- | ------------------------------------------------------------- |
+| `bloqueada`    | Bloqueada       | `cancelado` | `mesa.bloqueio` existe                                        |
+| `juntada`      | Com a mesa 4    | `caminho`   | `mesa.juntadaCom` aponta a principal                          |
+| `conta-pedida` | Pediu a conta   | `novo`      | ocupada e `comanda.contaPedidaEm`                             |
+| `servir`       | Servir          | `pronto`    | ocupada e `comanda.servirDesde` (a cozinha terminou a rodada) |
+| `na-cozinha`   | Na cozinha      | `preparo`   | ocupada e a comanda está em `recebido` ou `em-preparo`        |
+| `ocupada`      | Ocupada         | `caminho`   | ocupada, sem nenhum dos acima                                 |
+| `limpeza`      | Limpeza         | `espera`    | livre e `mesa.limpezaDesde` (só com a limpeza ligada)         |
+| `reservada`    | Reservada 20:00 | `espera`    | livre e há reserva marcada a menos da antecedência (30 min)   |
+| `livre`        | Livre           | `fim`       | o resto                                                       |
 
 ### Operação
 
@@ -185,12 +185,12 @@ As mudanças nas outras telas ficam no mínimo necessário:
   - nas fases seguintes entram um par juntado, uma conta com pagamento parcial, 2 reservas para hoje, 3 pessoas na espera e 1 chamado aberto;
   - taxa e couvert por segmento:
 
-    | Segmento   | Taxa de serviço | Couvert          |
-    | ---------- | --------------- | ---------------- |
-    | Pizzaria   | 10%, ligada     | R$ 8,00, ligado  |
-    | Adega      | 10%, ligada     | desligado        |
-    | Açougue    | 10%, ligada     | desligado        |
-    | Lanchonete | desligada       | desligado        |
+    | Segmento   | Taxa de serviço | Couvert         |
+    | ---------- | --------------- | --------------- |
+    | Pizzaria   | 10%, ligada     | R$ 8,00, ligado |
+    | Adega      | 10%, ligada     | desligado       |
+    | Açougue    | 10%, ligada     | desligado       |
+    | Lanchonete | desligada       | desligado       |
 
   - limpeza ligada nos 4 segmentos.
 - **Migração:** quem tem a versão 2 salva não perde nada. Todas as mesas vão para a área "Salão", com 4 lugares, forma quadrada e posições em fileiras de 6. Taxa, couvert e limpeza começam desligados. Os garçons saem dos nomes já usados nas comandas.
@@ -383,11 +383,17 @@ export const esquemaSalao: z.ZodType<ConfigSalao>
 test("toda mesa vai para a área Salão, com 4 lugares e forma quadrada", () => {
   const { mesas, salao } = migrarDaVersao2(baseV2)
   expect(salao.areas).toEqual([{ id: "area-salao", nome: "Salão", ordem: 1 }])
-  for (const mesa of mesas) expect(mesa).toMatchObject({ areaId: "area-salao", lugares: 4, forma: "quadrada" })
+  for (const mesa of mesas)
+    expect(mesa).toMatchObject({ areaId: "area-salao", lugares: 4, forma: "quadrada" })
 })
 test("posições em fileiras de 6, a cada 4 células", () => {
   expect(migrarDaVersao2(baseV2).mesas.map((mesa) => mesa.posicao)).toEqual([
-    { x: 0, y: 0 }, { x: 4, y: 0 }, { x: 8, y: 0 }, { x: 12, y: 0 }, { x: 16, y: 0 }, { x: 20, y: 0 },
+    { x: 0, y: 0 },
+    { x: 4, y: 0 },
+    { x: 8, y: 0 },
+    { x: 12, y: 0 },
+    { x: 16, y: 0 },
+    { x: 20, y: 0 },
     { x: 0, y: 4 },
   ])
 })
@@ -399,7 +405,10 @@ test("taxa, couvert e limpeza começam desligados", () => {
   expect(salao.funcoes).toEqual({ mapa: false, reservas: false, qr: false })
 })
 test("os garçons saem das comandas, sem repetir, em ordem alfabética", () => {
-  expect(migrarDaVersao2(baseV2).salao.garcons.map((garcom) => garcom.nome)).toEqual(["Bia", "Paula"])
+  expect(migrarDaVersao2(baseV2).salao.garcons.map((garcom) => garcom.nome)).toEqual([
+    "Bia",
+    "Paula",
+  ])
 })
 test("a mesa ocupada continua com a mesma comanda", () => {
   expect(migrarDaVersao2(baseV2).mesas[1]).toMatchObject({ status: "ocupada", pedidoAtivoId: 7 })
@@ -429,13 +438,21 @@ Os demais valores padrão de `ConfigSalao` são `alertas: { semPedidoMin: 15, co
 ```ts
 test("base da versão 2 é migrada: mesmos pedidos, mesa ocupada com a mesma comanda", async () => {
   const antiga = await baseDaVersao2() // gera com o servidor e tira os campos novos
-  await set("clickpedido-admin-dados:pizzaria", { versao: 2, geradoEm: AGORA.toISOString(), base: antiga })
+  await set("clickpedido-admin-dados:pizzaria", {
+    versao: 2,
+    geradoEm: AGORA.toISOString(),
+    base: antiga,
+  })
   const api = servidor()
   const mesas = await api.mesas.listar()
   expect(mesas.every((mesa) => mesa.areaId === "area-salao")).toBe(true)
   const ocupada = mesas.find((mesa) => mesa.status === "ocupada")
-  expect(ocupada?.pedidoAtivoId).toBe(antiga.mesas.find((mesa) => mesa.status === "ocupada")?.pedidoAtivoId)
-  expect((await get("clickpedido-admin-dados:pizzaria")).base.pedidos).toHaveLength(antiga.pedidos.length)
+  expect(ocupada?.pedidoAtivoId).toBe(
+    antiga.mesas.find((mesa) => mesa.status === "ocupada")?.pedidoAtivoId,
+  )
+  expect((await get("clickpedido-admin-dados:pizzaria")).base.pedidos).toHaveLength(
+    antiga.pedidos.length,
+  )
   expect((await get("clickpedido-admin-dados:pizzaria")).versao).toBe(3)
 })
 ```
@@ -470,8 +487,16 @@ Em `lib/admin/dados/salao-demo.test.ts`:
 test("20 mesas: Salão 1 a 10, Varanda 11 a 16, Balcão 17 a 20", () => {
   const { mesas, salao } = salaoDemo("pizzaria")
   expect(salao.areas.map((area) => area.nome)).toEqual(["Salão", "Varanda", "Balcão"])
-  const area = (numero: number) => salao.areas.find((a) => a.id === mesas.find((m) => m.numero === numero)?.areaId)?.nome
-  expect([1, 10, 11, 16, 17, 20].map(area)).toEqual(["Salão", "Salão", "Varanda", "Varanda", "Balcão", "Balcão"])
+  const area = (numero: number) =>
+    salao.areas.find((a) => a.id === mesas.find((m) => m.numero === numero)?.areaId)?.nome
+  expect([1, 10, 11, 16, 17, 20].map(area)).toEqual([
+    "Salão",
+    "Salão",
+    "Varanda",
+    "Varanda",
+    "Balcão",
+    "Balcão",
+  ])
 })
 test("lugares e formas", () => {
   const por = (numero: number) => salaoDemo("adega").mesas.find((m) => m.numero === numero)
@@ -482,19 +507,43 @@ test("lugares e formas", () => {
   expect(por(17)).toMatchObject({ forma: "redonda", lugares: 2 })
 })
 test("a mesa 20 está bloqueada para manutenção", () => {
-  expect(salaoDemo("lanchonete").mesas.find((m) => m.numero === 20)?.bloqueio).toEqual({ motivo: "Em manutenção" })
+  expect(salaoDemo("lanchonete").mesas.find((m) => m.numero === 20)?.bloqueio).toEqual({
+    motivo: "Em manutenção",
+  })
 })
-test.each(["adega", "acougue", "pizzaria", "lanchonete"] as const)("%s: nenhuma mesa se sobrepõe nem sai do mapa", (segmento) => {
-  // retângulos de tamanhoDaMesa na mesma área não se cruzam; x + largura ≤ 24 e y + altura ≤ 16
-})
+test.each(["adega", "acougue", "pizzaria", "lanchonete"] as const)(
+  "%s: nenhuma mesa se sobrepõe nem sai do mapa",
+  (segmento) => {
+    // retângulos de tamanhoDaMesa na mesma área não se cruzam; x + largura ≤ 24 e y + altura ≤ 16
+  },
+)
 test("taxa e couvert por segmento; limpeza ligada em todos", () => {
-  expect(salaoDemo("pizzaria").salao).toMatchObject({ taxaServico: { ativa: true, percentual: 10 }, couvert: { ativo: true, porPessoa: 8 }, limpeza: true })
-  expect(salaoDemo("adega").salao).toMatchObject({ taxaServico: { ativa: true, percentual: 10 }, couvert: { ativo: false }, limpeza: true })
-  expect(salaoDemo("acougue").salao).toMatchObject({ taxaServico: { ativa: true }, couvert: { ativo: false } })
-  expect(salaoDemo("lanchonete").salao).toMatchObject({ taxaServico: { ativa: false }, couvert: { ativo: false } })
+  expect(salaoDemo("pizzaria").salao).toMatchObject({
+    taxaServico: { ativa: true, percentual: 10 },
+    couvert: { ativo: true, porPessoa: 8 },
+    limpeza: true,
+  })
+  expect(salaoDemo("adega").salao).toMatchObject({
+    taxaServico: { ativa: true, percentual: 10 },
+    couvert: { ativo: false },
+    limpeza: true,
+  })
+  expect(salaoDemo("acougue").salao).toMatchObject({
+    taxaServico: { ativa: true },
+    couvert: { ativo: false },
+  })
+  expect(salaoDemo("lanchonete").salao).toMatchObject({
+    taxaServico: { ativa: false },
+    couvert: { ativo: false },
+  })
 })
 test("garçons da demonstração", () => {
-  expect(salaoDemo("pizzaria").salao.garcons.map((g) => g.nome)).toEqual(["Lucas", "Paula", "Rafa", "Bia"])
+  expect(salaoDemo("pizzaria").salao.garcons.map((g) => g.nome)).toEqual([
+    "Lucas",
+    "Paula",
+    "Rafa",
+    "Bia",
+  ])
 })
 test("as três funções Pro vêm ligadas para a demonstração mostrar tudo", () => {
   expect(salaoDemo("pizzaria").salao.funcoes).toEqual({ mapa: true, reservas: true, qr: true })
@@ -517,8 +566,14 @@ Em `salao.test.ts`:
 ```ts
 test("primeira posição livre: varre linha a linha, da esquerda para a direita, sem sobrepor", () => {
   const ocupada = { areaId: "a", forma: "quadrada", lugares: 4, posicao: { x: 0, y: 0 } } as Mesa
-  expect(primeiraPosicaoLivre([ocupada], "a", { forma: "quadrada", lugares: 4 })).toEqual({ x: 2, y: 0 })
-  expect(primeiraPosicaoLivre([ocupada], "b", { forma: "quadrada", lugares: 4 })).toEqual({ x: 0, y: 0 })
+  expect(primeiraPosicaoLivre([ocupada], "a", { forma: "quadrada", lugares: 4 })).toEqual({
+    x: 2,
+    y: 0,
+  })
+  expect(primeiraPosicaoLivre([ocupada], "b", { forma: "quadrada", lugares: 4 })).toEqual({
+    x: 0,
+    y: 0,
+  })
 })
 test("área cheia não tem posição", () => {
   // 96 mesas 2 × 2 enchem 24 × 16
@@ -534,12 +589,18 @@ test("mesa nova entra na primeira área, com 4 lugares, quadrada e na primeira p
   const mesa = await api.mesas.criar({ numero: 30 })
   const salao = await api.salao.config() // da Tarefa 7
   expect(mesa).toMatchObject({ areaId: salao.areas[0].id, lugares: 4, forma: "quadrada" })
-  const outras = (await api.mesas.listar()).filter((m) => m.id !== mesa.id && m.areaId === mesa.areaId)
+  const outras = (await api.mesas.listar()).filter(
+    (m) => m.id !== mesa.id && m.areaId === mesa.areaId,
+  )
   // não se sobrepõe a nenhuma outra
 })
 test("lugares fora de 1 a 20 e área que não existe são recusados", async () => {
-  await expect(servidor().mesas.criar({ numero: 31, lugares: 0 })).rejects.toThrow("Informe de 1 a 20 lugares.")
-  await expect(servidor().mesas.criar({ numero: 31, areaId: "nada" })).rejects.toThrow("Escolha uma área do salão.")
+  await expect(servidor().mesas.criar({ numero: 31, lugares: 0 })).rejects.toThrow(
+    "Informe de 1 a 20 lugares.",
+  )
+  await expect(servidor().mesas.criar({ numero: 31, areaId: "nada" })).rejects.toThrow(
+    "Escolha uma área do salão.",
+  )
 })
 test("área sem espaço no mapa recusa a mesa nova", async () => {
   // .rejects.toThrow("Não cabe mais mesa nessa área do mapa.")
@@ -591,24 +652,47 @@ test("a mesa 9 está em limpeza há 3 min; a 20 continua bloqueada e nunca receb
 ```ts
 const agora = new Date("2026-11-19T19:40:00-03:00")
 test("bloqueada vence tudo, até comanda aberta", () => {
-  expect(estadoDaMesa({ status: "ocupada", bloqueio: {} }, { status: "recebido" })).toEqual({ estado: "bloqueada", rotulo: "Bloqueada", tom: "cancelado" })
+  expect(estadoDaMesa({ status: "ocupada", bloqueio: {} }, { status: "recebido" })).toEqual({
+    estado: "bloqueada",
+    rotulo: "Bloqueada",
+    tom: "cancelado",
+  })
 })
 test("juntada mostra a principal", () => {
-  expect(estadoDaMesa({ status: "ocupada", juntadaCom: "mesa-4" }, undefined, { principal: { numero: 4 } }).rotulo).toBe("Com a mesa 4")
+  expect(
+    estadoDaMesa({ status: "ocupada", juntadaCom: "mesa-4" }, undefined, {
+      principal: { numero: 4 },
+    }).rotulo,
+  ).toBe("Com a mesa 4")
 })
 test("pediu a conta vence servir e cozinha", () => {
-  expect(estadoDaMesa({ status: "ocupada" }, { status: "recebido", contaPedidaEm: "x", servirDesde: "y" })).toMatchObject({ estado: "conta-pedida", rotulo: "Pediu a conta", tom: "novo" })
+  expect(
+    estadoDaMesa(
+      { status: "ocupada" },
+      { status: "recebido", contaPedidaEm: "x", servirDesde: "y" },
+    ),
+  ).toMatchObject({ estado: "conta-pedida", rotulo: "Pediu a conta", tom: "novo" })
 })
 test("rodada pronta para servir", () => {
-  expect(estadoDaMesa({ status: "ocupada" }, { status: "pronto", servirDesde: "y" })).toMatchObject({ estado: "servir", rotulo: "Servir", tom: "pronto" })
+  expect(estadoDaMesa({ status: "ocupada" }, { status: "pronto", servirDesde: "y" })).toMatchObject(
+    { estado: "servir", rotulo: "Servir", tom: "pronto" },
+  )
 })
 test("livre em limpeza", () => {
-  expect(estadoDaMesa({ status: "livre", limpezaDesde: "x" }, undefined)).toMatchObject({ estado: "limpeza", rotulo: "Limpeza", tom: "espera" })
+  expect(estadoDaMesa({ status: "livre", limpezaDesde: "x" }, undefined)).toMatchObject({
+    estado: "limpeza",
+    rotulo: "Limpeza",
+    tom: "espera",
+  })
 })
 test("reservada só a partir da antecedência", () => {
   const reserva = { inicio: "2026-11-19T20:00:00-03:00" }
-  expect(estadoDaMesa({ status: "livre" }, undefined, { reserva, agora, antecedenciaMin: 30 })).toMatchObject({ estado: "reservada", rotulo: "Reservada 20:00", tom: "espera" })
-  expect(estadoDaMesa({ status: "livre" }, undefined, { reserva, agora, antecedenciaMin: 15 }).estado).toBe("livre")
+  expect(
+    estadoDaMesa({ status: "livre" }, undefined, { reserva, agora, antecedenciaMin: 30 }),
+  ).toMatchObject({ estado: "reservada", rotulo: "Reservada 20:00", tom: "espera" })
+  expect(
+    estadoDaMesa({ status: "livre" }, undefined, { reserva, agora, antecedenciaMin: 15 }).estado,
+  ).toBe("livre")
 })
 test("limpeza vence reserva: a mesa precisa ser limpa antes", () => {
   // livre + limpezaDesde + reserva dentro da antecedência → "limpeza"
@@ -633,17 +717,31 @@ test.each([
   [{ taxaServico: { ativa: true, percentual: 21 } }, "A taxa de serviço vai de 0% a 20%."],
   [{ couvert: { ativo: true, porPessoa: 100.01 } }, "O couvert vai até R$ 100,00 por pessoa."],
   [{ areas: [] }, "O salão precisa de pelo menos uma área."],
-  [{ areas: [{ id: "a", nome: "Varanda", ordem: 1 }, { id: "b", nome: " varanda ", ordem: 2 }] }, "Já existe a área Varanda."],
+  [
+    {
+      areas: [
+        { id: "a", nome: "Varanda", ordem: 1 },
+        { id: "b", nome: " varanda ", ordem: 2 },
+      ],
+    },
+    "Já existe a área Varanda.",
+  ],
   [{ garcons: [{ id: "g", nome: "", ativo: true }] }, "Informe o nome do garçom."],
   [{ alertas: { ...padrao.alertas, semPedidoMin: 0 } }, "Os alertas vão de 1 a 600 minutos."],
-])("recusa %o com a mensagem certa", (mudanca, mensagem) => { /* safeParse → primeira mensagem */ })
-test("nomes de área e garçom são aparados e limitados a 30 e 40 caracteres", () => { /* … */ })
+])("recusa %o com a mensagem certa", (mudanca, mensagem) => {
+  /* safeParse → primeira mensagem */
+})
+test("nomes de área e garçom são aparados e limitados a 30 e 40 caracteres", () => {
+  /* … */
+})
 ```
 
 Em `servidor.test.ts`:
 
 ```ts
-test("salvar a configuração guarda e devolve; a próxima leitura vê a mudança", async () => { /* … */ })
+test("salvar a configuração guarda e devolve; a próxima leitura vê a mudança", async () => {
+  /* … */
+})
 test("excluir uma área com mesas é recusado", async () => {
   // tirar "Varanda" de areas → rejects.toThrow("Mova as mesas da Varanda antes de excluir a área.")
 })
