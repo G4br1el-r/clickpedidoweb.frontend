@@ -17,7 +17,7 @@ import {
 } from "@/lib/admin/regras/pedidos-de-teste"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { FiltroPeriodo } from "./filtro-periodo"
-import { AbaFinanceiro, AbaResumo, AbaVendas } from "./painel-visao-geral"
+import { AbaFinanceiro, AbaResumo } from "./painel-visao-geral"
 import { VisaoGeral } from "./visao-geral"
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
@@ -198,13 +198,7 @@ describe("abas do painel", () => {
     expect(screen.queryByRole("region", { name: "Canais de venda" })).not.toBeInTheDocument()
   })
 
-  test("Vendas mostra os canais; Financeiro, as formas de pagamento", () => {
-    const { unmount } = render(<AbaVendas resumo={RESUMO} segmento="pizzaria" />, {
-      wrapper: Provedores,
-    })
-    expect(regiao("Canais de venda").getAllByRole("listitem")[0]).toHaveTextContent("Entrega")
-    unmount()
-
+  test("Financeiro mostra as formas de pagamento", () => {
     render(<AbaFinanceiro resumo={RESUMO} />, { wrapper: Provedores })
     expect(regiao("Formas de pagamento").getAllByRole("listitem")[0]).toHaveTextContent(
       "Dinheiro2 pedidosR$ 100,0059%",

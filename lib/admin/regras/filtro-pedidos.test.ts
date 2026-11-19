@@ -43,6 +43,11 @@ describe("filtrarPedidos", () => {
     ])
     expect(ids(filtrarPedidos(PEDIDOS, { busca: "calabresa", status: ["cancelado"] }))).toEqual([3])
   })
+
+  test("filtra pela origem do pedido", () => {
+    const doPdv = { ...PEDIDOS_DE_TESTE[0], id: 50, origem: "pdv" as const }
+    expect(ids(filtrarPedidos([...PEDIDOS, doPdv], { origens: ["pdv"] }))).toEqual([50])
+  })
 })
 
 describe("totaisDaLista", () => {

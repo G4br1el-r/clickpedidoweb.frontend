@@ -109,6 +109,29 @@ test("visão geral: as abas ficam no endereço, a meta se define e o alerta leva
   await expect(page).toHaveURL(/\/admin\/estoque$/)
 })
 
+test("aba Vendas: da origem aos pedidos filtrados, com a etiqueta para tirar o filtro", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin?aba=vendas")
+  await expect(page.getByRole("region", { name: "Quando a loja vende" })).toBeVisible({
+    timeout: 15_000,
+  })
+  await expect(page.getByRole("table", { name: "Pedidos por dia da semana e hora" })).toBeVisible()
+  await expect(page.locator(".barras-atual .recharts-bar-rectangle").first()).toBeVisible()
+  await verificarAcessibilidade(page)
+
+  await page
+    .getByRole("region", { name: "Origem dos pedidos" })
+    .getByRole("link", { name: "Site" })
+    .click()
+  await expect(page).toHaveURL(/\/admin\/pedidos\?origem=site&de=2026-11-07&ate=2026-11-13/)
+  await expect(page.getByRole("button", { name: /07\/11 a 13\/11 · 7 dias/ })).toBeVisible()
+  await expect(page.getByRole("table")).toBeVisible()
+  await page.getByRole("button", { name: "Tirar o filtro Origem: Site" }).click()
+  await expect(page).not.toHaveURL(/origem=/)
+})
+
 test("do gráfico aos pedidos do dia: filtrar, abrir e avançar", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
   await page.goto("/admin")

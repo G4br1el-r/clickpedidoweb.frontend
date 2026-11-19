@@ -23,3 +23,19 @@ export function noPeriodo(pedidos: Pedido[], { de, ate }: Periodo) {
     return criado >= inicio && criado <= fim
   })
 }
+
+/** Agrupa e ordena do maior total para o menor (empate: mais pedidos). */
+export function fatias<K extends string>(pedidos: Pedido[], chave: (pedido: Pedido) => K) {
+  const total = soma(pedidos)
+  const grupos = new Map<K, Pedido[]>()
+  for (const pedido of pedidos)
+    grupos.set(chave(pedido), [...(grupos.get(chave(pedido)) ?? []), pedido])
+  return [...grupos.entries()]
+    .map(([valor, lista]) => ({
+      valor,
+      pedidos: lista.length,
+      total: soma(lista),
+      percentual: total ? (soma(lista) / total) * 100 : 0,
+    }))
+    .sort((a, b) => b.total - a.total || b.pedidos - a.pedidos)
+}

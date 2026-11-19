@@ -11,20 +11,22 @@ import { ListaPedidos } from "./lista-pedidos"
 function Provedores({
   children,
   aoMudarUrl,
+  endereco,
 }: {
   children: ReactNode
   aoMudarUrl?: OnUrlUpdateFunction
+  endereco?: string
 }) {
   return (
-    <NuqsTestingAdapter hasMemory onUrlUpdate={aoMudarUrl}>
+    <NuqsTestingAdapter hasMemory onUrlUpdate={aoMudarUrl} searchParams={endereco}>
       <TooltipProvider>{children}</TooltipProvider>
     </NuqsTestingAdapter>
   )
 }
 
-function renderizar(pedidos: Pedido[], aoMudarUrl?: OnUrlUpdateFunction) {
+function renderizar(pedidos: Pedido[], aoMudarUrl?: OnUrlUpdateFunction, endereco?: string) {
   return render(
-    <Provedores aoMudarUrl={aoMudarUrl}>
+    <Provedores aoMudarUrl={aoMudarUrl} endereco={endereco}>
       <ListaPedidos pedidos={pedidos} />
     </Provedores>,
   )
@@ -102,5 +104,16 @@ describe("ListaPedidos", () => {
     expect(screen.getByText("Nenhum pedido com esses filtros")).toBeInTheDocument()
     await usuario.click(screen.getByRole("button", { name: "Limpar filtros" }))
     expect(numeros()).toHaveLength(8)
+  })
+
+  test("a origem vem do endereço, aparece como etiqueta e sai ao tocar nela", async () => {
+    const usuario = userEvent.setup()
+    const doPdv = { ...PEDIDOS_DE_TESTE[0], id: 50, numero: 50, origem: "pdv" as const }
+    renderizar([...PEDIDOS_DE_TESTE, doPdv], undefined, "?origem=pdv")
+    expect(numeros()).toEqual(["#50"])
+    await usuario.click(
+      screen.getByRole("button", { name: "Tirar o filtro Origem: PDV do balcão" }),
+    )
+    expect(numeros()).toHaveLength(9)
   })
 })
