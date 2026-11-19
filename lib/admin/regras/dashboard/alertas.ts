@@ -3,11 +3,10 @@ import type { ConfigLoja, Lote, Pedido, Produto, Receita, StatusPedido } from ".
 import type { SegmentoPainelId } from "../../segmentos-painel"
 import { urgenciaNaCozinha } from "../cozinha"
 import { situacaoEstoque } from "../estoque"
-import { situacaoDoLote } from "../farmacia"
 import { urgencia } from "../fila"
 import { lojaAbertaAgora } from "../loja"
-import { faltaPesar } from "../pesagem"
 import { reais } from "./comum"
+import { lotesVencendo, pedidosAPesar, receitasAConferir } from "./contagens"
 import type { SituacaoMeta } from "./metas"
 import { nomesDo } from "./nomes"
 
@@ -112,10 +111,7 @@ export function alertasDoPainel({
       acao: verEstoque,
     })
 
-  const lotesEmRisco = lotes.filter((lote) => {
-    const { validade } = situacaoDoLote(lote, agora)
-    return lote.quantidade > 0 && (validade === "vencido" || validade === "vence-em-30")
-  }).length
+  const lotesEmRisco = lotesVencendo(lotes, agora)
   if (lotesEmRisco > 0)
     alertas.push({
       id: "lotes",
@@ -123,7 +119,7 @@ export function alertasDoPainel({
       acao: { rotulo: "Ver lotes", href: "/admin/validade" },
     })
 
-  const aConferir = receitas.filter((receita) => !(receita.id in decisoes)).length
+  const aConferir = receitasAConferir(receitas, decisoes)
   if (aConferir > 0)
     alertas.push({
       id: "receitas",
@@ -131,10 +127,7 @@ export function alertasDoPainel({
       acao: { rotulo: "Conferir receitas", href: "/admin/receitas" },
     })
 
-  const aPesar = pedidos.filter(
-    (pedido) =>
-      pedido.status !== "cancelado" && pedido.status !== "concluido" && faltaPesar(pedido),
-  ).length
+  const aPesar = pedidosAPesar(pedidos)
   if (aPesar > 0)
     alertas.push({
       id: "pesagem",
