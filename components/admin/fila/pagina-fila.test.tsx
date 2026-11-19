@@ -588,17 +588,44 @@ describe("PaginaFila", () => {
     await waitFor(() => expect(screen.getAllByRole("article")).toHaveLength(todos))
   })
 
-  test("métricas: concluídos e cancelados levam à lista de pedidos filtrada", async () => {
+  test("métricas: concluídos e cancelados abrem a gaveta Finalizados hoje", async () => {
     telaGrande()
+    const usuario = userEvent.setup()
     renderizar()
     expect(
-      await screen.findByRole("link", { name: /^Concluídos/ }, { timeout: 8000 }),
-    ).toHaveAttribute("href", "/admin/pedidos?status=concluido")
-    expect(screen.getByRole("link", { name: /^Cancelados/ })).toHaveAttribute(
-      "href",
-      "/admin/pedidos?status=cancelado",
-    )
+      await screen.findByRole("button", { name: /^Cancelados/ }, { timeout: 8000 }),
+    ).toBeInTheDocument()
     expect(screen.getByText("Preparo médio")).toBeInTheDocument()
+    // Aberta, a gaveta é modal: o resto da página sai da árvore de acessibilidade.
+    await usuario.click(screen.getByRole("button", { name: /^Concluídos/ }))
+    const gaveta = within(await screen.findByRole("dialog", { name: "Finalizados hoje" }))
+    expect(gaveta.getByRole("link", { name: "Ver todos em Pedidos" })).toHaveAttribute(
+      "href",
+      "/admin/pedidos",
+    )
+  })
+
+  test("Finalizados hoje: reabrir devolve o pedido para Prontos; reimprimir manda o cupom", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+    await usuario.click(screen.getByRole("button", { name: /^Finalizados hoje/ }))
+    const gaveta = within(await screen.findByRole("dialog", { name: "Finalizados hoje" }))
+    const linhas = await gaveta.findAllByRole("listitem")
+    expect(linhas.length).toBeGreaterThan(0)
+
+    const [reimprimir] = gaveta.getAllByRole("button", { name: /^Reimprimir cupom de #/ })
+    await usuario.click(reimprimir)
+    expect(imprimir).toHaveBeenCalled()
+
+    const [reabrir] = gaveta.getAllByRole("button", { name: /^Reabrir #/ })
+    const numero = (reabrir.getAttribute("aria-label") ?? "").replace("Reabrir ", "")
+    await usuario.click(reabrir)
+    await usuario.keyboard("{Escape}")
+    expect(
+      await (await coluna("Prontos")).findByRole("heading", { name: numero }),
+    ).toBeInTheDocument()
   })
 
   test("o aparelho que não escolheu o som usa o som da loja", async () => {

@@ -2,7 +2,7 @@
 
 import NumberFlow from "@number-flow/react"
 import { startOfDay } from "date-fns"
-import { ChevronDownIcon, InboxIcon, VolumeXIcon } from "lucide-react"
+import { ArchiveIcon, ChevronDownIcon, InboxIcon, VolumeXIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
 import { parseAsStringLiteral, useQueryState, useQueryStates } from "nuqs"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
@@ -25,6 +25,7 @@ import {
   useLoja,
   useMotoboys,
   usePedidos,
+  useReabrirPedido,
   useRecusarPedido,
   useSimularPedido,
   useVoltarPedido,
@@ -40,6 +41,7 @@ import { type HistoricoCliente, seloDoCliente } from "@/lib/admin/regras/cliente
 import {
   type ColunaFila,
   colunasDaFila,
+  finalizadosHoje,
   novosPedidos,
   pedidosDeDiasAnteriores,
   resumoDaFila,
@@ -70,6 +72,7 @@ import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
 import { EsteAparelho } from "./este-aparelho"
 import { FerramentasFila, PARAMETROS_FILA } from "./ferramentas-fila"
+import { GavetaFinalizados } from "./gaveta-finalizados"
 import { MetricasFila } from "./metricas-fila"
 import { PausaPedidos } from "./pausa-pedidos"
 import { useTelaAcesa } from "./use-tela-acesa"
@@ -302,6 +305,8 @@ export function PaginaFila({
     Boolean(filtro || ferramentas.busca) || ferramentas.canal.length > 0 || ferramentas.naoPagos
   const avancar = useAvancarPedido()
   const voltar = useVoltarPedido()
+  const reabrir = useReabrirPedido()
+  const [finalizadosAberto, setFinalizadosAberto] = useState(false)
   const aceitar = useAceitarPedido()
   const recusar = useRecusarPedido()
   const cancelar = useCancelarPedido()
@@ -418,6 +423,7 @@ export function PaginaFila({
           agora,
         )
       : null
+  const finalizados = finalizadosHoje(concluidos, criadosHoje)
   const metricas =
     fila && agora
       ? metricasDaFila({
@@ -511,7 +517,14 @@ export function PaginaFila({
         {/* Faixas 2 e 3: a régua e as ferramentas. No celular, recolhidas no Mais. */}
         {(aparelhoGrande || maisAberto) && (
           <div id="fila-mais" className="flex flex-col">
-            {metricas && <MetricasFila metricas={metricas} filtro={filtro} aoFiltrar={setFiltro} />}
+            {metricas && (
+              <MetricasFila
+                metricas={metricas}
+                filtro={filtro}
+                aoFiltrar={setFiltro}
+                aoAbrirFinalizados={() => setFinalizadosAberto(true)}
+              />
+            )}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/70 py-3">
               <FerramentasFila
                 busca={ferramentas.busca}
@@ -529,7 +542,18 @@ export function PaginaFila({
                   </Button>
                 </p>
               )}
-              <div className="ml-auto">
+              <div className="ml-auto flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-haspopup="dialog"
+                  onClick={() => setFinalizadosAberto(true)}
+                >
+                  <ArchiveIcon data-icon="inline-start" />
+                  Finalizados hoje
+                  <span className="text-muted-foreground tabular-nums">{finalizados.length}</span>
+                </Button>
                 <EsteAparelho loja={loja} />
               </div>
             </div>
@@ -608,6 +632,21 @@ export function PaginaFila({
         </Tabs>
       )}
 
+      <GavetaFinalizados
+        pedidos={finalizados}
+        aberta={finalizadosAberto}
+        aoMudar={setFinalizadosAberto}
+        aoReabrir={(pedido) =>
+          reabrir.mutate(pedido.id, {
+            ...avisoDeErro,
+            onSuccess: (reaberto) =>
+              toast(
+                `#${reaberto.numero} reaberto: ${rotuloStatus(reaberto.tipo, reaberto.status)}`,
+              ),
+          })
+        }
+        aoReimprimir={impressao.imprimir}
+      />
       <DetalhesPedido />
       {impressao.elemento}
     </div>

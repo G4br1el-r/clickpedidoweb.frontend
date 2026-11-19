@@ -137,6 +137,17 @@ export function useVoltarPedido() {
   )
 }
 
+/** Concluído por engano volta para Prontos (no salão, Em atendimento). */
+export function useReabrirPedido() {
+  return useMutacaoDePedido<number>(
+    (servidor, id) => servidor.pedidos.reabrir(id),
+    (pedido) =>
+      pedido.status === "concluido" && pedido.tipo !== "mesa"
+        ? { ...pedido, status: pedido.tipo === "atendimento" ? "em-preparo" : "pronto" }
+        : pedido,
+  )
+}
+
 export function useCancelarPedido() {
   return useMutacaoDePedido<MudancaDeEtapa & MotivoEscolhido>(
     (servidor, { id, de, ...escolhido }) => servidor.pedidos.cancelar(id, de, escolhido),
