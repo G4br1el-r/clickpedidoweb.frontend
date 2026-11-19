@@ -10,10 +10,13 @@ import {
   reiniciarServidores,
   servidorDo,
   useAvancarTicket,
+  useAvisarSobreRodada,
   useCozinha,
   useDarCiente,
   usePriorizarPedido,
   useRiscarItem,
+  useServirRodada,
+  useVerMensagem,
   useVoltarTicket,
 } from "./consultas"
 
@@ -129,5 +132,44 @@ describe("consultas da cozinha", () => {
 
     act(() => result.current.priorizar.mutate({ id: comanda.id, prioridade: true }))
     await waitFor(() => expect(doQuadro()?.prioridade).toBe(true))
+  })
+
+  test("servir a rodada pronta tira o ticket do quadro", async () => {
+    const { api, comanda } = await mesaNaCozinha()
+    await api.cozinha.avancar(comanda.id, 1, "recebido")
+    await api.cozinha.avancar(comanda.id, 1, "em-preparo")
+    const { result } = renderHook(() => ({ ...useQuadro(), servir: useServirRodada() }), {
+      wrapper: envolver(),
+    })
+    const tickets = () =>
+      ticketsDaCozinha(result.current.cozinha.data ?? []).filter(
+        (item) => item.pedido.id === comanda.id,
+      )
+    await waitFor(() => expect(tickets()).toHaveLength(1))
+
+    act(() => result.current.servir.mutate({ id: comanda.id, rodada: 1 }))
+    await waitFor(() => expect(tickets()).toHaveLength(0))
+    await waitFor(() => expect(result.current.servir.isSuccess).toBe(true))
+  })
+
+  test("a mensagem da cozinha aparece no pedido, e o Ok tira", async () => {
+    const { comanda } = await mesaNaCozinha()
+    const { result } = renderHook(
+      () => ({ ...useQuadro(), avisar: useAvisarSobreRodada(), ver: useVerMensagem() }),
+      { wrapper: envolver() },
+    )
+    const mensagens = () =>
+      result.current.cozinha.data
+        ?.find((item) => item.id === comanda.id)
+        ?.mensagensCozinha?.filter((mensagem) => !mensagem.vistaEm) ?? []
+    await waitFor(() => expect(result.current.cozinha.data).toBeDefined())
+
+    act(() => result.current.avisar.mutate({ id: comanda.id, rodada: 1, tipo: "atraso" }))
+    await waitFor(() => expect(mensagens().map((mensagem) => mensagem.tipo)).toEqual(["atraso"]))
+    await waitFor(() => expect(result.current.avisar.isSuccess).toBe(true))
+    await waitFor(() => expect(mensagens()[0]?.id).toMatch(/^msg-/))
+
+    act(() => result.current.ver.mutate({ id: comanda.id, mensagemId: mensagens()[0].id }))
+    await waitFor(() => expect(mensagens()).toEqual([]))
   })
 })

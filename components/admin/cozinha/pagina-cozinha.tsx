@@ -16,6 +16,7 @@ import { useAgora } from "@/hooks/use-agora"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import {
   useAvancarTicket,
+  useAvisarSobreRodada,
   useCozinha,
   useDarCiente,
   usePriorizarPedido,
@@ -23,7 +24,13 @@ import {
   useVoltarTicket,
 } from "@/lib/admin/dados/consultas"
 import { useAlternarProduto, useProdutos } from "@/lib/admin/dados/consultas-cardapio"
-import type { AvisoCozinha, ItemPedido, Pedido, Produto } from "@/lib/admin/dados/tipos"
+import type {
+  AvisoCozinha,
+  ItemPedido,
+  Pedido,
+  Produto,
+  TipoMensagemCozinha,
+} from "@/lib/admin/dados/tipos"
 import {
   usePreferenciasCarregadas,
   usePreferenciasFila,
@@ -93,6 +100,7 @@ function Coluna({
   aoVoltar,
   aoPriorizar,
   aoCiente,
+  aoAvisar,
   esgotaveis,
   aoEsgotar,
   comTitulo,
@@ -105,6 +113,7 @@ function Coluna({
   aoVoltar: (ticket: Ticket) => void
   aoPriorizar: (ticket: Ticket, prioridade: boolean) => void
   aoCiente: (ticket: Ticket, aviso: AvisoCozinha) => void
+  aoAvisar: (ticket: Ticket, tipo: TipoMensagemCozinha) => void
   esgotaveis: (ticket: Ticket) => Produto[]
   aoEsgotar: (produto: { id: string; nome: string }) => void
   comTitulo: boolean
@@ -141,6 +150,7 @@ function Coluna({
               aoVoltar={() => aoVoltar(ticket)}
               aoPriorizar={(prioridade) => aoPriorizar(ticket, prioridade)}
               aoCiente={(aviso) => aoCiente(ticket, aviso)}
+              aoAvisar={(tipo) => aoAvisar(ticket, tipo)}
               esgotaveis={esgotaveis(ticket)}
               aoEsgotar={aoEsgotar}
             />
@@ -166,6 +176,7 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
   const voltar = useVoltarTicket()
   const priorizar = usePriorizarPedido()
   const ciente = useDarCiente()
+  const avisarSobre = useAvisarSobreRodada()
   const { data: produtos } = useProdutos()
   const alternarProduto = useAlternarProduto()
   const [filtro, setFiltro] = useState<FiltroCozinha>("todos")
@@ -210,6 +221,8 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
     priorizar.mutate({ id: ticket.pedido.id, prioridade }, { onError: aoErrar })
   const aoCiente = (ticket: Ticket, aviso: AvisoCozinha) =>
     ciente.mutate({ id: ticket.pedido.id, avisoId: aviso.id }, { onError: aoErrar })
+  const aoAvisar = (ticket: Ticket, tipo: TipoMensagemCozinha) =>
+    avisarSobre.mutate({ id: ticket.pedido.id, rodada: ticket.rodada, tipo }, { onError: aoErrar })
   /** Os produtos do ticket que ainda estão à venda. */
   const esgotaveis = (ticket: Ticket): Produto[] => {
     const ids = new Set(ticket.itens.flatMap((item) => (item.produtoId ? [item.produtoId] : [])))
@@ -331,6 +344,7 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
               aoVoltar={aoVoltar}
               aoPriorizar={aoPriorizar}
               aoCiente={aoCiente}
+              aoAvisar={aoAvisar}
               esgotaveis={esgotaveis}
               aoEsgotar={aoEsgotar}
               comTitulo
@@ -364,6 +378,7 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
                 aoVoltar={aoVoltar}
                 aoPriorizar={aoPriorizar}
                 aoCiente={aoCiente}
+                aoAvisar={aoAvisar}
                 esgotaveis={esgotaveis}
                 aoEsgotar={aoEsgotar}
                 comTitulo={false}

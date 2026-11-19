@@ -4,6 +4,7 @@ import {
   AlertTriangleIcon,
   BanIcon,
   ClockIcon,
+  MessageSquareIcon,
   MoreHorizontalIcon,
   Undo2Icon,
   ZapIcon,
@@ -22,9 +23,11 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { AvisoCozinha, ItemPedido, Pedido } from "@/lib/admin/dados/tipos"
+import type { AvisoCozinha, ItemPedido, Pedido, TipoMensagemCozinha } from "@/lib/admin/dados/tipos"
 import {
+  mensagensPendentes,
   minutosNaCozinha,
+  TEXTO_DA_MENSAGEM,
   type TicketCozinha as Ticket,
   urgenciaNaCozinha,
 } from "@/lib/admin/regras/cozinha"
@@ -52,6 +55,11 @@ const DEPOIS_DE_PRONTO: Partial<Record<Pedido["tipo"], string>> = {
   entrega: "Aguardando o motoboy",
   retirada: "Aguardando o cliente",
 }
+
+const TIPOS_DE_MENSAGEM = Object.keys(TEXTO_DA_MENSAGEM) as TipoMensagemCozinha[]
+
+/** "Vai atrasar ~10 min" vira "vai atrasar ~10 min", para ler depois de "Avisado:". */
+const minuscula = (texto: string) => texto.charAt(0).toLowerCase() + texto.slice(1)
 
 const origem = (pedido: Pedido) =>
   pedido.mesa ? `Mesa ${pedido.mesa.numero}` : pedido.tipo === "entrega" ? "Entrega" : "Retirada"
@@ -137,6 +145,7 @@ export function TicketCozinha({
   aoVoltar,
   aoPriorizar,
   aoCiente,
+  aoAvisar,
   esgotaveis,
   aoEsgotar,
 }: {
@@ -148,6 +157,8 @@ export function TicketCozinha({
   aoVoltar: () => void
   aoPriorizar: (prioridade: boolean) => void
   aoCiente: (aviso: AvisoCozinha) => void
+  /** Mensagem rápida para o salão (mesa) ou o caixa (entrega e retirada). */
+  aoAvisar: (tipo: TipoMensagemCozinha) => void
   /** Produtos do ticket que ainda estão no cardápio: a cozinha pode avisar que acabaram. */
   esgotaveis: { id: string; nome: string }[]
   aoEsgotar: (produto: { id: string; nome: string }) => void
@@ -163,6 +174,7 @@ export function TicketCozinha({
   const cancelamento = ticket.avisos.find((aviso) => aviso.tipo === "cancelado")
   const cancelado = pedido.status === "cancelado"
   const alteracoes = ticket.avisos.filter((aviso) => aviso.tipo === "alterado")
+  const avisados = mensagensPendentes(pedido).filter((mensagem) => mensagem.rodada === rodada)
 
   return (
     <motion.article
@@ -245,6 +257,24 @@ export function TicketCozinha({
                     {ticket.status === "pronto" ? "Voltar para Preparando" : "Voltar para A fazer"}
                   </DropdownMenuItem>
                 )}
+                {itens.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger>
+                        <MessageSquareIcon />
+                        {pedido.tipo === "mesa" ? "Avisar o salão…" : "Avisar o caixa…"}
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {TIPOS_DE_MENSAGEM.map((tipo) => (
+                          <DropdownMenuItem key={tipo} onSelect={() => aoAvisar(tipo)}>
+                            {TEXTO_DA_MENSAGEM[tipo]}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  </>
+                )}
                 {esgotaveis.length > 0 && (
                   <>
                     <DropdownMenuSeparator />
@@ -288,6 +318,16 @@ export function TicketCozinha({
             Ciente
           </Button>
         </div>
+      ))}
+      {avisados.map((mensagem) => (
+        // Fica até o salão ou o caixa dar Ok: a cozinha sabe que o recado foi dado.
+        <p
+          key={mensagem.id}
+          className="-mt-1 flex items-center gap-1.5 text-[13px] text-muted-foreground"
+        >
+          <MessageSquareIcon className="size-3.5 shrink-0" aria-hidden="true" />
+          Avisado: {minuscula(TEXTO_DA_MENSAGEM[mensagem.tipo])}
+        </p>
       ))}
       {itens.length > 0 && (
         <Itens

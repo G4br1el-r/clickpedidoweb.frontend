@@ -11,11 +11,14 @@ import {
 import {
   alteracoesParaCozinha,
   avancarRodada,
+  avisarSobreRodada,
   darCiente,
   naMaoDaCozinha,
   riscarItem,
   type StatusTicket,
+  servirRodada,
   ticketsDaCozinha,
+  verMensagem,
   voltarRodada,
 } from "../regras/cozinha"
 import { esquemaLoja } from "../regras/esquema-loja"
@@ -51,11 +54,12 @@ import type {
   Pedido,
   Produto,
   StatusPedido,
+  TipoMensagemCozinha,
   TipoMovimento,
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 3
+const VERSAO = 4
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -731,6 +735,11 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         })
       },
 
+      /** Alguém do salão ou do caixa leu a mensagem da cozinha. */
+      verMensagem(id: number, mensagemId: string) {
+        return alterar(id, (pedido) => verMensagem(pedido, mensagemId, new Date().toISOString()))
+      },
+
       /** Prioridade: o pedido passa na frente na cozinha. Cozinha, caixa e garçom marcam. */
       priorizar(id: number, prioridade: boolean) {
         return alterar(id, (pedido) => {
@@ -1226,6 +1235,18 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       /** A cozinha viu o cancelamento ou a alteração. */
       ciente(id: number, avisoId: string) {
         return alterar(id, (pedido) => darCiente(pedido, avisoId, new Date().toISOString()))
+      },
+
+      /** O garçom levou a rodada pronta à mesa. */
+      servir(id: number, rodada: number) {
+        return alterar(id, (pedido) => servirRodada(pedido, rodada, new Date().toISOString()))
+      },
+
+      /** Mensagem rápida da cozinha para o salão (mesa) ou o caixa (entrega e retirada). */
+      avisar(id: number, rodada: number, tipo: TipoMensagemCozinha) {
+        return alterar(id, (pedido) =>
+          avisarSobreRodada(pedido, rodada, tipo, novoId("msg")(), new Date().toISOString()),
+        )
       },
     },
 

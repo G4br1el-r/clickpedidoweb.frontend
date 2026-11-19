@@ -207,8 +207,9 @@ describe("gerarPedidos", () => {
       expect(horas).toEqual(horas.toSorted((a, b) => a - b))
       expect(Math.max(...horas)).toBeLessThanOrEqual(AGORA.getTime())
 
+      // A comanda toda servida não tem mais rodada na cozinha e continua pronta.
       if (NA_COZINHA.includes(pedido.status)) {
-        expect(statusPelasRodadas(pedido)).toBe(pedido.status)
+        expect(statusPelasRodadas(pedido) ?? "pronto").toBe(pedido.status)
       }
       // O que passou pela cozinha guarda quando começou e quando ficou pronto.
       if (etapas.pronto) {
@@ -219,6 +220,31 @@ describe("gerarPedidos", () => {
       }
     }
     expect(pedidos.filter((pedido) => pedido.etapas?.pronto).length).toBeGreaterThan(10)
+  })
+
+  test("a mesa pronta há mais tempo já foi servida, de 3 a 6 min depois de pronta", () => {
+    const pedidos = gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "lanchonete",
+      de: new Date(2026, 10, 12),
+      agora: AGORA,
+    })
+    const servidos = pedidos.flatMap((pedido) =>
+      pedido.itens.filter((item) => item.servidoEm).map((item) => ({ pedido, item })),
+    )
+    expect(servidos.length).toBeGreaterThan(0)
+    for (const { pedido, item } of servidos) {
+      expect(pedido.tipo).toBe("mesa")
+      const minutos = (Date.parse(item.servidoEm ?? "") - Date.parse(item.feitoEm ?? "")) / 60_000
+      expect(minutos).toBeGreaterThanOrEqual(3)
+      expect(minutos).toBeLessThanOrEqual(6)
+      expect(Date.parse(item.servidoEm ?? "")).toBeLessThanOrEqual(AGORA.getTime())
+    }
+    // Entre as comandas abertas, há mesa já servida: a demo não fica cheia de "pronto para servir".
+    const naCozinha = pedidos.filter(
+      (pedido) => pedido.tipo === "mesa" && pedido.status === "pronto",
+    )
+    expect(naCozinha.some((pedido) => pedido.itens.some((item) => item.servidoEm))).toBe(true)
   })
 
   test("na lanchonete o número do pedido recomeça no mês; nas outras é o id", () => {

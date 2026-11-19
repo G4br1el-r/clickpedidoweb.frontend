@@ -58,6 +58,8 @@ export type ItemPedido = {
   iniciadoEm?: string
   /** Cozinha: quando o item foi riscado como feito. */
   feitoEm?: string
+  /** Mesa: quando o garçom levou o item à mesa. A rodada toda servida sai da cozinha. */
+  servidoEm?: string
 }
 
 /**
@@ -73,6 +75,18 @@ export type AvisoCozinha = {
   rodada?: number
   etapa?: "recebido" | "em-preparo" | "pronto"
   itens?: { nome: string; quantidade: number }[]
+}
+
+/** As mensagens rápidas que a cozinha manda para o salão ou o caixa. */
+export type TipoMensagemCozinha = "atraso" | "substituicao" | "duvida"
+
+/** Mensagem da cozinha sobre uma rodada. Fica até alguém dar Ok. */
+export type MensagemCozinha = {
+  id: string
+  rodada: number
+  tipo: TipoMensagemCozinha
+  em: string
+  vistaEm?: string
 }
 
 export type EnderecoEntrega = {
@@ -116,6 +130,8 @@ export type Pedido = {
   avisosCozinha?: AvisoCozinha[]
   /** Quando o pedido entrou em cada etapa por que passou. */
   etapas?: Partial<Record<StatusPedido, string>>
+  /** O que a cozinha mandou dizer ao salão ou ao caixa. */
+  mensagensCozinha?: MensagemCozinha[]
   impressoEm?: string
   /** Mesa: se a rodada vai para a cozinha. */
   enviarParaCozinha: boolean

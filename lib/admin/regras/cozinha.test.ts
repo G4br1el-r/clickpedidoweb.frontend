@@ -1,16 +1,23 @@
 import { describe, expect, test } from "vitest"
 import type { ItemPedido, Pedido, StatusPedido, TipoPedido } from "../dados/tipos"
 import {
+  avisarSobreRodada,
   chavesDaCozinha,
+  chavesDeQuemServe,
   colunasDaCozinha,
   cozinhaJaPreparou,
   type FiltroCozinha,
   itensDaCozinha,
+  mensagensPendentes,
   minutosNaCozinha,
   novidadesNaCozinha,
+  prontosParaServir,
+  servirRodada,
   statusPelasRodadas,
+  TEXTO_DA_MENSAGEM,
   ticketsDaCozinha,
   urgenciaNaCozinha,
+  verMensagem,
 } from "./cozinha"
 import { AGORA_DE_TESTE as AGORA, PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
 
@@ -47,16 +54,23 @@ function pedido(
 const nomes = (itens: ItemPedido[]) => itens.map((item) => item.nome)
 
 describe("cozinhaJaPreparou", () => {
-  test("item que foi para a cozinha, com a comanda em preparo ou pronta", () => {
-    const pizza = item("Pizza", 1, true)
-    expect(cozinhaJaPreparou(pedido(1, "em-preparo", 5, "mesa", [pizza]), pizza)).toBe(true)
-    expect(cozinhaJaPreparou(pedido(1, "pronto", 5, "mesa", [pizza]), pizza)).toBe(true)
+  const comecou = { iniciadoEm: minutosAtras(10) }
+
+  test("a rodada do item já começou, ficou pronta ou foi servida", () => {
+    const pizza = { ...item("Pizza", 1, true), ...comecou }
+    const batata = item("Batata", 2, true)
+    // A rodada 2 nova põe a comanda em Novo, mas a pizza já está no fogo.
+    const comanda = pedido(1, "recebido", 5, "mesa", [pizza, batata])
+    expect(cozinhaJaPreparou(comanda, pizza)).toBe(true)
+    const servida = { ...pizza, feitoEm: minutosAtras(5), servidoEm: minutosAtras(2) }
+    expect(cozinhaJaPreparou(pedido(1, "pronto", 5, "mesa", [servida]), servida)).toBe(true)
   })
 
-  test("ainda não começou, ou o item não passa pela cozinha", () => {
-    const pizza = item("Pizza", 1, true)
+  test("rodada que ainda não começou, ou item que não passa pela cozinha", () => {
+    const pizza = { ...item("Pizza", 1, true), ...comecou, feitoEm: minutosAtras(5) }
+    const batata = item("Batata", 2, true)
     const agua = item("Água", 1, false)
-    expect(cozinhaJaPreparou(pedido(1, "recebido", 5, "mesa", [pizza]), pizza)).toBe(false)
+    expect(cozinhaJaPreparou(pedido(1, "recebido", 5, "mesa", [pizza, batata]), batata)).toBe(false)
     expect(cozinhaJaPreparou(pedido(1, "pronto", 5, "mesa", [agua]), agua)).toBe(false)
   })
 })
@@ -286,6 +300,113 @@ describe("ticketsDaCozinha", () => {
     ]
     expect(ticketsDaCozinha([...fora, pedido(41, "recebido", 2)]).map((t) => t.id)).toEqual([
       "41:1",
+    ])
+  })
+})
+
+describe("servirRodada", () => {
+  const agora = AGORA.toISOString()
+  const comanda = pedido(50, "recebido", 40, "mesa", [
+    { ...item("Pizza", 1, true, 30), ...feitoHa(3) },
+    item("Cerveja", 1, false, 30),
+    item("Batata", 2, true, 5),
+  ])
+
+  test("rodada pronta servida sai da cozinha; a comanda segue no status das outras", () => {
+    const servida = servirRodada(comanda, 1, agora)
+    expect(servida.itens.map((doPedido) => doPedido.servidoEm)).toEqual([
+      agora,
+      undefined,
+      undefined,
+    ])
+    expect(ticketsDaCozinha([servida]).map((ticket) => ticket.id)).toEqual(["50:2"])
+    expect(servida.status).toBe("recebido")
+  })
+
+  test("só a rodada pronta pode ser servida", () => {
+    expect(() => servirRodada(comanda, 2, agora)).toThrow("Esta rodada ainda não está pronta.")
+    expect(() => servirRodada(comanda, 7, agora)).toThrow("Esta rodada não está na cozinha.")
+  })
+})
+
+describe("prontosParaServir", () => {
+  test("rodadas prontas das mesas, da que ficou pronta primeiro; entrega e servido ficam fora", () => {
+    const mesa5 = pedido(60, "recebido", 40, "mesa", [
+      { ...item("Pizza", 1, true, 30), ...feitoHa(2) },
+      item("Batata", 2, true, 5),
+    ])
+    const mesa7 = pedido(61, "pronto", 20, "mesa", [
+      { ...item("Esfiha", 1, true, 20), ...feitoHa(6) },
+    ])
+    const servida = pedido(62, "pronto", 20, "mesa", [
+      { ...item("Pizza", 1, true, 20), ...feitoHa(9), servidoEm: minutosAtras(4) },
+    ])
+    const entrega = pedido(63, "pronto", 20, "entrega", [{ ...item("Pizza"), ...feitoHa(1) }])
+    expect(prontosParaServir([mesa5, mesa7, servida, entrega]).map((t) => t.id)).toEqual([
+      "61:1",
+      "60:1",
+    ])
+  })
+})
+
+describe("mensagens da cozinha", () => {
+  const agora = AGORA.toISOString()
+  const comanda = pedido(70, "recebido", 40, "mesa", [
+    { ...item("Pizza", 1, true, 30), ...iniciadoHa(10) },
+    { ...item("Batata", 2, true, 30), ...feitoHa(10), servidoEm: minutosAtras(5) },
+  ])
+
+  test("a cozinha avisa sobre uma rodada; a mensagem fica pendente até alguém dar Ok", () => {
+    const avisado = avisarSobreRodada(comanda, 1, "atraso", "msg-1", agora)
+    expect(mensagensPendentes(avisado)).toEqual([
+      { id: "msg-1", rodada: 1, tipo: "atraso", em: agora },
+    ])
+    expect(TEXTO_DA_MENSAGEM.atraso).toBe("Vai atrasar ~10 min")
+
+    const visto = verMensagem(avisado, "msg-1", agora)
+    expect(mensagensPendentes(visto)).toEqual([])
+    expect(visto.mensagensCozinha?.[0].vistaEm).toBe(agora)
+  })
+
+  test("a mesma mensagem pendente não se repete na rodada", () => {
+    const uma = avisarSobreRodada(comanda, 1, "duvida", "msg-1", agora)
+    const duas = avisarSobreRodada(uma, 1, "duvida", "msg-2", agora)
+    expect(mensagensPendentes(duas).map((mensagem) => mensagem.id)).toEqual(["msg-1"])
+  })
+
+  test("só se avisa sobre rodada que está na cozinha, e Ok de mensagem que existe", () => {
+    expect(() => avisarSobreRodada(comanda, 2, "atraso", "msg-1", agora)).toThrow(
+      "Esta rodada não está na cozinha.",
+    )
+    expect(() => verMensagem(comanda, "msg-9", agora)).toThrow("Mensagem não encontrada.")
+  })
+})
+
+describe("chavesDeQuemServe", () => {
+  const mensagem = (id: string) => ({ id, rodada: 1, tipo: "atraso" as const, em: minutosAtras(1) })
+  const mesa = {
+    ...pedido(80, "pronto", 20, "mesa", [{ ...item("Pizza", 1, true, 20), ...feitoHa(1) }]),
+    mensagensCozinha: [mensagem("msg-a"), { ...mensagem("msg-b"), vistaEm: minutosAtras(0) }],
+  }
+  const entrega = {
+    ...pedido(81, "pronto", 20, "entrega", [{ ...item("Pizza"), ...feitoHa(1) }]),
+    mensagensCozinha: [mensagem("msg-c")],
+  }
+  const preparando = pedido(82, "em-preparo", 10, "retirada", [
+    { ...item("Pizza"), ...iniciadoHa(3) },
+  ])
+
+  test("o salão olha as rodadas prontas das mesas e as mensagens pendentes delas", () => {
+    expect([...chavesDeQuemServe([mesa, entrega, preparando], "salao")]).toEqual([
+      "pronto:80:1",
+      "msg:msg-a",
+    ])
+  })
+
+  test("o caixa olha a entrega e a retirada prontas e as mensagens delas", () => {
+    expect([...chavesDeQuemServe([mesa, entrega, preparando], "caixa")]).toEqual([
+      "pronto:81",
+      "msg:msg-c",
     ])
   })
 })

@@ -257,14 +257,30 @@ test("salão: o garçom lança, a cozinha prepara e a mesa fecha a conta", async
   if (await abaProntos.isVisible()) await abaProntos.click()
   await expect(naColuna("Prontos")).toContainText("Servir na mesa")
 
-  // Mesas: a comanda está aberta; fechar a conta no Pix libera a mesa.
+  // Garçom: a rodada pronta aparece no topo, para levar à mesa.
+  await page.goto("/admin/garcom")
+  const faixa = page.getByRole("region", { name: /^Prontos para servir/ })
+  const rodada = faixa.getByRole("listitem", { name: "Mesa 90", exact: true })
+  await expect(rodada).toBeVisible({ timeout: 15_000 })
+  await verificarAcessibilidade(page)
+  await expect(faixa).toHaveScreenshot("salao-faixa-pronto.png")
+
+  // Mesas: a mesa espera o garçom; Servido na comanda tira a rodada da cozinha.
   await page.goto("/admin/mesas")
   const mesa = page.getByRole("button", { name: "Mesa 90", exact: true })
   await expect(mesa).toContainText("Léo")
+  await expect(mesa).toContainText("Pronto para servir")
   await mesa.click()
   const comanda = page.getByRole("dialog", { name: "Mesa 90" })
   await expect(comanda.getByRole("list", { name: "Itens da comanda" })).toBeVisible()
   await verificarAcessibilidade(page)
+  const pronta = comanda.getByRole("listitem", { name: "1ª rodada pronta" })
+  await expect(pronta).toHaveScreenshot("salao-comanda-pronta.png")
+  await pronta.getByRole("button", { name: "Servido" }).click()
+  await expect(pronta).toHaveCount(0)
+  await expect(comanda).toContainText("Ocupada")
+
+  // Fechar a conta no Pix libera a mesa.
   await comanda.getByRole("button", { name: "Fechar conta" }).click()
   const fechar = page.getByRole("dialog", { name: "Fechar a conta da mesa 90" })
   await fechar.getByText("Pix").click()

@@ -39,12 +39,51 @@ function telaGrande() {
   }))
 }
 
-function renderizar(intervaloSimulacao = 60_000) {
+function renderizar(intervaloSimulacao = 60_000, intervalo?: number) {
   return render(
     <Provedores>
-      <PaginaFila intervaloSimulacao={intervaloSimulacao} />
+      <PaginaFila intervaloSimulacao={intervaloSimulacao} intervalo={intervalo} />
     </Provedores>,
   )
+}
+
+/** Retirada do balcão, mandada para a fila e a cozinha. */
+const retirada = () =>
+  servidorDo("pizzaria").pdv.finalizar({
+    itens: [{ avulso: { nome: "Batata", preco: 12 }, quantidade: 1 }],
+    pagamento: "pix",
+    desconto: { modo: "reais", valor: 0 },
+    concluida: false,
+  })
+
+/** Áudio: a fronteira com o navegador. Conta quantas vezes o alerta tocou. */
+function contarAlertas() {
+  const tocadas = vi.fn()
+  vi.stubGlobal(
+    "AudioContext",
+    class {
+      currentTime = 0
+      destination = {}
+      state = "running"
+      createOscillator() {
+        tocadas()
+        return {
+          type: "sine",
+          frequency: { setValueAtTime: () => {} },
+          connect: (no: unknown) => no,
+          start: () => {},
+          stop: () => {},
+        }
+      }
+      createGain() {
+        return {
+          gain: { setValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} },
+          connect: (no: unknown) => no,
+        }
+      }
+    },
+  )
+  return tocadas
 }
 
 const coluna = async (nome: string) =>
@@ -132,6 +171,45 @@ describe("PaginaFila", () => {
 
     expect(await screen.findByText("Chegou agora", {}, { timeout: 8000 })).toBeInTheDocument()
     expect(tocadas).toHaveBeenCalled()
+  })
+
+  test("mensagem da cozinha aparece no cartão, com Ok", async () => {
+    telaGrande()
+    const pedido = await retirada()
+    await servidorDo("pizzaria").cozinha.avisar(pedido.id, 1, "substituicao")
+    const usuario = userEvent.setup()
+    renderizar()
+
+    const cartao = within(
+      (await coluna("Novos")).getByRole("article", { name: `#${pedido.numero}` }),
+    )
+    const mensagem = within(cartao.getByRole("status", { name: "Mensagem da cozinha" }))
+    expect(mensagem.getByText("Acabou um item, ver substituição")).toBeInTheDocument()
+    await usuario.click(mensagem.getByRole("button", { name: "Ok" }))
+    await waitFor(() =>
+      expect(cartao.queryByRole("status", { name: "Mensagem da cozinha" })).toBeNull(),
+    )
+    const visto = await servidorDo("pizzaria").pedidos.buscar(pedido.id)
+    expect(visto?.mensagensCozinha?.[0].vistaEm).toBeDefined()
+  })
+
+  test("pedido que fica pronto na cozinha toca o alerta", async () => {
+    telaGrande()
+    const tocadas = contarAlertas()
+    const pedido = await retirada()
+    usePreferenciasFila.setState({ somLigado: true })
+    renderizar(60_000, 200)
+    await (await coluna("Novos")).findByRole("article", { name: `#${pedido.numero}` })
+    expect(tocadas).not.toHaveBeenCalled()
+
+    await servidorDo("pizzaria").cozinha.avancar(pedido.id, 1, "recebido")
+    await servidorDo("pizzaria").cozinha.avancar(pedido.id, 1, "em-preparo")
+    await (await coluna("Prontos")).findByRole(
+      "article",
+      { name: `#${pedido.numero}` },
+      { timeout: 4000 },
+    )
+    await waitFor(() => expect(tocadas).toHaveBeenCalled())
   })
 
   test("sair da fila com um destaque na tela desliga o relógio do destaque", async () => {

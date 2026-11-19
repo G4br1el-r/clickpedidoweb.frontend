@@ -7,6 +7,7 @@ import {
   CalendarIcon,
   ClockIcon,
   MapPinIcon,
+  MessageSquareIcon,
   PanelRightOpenIcon,
   PrinterIcon,
   ScaleIcon,
@@ -16,6 +17,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import type { Motoboy, Pedido } from "@/lib/admin/dados/tipos"
+import { mensagensPendentes, TEXTO_DA_MENSAGEM } from "@/lib/admin/regras/cozinha"
 import { textoCobranca, type Urgencia, urgencia } from "@/lib/admin/regras/fila"
 import { textoRetirada } from "@/lib/admin/regras/numero"
 import { itensParaPesar } from "@/lib/admin/regras/pesagem"
@@ -78,6 +80,7 @@ export function CartaoFila({
   aoAvancar,
   aoAbrir,
   aoImprimir,
+  aoVerMensagem,
 }: {
   pedido: Pedido
   agora: Date
@@ -87,12 +90,16 @@ export function CartaoFila({
   aoAvancar: () => void
   aoAbrir: () => void
   aoImprimir: () => void
+  /** Ok na mensagem que a cozinha mandou para o caixa. */
+  aoVerMensagem: (mensagemId: string) => void
 }) {
   const semMovimento = useReducedMotion()
   const acao = rotuloAcao(pedido.tipo, pedido.status)
   const motoboy = motoboys.find((item) => item.id === pedido.motoboyId)
   // Açougue: carne no quilo que ainda não passou pela balança.
   const aPesar = !pedido.pesagem && itensParaPesar(pedido).length > 0
+  // A mensagem da mesa vai para o salão; aqui só a da entrega e da retirada.
+  const mensagens = pedido.tipo === "mesa" ? [] : mensagensPendentes(pedido)
   const canal = pedido.mesa
     ? `Mesa ${pedido.mesa.numero}`
     : CANAL_CURTO[pedido.tipo as keyof typeof CANAL_CURTO]
@@ -157,6 +164,30 @@ export function CartaoFila({
         </CardHeader>
 
         <CardContent className="flex flex-col gap-2 px-3 text-sm">
+          {mensagens.map((mensagem) => (
+            <div
+              key={mensagem.id}
+              role="status"
+              aria-label="Mensagem da cozinha"
+              className="flex items-center gap-2 rounded-lg bg-(--atencao)/[0.08] py-1.5 pr-1.5 pl-2.5"
+            >
+              <MessageSquareIcon
+                className="size-3.5 shrink-0 text-(--atencao)"
+                aria-hidden="true"
+              />
+              <span className="min-w-0 flex-1 text-[13px] font-medium">
+                {TEXTO_DA_MENSAGEM[mensagem.tipo]}
+              </span>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => aoVerMensagem(mensagem.id)}
+              >
+                Ok
+              </Button>
+            </div>
+          ))}
           <div className="flex flex-col">
             <span className="font-medium">{pedido.cliente.nome}</span>
             {pedido.mesa?.garcom && (

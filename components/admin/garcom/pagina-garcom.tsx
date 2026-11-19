@@ -50,6 +50,8 @@ import { ComandaMesa } from "../mesas/comanda-mesa"
 import { type AvisoCaixa, linhaQueMudou } from "../pdv/caixa-pdv"
 import { CatalogoBalcao } from "../pdv/catalogo-balcao"
 import { JanelaOpcoes } from "../pdv/janela-opcoes"
+import { ChaveAlertaSonoro } from "../salao/chave-alerta-sonoro"
+import { ProntosParaServir } from "../salao/prontos-para-servir"
 import { Traco } from "../traco"
 
 /** Item da bandeja: o que a tela mostra e as escolhas que vão para o servidor. */
@@ -340,7 +342,10 @@ export function PaginaGarcom() {
       <CabecalhoPagina
         titulo="Garçom"
         resumo="Escolha a mesa, monte a rodada e lance na comanda."
+        acoes={<ChaveAlertaSonoro />}
       />
+
+      <ProntosParaServir />
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_23rem] lg:gap-0">
         <div className="flex min-w-0 flex-col gap-5 lg:pr-6">

@@ -3,9 +3,12 @@
 import { type QueryKey, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import {
   avancarRodada,
+  avisarSobreRodada,
   darCiente,
   riscarItem,
   type StatusTicket,
+  servirRodada,
+  verMensagem,
   voltarRodada,
 } from "../regras/cozinha"
 import { proximoStatus } from "../regras/status"
@@ -13,7 +16,7 @@ import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { carregarCatalogo } from "./catalogos"
 import { criarServidor, type FiltroPedidos, type Servidor, type VendaPdv } from "./servidor"
-import type { ConfigLoja, Pedido, StatusPedido } from "./tipos"
+import type { ConfigLoja, Pedido, StatusPedido, TipoMensagemCozinha } from "./tipos"
 
 /** Espera de rede simulada: dá para ver os estados de carregamento; zero nos testes. */
 const ESPERA = process.env.NODE_ENV === "test" ? 0 : 250
@@ -174,8 +177,8 @@ export const STATUS_DA_FILA: StatusPedido[] = [
 ]
 
 /** Fila ao vivo: o que está em aberto, de qualquer dia, conferido a cada 5 s. */
-export function useFila() {
-  return usePedidos({ status: STATUS_DA_FILA }, { atualizarACada: 5_000 })
+export function useFila(intervalo = 5_000) {
+  return usePedidos({ status: STATUS_DA_FILA }, { atualizarACada: intervalo })
 }
 
 /**
@@ -230,6 +233,33 @@ export function useDarCiente() {
   return useMutacaoDePedido<{ id: number; avisoId: string }>(
     (servidor, { id, avisoId }) => servidor.cozinha.ciente(id, avisoId),
     ouIgual((pedido, { avisoId }) => darCiente(pedido, avisoId, new Date().toISOString())),
+  )
+}
+
+/** O garçom levou a rodada pronta à mesa: ela sai da cozinha e do salão. */
+export function useServirRodada() {
+  return useMutacaoDePedido<{ id: number; rodada: number }>(
+    (servidor, { id, rodada }) => servidor.cozinha.servir(id, rodada),
+    ouIgual((pedido, { rodada }) => servirRodada(pedido, rodada, new Date().toISOString())),
+  )
+}
+
+/** Mensagem rápida da cozinha sobre a rodada, para o salão ou o caixa. */
+export function useAvisarSobreRodada() {
+  return useMutacaoDePedido<{ id: number; rodada: number; tipo: TipoMensagemCozinha }>(
+    (servidor, { id, rodada, tipo }) => servidor.cozinha.avisar(id, rodada, tipo),
+    // A previsão usa um id provisório; o do servidor chega quando a lista recarrega.
+    ouIgual((pedido, { rodada, tipo }) =>
+      avisarSobreRodada(pedido, rodada, tipo, "previsto", new Date().toISOString()),
+    ),
+  )
+}
+
+/** Ok na mensagem da cozinha: ela sai de todas as telas. */
+export function useVerMensagem() {
+  return useMutacaoDePedido<{ id: number; mensagemId: string }>(
+    (servidor, { id, mensagemId }) => servidor.pedidos.verMensagem(id, mensagemId),
+    ouIgual((pedido, { mensagemId }) => verMensagem(pedido, mensagemId, new Date().toISOString())),
   )
 }
 

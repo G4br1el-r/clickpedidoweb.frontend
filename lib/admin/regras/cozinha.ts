@@ -1,4 +1,11 @@
-import type { AvisoCozinha, ItemPedido, Pedido, StatusPedido } from "../dados/tipos"
+import type {
+  AvisoCozinha,
+  ItemPedido,
+  MensagemCozinha,
+  Pedido,
+  StatusPedido,
+  TipoMensagemCozinha,
+} from "../dados/tipos"
 import type { Urgencia } from "./fila"
 
 export type FiltroCozinha = "todos" | "mesas" | "entrega" | "retirada"
@@ -30,12 +37,20 @@ export function itensDaCozinha(pedido: Pedido): { atuais: ItemPedido[]; anterior
 }
 
 /**
- * A cozinha já preparou (ou está preparando) o item: ele foi para a cozinha e a comanda
- * está em preparo ou pronta. Tirar ou diminuir esse item pede confirmação.
+ * A cozinha já preparou (ou está preparando) o item: ele foi para a cozinha e a rodada
+ * dele já começou, ficou pronta ou foi servida. Tirar ou diminuir esse item pede confirmação.
  */
-export const cozinhaJaPreparou = (comanda: Pedido, item: ItemPedido) =>
-  (item.vaiParaCozinha ?? comanda.enviarParaCozinha) &&
-  (comanda.status === "em-preparo" || comanda.status === "pronto")
+export function cozinhaJaPreparou(comanda: Pedido, item: ItemPedido): boolean {
+  const vaiParaCozinha = (doPedido: ItemPedido) =>
+    doPedido.vaiParaCozinha ?? comanda.enviarParaCozinha
+  if (!vaiParaCozinha(item)) return false
+  return comanda.itens.some(
+    (doPedido) =>
+      vaiParaCozinha(doPedido) &&
+      rodadaDo(doPedido) === rodadaDo(item) &&
+      Boolean(doPedido.iniciadoEm || doPedido.feitoEm || doPedido.servidoEm),
+  )
+}
 
 /**
  * O que pede o olho da cozinha: cada ticket em A fazer ("pedido:rodada") e cada aviso
@@ -98,13 +113,18 @@ function statusDaRodada(itens: ItemPedido[]): StatusTicket {
   return itens.some((item) => item.iniciadoEm) ? "em-preparo" : "recebido"
 }
 
-/** Os tickets da cozinha: um por rodada de cada pedido, só com o que vai para a cozinha. */
+/**
+ * Os tickets da cozinha: um por rodada de cada pedido, só com o que vai para a cozinha.
+ * O que o garçom já serviu saiu da cozinha.
+ */
 export function ticketsDaCozinha(pedidos: Pedido[]): TicketCozinha[] {
   const naCozinha = pedidos.filter(
     (pedido) => pedido.tipo !== "atendimento" && naMaoDaCozinha(pedido),
   )
   return naCozinha.flatMap((pedido) => {
-    const daCozinha = pedido.itens.filter((item) => item.vaiParaCozinha ?? pedido.enviarParaCozinha)
+    const daCozinha = pedido.itens.filter(
+      (item) => (item.vaiParaCozinha ?? pedido.enviarParaCozinha) && !item.servidoEm,
+    )
     const avisos = pendentes(pedido)
     // A rodada que ficou sem itens continua na tela enquanto houver alteração sem ciente.
     const rodadas = [
@@ -230,6 +250,95 @@ export function riscarItem(pedido: Pedido, itemId: string, feito: boolean, agora
   })
 }
 
+/** O garçom levou a rodada pronta à mesa: ela sai da cozinha. */
+export function servirRodada(pedido: Pedido, rodada: number, agora: string): Pedido {
+  conferirAtivo(pedido)
+  const ticket = ticketsDaCozinha([pedido]).find((item) => item.rodada === rodada)
+  if (!ticket || ticket.itens.length === 0) throw new Error("Esta rodada não está na cozinha.")
+  if (ticket.status !== "pronto") throw new Error("Esta rodada ainda não está pronta.")
+  return mudarItensDaRodada(pedido, ticket.itens, (item) => ({ ...item, servidoEm: agora }))
+}
+
+/** Quando a rodada ficou pronta: o último item riscado. */
+const prontoEm = (ticket: TicketCozinha) =>
+  Math.max(...ticket.itens.map((item) => Date.parse(item.feitoEm ?? "")))
+
+/** O que o salão tem para levar: as rodadas prontas das mesas, da mais antiga à mais nova. */
+export const prontosParaServir = (pedidos: Pedido[]): TicketCozinha[] =>
+  ticketsDaCozinha(pedidos.filter((pedido) => pedido.tipo === "mesa"))
+    .filter((ticket) => ticket.status === "pronto" && ticket.itens.length > 0)
+    .sort((a, b) => prontoEm(a) - prontoEm(b))
+
+export const TEXTO_DA_MENSAGEM: Record<TipoMensagemCozinha, string> = {
+  atraso: "Vai atrasar ~10 min",
+  substituicao: "Acabou um item, ver substituição",
+  duvida: "Dúvida no pedido, venha à cozinha",
+}
+
+/** As mensagens da cozinha que ninguém deu Ok ainda. */
+export const mensagensPendentes = (pedido: Pedido): MensagemCozinha[] =>
+  (pedido.mensagensCozinha ?? []).filter((mensagem) => !mensagem.vistaEm)
+
+/** A cozinha manda uma mensagem rápida sobre a rodada. A mesma, pendente, não se repete. */
+export function avisarSobreRodada(
+  pedido: Pedido,
+  rodada: number,
+  tipo: TipoMensagemCozinha,
+  id: string,
+  agora: string,
+): Pedido {
+  conferirAtivo(pedido)
+  const naCozinha = ticketsDaCozinha([pedido]).some(
+    (ticket) => ticket.rodada === rodada && ticket.itens.length > 0,
+  )
+  if (!naCozinha) throw new Error("Esta rodada não está na cozinha.")
+  const repetida = mensagensPendentes(pedido).some(
+    (mensagem) => mensagem.rodada === rodada && mensagem.tipo === tipo,
+  )
+  if (repetida) return pedido
+  return {
+    ...pedido,
+    mensagensCozinha: [...(pedido.mensagensCozinha ?? []), { id, rodada, tipo, em: agora }],
+  }
+}
+
+/** Alguém do salão ou do caixa leu a mensagem: ela sai de todas as telas. */
+export function verMensagem(pedido: Pedido, mensagemId: string, agora: string): Pedido {
+  if (!pedido.mensagensCozinha?.some((mensagem) => mensagem.id === mensagemId)) {
+    throw new Error("Mensagem não encontrada.")
+  }
+  return {
+    ...pedido,
+    mensagensCozinha: pedido.mensagensCozinha.map((mensagem) =>
+      mensagem.id === mensagemId ? { ...mensagem, vistaEm: mensagem.vistaEm ?? agora } : mensagem,
+    ),
+  }
+}
+
+/** Quem leva o pedido adiante: o salão serve as mesas; o caixa, a entrega e a retirada. */
+export type QuemServe = "salao" | "caixa"
+
+const DE_QUEM: Record<QuemServe, (pedido: Pedido) => boolean> = {
+  salao: (pedido) => pedido.tipo === "mesa",
+  caixa: (pedido) => pedido.tipo === "entrega" || pedido.tipo === "retirada",
+}
+
+/**
+ * O que pede o olho de quem serve: a rodada que ficou pronta e a mensagem da cozinha.
+ * Uma chave nova desde a última leitura toca o alerta.
+ */
+export function chavesDeQuemServe(pedidos: Pedido[], quem: QuemServe): Set<string> {
+  const daqui = pedidos.filter(DE_QUEM[quem])
+  const prontos =
+    quem === "salao"
+      ? prontosParaServir(daqui).map((ticket) => `pronto:${ticket.id}`)
+      : daqui.filter((pedido) => pedido.status === "pronto").map((pedido) => `pronto:${pedido.id}`)
+  const mensagens = daqui.flatMap((pedido) =>
+    mensagensPendentes(pedido).map((mensagem) => `msg:${mensagem.id}`),
+  )
+  return new Set([...prontos, ...mensagens])
+}
+
 const PASSA_NO_FILTRO: Record<FiltroCozinha, (pedido: Pedido) => boolean> = {
   todos: () => true,
   mesas: (pedido) => pedido.tipo === "mesa",
@@ -272,8 +381,7 @@ export function colunasDaCozinha(
  */
 export function naTelaDaCozinha(ticket: TicketCozinha, agora: Date): boolean {
   if (ticket.status !== "pronto" || ticket.avisos.length > 0) return true
-  const pronto = Math.max(...ticket.itens.map((item) => Date.parse(item.feitoEm ?? "")))
-  return agora.getTime() - pronto < PRONTO_FICA_MINUTOS * 60_000
+  return agora.getTime() - prontoEm(ticket) < PRONTO_FICA_MINUTOS * 60_000
 }
 
 /**

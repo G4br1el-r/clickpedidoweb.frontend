@@ -480,7 +480,7 @@ export function gerarPedidos({
           },
         }
       }
-      pedidos.push(comHorarios(novo, atualizado))
+      pedidos.push(comHorarios(novo, atualizado, agora))
     }
   }
   return pedidos
@@ -499,9 +499,9 @@ const CAMINHO_DA_COZINHA: StatusPedido[] = [
  * pedidos: o preparo começa 2 a 5 min depois da chegada, fica pronto 8 a 15 min depois e
  * a entrega sai 3 a 8 min depois de pronta, tudo antes dos 25 min em que o status muda.
  * Concluído e cancelado fecham na última atualização; a venda do balcão não passa pela
- * cozinha.
+ * cozinha. Na mesa, o garçom serve 3 a 6 min depois de pronto, se já deu tempo.
  */
-function comHorarios(pedido: Pedido, atualizado: Date): Pedido {
+function comHorarios(pedido: Pedido, atualizado: Date, agora: Date): Pedido {
   const criado = new Date(pedido.criadoEm)
   const hora = (data: Date) => data.toISOString()
   if (pedido.status === "aguardando-pagamento") {
@@ -532,9 +532,17 @@ function comHorarios(pedido: Pedido, atualizado: Date): Pedido {
   }
   if (ate === 4) etapas.concluido = hora(atualizado)
 
+  const servido = addMinutes(pronto, 3 + (pedido.id % 4))
+  const limite = ate === 4 ? atualizado : agora
+  const serviu = pedido.tipo === "mesa" && ate >= 2 && servido <= limite
   const itens = pedido.itens.map((item) => {
     if (ate < 1 || !(item.vaiParaCozinha ?? pedido.enviarParaCozinha)) return item
-    return { ...item, iniciadoEm: hora(iniciou), ...(ate >= 2 ? { feitoEm: hora(pronto) } : {}) }
+    return {
+      ...item,
+      iniciadoEm: hora(iniciou),
+      ...(ate >= 2 ? { feitoEm: hora(pronto) } : {}),
+      ...(serviu ? { servidoEm: hora(servido) } : {}),
+    }
   })
   return { ...pedido, itens, etapas }
 }

@@ -298,6 +298,43 @@ describe("PaginaCozinha", () => {
     await waitFor(async () => expect(await disponivel()).toBe(true))
   })
 
+  test("avisar o salão: a mensagem vai para o pedido e o ticket mostra até alguém dar Ok", async () => {
+    telaGrande()
+    const { comanda } = await comandaNaMesa(64)
+    const usuario = userEvent.setup()
+    renderizar()
+    const pendentes = async () =>
+      ((await api().pedidos.buscar(comanda.id))?.mensagensCozinha ?? []).filter(
+        (mensagem) => !mensagem.vistaEm,
+      )
+
+    await usuario.click(within(await ticket("Mesa 64")).getByRole("button", { name: "Mais ações" }))
+    ;(await screen.findByRole("menuitem", { name: "Avisar o salão…" })).focus()
+    await usuario.keyboard("{ArrowRight}")
+    ;(await screen.findByRole("menuitem", { name: "Vai atrasar ~10 min" })).focus()
+    await usuario.keyboard("{Enter}")
+
+    expect(
+      await within(await ticket("Mesa 64")).findByText("Avisado: vai atrasar ~10 min"),
+    ).toBeInTheDocument()
+    await waitFor(async () => expect((await pendentes()).map((m) => m.tipo)).toEqual(["atraso"]))
+  })
+
+  test("entrega e retirada avisam o caixa", async () => {
+    telaGrande()
+    const retirada = await api().pdv.finalizar({
+      itens: [{ avulso: { nome: "Batata", preco: 12 }, quantidade: 1 }],
+      pagamento: "pix",
+      desconto: { modo: "reais", valor: 0 },
+      concluida: false,
+    })
+    const usuario = userEvent.setup()
+    renderizar()
+    const doTicket = await screen.findByRole("article", { name: `Retirada · #${retirada.numero}` })
+    await usuario.click(within(doTicket).getByRole("button", { name: "Mais ações" }))
+    expect(await screen.findByRole("menuitem", { name: "Avisar o caixa…" })).toBeInTheDocument()
+  })
+
   test("filtro Entrega deixa só entrega, sem retirada nem mesa", async () => {
     telaGrande()
     await comandaNaMesa(52)

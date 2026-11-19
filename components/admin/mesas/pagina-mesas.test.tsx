@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
+import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { PaginaMesas } from "./pagina-mesas"
 
@@ -119,6 +120,45 @@ describe("PaginaMesas", () => {
     expect(await estado(60)).toEqual({ tom: "caminho", texto: "Ocupada" })
     expect(await estado(62)).toEqual({ tom: "fim", texto: "Livre" })
     expect(await estado(63)).toEqual({ tom: "preparo", texto: "Na cozinha" })
+  })
+
+  test("rodada pronta: o cartão diz Pronto para servir, com a mensagem da cozinha, e a comanda tem Servido", async () => {
+    const mesa = await mesaOcupada()
+    const comAPizza = await api().mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [{ avulso: { nome: "Pizza", preco: 40 }, quantidade: 1 }],
+    })
+    await api().cozinha.avancar(comAPizza.id, 2, "recebido")
+    await api().cozinha.avisar(comAPizza.id, 2, "atraso")
+    await api().cozinha.avancar(comAPizza.id, 2, "em-preparo")
+    const usuario = await abrir()
+
+    const doCartao = await cartao(60)
+    expect(doCartao).toHaveTextContent("Pronto para servir")
+    expect(doCartao).toHaveTextContent("Vai atrasar ~10 min")
+    expect(
+      within(screen.getByRole("region", { name: /^Prontos para servir/ })).getByRole("listitem", {
+        name: "Mesa 60 · 2ª rodada",
+      }),
+    ).toBeInTheDocument()
+
+    await usuario.click(doCartao)
+    const pronta = within(comanda().getByRole("listitem", { name: "2ª rodada pronta" }))
+    expect(pronta.getByText("1× Pizza")).toBeInTheDocument()
+    await usuario.click(pronta.getByRole("button", { name: "Servido" }))
+    await waitFor(() =>
+      expect(comanda().queryByRole("listitem", { name: "2ª rodada pronta" })).toBeNull(),
+    )
+    // O cabeçalho da comanda acompanha: a mesa volta a ser só ocupada.
+    await waitFor(() => expect(comanda().getByText("Ocupada")).toBeInTheDocument())
+  })
+
+  test("a chave de alerta sonoro liga o som neste aparelho", async () => {
+    usePreferenciasFila.setState(usePreferenciasFila.getInitialState(), true)
+    const usuario = await abrir()
+    await usuario.click(screen.getByRole("switch", { name: "Alerta sonoro" }))
+    expect(usePreferenciasFila.getState().somLigado).toBe(true)
   })
 
   test("nova mesa com número; número repetido é recusado", async () => {

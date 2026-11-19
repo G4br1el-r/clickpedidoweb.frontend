@@ -279,3 +279,50 @@ As fronteiras de cada fase seguinte são escritas no início dela, como foi feit
    - cancelado e alterado com Ciente;
    - Acabou com Desfazer.
 5. **Screenshots:** a cozinha nas 11 telas, revisados antes de atualizar.
+
+## Fase 3: salão
+
+**Desenho**
+
+- **Servido:** o item ganhou `servidoEm`.
+  - O garçom toca Servido e a rodada pronta inteira sai da cozinha (`servirRodada`); só rodada pronta pode ser servida.
+  - O status da comanda não muda: a mesa só conclui quando a conta fecha.
+  - A comanda toda servida não tem mais rodada na cozinha e continua pronta.
+- **Pronto para servir:**
+  - `estadoDaMesa` ganhou o estado "Pronto para servir" (tom pronto), que vem antes de "Na cozinha";
+  - a comanda aberta em Mesas mostra cada rodada pronta com o botão Servido;
+  - Garçom e Mesas mostram no topo a faixa **Prontos para servir**, com as rodadas prontas de todas as mesas (Servido) e as mensagens da cozinha (Ok). A faixa some quando não há nada.
+- **Saída de Prontos:** a mesa sai quando é servida; entrega e retirada saem quando a Fila avança; continua a rede de segurança de 15 min.
+- **Mensagens rápidas** (`Pedido.mensagensCozinha`):
+  - o menu "⋯" do ticket ganhou "Avisar o salão…" (mesa) ou "Avisar o caixa…" (entrega e retirada), com as três mensagens fixas;
+  - a mesma mensagem pendente não se repete na rodada;
+  - o ticket mostra "Avisado: …" até alguém dar Ok;
+  - a mensagem da mesa aparece na faixa do Garçom e de Mesas, com Ok, e no cartão da mesa. O Ok fica na faixa, porque o cartão inteiro já é um botão;
+  - a da entrega e da retirada aparece no cartão da Fila, com Ok.
+- **Som:** Garçom e Mesas ganharam a chave "Alerta sonoro", a mesma preferência do aparelho. O som toca quando uma rodada fica pronta ou chega mensagem (`chavesDeQuemServe`). A Fila toca também quando uma entrega ou retirada fica pronta.
+- **Confirmação ao tirar item:** `cozinhaJaPreparou` olha a rodada do item, não o status da comanda. Uma rodada nova, que ainda não começou, sai sem pergunta.
+- **Demo:** o gerador serve a rodada pronta da mesa 3 a 6 min depois de pronta, se já deu tempo. `VERSAO` subiu para 4, e a base guardada é gerada de novo.
+
+**Fronteiras de teste**
+
+1. **Regras:**
+   - `servirRodada`;
+   - a rodada servida sai dos tickets;
+   - `prontosParaServir`;
+   - `estadoDaMesa` com "Pronto para servir";
+   - `cozinhaJaPreparou` por rodada;
+   - as mensagens;
+   - `chavesDeQuemServe`.
+2. **Servidor:**
+   - `cozinha.servir`;
+   - `cozinha.avisar`;
+   - `pedidos.verMensagem`;
+   - o gerador com `servidoEm`.
+3. **Hooks:** servir tira o ticket do quadro; a mensagem aparece e o Ok tira.
+4. **Tela:**
+   - Cozinha: "Avisar o salão…", "Avisar o caixa…" e a linha Avisado;
+   - faixa Prontos para servir: Servido, mensagem com Ok, alerta;
+   - Garçom: a faixa e a chave do alerta;
+   - Mesas: o estado, a mensagem no cartão, Servido na comanda e a chave do alerta;
+   - Fila: a mensagem com Ok e o alerta de pronto.
+5. **E2E:** o fluxo do salão passa pela faixa do Garçom e pelo Servido na comanda antes de fechar a conta.

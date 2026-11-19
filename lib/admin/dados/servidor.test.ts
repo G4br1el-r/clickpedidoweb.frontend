@@ -1648,4 +1648,35 @@ describe("cozinha", () => {
     await api.cozinha.ciente(pedido.id, cancelado.avisosCozinha?.[0].id ?? "")
     expect(await ids()).not.toContain(pedido.id)
   })
+
+  test("servir: a rodada pronta sai da cozinha; a que não está pronta é recusada", async () => {
+    const { api, comanda } = await mesaComDuasRodadas()
+    await api.cozinha.avancar(comanda.id, 1, "recebido")
+    await api.cozinha.avancar(comanda.id, 1, "em-preparo")
+    await expect(api.cozinha.servir(comanda.id, 2)).rejects.toThrow(
+      "Esta rodada ainda não está pronta.",
+    )
+
+    vi.setSystemTime(minutosDepois(9))
+    const servida = await api.cozinha.servir(comanda.id, 1)
+    expect(servida.itens[0].servidoEm).toBe(minutosDepois(9).toISOString())
+    expect(estados(servida)).toEqual([[2, "recebido"]])
+    expect(servida.status).toBe("recebido")
+  })
+
+  test("a cozinha avisa o salão sobre a rodada, e o Ok tira a mensagem", async () => {
+    const { api, comanda } = await mesaComDuasRodadas()
+    vi.setSystemTime(minutosDepois(6))
+    const avisado = await api.cozinha.avisar(comanda.id, 2, "substituicao")
+    const [mensagem] = avisado.mensagensCozinha ?? []
+    expect(mensagem).toMatchObject({
+      rodada: 2,
+      tipo: "substituicao",
+      em: minutosDepois(6).toISOString(),
+    })
+    expect(mensagem.vistaEm).toBeUndefined()
+
+    const visto = await api.pedidos.verMensagem(comanda.id, mensagem.id)
+    expect(visto.mensagensCozinha?.[0].vistaEm).toBe(minutosDepois(6).toISOString())
+  })
 })
