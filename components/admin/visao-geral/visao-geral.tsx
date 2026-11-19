@@ -12,9 +12,11 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLoja, usePedidos } from "@/lib/admin/dados/consultas"
 import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import { useFarmacia } from "@/lib/admin/farmacia-estado"
+import { useMetas } from "@/lib/admin/metas"
 import { abaEscolhida, abasDo } from "@/lib/admin/regras/dashboard/abas"
 import { alertasDoPainel } from "@/lib/admin/regras/dashboard/alertas"
 import { periodoDaBusca } from "@/lib/admin/regras/dashboard/busca"
+import { situacaoDaMeta } from "@/lib/admin/regras/dashboard/metas"
 import { resumir } from "@/lib/admin/regras/dashboard/resumo"
 import { hojeVsSemanaPassada } from "@/lib/admin/regras/dashboard/semana-passada"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
@@ -66,6 +68,15 @@ export function VisaoGeral() {
     [pedidos, agora],
   )
 
+  const metaDefinida = useMetas((estado) => estado.metas[segmento])
+  const meta = useMemo(
+    () =>
+      metaDefinida && pedidos && loja && agora
+        ? situacaoDaMeta(metaDefinida, pedidos, loja.horarios, agora)
+        : null,
+    [metaDefinida, pedidos, loja, agora],
+  )
+
   const { data: produtos } = useProdutos()
   const decisoes = useFarmacia((estado) => estado.decisoes)
   const alertas = useMemo(() => {
@@ -81,9 +92,9 @@ export function VisaoGeral() {
       lotes: ehFarmacia ? lotesDemo(agora) : [],
       receitas: ehFarmacia ? receitasDemo(agora) : [],
       decisoes,
-      meta: null,
+      meta,
     })
-  }, [pedidos, produtos, loja, agora, segmento, decisoes])
+  }, [pedidos, produtos, loja, agora, segmento, decisoes, meta])
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 md:p-6 lg:px-8">
@@ -141,6 +152,7 @@ export function VisaoGeral() {
             segmento={segmento}
             comparacao={comparacao}
             alertas={alertas}
+            meta={meta}
           />
         )
       ) : (

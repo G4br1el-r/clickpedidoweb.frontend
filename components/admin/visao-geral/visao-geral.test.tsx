@@ -8,6 +8,7 @@ import type { ComponentProps, ReactNode } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores } from "@/lib/admin/dados/consultas"
+import { useMetas } from "@/lib/admin/metas"
 import { resumir } from "@/lib/admin/regras/dashboard/resumo"
 import {
   AGORA_DE_TESTE,
@@ -57,6 +58,7 @@ beforeEach(async () => {
   await clear()
   reiniciarServidores()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
+  useMetas.setState(useMetas.getInitialState(), true)
 })
 
 afterEach(() => {
@@ -227,6 +229,18 @@ describe("VisaoGeral", () => {
       await screen.findByRole("region", { name: "Precisa de atenção" }, { timeout: 8000 }),
     )
     expect(faixa.getAllByRole("link", { name: "Ver estoque" }).length).toBeGreaterThan(0)
+  })
+
+  test("no Resumo, a meta do segmento aparece calculada com os pedidos do mês", async () => {
+    useMetas.getState().definir("pizzaria", { faturamento: 60_000, pedidos: null })
+    render(<VisaoGeral />, { wrapper: Provedores })
+
+    const meta = within(
+      await screen.findByRole("region", { name: "Meta do mês" }, { timeout: 8000 }),
+    )
+    expect(meta.getByText("Vendido no mês").closest("[data-indicador]")).toHaveTextContent(
+      "de R$ 60.000,00",
+    )
   })
 
   test("a aba vem do endereço, e trocar de aba muda o endereço", async () => {

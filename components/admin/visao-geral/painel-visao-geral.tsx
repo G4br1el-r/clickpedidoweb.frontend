@@ -1,6 +1,5 @@
 "use client"
 
-import NumberFlow from "@number-flow/react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { ChevronDownIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react"
@@ -21,6 +20,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import type { Alerta } from "@/lib/admin/regras/dashboard/alertas"
+import type { SituacaoMeta } from "@/lib/admin/regras/dashboard/metas"
 import { nomesDo } from "@/lib/admin/regras/dashboard/nomes"
 import type { Resumo } from "@/lib/admin/regras/dashboard/resumo"
 import {
@@ -30,13 +30,15 @@ import {
 import { diasNoPeriodo, type Periodo } from "@/lib/admin/regras/periodo"
 import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
-import { emReais, formatoMoeda, plural } from "@/lib/formato"
+import { emReais, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { BlocoSecao } from "../bloco-secao"
 import { SeloStatus } from "../pedidos/selos"
 import { AoVivo, Indicador, Regua } from "../regua"
+import { BlocoMeta } from "./bloco-meta"
 import { FaixaAtencao } from "./faixa-atencao"
 import type { MedidaDoGrafico } from "./grafico-por-dia"
+import { inteiro, Numero } from "./numero"
 
 // Recharts pesa: o gráfico chega depois, só no navegador, com o esqueleto no lugar.
 const GraficoPorDia = dynamic(() => import("./grafico-por-dia"), {
@@ -49,23 +51,6 @@ const porcentagem = new Intl.NumberFormat("pt-BR", {
   maximumFractionDigits: 1,
   signDisplay: "exceptZero",
 })
-const inteiro = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 })
-
-/** Número animado para quem vê; o valor formatado para leitores de tela e buscas. */
-function Numero({ valor, moeda = false }: { valor: number; moeda?: boolean }) {
-  return (
-    <>
-      <NumberFlow
-        value={valor}
-        locales="pt-BR"
-        format={moeda ? formatoMoeda : { maximumFractionDigits: 1 }}
-        aria-hidden="true"
-        className="tabular-nums"
-      />
-      <span className="sr-only">{moeda ? emReais(valor) : inteiro.format(valor)}</span>
-    </>
-  )
-}
 
 /** Seção com título que vira região para leitores de tela. */
 function Secao({
@@ -179,6 +164,7 @@ export function AbaResumo({
   segmento,
   comparacao,
   alertas = [],
+  meta = null,
 }: {
   resumo: Resumo
   periodo: Periodo
@@ -187,6 +173,8 @@ export function AbaResumo({
   comparacao?: ComparacaoHoje
   /** O que precisa de atenção agora; vazio esconde a faixa. */
   alertas?: Alerta[]
+  /** Situação da meta do mês; `null` quando a loja ainda não definiu. */
+  meta?: SituacaoMeta | null
 }) {
   const [medida, setMedida] = useState<MedidaDoGrafico>("faturamento")
   const n = nomesDo(segmento)
@@ -244,6 +232,8 @@ export function AbaResumo({
           )}
         </p>
       </Secao>
+
+      <BlocoMeta segmento={segmento} situacao={meta} />
 
       <Secao titulo="Desempenho do período" descricao={dias === 1 ? "1 dia" : `${dias} dias`}>
         <Regua>
