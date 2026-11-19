@@ -6,7 +6,7 @@ import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { carregarCatalogo } from "./catalogos"
 import { criarServidor, type FiltroPedidos, type Servidor, type VendaPdv } from "./servidor"
-import type { ConfigLoja, MotivoEscolhido, Pedido, StatusPedido } from "./tipos"
+import type { ConfigLoja, MotivoEscolhido, PausaPedidos, Pedido, StatusPedido } from "./tipos"
 
 /** Espera de rede simulada: dá para ver os estados de carregamento; zero nos testes. */
 const ESPERA = process.env.NODE_ENV === "test" ? 0 : 250
@@ -206,6 +206,19 @@ export function useDefinirAberta() {
 
 export function useDefinirEntrega() {
   return useMudancaNaLoja((servidor, entrega: boolean) => servidor.definirEntrega(entrega))
+}
+
+/** Para de receber pedidos por um tempo: todos ou só os de entrega. */
+export function usePausar() {
+  return useMudancaNaLoja(
+    (servidor, { minutos, so }: { minutos: number; so: PausaPedidos["so"] }) =>
+      servidor.pausar(minutos, so),
+  )
+}
+
+/** Volta a receber pedidos antes da hora. */
+export function useRetomar() {
+  return useMudancaNaLoja((servidor, _: undefined) => servidor.retomar())
 }
 
 /** Minutos a mais no prazo dos pedidos novos (0 volta ao normal). */

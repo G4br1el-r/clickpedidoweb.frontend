@@ -1,4 +1,4 @@
-import { addDays, endOfDay, isSameDay, startOfDay, subDays } from "date-fns"
+import { addDays, addMinutes, endOfDay, format, isSameDay, startOfDay, subDays } from "date-fns"
 import { del, get, set } from "idb-keyval"
 import { expediente, horariosLivres, INTERVALO_MIN } from "../regras/agenda"
 import {
@@ -14,6 +14,7 @@ import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoqu
 import { normalizar } from "../regras/filtro-pedidos"
 import { eventosDaMudanca } from "../regras/historico"
 import { proximoNumero } from "../regras/numero"
+import { pausaAtiva } from "../regras/pausa"
 import {
   type Desconto,
   descontoPassaDoSubtotal,
@@ -42,6 +43,7 @@ import type {
   MotivoEscolhido,
   Motoboy,
   MovimentoEstoque,
+  PausaPedidos,
   Pedido,
   Produto,
   StatusPedido,
@@ -128,6 +130,9 @@ export type OpcoesServidor = {
 
 /** Gerador de ids novos com prefixo: prod-1a2b3c4d. */
 const novoId = (prefixo: string) => () => `${prefixo}-${crypto.randomUUID().slice(0, 8)}`
+
+/** Quanto tempo a pausa de pedidos pode durar. */
+const PAUSAS = [15, 30, 60]
 
 /** Acréscimos que a barra da fila oferece; 0 volta ao prazo normal. */
 const ACRESCIMOS = [0, 10, 15, 30]
@@ -658,6 +663,20 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       return mudarLoja({ acrescimoPrazoMin: minutos })
     },
 
+    /** Cozinha cheia: para de receber pedidos (todos ou só os de entrega) e volta sozinha. */
+    async pausar(minutos: number, so: PausaPedidos["so"]): Promise<ConfigLoja> {
+      if (!PAUSAS.includes(minutos)) throw new Error("Pause por 15, 30 ou 60 min.")
+      return mudarLoja({ pausa: { ate: addMinutes(new Date(), minutos).toISOString(), so } })
+    },
+
+    /** Volta a receber pedidos antes da hora. */
+    async retomar(): Promise<ConfigLoja> {
+      const base = await carregar()
+      const { pausa: _pausa, ...loja } = base.loja
+      await substituir({ ...base, loja })
+      return responder(loja)
+    },
+
     pedidos: {
       async listar({ de, ate, status, concluidosEm }: FiltroPedidos = {}): Promise<Pedido[]> {
         const inicio = de ? startOfDay(de).getTime() : -Infinity
@@ -789,6 +808,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       async simular(): Promise<Pedido> {
         const base = await carregar()
         const agora = new Date()
+        const pausa = pausaAtiva(base.loja, agora)
+        const volta = pausa && format(new Date(pausa.ate), "HH:mm")
+        if (pausa?.so === "loja") throw new Error(`A loja está pausada até ${volta}.`)
         const ultimo = base.pedidos.at(-1)
         const novo = {
           ...gerarPedidoAgora({
@@ -801,6 +823,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           }),
           // A semente sai da hora: o token do pedido real não pode ser previsível.
           token: crypto.randomUUID(),
+        }
+        if (pausa?.so === "entrega" && novo.tipo === "entrega") {
+          throw new Error(`A entrega está pausada até ${volta}.`)
         }
         // Recebido, o estoque sai na hora; aguardando pagamento online, só quando pagar.
         const chegou: Pedido = {

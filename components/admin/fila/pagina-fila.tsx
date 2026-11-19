@@ -63,6 +63,7 @@ import { AjustePrazo } from "./ajuste-prazo"
 import { AvisoDiasAnteriores } from "./aviso-dias-anteriores"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
+import { PausaPedidos } from "./pausa-pedidos"
 
 const SONS: { valor: SomAlerta; rotulo: string }[] = [
   { valor: "suave", rotulo: "Suave" },
@@ -386,6 +387,7 @@ export function PaginaFila({
             }
           />
         )}
+        {loja && agora && <PausaPedidos loja={loja} agora={agora} comEntrega={temEntrega} />}
         {loja && <AjustePrazo loja={loja} comEntrega={temEntrega} />}
         <div className="flex flex-wrap items-center gap-2">
           <Chave

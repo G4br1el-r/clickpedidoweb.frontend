@@ -331,6 +331,8 @@ export type Bairro = { id: string; cidade: string; nome: string; taxa: number; a
 /** Dia da semana: 0 = domingo. */
 export type HorarioFuncionamento = { dia: number; aberto: boolean; abre: string; fecha: string }
 
+export type PausaPedidos = { ate: string; so: "loja" | "entrega" }
+
 export type SomAlerta = "suave" | "alto" | "muito-alto" | "sirene"
 
 export type ConfigLoja = {
@@ -367,6 +369,8 @@ export type ConfigLoja = {
   limiteAceiteMin: number
   /** Cozinha cheia: minutos a mais no prazo dos pedidos novos (+10, +15 ou +30). */
   acrescimoPrazoMin?: number
+  /** Pausa de pedidos: até quando e se vale para a loja toda ou só para a entrega. */
+  pausa?: PausaPedidos
   /** Salão: vídeo do banner da loja (YouTube, Shorts ou Reels). */
   videoBanner?: string
   vitrines: {

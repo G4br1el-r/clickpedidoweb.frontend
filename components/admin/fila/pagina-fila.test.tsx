@@ -298,6 +298,25 @@ describe("PaginaFila", () => {
     expect(await screen.findByText("Entrega 50 min · Retirada 30 min")).toBeInTheDocument()
   })
 
+  test("pausar a loja por 15 min mostra até quando e o que o cliente vê; retomar tira", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(
+      await screen.findByRole("button", { name: "Pausar pedidos" }, { timeout: 8000 }),
+    )
+    await usuario.click(await screen.findByRole("menuitem", { name: "Loja toda por 15 min" }))
+
+    expect(await screen.findByText("Loja pausada até 20:45 · 15 min")).toBeInTheDocument()
+    expect(screen.getByText("O cliente vê: Loja ocupada, volte às 20:45")).toBeInTheDocument()
+    expect((await servidorDo("pizzaria").loja()).pausa?.so).toBe("loja")
+
+    await usuario.click(screen.getByRole("button", { name: "Retomar" }))
+    await waitFor(() =>
+      expect(screen.queryByText("Loja pausada até 20:45 · 15 min")).not.toBeInTheDocument(),
+    )
+    expect(screen.getByRole("button", { name: "Pausar pedidos" })).toBeInTheDocument()
+  })
+
   test("o aparelho que não escolheu o som usa o som da loja", async () => {
     telaGrande()
     const api = servidorDo("pizzaria")
