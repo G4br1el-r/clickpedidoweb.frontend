@@ -83,7 +83,8 @@ describe("PaginaEstoque", { timeout: 15_000 }, () => {
 
     // A adega controla os 120 produtos: 12 no mínimo ou abaixo, 5 zerados.
     expect(resumo.getByText("120")).toBeInTheDocument()
-    expect(resumo.getByText("R$ 119.746,69")).toBeInTheDocument()
+    // Saldo × custo do produto (dados v3: o custo vem do cardápio, de 31% a 59% do preço).
+    expect(resumo.getByText("R$ 102.622,39")).toBeInTheDocument()
 
     const situacao = screen.getByRole("radiogroup", { name: "Situação" })
     expect(within(situacao).getByRole("radio", { name: "Controlados 120" })).toBeChecked()
