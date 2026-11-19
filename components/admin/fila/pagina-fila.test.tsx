@@ -216,13 +216,10 @@ describe("PaginaFila", () => {
   test("ligar a notificação pede licença ao navegador; negada, a chave fica desligada", async () => {
     const usuario = userEvent.setup()
     let resposta: NotificationPermission = "denied"
-    vi.stubGlobal(
-      "Notification",
-      class {
-        static permission: NotificationPermission = "default"
-        static requestPermission = vi.fn(async () => resposta)
-      },
-    )
+    vi.stubGlobal("Notification", {
+      permission: "default",
+      requestPermission: vi.fn(async () => resposta),
+    })
     renderizar()
     const menu = await abrirEsteAparelho(usuario)
     const chave = menu.getByRole("switch", { name: "Notificação do sistema" })
