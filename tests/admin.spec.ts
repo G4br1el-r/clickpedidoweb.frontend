@@ -814,6 +814,39 @@ test("fila: pausar, acrescentar ao prazo e filtrar os atrasados pela régua", as
   await expect(atrasados).toHaveAttribute("aria-pressed", "false")
 })
 
+test("fila: arrastar o cartão para a coluna seguinte avança o pedido", async ({ page }, info) => {
+  test.skip(
+    (info.project.use.viewport?.width ?? 0) < 1024,
+    "No celular e no tablet a fila usa abas",
+  )
+  test.skip(Boolean(info.project.use.isMobile), "Arrastar com o dedo fica para o teste no aparelho")
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/fila")
+  const novos = page.getByRole("region", { name: /^Novos, / })
+  const cartao = novos.getByRole("article").first()
+  await expect(cartao).toBeVisible({ timeout: 15_000 })
+  await esperarAnimacoes(page)
+  const numero = (await cartao.getByRole("heading").textContent()) ?? ""
+
+  // Pega o cartão onde ele está e leva de lado, na mesma altura, até a coluna seguinte.
+  const pegar = cartao.getByText(/itens? ·/)
+  await pegar.scrollIntoViewIfNeeded()
+  const de = await pegar.boundingBox()
+  const para = await page.getByRole("region", { name: /^Em preparo, / }).boundingBox()
+  if (!de || !para) throw new Error("Cartão e coluna deviam estar na tela")
+  const altura = de.y + de.height / 2
+  await page.mouse.move(de.x + de.width / 2, altura)
+  await page.mouse.down()
+  await page.mouse.move(para.x + para.width / 2, altura, { steps: 12 })
+  await page.mouse.up()
+
+  await expect(
+    page
+      .getByRole("region", { name: /^Em preparo, / })
+      .getByRole("heading", { name: numero, exact: true }),
+  ).toBeVisible()
+})
+
 test("fila: aceitar numa aba tira o aceite pendente da outra aba", async ({
   page,
   context,

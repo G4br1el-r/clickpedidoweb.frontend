@@ -117,3 +117,17 @@ export function etapasDoCaminho(tipo: TipoPedido): StatusPedido[] {
   }
   return etapas
 }
+
+/**
+ * Arrastar o cartão para outra coluna: a seguinte avança, a anterior volta. Pular etapa ou
+ * soltar onde o pedido não tem etapa não move.
+ */
+export function destinoDoArraste(
+  tipo: TipoPedido,
+  de: StatusPedido,
+  para: StatusPedido,
+): "avancar" | "voltar" | null {
+  if (proximoStatus(tipo, de) === para) return "avancar"
+  if (statusAnterior(tipo, de) === para) return "voltar"
+  return null
+}

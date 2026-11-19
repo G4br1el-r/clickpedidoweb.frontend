@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import {
+  destinoDoArraste,
   etapasDoCaminho,
   proximoStatus,
   rotuloAcao,
@@ -132,5 +133,18 @@ describe("statusAnterior", () => {
     expect(statusAnterior("entrega", "recebido")).toBeNull()
     expect(statusAnterior("entrega", "cancelado")).toBeNull()
     expect(statusAnterior("mesa", "concluido")).toBeNull()
+  })
+})
+
+describe("destinoDoArraste", () => {
+  test("soltar na coluna seguinte avança; na anterior, volta", () => {
+    expect(destinoDoArraste("entrega", "em-preparo", "pronto")).toBe("avancar")
+    expect(destinoDoArraste("entrega", "em-preparo", "recebido")).toBe("voltar")
+  })
+
+  test("pular etapa, a mesma coluna ou etapa que o pedido não tem: não move", () => {
+    expect(destinoDoArraste("entrega", "recebido", "pronto")).toBeNull()
+    expect(destinoDoArraste("entrega", "pronto", "pronto")).toBeNull()
+    expect(destinoDoArraste("retirada", "pronto", "saiu-para-entrega")).toBeNull()
   })
 })

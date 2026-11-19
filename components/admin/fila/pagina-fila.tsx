@@ -32,7 +32,13 @@ import {
   useSimularPedido,
   useVoltarPedido,
 } from "@/lib/admin/dados/consultas"
-import type { MotivoEscolhido, Pedido, SomAlerta, TipoPedido } from "@/lib/admin/dados/tipos"
+import type {
+  MotivoEscolhido,
+  Pedido,
+  SomAlerta,
+  StatusPedido,
+  TipoPedido,
+} from "@/lib/admin/dados/tipos"
 import {
   usePreferenciasCarregadas,
   usePreferenciasFila,
@@ -56,7 +62,12 @@ import {
   metricasDaFila,
 } from "@/lib/admin/regras/metricas-fila"
 import type { TemposDaLoja } from "@/lib/admin/regras/prazo"
-import { proximoStatus, rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
+import {
+  destinoDoArraste,
+  proximoStatus,
+  rotuloStatus,
+  tomDoStatus,
+} from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
 import { liberarSom, somBloqueado, tocarAlerta } from "@/lib/admin/som"
@@ -69,6 +80,7 @@ import { usePedidoAberto } from "../pedidos/estado-lista"
 import { Traco } from "../traco"
 import { AjudaAtalhos } from "./ajuda-atalhos"
 import { AjustePrazo } from "./ajuste-prazo"
+import { Arrastavel, QuadroArrastavel, useColunaSoltavel } from "./arrastar"
 import { AvisoDiasAnteriores } from "./aviso-dias-anteriores"
 import { avisarChegada } from "./avisos-do-aparelho"
 import { BarraSelecao } from "./barra-selecao"
@@ -235,11 +247,17 @@ function Coluna({
   acoes: AcoesDoCartao
   comTitulo: boolean
 }) {
+  // Com as colunas lado a lado, o cartão se arrasta para a coluna seguinte ou a anterior.
+  const soltavel = useColunaSoltavel(coluna.status, comTitulo)
   return (
     <section
+      ref={soltavel.ref}
       aria-label={`${coluna.titulo}, ${coluna.pedidos.length}`}
       // Coluna sem bandeja: os cartões ficam direto na folha, e um fio separa as colunas.
-      className="flex min-w-0 flex-col gap-2.5 lg:px-3 lg:first:pl-0 lg:last:pr-0"
+      className={cn(
+        "flex min-w-0 flex-col gap-2.5 transition-colors duration-150 lg:px-3 lg:first:pl-0 lg:last:pr-0",
+        soltavel.sobre && "bg-foreground/[0.03]",
+      )}
     >
       {comTitulo && (
         <h2 className="flex items-center gap-2 pb-1 text-sm font-semibold">
@@ -257,30 +275,31 @@ function Coluna({
       ) : (
         <AnimatePresence initial={false}>
           {coluna.pedidos.map((pedido) => (
-            <CartaoFila
-              key={pedido.id}
-              pedido={pedido}
-              agora={agora}
-              motoboys={motoboys ?? []}
-              novo={novos.has(pedido.id)}
-              ocupado={emAndamento === pedido.id}
-              limiteAceiteMin={limiteAceiteMin}
-              tempos={tempos}
-              seloCliente={historico?.[pedido.id] ? seloDoCliente(historico[pedido.id]) : null}
-              nomeLoja={nomeLoja}
-              compacto={compacto}
-              selecao={{
-                ativa: selecao.ativa,
-                marcado: selecao.ids.has(pedido.id),
-                alternar: () => selecao.alternar(pedido.id),
-              }}
-              aoAceitar={() => acoes.aceitar(pedido)}
-              aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
-              aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
-              aoAvancar={() => acoes.avancar(pedido)}
-              aoAbrir={() => acoes.abrir(pedido)}
-              aoImprimir={() => acoes.imprimir(pedido)}
-            />
+            <Arrastavel key={pedido.id} id={pedido.id} ativo={comTitulo}>
+              <CartaoFila
+                pedido={pedido}
+                agora={agora}
+                motoboys={motoboys ?? []}
+                novo={novos.has(pedido.id)}
+                ocupado={emAndamento === pedido.id}
+                limiteAceiteMin={limiteAceiteMin}
+                tempos={tempos}
+                seloCliente={historico?.[pedido.id] ? seloDoCliente(historico[pedido.id]) : null}
+                nomeLoja={nomeLoja}
+                compacto={compacto}
+                selecao={{
+                  ativa: selecao.ativa,
+                  marcado: selecao.ids.has(pedido.id),
+                  alternar: () => selecao.alternar(pedido.id),
+                }}
+                aoAceitar={() => acoes.aceitar(pedido)}
+                aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
+                aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
+                aoAvancar={() => acoes.avancar(pedido)}
+                aoAbrir={() => acoes.abrir(pedido)}
+                aoImprimir={() => acoes.imprimir(pedido)}
+              />
+            </Arrastavel>
           ))}
         </AnimatePresence>
       )}
@@ -447,6 +466,22 @@ export function PaginaFila({
         )
       : null
   const finalizados = finalizadosHoje(concluidos, criadosHoje)
+  // Soltar noutra coluna: a seguinte avança, a anterior volta; pular etapa não move.
+  const aoSoltar = (pedido: Pedido, para: StatusPedido) => {
+    if (para === pedido.status) return
+    const destino = destinoDoArraste(pedido.tipo, pedido.status, para)
+    if (destino === "avancar") acoes.avancar(pedido)
+    else if (destino === "voltar") {
+      voltar.mutate(
+        { id: pedido.id, de: pedido.status },
+        {
+          ...avisoDeErro,
+          onSuccess: (voltou) =>
+            toast(`#${voltou.numero} de volta: ${rotuloStatus(voltou.tipo, voltou.status)}`),
+        },
+      )
+    } else toast("Só dá para levar o pedido para a etapa seguinte ou a anterior.")
+  }
   // Atalhos de teclado: só no computador, onde as colunas ficam lado a lado.
   useAtalhosDaFila({
     ativo: telaGrande,
@@ -641,29 +676,31 @@ export function PaginaFila({
           </EmptyHeader>
         </Empty>
       ) : telaGrande ? (
-        <div
-          className="grid items-stretch divide-x divide-border/70"
-          style={{ gridTemplateColumns: `repeat(${colunas.length}, minmax(0, 1fr))` }}
-        >
-          {colunas.map((coluna) => (
-            <Coluna
-              key={coluna.id}
-              coluna={coluna}
-              agora={agora}
-              motoboys={motoboys}
-              novos={novos}
-              emAndamento={idEmAndamento}
-              limiteAceiteMin={limiteAceiteMin}
-              tempos={tempos}
-              historico={historico}
-              nomeLoja={loja?.nome ?? ""}
-              compacto={preferencias.compacto}
-              selecao={selecao}
-              acoes={acoes}
-              comTitulo
-            />
-          ))}
-        </div>
+        <QuadroArrastavel pedidos={fila ?? []} aoSoltar={aoSoltar}>
+          <div
+            className="grid items-stretch divide-x divide-border/70"
+            style={{ gridTemplateColumns: `repeat(${colunas.length}, minmax(0, 1fr))` }}
+          >
+            {colunas.map((coluna) => (
+              <Coluna
+                key={coluna.id}
+                coluna={coluna}
+                agora={agora}
+                motoboys={motoboys}
+                novos={novos}
+                emAndamento={idEmAndamento}
+                limiteAceiteMin={limiteAceiteMin}
+                tempos={tempos}
+                historico={historico}
+                nomeLoja={loja?.nome ?? ""}
+                compacto={preferencias.compacto}
+                selecao={selecao}
+                acoes={acoes}
+                comTitulo
+              />
+            ))}
+          </div>
+        </QuadroArrastavel>
       ) : (
         <Tabs defaultValue={colunas[0].id}>
           <TabsList className="sem-barra w-full justify-start overflow-x-auto">
