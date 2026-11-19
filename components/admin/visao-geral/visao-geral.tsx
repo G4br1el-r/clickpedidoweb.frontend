@@ -8,7 +8,7 @@ import { parseAsString, useQueryState } from "nuqs"
 import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLoja, usePedidos } from "@/lib/admin/dados/consultas"
 import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import { useMesas } from "@/lib/admin/dados/consultas-mesas"
@@ -154,6 +154,7 @@ export function VisaoGeral() {
         value={aba}
         // Resumo é o padrão: fica fora do endereço.
         onValueChange={(valor) => void setAba(valor === "resumo" ? null : valor)}
+        className="gap-6"
       >
         <TabsList variant="line" aria-label="Abas da visão geral">
           {abasDo(segmento).map((item) => (
@@ -162,29 +163,32 @@ export function VisaoGeral() {
             </TabsTrigger>
           ))}
         </TabsList>
+
+        <FiltroPeriodo />
+
+        {/* Só a aba aberta é montada; cada uma é o painel da sua aba para leitores de tela. */}
+        <TabsContent value={aba}>
+          {resumo && periodo ? (
+            aba === "vendas" ? (
+              <AbaVendas resumo={resumo} segmento={segmento} />
+            ) : aba === "financeiro" ? (
+              <AbaFinanceiro resumo={resumo} />
+            ) : (
+              <AbaResumo
+                resumo={resumo}
+                periodo={periodo}
+                segmento={segmento}
+                comparacao={comparacao}
+                alertas={alertas}
+                meta={meta}
+                destaques={destaques}
+              />
+            )
+          ) : (
+            <EsqueletoVisaoGeral />
+          )}
+        </TabsContent>
       </Tabs>
-
-      <FiltroPeriodo />
-
-      {resumo && periodo ? (
-        aba === "vendas" ? (
-          <AbaVendas resumo={resumo} segmento={segmento} />
-        ) : aba === "financeiro" ? (
-          <AbaFinanceiro resumo={resumo} />
-        ) : (
-          <AbaResumo
-            resumo={resumo}
-            periodo={periodo}
-            segmento={segmento}
-            comparacao={comparacao}
-            alertas={alertas}
-            meta={meta}
-            destaques={destaques}
-          />
-        )
-      ) : (
-        <EsqueletoVisaoGeral />
-      )}
     </div>
   )
 }
