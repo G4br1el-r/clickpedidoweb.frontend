@@ -254,7 +254,9 @@ describe("servidor de demonstração", () => {
 
   test("pedido criado aqui tem token opaco de 128 bits, sem segmento nem número", async () => {
     const api = servidor()
+    await api.caixa.abrir({ operadorId: "eq-marina", pin: "1111", fundo: 100 })
     const venda = await api.pdv.finalizar({
+      operadorId: "eq-marina",
       itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
       pagamento: "pix",
       desconto: { modo: "reais", valor: 0 },
@@ -285,6 +287,7 @@ describe("servidor de demonstração", () => {
   describe("PDV", () => {
     /** X-Burger (R$ 20) com Bacon (+ R$ 3), duas vezes, e uma água avulsa de R$ 4,50. */
     const venda: VendaPdv = {
+      operadorId: "eq-marina",
       itens: [
         {
           produtoId: "prod-x-burger",
@@ -298,6 +301,31 @@ describe("servidor de demonstração", () => {
       valorRecebido: 100,
       concluida: true,
     }
+
+    /** Sem caixa aberto não se vende: Marina abre o caixa nas lojas usadas aqui. */
+    beforeEach(async () => {
+      for (const segmento of ["lanchonete", "pizzaria"] as const) {
+        await criarServidor({
+          segmento,
+          carregarCatalogo: async () => catalogoDeTeste(),
+          espera: 0,
+        }).caixa.abrir({ operadorId: "eq-marina", pin: "1111", fundo: 100 })
+      }
+    })
+
+    test("sem caixa aberto, a venda recusa", async () => {
+      const api = servidor()
+      await api.caixa.fechar({ operadorId: "eq-marina", contadoDinheiro: 100 })
+      await expect(api.pdv.finalizar(venda)).rejects.toThrow("Abra o caixa antes de vender.")
+    })
+
+    test("a venda leva o turno e o operador", async () => {
+      const api = servidor()
+      const turno = await api.caixa.atual()
+      const pedido = await api.pdv.finalizar(venda)
+      expect(pedido.turnoId).toBe(turno?.id)
+      expect(pedido.operadorId).toBe("eq-marina")
+    })
 
     test("a venda concluída nasce paga, com as contas refeitas no servidor", async () => {
       const api = servidor()

@@ -3,7 +3,8 @@
 import NumberFlow from "@number-flow/react"
 import { format } from "date-fns"
 import { PlusIcon, PrinterIcon, ShoppingBasketIcon } from "lucide-react"
-import { useRef, useState } from "react"
+import { parseAsStringLiteral, useQueryState } from "nuqs"
+import { type Dispatch, type SetStateAction, useRef, useState } from "react"
 import { useHotkeys } from "react-hotkeys-hook"
 import { NumericFormat } from "react-number-format"
 import { useReactToPrint } from "react-to-print"
@@ -27,6 +28,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -37,7 +39,10 @@ import {
 } from "@/components/ui/table"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useFinalizarVenda, useLoja, useUltimasVendas } from "@/lib/admin/dados/consultas"
+import { useCaixaAtual } from "@/lib/admin/dados/consultas-caixa"
+import { useEquipe, useUsuarioAtual } from "@/lib/admin/dados/consultas-equipe"
 import type { Pedido, Produto } from "@/lib/admin/dados/tipos"
+import { podeOperarTurno } from "@/lib/admin/regras/caixa"
 import {
   adicionarItem,
   bloqueioDaVenda,
@@ -47,9 +52,15 @@ import {
 } from "@/lib/admin/regras/pdv"
 import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { BlocoSecao } from "../bloco-secao"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { AberturaCaixa } from "./caixa/abertura-caixa"
+import { CaixaDeOutraPessoa } from "./caixa/caixa-de-outra-pessoa"
+import { FechamentoCaixa } from "./caixa/fechamento-caixa"
+import { HistoricoCaixas } from "./caixa/historico-caixas"
+import { PainelTurno } from "./caixa/painel-turno"
 import {
   type AvisoCaixa,
   CAIXA_VAZIA,
@@ -209,12 +220,99 @@ function ItemAvulso({ aoAdicionar }: { aoAdicionar: (item: Omit<ItemCaixa, "chav
 }
 
 /** PDV: vender no balcão com o catálogo de um lado e a caixa do outro. */
+/** O PDV troca de tela conforme o caixa: fechado, abre; aberto, vende. */
 export function PaginaPdv() {
+  const segmento = useSegmentoAtual((estado) => estado.segmento)
+  const { data: turno, isPending } = useCaixaAtual()
+  const { membro, carregando } = useUsuarioAtual()
+  const { data: equipe = [] } = useEquipe()
+  // A venda em andamento fica aqui, uma por segmento: ir ao fechamento ou ao histórico (ou
+  // trocar de loja) e voltar não perde os itens lançados.
+  const [caixas, setCaixas] = useState<Partial<Record<SegmentoPainelId, EstadoCaixa>>>({})
+  const caixa = caixas[segmento] ?? CAIXA_VAZIA
+  const setCaixa: Dispatch<SetStateAction<EstadoCaixa>> = (mudar) =>
+    setCaixas((todas) => {
+      const atual = todas[segmento] ?? CAIXA_VAZIA
+      return { ...todas, [segmento]: typeof mudar === "function" ? mudar(atual) : mudar }
+    })
+  const [tela, setTela] = useQueryState("tela", parseAsStringLiteral(TELAS))
+  const voltar = () => setTela(null)
+
+  if (tela === "caixas") {
+    return (
+      <Moldura>
+        <HistoricoCaixas aoVoltar={voltar} aoReabrir={voltar} />
+      </Moldura>
+    )
+  }
+  // Espera o caixa e quem está usando o painel: a venda vai no nome dessa pessoa.
+  if (isPending || carregando || !membro) {
+    return (
+      <div
+        role="status"
+        aria-label="Carregando o caixa"
+        className="flex flex-1 flex-col gap-4 p-4 md:p-6 lg:px-8"
+      >
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+      </div>
+    )
+  }
+  if (!turno) {
+    return (
+      <Moldura>
+        <AberturaCaixa aoVerHistorico={() => setTela("caixas")} />
+      </Moldura>
+    )
+  }
+  if (!podeOperarTurno(membro, turno)) {
+    const operador = equipe.find((pessoa) => pessoa.id === turno.abertoPor)?.nome ?? "outra pessoa"
+    return (
+      <Moldura>
+        <CaixaDeOutraPessoa operador={operador} aoVerHistorico={() => setTela("caixas")} />
+      </Moldura>
+    )
+  }
+  if (tela === "fechar") {
+    return (
+      <Moldura>
+        <FechamentoCaixa aoVoltar={voltar} aoFechado={voltar} />
+      </Moldura>
+    )
+  }
+  return (
+    <TelaDeVenda
+      key={segmento}
+      caixa={caixa}
+      setCaixa={setCaixa}
+      aoFecharCaixa={() => setTela("fechar")}
+      aoVerCaixas={() => setTela("caixas")}
+    />
+  )
+}
+
+/** Telas do PDV além da venda, no endereço: `?tela=fechar` e `?tela=caixas`. */
+const TELAS = ["fechar", "caixas"] as const
+
+function Moldura({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-1 flex-col p-4 md:p-6 lg:px-8">{children}</div>
+}
+
+function TelaDeVenda({
+  caixa,
+  setCaixa,
+  aoFecharCaixa,
+  aoVerCaixas,
+}: {
+  caixa: EstadoCaixa
+  setCaixa: Dispatch<SetStateAction<EstadoCaixa>>
+  aoFecharCaixa: () => void
+  aoVerCaixas: () => void
+}) {
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const telaGrande = useTelaGrande()
   const { data: ultimas = [] } = useUltimasVendas()
   const finalizar = useFinalizarVenda()
-  const [caixa, setCaixa] = useState<EstadoCaixa>(CAIXA_VAZIA)
   const [comOpcoes, setComOpcoes] = useState<Produto | null>(null)
   const [ticket, setTicket] = useState<Pedido | null>(null)
   const [caixaAberta, setCaixaAberta] = useState(false)
@@ -310,6 +408,11 @@ export function PaginaPdv() {
     <div className="flex flex-1 flex-col gap-5 p-4 pb-24 md:p-6 lg:px-8 lg:pb-6">
       <CabecalhoPagina
         titulo="PDV"
+        acoes={
+          <Button type="button" variant="ghost" size="sm" onClick={aoVerCaixas}>
+            Histórico de caixas
+          </Button>
+        }
         resumo={
           <>
             Venda no balcão
@@ -319,6 +422,8 @@ export function PaginaPdv() {
           </>
         }
       />
+
+      <PainelTurno aoFecharCaixa={aoFecharCaixa} />
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_23rem] lg:gap-0">
         <div className="flex min-w-0 flex-col gap-5 lg:pr-6">

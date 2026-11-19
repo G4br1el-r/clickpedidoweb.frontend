@@ -1,25 +1,37 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
+import { clear } from "idb-keyval"
+import type { ReactElement } from "react"
 import { beforeEach, describe, expect, test } from "vitest"
+import { reiniciarServidores } from "@/lib/admin/dados/consultas"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { useUsuarioSalvo } from "@/lib/admin/usuario-atual"
 import { PaginaModulo } from "./pagina-modulo"
+
+/** No app, o React Query vem dos provedores da raiz. */
+const comConsultas = (pagina: ReactElement) =>
+  render(<QueryClientProvider client={new QueryClient()}>{pagina}</QueryClientProvider>)
 
 beforeEach(() => {
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
+  localStorage.clear()
+  useUsuarioSalvo.setState(useUsuarioSalvo.getInitialState(), true)
+  // Fora do ShellAdmin ninguém lê o navegador: o teste começa com ele já lido.
+  useUsuarioSalvo.setState({ hidratado: true })
 })
 
 describe("PaginaModulo", () => {
   test("não avisa nada antes de carregar o segmento salvo neste navegador", () => {
     useSegmentoAtual.setState({ segmento: "salao", hidratado: false })
-    render(<PaginaModulo id="mesas" />)
+    comConsultas(<PaginaModulo id="mesas" />)
 
     expect(screen.queryByText(/não faz parte/)).not.toBeInTheDocument()
   })
 
   test("avisa quando o módulo não faz parte do segmento e leva para a visão geral", () => {
     useSegmentoAtual.setState({ segmento: "salao", hidratado: true })
-    render(<PaginaModulo id="mesas" />)
+    comConsultas(<PaginaModulo id="mesas" />)
 
     expect(screen.getByText("Mesas não faz parte de Salão de beleza")).toBeInTheDocument()
     expect(screen.getByRole("link", { name: "Ir para a visão geral" })).toHaveAttribute(
@@ -60,7 +72,7 @@ describe("módulos da farmácia", () => {
 
   test("na pizzaria, receitas não faz parte do segmento", () => {
     useSegmentoAtual.setState({ segmento: "pizzaria", hidratado: true })
-    render(<PaginaModulo id="receitas" />)
+    comConsultas(<PaginaModulo id="receitas" />)
     expect(screen.getByText("Receitas não faz parte de Pizzaria")).toBeInTheDocument()
   })
 })
@@ -76,6 +88,54 @@ describe("estoque", () => {
     expect(screen.queryByText("Em construção")).not.toBeInTheDocument()
     expect(
       await screen.findByRole("heading", { level: 1, name: "Estoque" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+  })
+})
+
+describe("acesso por perfil", () => {
+  beforeEach(async () => {
+    await clear()
+    reiniciarServidores()
+  })
+
+  test("/admin/estoque para o caixa avisa que não tem acesso", async () => {
+    useSegmentoAtual.setState({ segmento: "pizzaria", hidratado: true })
+    useUsuarioSalvo.getState().entrar("pizzaria", "eq-marina")
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <PaginaModulo id="estoque" />
+      </QueryClientProvider>,
+    )
+    expect(
+      await screen.findByText("Sem acesso a Estoque", {}, { timeout: 5000 }),
+    ).toBeInTheDocument()
+    expect(screen.getByText("Peça a um gerente ou troque de usuário no topo.")).toBeInTheDocument()
+    expect(screen.queryByRole("heading", { level: 1, name: "Estoque" })).not.toBeInTheDocument()
+  })
+
+  test("o dono abre a Equipe", async () => {
+    useSegmentoAtual.setState({ segmento: "pizzaria", hidratado: true })
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <PaginaModulo id="equipe" />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByRole("heading", { level: 1, name: "Equipe" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("table", { name: "Equipe" }, { timeout: 5000 }),
+    ).toBeInTheDocument()
+  })
+
+  test("o gerente não abre a Equipe", async () => {
+    useSegmentoAtual.setState({ segmento: "pizzaria", hidratado: true })
+    useUsuarioSalvo.getState().entrar("pizzaria", "eq-gerente")
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <PaginaModulo id="equipe" />
+      </QueryClientProvider>,
+    )
+    expect(
+      await screen.findByText("Sem acesso a Equipe", {}, { timeout: 5000 }),
     ).toBeInTheDocument()
   })
 })

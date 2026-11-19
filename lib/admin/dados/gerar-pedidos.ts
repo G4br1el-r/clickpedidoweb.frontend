@@ -483,7 +483,11 @@ export function gerarPedidos({
       pedidos.push(novo)
     }
   }
-  return pedidos
+  // Hoje o caixa ainda não abriu: a venda do PDV fica só nos dias anteriores. Sai depois de
+  // gerada, para os sorteios (e os outros pedidos de hoje) continuarem os mesmos.
+  return pedidos.filter(
+    (pedido) => pedido.origem !== "pdv" || !isSameDay(new Date(pedido.criadoEm), agora),
+  )
 }
 
 export type OpcoesPedidoAgora = Omit<OpcoesGeracao, "de"> & {

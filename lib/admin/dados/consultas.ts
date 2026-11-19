@@ -5,6 +5,7 @@ import { proximoStatus } from "../regras/status"
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { carregarCatalogo } from "./catalogos"
+import { useUsuarioAtual } from "./consultas-equipe"
 import { criarServidor, type FiltroPedidos, type Servidor, type VendaPdv } from "./servidor"
 import type { ConfigLoja, Pedido, StatusPedido } from "./tipos"
 
@@ -216,8 +217,11 @@ export function useUltimasVendas() {
 export function useFinalizarVenda() {
   const segmento = useSegmento()
   const cliente = useQueryClient()
+  const { membro } = useUsuarioAtual()
   return useMutation({
-    mutationFn: (venda: VendaPdv) => servidorDo(segmento).pdv.finalizar(venda),
+    // A venda vai no nome de quem está usando o painel.
+    mutationFn: (venda: Omit<VendaPdv, "operadorId">) =>
+      servidorDo(segmento).pdv.finalizar({ ...venda, operadorId: membro?.id ?? "" }),
     onSuccess: () => cliente.invalidateQueries({ queryKey: chaves.tudo(segmento) }),
   })
 }

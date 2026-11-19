@@ -1,12 +1,13 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen } from "@testing-library/react"
+import { act, render, screen, waitFor } from "@testing-library/react"
 import { clear } from "idb-keyval"
 import { beforeEach, describe, expect, test, vi } from "vitest"
 import { SidebarProvider } from "@/components/ui/sidebar"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { useUsuarioSalvo } from "@/lib/admin/usuario-atual"
 import { MenuModulos } from "./menu-modulos"
 
 const caminho = vi.hoisted(() => ({ atual: "/admin" }))
@@ -30,6 +31,10 @@ beforeEach(async () => {
   await clear()
   reiniciarServidores()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
+  localStorage.clear()
+  useUsuarioSalvo.setState(useUsuarioSalvo.getInitialState(), true)
+  // Fora do ShellAdmin ninguém lê o navegador: o teste começa com ele já lido.
+  useUsuarioSalvo.setState({ hidratado: true })
 })
 describe("MenuModulos", () => {
   test("no salão aparece Agendamentos e somem mesas, garçom, cozinha e entrega", () => {
@@ -98,5 +103,58 @@ describe("aviso do estoque no menu", () => {
     })
     renderizar()
     expect(await screen.findByText("1 produto para repor")).toBeInTheDocument()
+  })
+})
+
+describe("menu por perfil", () => {
+  const links = () => screen.getAllByRole("link").map((link) => link.textContent)
+
+  test("logada como caixa, o menu só tem PDV, Pedidos e Fila", async () => {
+    useUsuarioSalvo.getState().entrar("pizzaria", "eq-marina")
+    renderizar()
+    await waitFor(() => expect(links()).toEqual(["Fila de pedidos", "PDV", "Pedidos"]), {
+      timeout: 5000,
+    })
+  })
+
+  test("o gerente não vê Equipe; o dono vê", async () => {
+    useUsuarioSalvo.getState().entrar("pizzaria", "eq-gerente")
+    const { unmount } = renderizar()
+    expect(
+      await screen.findByRole("link", { name: "Estoque" }, { timeout: 5000 }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Equipe" })).not.toBeInTheDocument()
+    unmount()
+
+    useUsuarioSalvo.getState().sair("pizzaria")
+    renderizar()
+    expect(screen.getByRole("link", { name: "Equipe" })).toHaveAttribute("href", "/admin/equipe")
+  })
+
+  test("recarregar como caixa não mostra o menu do dono antes de ler quem entrou", async () => {
+    useUsuarioSalvo.setState({ hidratado: false })
+    localStorage.setItem(
+      "clickpedido-admin-usuario",
+      JSON.stringify({ state: { porSegmento: { pizzaria: "eq-marina" } }, version: 1 }),
+    )
+    renderizar()
+    expect(screen.queryByRole("link", { name: "Estoque" })).not.toBeInTheDocument()
+    await act(() => useUsuarioSalvo.persist.rehydrate())
+    await waitFor(() => expect(links()).toEqual(["Fila de pedidos", "PDV", "Pedidos"]), {
+      timeout: 5000,
+    })
+  })
+
+  test("trocar de segmento mostra o usuário daquele segmento", async () => {
+    useUsuarioSalvo.getState().entrar("pizzaria", "eq-marina")
+    renderizar()
+    await waitFor(() => expect(links()).toEqual(["Fila de pedidos", "PDV", "Pedidos"]), {
+      timeout: 5000,
+    })
+    act(() => useSegmentoAtual.setState({ segmento: "adega" }))
+    expect(
+      await screen.findByRole("link", { name: "Visão geral" }, { timeout: 5000 }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("link", { name: "Equipe" })).toBeInTheDocument()
   })
 })

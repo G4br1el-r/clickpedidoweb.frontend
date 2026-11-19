@@ -9,6 +9,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { useUsuarioSalvo } from "@/lib/admin/usuario-atual"
 import { PaginaLoja } from "./pagina-loja"
 
 const imprimir = vi.fn()
@@ -50,6 +51,10 @@ beforeEach(async () => {
   reiniciarServidores()
   imprimir.mockClear()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
+  localStorage.clear()
+  useUsuarioSalvo.setState(useUsuarioSalvo.getInitialState(), true)
+  // Fora do ShellAdmin ninguém lê o navegador: o teste começa com ele já lido.
+  useUsuarioSalvo.setState({ hidratado: true })
 })
 
 afterEach(() => {
@@ -159,6 +164,49 @@ describe("PaginaLoja", () => {
     await usuario.click(screen.getByRole("button", { name: "Salvar alterações" }))
     await waitFor(async () => expect((await api().loja()).som).toBe("suave"))
     expect((await api().loja()).cidadesAtendidas).toEqual(["São José dos Campos", "Jacareí"])
+  })
+})
+
+describe("PaginaLoja: por perfil", () => {
+  test("o gerente não vê Formas de pagamento nem Pagamento online na loja", async () => {
+    useUsuarioSalvo.getState().entrar("pizzaria", "eq-gerente")
+    await abrir()
+    expect(screen.getByRole("region", { name: "Impressão" })).toBeInTheDocument()
+    expect(screen.queryByRole("region", { name: "Formas de pagamento" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("region", { name: "Pagamento online" })).not.toBeInTheDocument()
+  })
+
+  test("o dono vê as duas", async () => {
+    await abrir()
+    expect(screen.getByRole("region", { name: "Formas de pagamento" })).toBeInTheDocument()
+    expect(screen.getByRole("region", { name: "Pagamento online" })).toBeInTheDocument()
+  })
+})
+
+describe("PaginaLoja: PDV e caixa", () => {
+  test("muda o alerta para R$ 800 e salva", async () => {
+    const usuario = await abrir()
+    const pdv = secao("PDV e caixa")
+    expect(pdv.getByLabelText("Fundo de troco sugerido")).toHaveValue("R$ 100,00")
+    const alerta = pdv.getByLabelText("Alerta de sangria acima de")
+    expect(alerta).toHaveValue("R$ 500,00")
+    await usuario.tripleClick(alerta)
+    await usuario.keyboard("800")
+    expect(alerta).toHaveValue("R$ 800,00")
+    await usuario.click(
+      within(await screen.findByRole("region", { name: "Alterações não salvas" })).getByRole(
+        "button",
+        { name: "Salvar alterações" },
+      ),
+    )
+    expect(await screen.findByText("Configurações salvas.")).toBeInTheDocument()
+    expect((await api().loja()).pdv).toEqual({ fundoSugerido: 100, alertaSangria: 800 })
+  })
+
+  test("lanchonete não tem a seção", async () => {
+    useSegmentoAtual.setState({ segmento: "lanchonete" })
+    await abrir()
+    expect(screen.queryByRole("region", { name: "PDV e caixa" })).not.toBeInTheDocument()
   })
 })
 

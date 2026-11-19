@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test"
-import { esperarAnimacoes, verificarAcessibilidade } from "./apoio"
+import { abrirCaixa, esperarAnimacoes, verificarAcessibilidade } from "./apoio"
 
 /** Cada teste começa com as configurações de fábrica. */
 test.beforeEach(async ({ page }) => {
@@ -213,7 +213,7 @@ test("cardápio: criar produto com opções e mudar o preço na linha", async ({
 test("PDV: venda em dinheiro com troco, ticket e últimas vendas", async ({ page }, info) => {
   test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a caixa abre pela barra")
   await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
-  await page.goto("/admin/pdv")
+  await abrirCaixa(page)
   await expect(page.getByRole("button", { name: /^Adicionar / }).first()).toBeVisible({
     timeout: 15_000,
   })
@@ -237,6 +237,77 @@ test("PDV: venda em dinheiro com troco, ticket e últimas vendas", async ({ page
   await ticket.getByRole("button", { name: "Nova venda" }).click()
   await expect(venda.getByText("Nenhum item na venda.")).toBeVisible()
   await expect(page.getByRole("row", { name: /2× Água/ })).toBeVisible()
+})
+
+test("PDV: turno completo com sangria autorizada e fechamento com diferença", async ({
+  page,
+}, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a caixa abre pela barra")
+  test.setTimeout(120_000)
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+
+  // Abertura: sem caixa aberto, o PDV pede quem abre, o fundo e o PIN.
+  await page.goto("/admin/pdv")
+  await expect(page.getByRole("region", { name: "Abrir o caixa" })).toBeVisible({ timeout: 15_000 })
+  await verificarAcessibilidade(page)
+  await abrirCaixa(page)
+  const turno = page.getByRole("region", { name: "Turno do caixa" })
+  await expect(turno).toContainText("Marina S.")
+  await expect(turno).toContainText("R$ 100,00")
+
+  // Uma venda de R$ 10 em dinheiro: a gaveta vai a R$ 110.
+  await page.getByRole("button", { name: "Lançar item avulso" }).click()
+  await page.getByLabel("Item avulso", { exact: true }).fill("Água")
+  await page.getByLabel("Valor", { exact: true }).fill("10")
+  await page.getByRole("button", { name: "Incluir item avulso" }).click()
+  const venda = page.getByRole("region", { name: "Venda" })
+  await venda.getByText("Dinheiro").click()
+  await venda.getByRole("button", { name: "R$ 20" }).click()
+  await page.keyboard.press("F9")
+  await page
+    .getByRole("dialog", { name: /^Venda #\d+/ })
+    .getByRole("button", { name: "Nova venda" })
+    .click()
+  await expect(turno).toContainText("R$ 110,00")
+
+  // Sangria de R$ 50: a Marina é Caixa, então o Rafael autoriza com o PIN dele.
+  await page.keyboard.press("F11")
+  const movimento = page.getByRole("dialog", { name: "Sangria ou suprimento" })
+  await movimento.getByLabel("Valor").fill("50")
+  await movimento.getByLabel("Motivo").fill("Cofre")
+  await verificarAcessibilidade(page)
+  await movimento.getByRole("button", { name: "Registrar" }).click()
+  const autorizacao = page.getByRole("dialog", { name: "Autorização do gerente" })
+  await autorizacao.getByRole("radio", { name: "Rafael M. Gerente" }).click()
+  await autorizacao.getByLabel("PIN do gerente").fill("2580")
+  await verificarAcessibilidade(page)
+  await autorizacao.getByRole("button", { name: "Autorizar" }).click()
+  await expect(turno).toContainText("R$ 60,00")
+
+  // Fechamento: R$ 58 contados de R$ 60 esperados; a diferença pede justificativa.
+  await page.keyboard.press("F12")
+  await expect(page.getByRole("heading", { level: 1, name: "Fechar o caixa" })).toBeVisible()
+  const contagem = page.getByRole("region", { name: "Contagem da gaveta" })
+  for (const nota of ["R$ 50", "R$ 5", "R$ 2", "R$ 1"]) {
+    await contagem.getByLabel(nota, { exact: true }).fill("1")
+  }
+  const dinheiro = page
+    .getByRole("table", { name: "Conferência por forma de pagamento" })
+    .getByRole("row", { name: /^Dinheiro/ })
+  await expect(dinheiro).toContainText("−R$ 2,00")
+  const fechar = page.getByRole("button", { name: "Fechar caixa" })
+  await expect(fechar).toBeDisabled()
+  await page.getByLabel("Justificativa").fill("Troco dado a mais")
+  await verificarAcessibilidade(page)
+  await fechar.click()
+
+  // De volta à abertura; o histórico mostra o turno no topo, com a diferença.
+  await expect(page.getByRole("region", { name: "Abrir o caixa" })).toBeVisible()
+  await page.getByRole("button", { name: "Histórico de caixas" }).click()
+  const caixas = page.getByRole("table", { name: "Caixas" })
+  await expect(caixas.getByRole("row").nth(1)).toContainText("Marina S.")
+  await expect(caixas.getByRole("row").nth(1)).toContainText("−R$ 2,00")
+  await verificarAcessibilidade(page)
 })
 
 test("salão: o garçom lança, a cozinha prepara e a mesa fecha a conta", async ({ page }) => {
@@ -437,6 +508,8 @@ test("adega: esgotar um gelo tira a opção do combo no PDV", async ({ page }, i
   test.setTimeout(90_000)
   await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
   await noSegmento(page, "adega")
+  // A dona abre o caixa: ela também mexe no cardápio (a Marina, do caixa, não vê o cardápio).
+  await abrirCaixa(page, { pessoa: "Carla N.", pin: "1234" })
 
   const opcoesDoCombo = async () => {
     await page.goto("/admin/pdv")
@@ -484,8 +557,9 @@ test("estoque: contagem, a venda no PDV baixa e esgota, o cancelamento devolve",
   await contagem.getByRole("button", { name: "Registrar contagem" }).click()
   await expect(linha.getByText("1 un", { exact: true })).toBeVisible()
 
-  // A venda no balcão leva a última; a fila recebe, para dar para cancelar depois.
-  await page.goto("/admin/pdv")
+  // A venda no balcão leva a última; a fila recebe, para dar para cancelar depois. A dona
+  // abre o caixa: ela também vê o estoque (a Marina, do caixa, não vê).
+  await abrirCaixa(page, { pessoa: "Carla N.", pin: "1234" })
   await expect(page.getByRole("button", { name: /^Adicionar / }).first()).toBeVisible({
     timeout: 15_000,
   })
@@ -513,6 +587,9 @@ test("estoque: contagem, a venda no PDV baixa e esgota, o cancelamento devolve",
   await page.getByRole("button", { name: "Cancelar pedido" }).click()
   await page.getByRole("button", { name: "Sim, cancelar" }).click()
   await expect(page.getByRole("button", { name: "Cancelar pedido" })).toHaveCount(0)
+  // A tela muda antes de o servidor gravar (atualização otimista): o aviso só sai depois de
+  // gravado. Sem esperar, ir ao estoque corta a gravação e o saldo não volta.
+  await expect(page.getByText(/^Pedido #\d+: Cancelado$/)).toBeVisible()
 
   linha = await linhaNoEstoque()
   await expect(linha.getByText("1 un", { exact: true })).toBeVisible()

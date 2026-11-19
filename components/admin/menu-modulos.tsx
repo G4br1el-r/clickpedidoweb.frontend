@@ -11,6 +11,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
 } from "@/components/ui/sidebar"
+import { usePerfilAtual } from "@/lib/admin/dados/consultas-equipe"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { menuDo } from "@/lib/admin/segmentos-painel"
 import { AvisoEstoque } from "./estoque/aviso-estoque"
@@ -24,8 +25,11 @@ function estaEm(caminho: string, href: string) {
 export function MenuModulos() {
   const caminho = usePathname()
   const segmento = useSegmentoAtual((estado) => estado.segmento)
+  const perfil = usePerfilAtual()
+  // Até saber quem é, o menu fica vazio: o caixa não vê o menu do dono piscar.
+  if (!perfil) return null
 
-  return menuDo(segmento).map(({ grupo, itens }) => (
+  return menuDo(segmento, perfil).map(({ grupo, itens }) => (
     <SidebarGroup key={grupo}>
       <SidebarGroupLabel>{grupo}</SidebarGroupLabel>
       <SidebarGroupContent>

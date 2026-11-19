@@ -35,6 +35,14 @@ describe("secoesAlteradas", () => {
   })
 })
 
+describe("secoesAlteradas: PDV", () => {
+  test("o fundo e o alerta caem em PDV e caixa, depois do pagamento online", () => {
+    expect(
+      secoesAlteradas({ pdv: { alertaSangria: true }, pagamentoOnlineConectado: true, som: true }),
+    ).toEqual(["Pagamento online", "PDV e caixa", "Alerta sonoro"])
+  })
+})
+
 describe("resumoDasAlteracoes", () => {
   test("junta os nomes como na fala", () => {
     expect(resumoDasAlteracoes([])).toBe("")

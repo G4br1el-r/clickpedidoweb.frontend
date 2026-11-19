@@ -52,7 +52,11 @@ function servidor(
 
 const saldo = async (api: ReturnType<typeof servidor>, id: string) =>
   (await api.produtos.listar()).find((produto) => produto.id === id)
+/** Sem caixa aberto não se vende. */
+const abrirCaixa = (api: ReturnType<typeof servidor>) =>
+  api.caixa.abrir({ operadorId: "eq-marina", pin: "1111", fundo: 100 })
 const refriNoPdv = (quantidade: number, concluida = true) => ({
+  operadorId: "eq-marina",
   itens: [{ produtoId: "refri", escolhas: {}, quantidade }],
   pagamento: "pix" as const,
   desconto: { modo: "reais" as const, valor: 0 },
@@ -119,6 +123,7 @@ describe("estoque: movimentos à mão", () => {
 describe("estoque: vendas", () => {
   test("o PDV baixa, recusa passar do saldo e, ao zerar, esgota; a entrada devolve", async () => {
     const api = servidor()
+    await abrirCaixa(api)
     const venda = await api.pdv.finalizar(refriNoPdv(3))
     expect((await saldo(api, "refri"))?.estoque?.quantidade).toBe(2)
     expect((await api.estoque.movimentos("refri"))[0]).toMatchObject({
@@ -153,6 +158,7 @@ describe("estoque: vendas", () => {
 
   test("cancelar devolve o que saiu, uma vez só", async () => {
     const api = servidor()
+    await abrirCaixa(api)
     const venda = await api.pdv.finalizar(refriNoPdv(2, false))
     expect((await saldo(api, "refri"))?.estoque?.quantidade).toBe(3)
     await api.pedidos.cancelar(venda.id, "recebido")

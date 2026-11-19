@@ -151,6 +151,18 @@ describe("gerarPedidos", () => {
     }
   })
 
+  test("hoje não há venda do PDV (o caixa ainda não abriu)", () => {
+    const pedidos = gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "farmacia",
+      de: new Date(2026, 10, 6),
+      agora: AGORA,
+    })
+    const doPdv = pedidos.filter((pedido) => pedido.origem === "pdv")
+    expect(doPdv.length).toBeGreaterThan(0)
+    expect(doPdv.filter((pedido) => dia(pedido) === 13)).toEqual([])
+  })
+
   test("hoje tem pedidos em andamento; os dias anteriores estão encerrados", () => {
     const pedidos = gerarPedidos({
       catalogo: catalogo(),

@@ -1,8 +1,9 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, within } from "@testing-library/react"
+import { act, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
+import { NuqsTestingAdapter } from "nuqs/adapters/testing"
 import { type ReactNode, useState } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
@@ -17,12 +18,15 @@ function Provedores({ children }: { children: ReactNode }) {
     () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
   )
   return (
-    <QueryClientProvider client={cliente}>
-      <TooltipProvider>
-        {children}
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    // O PDV lê a tela no endereço (`?tela=`).
+    <NuqsTestingAdapter hasMemory>
+      <QueryClientProvider client={cliente}>
+        <TooltipProvider>
+          {children}
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </NuqsTestingAdapter>
   )
 }
 
@@ -100,7 +104,13 @@ beforeEach(async () => {
   await clear()
   reiniciarServidores()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
+  await abrirCaixa()
 })
+
+/** Sem caixa aberto não se vende: Marina abre o caixa pelo servidor. */
+function abrirCaixa() {
+  return servidorDo("pizzaria").caixa.abrir({ operadorId: "eq-marina", pin: "1111", fundo: 100 })
+}
 
 afterEach(() => {
   vi.useRealTimers()
@@ -275,6 +285,39 @@ describe("PaginaPdv", () => {
     await usuario.click(within(ticket).getByRole("button", { name: "Nova venda" }))
     expect(caixa().getByText("Nenhum item na venda.")).toBeInTheDocument()
     expect(await screen.findByRole("row", { name: new RegExp(`${numero}`) })).toBeInTheDocument()
+  })
+
+  test("ir ao fechamento e voltar mantém a venda em andamento", async () => {
+    const usuario = await abrir()
+    const { simples } = await produtos()
+    await usuario.click(botao(simples.nome))
+    await usuario.keyboard("{F12}")
+    await screen.findByRole("heading", { level: 1, name: "Fechar o caixa" })
+    await usuario.click(screen.getByRole("button", { name: "Voltar à venda" }))
+    expect(
+      await within(await screen.findByRole("region", { name: "Venda" })).findByRole("listitem", {
+        name: simples.nome,
+      }),
+    ).toBeInTheDocument()
+  })
+
+  test("cada segmento tem a sua venda em andamento", async () => {
+    await servidorDo("adega").caixa.abrir({ operadorId: "eq-marina", pin: "1111", fundo: 100 })
+    const usuario = await abrir()
+    const { simples } = await produtos()
+    await usuario.click(botao(simples.nome))
+    act(() => useSegmentoAtual.setState({ segmento: "adega" }))
+    expect(
+      await within(
+        await screen.findByRole("region", { name: "Venda" }, { timeout: 8000 }),
+      ).findByText("Nenhum item na venda.", {}, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    act(() => useSegmentoAtual.setState({ segmento: "pizzaria" }))
+    expect(
+      await within(
+        await screen.findByRole("region", { name: "Venda" }, { timeout: 8000 }),
+      ).findByRole("listitem", { name: simples.nome }, { timeout: 8000 }),
+    ).toBeInTheDocument()
   })
 
   test("venda não concluída vai para a fila", async () => {

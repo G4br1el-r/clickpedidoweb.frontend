@@ -31,7 +31,10 @@ import { Textarea } from "@/components/ui/textarea"
 import { useAgora } from "@/hooks/use-agora"
 import { useLoja } from "@/lib/admin/dados/consultas"
 import { useConectarPagamento, useSalvarLoja } from "@/lib/admin/dados/consultas-entrega"
-import type { ConfigLoja, FormaPagamento, SomAlerta } from "@/lib/admin/dados/tipos"
+import { usePerfilAtual } from "@/lib/admin/dados/consultas-equipe"
+import type { ConfigLoja, FormaPagamento, PerfilAcesso, SomAlerta } from "@/lib/admin/dados/tipos"
+import { configPdv } from "@/lib/admin/regras/caixa"
+import { podeVerSecaoLoja } from "@/lib/admin/regras/equipe"
 import { esquemaLoja, type FormularioLoja } from "@/lib/admin/regras/esquema-loja"
 import { copiarParaTodos, textoDoHorario } from "@/lib/admin/regras/loja"
 import { resumoDasAlteracoes, secoesAlteradas } from "@/lib/admin/regras/secoes-loja"
@@ -220,7 +223,7 @@ function CampoDinheiro({
   erro,
 }: {
   controle: Controle
-  nome: "taxaEntregaPadrao" | "pedidoMinimo"
+  nome: "taxaEntregaPadrao" | "pedidoMinimo" | "pdv.fundoSugerido" | "pdv.alertaSangria"
   rotulo: string
   erro?: ErroDoCampo
 }) {
@@ -511,6 +514,7 @@ const PAGAMENTOS: { forma: FormaPagamento; rotulo: string; online?: boolean }[] 
 const valoresIniciais = (loja: ConfigLoja): FormularioLoja => ({
   ...loja,
   videoBanner: loja.videoBanner ?? "",
+  pdv: configPdv(loja),
 })
 
 /**
@@ -561,7 +565,7 @@ function BarraSalvar({
   )
 }
 
-function Formulario({ loja }: { loja: ConfigLoja }) {
+function Formulario({ loja, perfil }: { loja: ConfigLoja; perfil: PerfilAcesso }) {
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const agora = useAgora(60_000)
   const salvar = useSalvarLoja()
@@ -588,6 +592,7 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
   // Conectar e desconectar salvam na hora: vale o que está no servidor, não o rascunho.
   const conectado = Boolean(loja.pagamentoOnlineConectado)
   const comEntrega = temModulo(segmento, "motoboys")
+  const comPdv = temModulo(segmento, "pdv")
   const salao = segmento === "salao"
 
   // Fechar a aba com alteração pendente pede confirmação do navegador.
@@ -825,97 +830,123 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
         {comEntrega && <Cidades controle={controle} />}
       </Secao>
 
-      <Secao
-        titulo="Formas de pagamento"
-        descricao="O que a loja aceita no site. Pix e cartão online dependem da conta online."
-      >
-        <Linhas>
-          {PAGAMENTOS.filter(
-            ({ forma }) =>
-              forma !== "pagar-apos-pesagem" || temRecurso(segmento, "pagarAposPesagem"),
-          ).map(({ forma, rotulo, online }) => (
-            <Controller
-              key={forma}
-              control={controle}
-              name={`pagamentos.${forma}`}
-              render={({ field }) => (
-                <div className="flex min-h-14 items-center justify-between gap-4 py-3">
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span
-                      className={cn(
-                        "text-sm font-medium",
-                        online && !conectado && "text-muted-foreground",
-                      )}
-                      id={`pagamento-${forma}`}
-                    >
-                      {rotulo}
-                    </span>
-                    {online && !conectado && (
-                      <span className="text-[13px] text-muted-foreground">
-                        Precisa da conta online conectada.
+      {podeVerSecaoLoja(perfil, "pagamentos") && (
+        <Secao
+          titulo="Formas de pagamento"
+          descricao="O que a loja aceita no site. Pix e cartão online dependem da conta online."
+        >
+          <Linhas>
+            {PAGAMENTOS.filter(
+              ({ forma }) =>
+                forma !== "pagar-apos-pesagem" || temRecurso(segmento, "pagarAposPesagem"),
+            ).map(({ forma, rotulo, online }) => (
+              <Controller
+                key={forma}
+                control={controle}
+                name={`pagamentos.${forma}`}
+                render={({ field }) => (
+                  <div className="flex min-h-14 items-center justify-between gap-4 py-3">
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span
+                        className={cn(
+                          "text-sm font-medium",
+                          online && !conectado && "text-muted-foreground",
+                        )}
+                        id={`pagamento-${forma}`}
+                      >
+                        {rotulo}
                       </span>
-                    )}
-                    {erros.pagamentos?.[forma] && (
-                      <FieldError>{erros.pagamentos[forma]?.message}</FieldError>
-                    )}
-                  </span>
-                  <Switch
-                    aria-labelledby={`pagamento-${forma}`}
-                    checked={field.value}
-                    disabled={online && !conectado}
-                    onCheckedChange={field.onChange}
-                  />
-                </div>
-              )}
-            />
-          ))}
-        </Linhas>
-        {erros.pagamentos?.root?.message || erros.pagamentos?.message ? (
-          <FieldError>{erros.pagamentos.root?.message ?? erros.pagamentos.message}</FieldError>
-        ) : null}
-      </Secao>
+                      {online && !conectado && (
+                        <span className="text-[13px] text-muted-foreground">
+                          Precisa da conta online conectada.
+                        </span>
+                      )}
+                      {erros.pagamentos?.[forma] && (
+                        <FieldError>{erros.pagamentos[forma]?.message}</FieldError>
+                      )}
+                    </span>
+                    <Switch
+                      aria-labelledby={`pagamento-${forma}`}
+                      checked={field.value}
+                      disabled={online && !conectado}
+                      onCheckedChange={field.onChange}
+                    />
+                  </div>
+                )}
+              />
+            ))}
+          </Linhas>
+          {erros.pagamentos?.root?.message || erros.pagamentos?.message ? (
+            <FieldError>{erros.pagamentos.root?.message ?? erros.pagamentos.message}</FieldError>
+          ) : null}
+        </Secao>
+      )}
 
-      <Secao
-        titulo="Pagamento online"
-        descricao="No protótipo, a conexão é de demonstração: nenhuma chave ou token é digitado nem guardado aqui."
-      >
-        <Linhas>
-          <div className="flex min-h-14 flex-wrap items-center gap-x-4 gap-y-2 py-3">
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="text-sm font-medium">Mercado Pago</span>
-              <span className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
-                <Traco tom={conectado ? "pronto" : "fim"} />
-                {conectado ? "Conectada" : "Não conectada"}
-              </span>
+      {podeVerSecaoLoja(perfil, "pagamento-online") && (
+        <Secao
+          titulo="Pagamento online"
+          descricao="No protótipo, a conexão é de demonstração: nenhuma chave ou token é digitado nem guardado aqui."
+        >
+          <Linhas>
+            <div className="flex min-h-14 flex-wrap items-center gap-x-4 gap-y-2 py-3">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-sm font-medium">Mercado Pago</span>
+                <span className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
+                  <Traco tom={conectado ? "pronto" : "fim"} />
+                  {conectado ? "Conectada" : "Não conectada"}
+                </span>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                className="ml-auto"
+                disabled={conectar.isPending}
+                onClick={() =>
+                  conectar.mutate(!conectado, {
+                    onSuccess: (atualizada) => {
+                      // Já está salvo no servidor: o formulário passa a partir daí, sem contar como alteração.
+                      resetField("pagamentoOnlineConectado", {
+                        defaultValue: atualizada.pagamentoOnlineConectado,
+                      })
+                      resetField("pagamentos", { defaultValue: atualizada.pagamentos })
+                      toast.success(
+                        atualizada.pagamentoOnlineConectado
+                          ? "Conta conectada."
+                          : "Conta desconectada.",
+                      )
+                    },
+                    onError: (erro) => toast.error(erro.message),
+                  })
+                }
+              >
+                {conectado ? "Desconectar" : "Conectar"}
+              </Button>
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="ml-auto"
-              disabled={conectar.isPending}
-              onClick={() =>
-                conectar.mutate(!conectado, {
-                  onSuccess: (atualizada) => {
-                    // Já está salvo no servidor: o formulário passa a partir daí, sem contar como alteração.
-                    resetField("pagamentoOnlineConectado", {
-                      defaultValue: atualizada.pagamentoOnlineConectado,
-                    })
-                    resetField("pagamentos", { defaultValue: atualizada.pagamentos })
-                    toast.success(
-                      atualizada.pagamentoOnlineConectado
-                        ? "Conta conectada."
-                        : "Conta desconectada.",
-                    )
-                  },
-                  onError: (erro) => toast.error(erro.message),
-                })
-              }
-            >
-              {conectado ? "Desconectar" : "Conectar"}
-            </Button>
-          </div>
-        </Linhas>
-      </Secao>
+          </Linhas>
+        </Secao>
+      )}
+
+      {comPdv && (
+        <Secao
+          titulo="PDV e caixa"
+          descricao="O fundo de troco que a abertura do caixa sugere e quando o painel do turno recomenda a sangria."
+        >
+          <Grade>
+            <CampoDinheiro
+              controle={controle}
+              nome="pdv.fundoSugerido"
+              rotulo="Fundo de troco sugerido"
+              erro={erros.pdv?.fundoSugerido}
+            />
+            <CampoDinheiro
+              controle={controle}
+              nome="pdv.alertaSangria"
+              rotulo="Alerta de sangria acima de"
+              erro={erros.pdv?.alertaSangria}
+            />
+          </Grade>
+        </Secao>
+      )}
 
       <Secao
         titulo="Impressão"
@@ -1014,13 +1045,19 @@ function EsqueletoFormulario() {
 /** Configurações da loja: dados, horários, entrega, pagamento, impressão e som. */
 export function PaginaLoja() {
   const { data: loja } = useLoja()
+  // Espera saber quem é: o gerente não vê as seções de pagamento nem por um instante.
+  const perfil = usePerfilAtual()
   return (
     <div className="flex w-full max-w-5xl flex-1 flex-col gap-6 p-4 md:p-6 lg:px-8">
       <CabecalhoPagina
         titulo="Configurações da loja"
         resumo="Tudo é salvo junto, pelo botão que aparece quando algo muda."
       />
-      {loja ? <Formulario key={loja.nome} loja={loja} /> : <EsqueletoFormulario />}
+      {loja && perfil ? (
+        <Formulario key={loja.nome} loja={loja} perfil={perfil} />
+      ) : (
+        <EsqueletoFormulario />
+      )}
     </div>
   )
 }

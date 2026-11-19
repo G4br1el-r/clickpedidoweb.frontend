@@ -15,6 +15,7 @@ import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { type ModuloId, tituloDoModulo } from "@/lib/admin/segmentos-painel"
+import { TrocarUsuario } from "./equipe/trocar-usuario"
 import { SeletorSegmento } from "./seletor-segmento"
 
 /** `modulo`: o título segue o nome do módulo no segmento escolhido (ex.: Produtos na farmácia). */
@@ -54,6 +55,7 @@ export function CabecalhoAdmin({ trilha, acoes }: { trilha: Trilha; acoes?: Reac
       </Breadcrumb>
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
         {acoes}
+        <TrocarUsuario />
         <SeletorSegmento />
         <AlternarTema />
       </div>

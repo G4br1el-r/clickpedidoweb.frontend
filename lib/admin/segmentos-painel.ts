@@ -27,8 +27,12 @@ import {
   ShieldAlertIcon,
   SquareKanbanIcon,
   TagsIcon,
+  UsersIcon,
   WineIcon,
 } from "lucide-react"
+
+import type { PerfilAcesso } from "./dados/tipos"
+import { podeVerModulo } from "./regras/equipe"
 
 export type SegmentoPainelId =
   | "adega"
@@ -121,6 +125,7 @@ export type ModuloId =
   | "motoboys"
   | "bairros"
   | "loja"
+  | "equipe"
 
 /** Módulos de comida com salão e entrega (adega, açougue, pizzaria). */
 const COMPLETO: readonly ModuloId[] = [
@@ -137,6 +142,7 @@ const COMPLETO: readonly ModuloId[] = [
   "motoboys",
   "bairros",
   "loja",
+  "equipe",
 ]
 
 const MODULOS: Record<SegmentoPainelId, readonly ModuloId[]> = {
@@ -154,6 +160,7 @@ const MODULOS: Record<SegmentoPainelId, readonly ModuloId[]> = {
     "categorias",
     "estoque",
     "loja",
+    "equipe",
   ],
   // Quiosque do Mineiro: sem PDV.
   lanchonete: COMPLETO.filter((modulo) => modulo !== "pdv"),
@@ -172,6 +179,7 @@ const MODULOS: Record<SegmentoPainelId, readonly ModuloId[]> = {
     "motoboys",
     "bairros",
     "loja",
+    "equipe",
   ],
 }
 
@@ -298,6 +306,7 @@ export const MODULOS_PAINEL: readonly InfoModulo[] = [
     grupo: "Loja",
     icone: Settings2Icon,
   },
+  { id: "equipe", titulo: "Equipe", href: "/admin/equipe", grupo: "Loja", icone: UsersIcon },
 ]
 
 const GRUPOS_MENU: readonly GrupoMenu[] = ["Operação", "Farmácia", "Gestão", "Entrega", "Loja"]
@@ -312,12 +321,21 @@ export function tituloDoModulo(id: ModuloId, segmento: SegmentoPainelId): string
   return TITULOS[segmento]?.[id] ?? buscarModulo(id)?.titulo ?? id
 }
 
-/** Menu do segmento: só os grupos que têm algum módulo dele, com os nomes do segmento. */
-export function menuDo(segmento: SegmentoPainelId): { grupo: GrupoMenu; itens: InfoModulo[] }[] {
+/**
+ * Menu do segmento: só os grupos que têm algum módulo dele que o perfil pode ver,
+ * com os nomes do segmento.
+ */
+export function menuDo(
+  segmento: SegmentoPainelId,
+  perfil: PerfilAcesso = "dono",
+): { grupo: GrupoMenu; itens: InfoModulo[] }[] {
   return GRUPOS_MENU.map((grupo) => ({
     grupo,
     itens: MODULOS_PAINEL.filter(
-      (modulo) => modulo.grupo === grupo && temModulo(segmento, modulo.id),
+      (modulo) =>
+        modulo.grupo === grupo &&
+        temModulo(segmento, modulo.id) &&
+        podeVerModulo(perfil, modulo.id),
     ).map((modulo) => ({ ...modulo, titulo: tituloDoModulo(modulo.id, segmento) })),
   })).filter((grupo) => grupo.itens.length > 0)
 }

@@ -4,6 +4,7 @@ import {
   buscarSegmento,
   ehSegmentoPainel,
   menuDo,
+  SEGMENTOS_PAINEL,
   temModulo,
   temRecurso,
   tituloDoModulo,
@@ -18,8 +19,18 @@ describe("menuDo", () => {
     expect(menu).toEqual([
       { grupo: "Operação", itens: ["Visão geral", "Agendamentos", "Fila de pedidos", "PDV"] },
       { grupo: "Gestão", itens: ["Pedidos", "Cardápio", "Categorias", "Estoque"] },
-      { grupo: "Loja", itens: ["Configurações da loja"] },
+      { grupo: "Loja", itens: ["Configurações da loja", "Equipe"] },
     ])
+  })
+
+  test("Equipe aparece em todos os segmentos, no grupo Loja", () => {
+    for (const segmento of SEGMENTOS_PAINEL) {
+      const loja = menuDo(segmento.id).find((grupo) => grupo.grupo === "Loja")
+      expect(loja?.itens.find((item) => item.id === "equipe")).toMatchObject({
+        titulo: "Equipe",
+        href: "/admin/equipe",
+      })
+    }
   })
 
   test("a pizzaria tem o grupo de entrega", () => {
@@ -118,7 +129,7 @@ describe("farmácia", () => {
       },
       { grupo: "Gestão", itens: ["Pedidos", "Produtos", "Categorias", "Estoque"] },
       { grupo: "Entrega", itens: ["Motoboys", "Bairros e taxas"] },
-      { grupo: "Loja", itens: ["Configurações da loja"] },
+      { grupo: "Loja", itens: ["Configurações da loja", "Equipe"] },
     ])
   })
 

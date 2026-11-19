@@ -13,6 +13,8 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
+import { usePerfilAtual } from "@/lib/admin/dados/consultas-equipe"
+import { podeVerModulo } from "@/lib/admin/regras/equipe"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import {
   buscarModulo,
@@ -26,6 +28,7 @@ import { PaginaCategorias } from "./cardapio/pagina-categorias"
 import { PaginaCozinha } from "./cozinha/pagina-cozinha"
 import { PaginaBairros } from "./entrega/pagina-bairros"
 import { PaginaMotoboys } from "./entrega/pagina-motoboys"
+import { PaginaEquipe } from "./equipe/pagina-equipe"
 import { PaginaEstoque } from "./estoque/pagina-estoque"
 import { PaginaControlados } from "./farmacia/pagina-controlados"
 import { PaginaReceitas } from "./farmacia/pagina-receitas"
@@ -36,6 +39,7 @@ import { PaginaLoja } from "./loja/pagina-loja"
 import { PaginaMesas } from "./mesas/pagina-mesas"
 import { PaginaPdv } from "./pdv/pagina-pdv"
 import { PaginaPedidos } from "./pedidos/pagina-pedidos"
+import { SemAcesso } from "./sem-acesso"
 import { VisaoGeral } from "./visao-geral/visao-geral"
 
 /** Módulos que já têm página; os outros mostram "Em construção". */
@@ -54,6 +58,7 @@ const PAGINAS: Partial<Record<ModuloId, ComponentType>> = {
   motoboys: PaginaMotoboys,
   bairros: PaginaBairros,
   loja: PaginaLoja,
+  equipe: PaginaEquipe,
   receitas: PaginaReceitas,
   controlados: PaginaControlados,
   validade: PaginaValidade,
@@ -71,6 +76,7 @@ export function CarregandoModulo() {
 export function PaginaModulo({ id }: { id: ModuloId }) {
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const hidratado = useSegmentoAtual((estado) => estado.hidratado)
+  const perfil = usePerfilAtual()
   const modulo = buscarModulo(id)
   if (!modulo) return null
 
@@ -99,6 +105,9 @@ export function PaginaModulo({ id }: { id: ModuloId }) {
       </Empty>
     )
   }
+
+  if (!perfil) return <CarregandoModulo />
+  if (!podeVerModulo(perfil, id)) return <SemAcesso titulo={`Sem acesso a ${modulo.titulo}`} />
 
   const Pagina = PAGINAS[id]
   if (Pagina) return <Pagina />

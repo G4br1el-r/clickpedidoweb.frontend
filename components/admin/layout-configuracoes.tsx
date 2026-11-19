@@ -11,7 +11,9 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { usePerfilAtual } from "@/lib/admin/dados/consultas-equipe"
 import { VARIAVEIS_FONTES } from "@/lib/admin/fontes"
+import { podeVerAparencia } from "@/lib/admin/regras/equipe"
 import { buscarSecao } from "@/lib/admin/secoes"
 import { cn } from "@/lib/utils"
 import { BarraAcoes } from "./barra-acoes"
@@ -19,6 +21,7 @@ import { CabecalhoAdmin, type Trilha } from "./cabecalho-admin"
 import { usePrevia } from "./previa/estado"
 import { Previa } from "./previa/previa"
 import { SacolaAdmin } from "./sacola-admin"
+import { SemAcesso } from "./sem-acesso"
 
 /**
  * Estrutura das configurações: ajustes à esquerda, com a barra de aplicar presa
@@ -29,12 +32,22 @@ export function LayoutConfiguracoes({ children }: { children: ReactNode }) {
   const caminho = usePathname()
   const previaAberta = usePrevia((estado) => estado.folhaAberta)
   const setPreviaAberta = usePrevia((estado) => estado.abrirFolha)
+  const perfil = usePerfilAtual()
   const secao = buscarSecao(caminho.split("/")[3] ?? "")
   const trilha: Trilha = [
     { titulo: "Painel", href: "/admin" },
     { titulo: "Configurações", href: "/admin/configuracoes" },
     ...(secao ? [{ titulo: secao.titulo }] : []),
   ]
+
+  if (perfil && !podeVerAparencia(perfil)) {
+    return (
+      <>
+        <CabecalhoAdmin trilha={trilha} />
+        <SemAcesso titulo="Sem acesso a Personalizar loja" />
+      </>
+    )
+  }
 
   return (
     <>
