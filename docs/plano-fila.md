@@ -117,4 +117,14 @@ Base: a [Fase 5 do plano do painel](plano-painel-admin.md#fase-5-fila-de-pedidos
 
 ## Situação
 
-- Fase 1: em andamento.
+- **Fase 1: pronta em 19/11/2026** (branch `claude/admin-fila-pedidos-22418d`).
+  - **Decidido no caminho:**
+    - o volume dos alertas antigos subiu (suave 0,3, alto 0,6, muito alto 0,8; Sirene 1);
+    - "Estorno pendente" vale para todo pedido pago e cancelado, não só o pago online;
+    - a farmácia já liga o aceite manual; o salão fica desligado até a fase 6;
+    - cancelar pelo cartão é um botão X ao lado de Detalhes, com motivo e confirmação;
+    - o servidor de demonstração não conclui mais sozinho (nem dá como pago) o que ficou aberto ao virar o dia: isso vai para o aviso. Só o Pix não pago é cancelado sozinho;
+    - a base guardada subiu para a versão 3 (os campos novos da loja): quem já usava o painel ganha dados de demonstração novos.
+  - **Fica para depois:** o aviso de som bloqueado confere ao abrir a fila e a cada toque na página, não sozinho com o tempo.
+  - **Pendente:** os screenshots (`toHaveScreenshot`) não foram atualizados. No E2E rápido, 125 deles falham, inclusive em telas da vitrine que esta fase não tocou (checkout, WhatsApp, produto): parecem desatualizados desde antes. A fila mudou de propósito (som "Padrão da loja (Sirene)"). Falta comparar com o commit-base e revisar antes de atualizar.
+  - **Fica para depois:** a acessibilidade (axe) do cartão esperando aceite no E2E: com o relógio controlado as animações param no meio.

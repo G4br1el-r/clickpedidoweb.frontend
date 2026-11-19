@@ -60,7 +60,12 @@ export function AvisoDiasAnteriores({ pedidos }: { pedidos: Pedido[] }) {
             os que não vão sair.
           </DialogDescription>
         </DialogHeader>
-        <ul className="flex max-h-80 flex-col divide-y divide-border/70 overflow-y-auto text-sm">
+        <ul
+          // biome-ignore lint/a11y/noNoninteractiveTabindex: a lista rola e precisa de foco pelo teclado (WCAG, axe scrollable-region-focusable).
+          tabIndex={0}
+          aria-label="Pedidos esquecidos"
+          className="flex max-h-80 flex-col divide-y divide-border/70 overflow-y-auto rounded-md text-sm focus-visible:outline-2 focus-visible:outline-ring"
+        >
           {pedidos.map((pedido) => (
             <li key={pedido.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 py-2">
               <span className="font-semibold tabular-nums">#{pedido.numero}</span>
