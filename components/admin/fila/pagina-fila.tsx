@@ -61,6 +61,7 @@ import { ChaveDaLoja } from "./chave-da-loja"
 import { EsteAparelho } from "./este-aparelho"
 import { MetricasFila } from "./metricas-fila"
 import { PausaPedidos } from "./pausa-pedidos"
+import { useTelaAcesa } from "./use-tela-acesa"
 import { useTituloDaAba } from "./use-titulo-da-aba"
 
 const _SONS: { valor: SomAlerta; rotulo: string }[] = [
@@ -279,6 +280,7 @@ export function PaginaFila({
   // Impressão automática: cada pedido novo entra uma vez na fila da impressora.
   const enviadosParaImprimir = useRef(new Set<number>())
   const marcarNaAba = useTituloDaAba(fila, preferencias.piscarAba)
+  useTelaAcesa(preferencias.telaAcesa)
   const novos = useChegadas(fila, (chegaram) => {
     avisarChegada(chegaram, usePreferenciasFila.getState())
     marcarNaAba(chegaram)

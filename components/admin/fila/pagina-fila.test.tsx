@@ -264,6 +264,30 @@ describe("PaginaFila", () => {
     await waitFor(() => expect(document.title).toBe("Fila de pedidos"))
   })
 
+  test("Tela sempre acesa segura a tela enquanto a fila está aberta e solta ao sair", async () => {
+    telaGrande()
+    const soltar = vi.fn(async () => {})
+    const pedir = vi.fn(async () => ({ release: soltar }))
+    Object.defineProperty(navigator, "wakeLock", { configurable: true, value: { request: pedir } })
+    usePreferenciasFila.setState({ telaAcesa: true })
+    const { unmount } = renderizar()
+
+    await waitFor(() => expect(pedir).toHaveBeenCalledWith("screen"), { timeout: 8000 })
+    unmount()
+    await waitFor(() => expect(soltar).toHaveBeenCalled())
+    Reflect.deleteProperty(navigator, "wakeLock")
+  })
+
+  test("sem suporte do navegador, Tela sempre acesa não liga e diz por quê", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    const menu = await abrirEsteAparelho(usuario)
+    const chave = menu.getByRole("switch", { name: "Tela sempre acesa" })
+    await usuario.click(chave)
+    expect(await screen.findByText("Este navegador não deixa a tela acesa.")).toBeInTheDocument()
+    expect(chave).toHaveAttribute("aria-checked", "false")
+  })
+
   test("com a aba à vista, não manda notificação", async () => {
     telaGrande()
     const avisos = vi.fn()

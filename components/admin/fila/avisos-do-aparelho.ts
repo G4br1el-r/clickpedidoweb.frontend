@@ -40,5 +40,8 @@ export async function pedirLicenca(chave: ChaveDoAparelho): Promise<string | nul
       ? null
       : "O navegador bloqueou as notificações. Libere nas configurações do site."
   }
+  if (chave === "telaAcesa" && !("wakeLock" in navigator)) {
+    return "Este navegador não deixa a tela acesa."
+  }
   return null
 }
