@@ -10,7 +10,7 @@
 
 **Origem:** as decisões Q1 a Q52 da sessão de perguntas de 18 e 19/11/2026, registradas abaixo. Base anterior: Fase 8 de [plano-painel-admin.md](plano-painel-admin.md).
 
-**Situação:** aguarda revisão. Só a Fase 1 tem passo a passo. Cada fase seguinte ganha o seu quando a anterior for mesclada, já sobre o código real.
+**Situação:** Fase 1 pronta em 19/11/2026, aguardando o PR. Só a Fase 1 tem passo a passo. Cada fase seguinte ganha o seu quando a anterior for mesclada, já sobre o código real.
 
 ## Restrições gerais
 
@@ -761,6 +761,28 @@ Em `consultas-mesas.test.tsx`: `useSalvarConfigSalao` invalida `useConfigSalao` 
 - [ ] **Passo 3:** `pnpm test:e2e:rapido`. O screenshot `painel-mesas-*` vai mudar (20 mesas e os rótulos novos). Revise a diferença antes de atualizar com `--update-snapshots`, só nesse teste.
 - [ ] **Passo 4:** registrar no fim desta seção a "Situação" (data, o que os testes pegaram, total de testes, mínimos de cobertura), como em `plano-painel-admin.md`.
 - [ ] **Passo 5:** abrir o PR da Fase 1 para `main`.
+
+Situação: pronta em 19/11/2026, aguardando o PR.
+
+- **O que as revisões pegaram:**
+  - a demonstração só abria com o salão do roteiro em parte dos dias. Um pedido de mesa sorteado entre 90 e 120 min antes ficava aberto. Agora só as comandas do roteiro ficam abertas hoje;
+  - na migração, "Bia", "bia" e "Bía" viravam garçons com o mesmo id, o que travaria o salvamento do salão. Agora a deduplicação usa o nome normalizado;
+  - na migração, com mais de 24 mesas, as mesas nasciam fora do mapa. Agora vão para a primeira posição livre, e com mais de 96 para a área "Salão 2";
+  - a mesa retangular grande valia só a partir de 8 lugares (a decisão é mais de 6);
+  - estados da comanda apareciam em mesa livre, e o resumo "com rodada na cozinha" deixava de contar a mesa que pediu a conta;
+  - a mesa bloqueada ainda recebia comanda pelo Garçom. Agora `lancar` recusa e o Garçom não a lista;
+  - ids repetidos de área e de garçom passavam no esquema do salão;
+  - o E2E de estoque navegava antes de o IndexedDB gravar o cancelamento.
+- **Mudou fora do plano:** a mensagem de área com mesas virou "Mova as mesas da área {nome} antes de excluí-la." (por causa do gênero). A forma inválida usa "Escolha a forma da mesa.". O garçom das comandas geradas sai da lista do salão.
+- **Screenshots:** mudaram em 8 telas do painel (visão geral, pedidos, fila, cozinha, mesas, comanda, motoboys, pesagem), por conteúdo da demonstração. As diferenças foram revisadas e o layout é o mesmo.
+- **Testes e cobertura:** 1105 testes no Vitest e 406 no E2E rápido (28 pulados). Os mínimos de cobertura subiram para 81/72/79/82 no geral e 97/94/98/98 em `lib/**`.
+- **Para a Fase 2:**
+  - cartão estreito (320 px) quebra "Pediu a conta" em duas linhas;
+  - limpeza de outro dia continua na mesa até haver "Marcar limpa";
+  - regex `\b` dentro de template literal em `pagina-garcom.test.tsx`;
+  - teste da migração de 3 dias sem `ocupadas.length > 0`;
+  - limites de centavos no esquema do salão (antes da Fase 4);
+  - o teste de "pediu a conta depois de nova rodada" vai inverter na Fase 3 (Q23).
 
 ## Fase 2: grade nova
 
