@@ -1,7 +1,7 @@
 import { addDays, format, isSameDay, startOfDay } from "date-fns"
 import type { FormaPagamento, Pedido, StatusPedido, TipoPedido } from "../../dados/tipos"
 import { diasNoPeriodo, type Periodo, periodoAnterior } from "../periodo"
-import { ehValido, noPeriodo, reais, soma, ticket } from "./comum"
+import { ehValido, fatias, noPeriodo, reais, soma, ticket } from "./comum"
 
 export type DiaDaSerie = {
   data: Date
@@ -48,22 +48,6 @@ const EM_ANDAMENTO: readonly StatusPedido[] = [
 ]
 
 const chaveDoDia = (data: Date) => format(data, "yyyy-MM-dd")
-
-/** Agrupa e ordena do maior total para o menor (empate: mais pedidos). */
-function fatias<K extends string>(pedidos: Pedido[], chave: (pedido: Pedido) => K) {
-  const total = soma(pedidos)
-  const grupos = new Map<K, Pedido[]>()
-  for (const pedido of pedidos)
-    grupos.set(chave(pedido), [...(grupos.get(chave(pedido)) ?? []), pedido])
-  return [...grupos.entries()]
-    .map(([valor, lista]) => ({
-      valor,
-      pedidos: lista.length,
-      total: soma(lista),
-      percentual: total ? (soma(lista) / total) * 100 : 0,
-    }))
-    .sort((a, b) => b.total - a.total || b.pedidos - a.pedidos)
-}
 
 function maisVendidos(pedidos: Pedido[], limite: number): ProdutoVendido[] {
   const produtos = new Map<string, ProdutoVendido>()

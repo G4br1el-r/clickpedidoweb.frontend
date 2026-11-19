@@ -1,6 +1,18 @@
 import { describe, expect, test } from "vitest"
-import { PEDIDOS_DE_TESTE as PEDIDOS, PERIODO_DE_TESTE as PERIODO } from "../pedidos-de-teste"
-import { podeAgruparPorSemana, porSemana, reguaDeVendas, serieComAnterior } from "./vendas"
+import {
+  PEDIDOS_DE_TESTE as PEDIDOS,
+  PERIODO_DE_TESTE as PERIODO,
+  pedidoDeTeste,
+} from "../pedidos-de-teste"
+import {
+  mapaDeCalor,
+  mediaPorHora,
+  origensDasVendas,
+  podeAgruparPorSemana,
+  porSemana,
+  reguaDeVendas,
+  serieComAnterior,
+} from "./vendas"
 
 describe("reguaDeVendas", () => {
   test("faturamento, pedidos, ticket e itens por pedido das vendas válidas, com o período anterior", () => {
@@ -66,6 +78,64 @@ describe("agrupar por semana", () => {
         pedidos: 1,
         anterior: { inicio: new Date(2026, 9, 8), faturamento: 5, pedidos: 2 },
       },
+    ])
+  })
+})
+
+describe("mapaDeCalor", () => {
+  test("pedidos válidos por dia da semana e hora, de segunda a domingo, nas horas com venda", () => {
+    const mapa = mapaDeCalor(PEDIDOS, PERIODO)
+    expect(mapa.horas).toEqual([19, 20])
+    expect(mapa.dias.map((linha) => linha.dia)).toEqual([1, 2, 3, 4, 5, 6, 0])
+    // 12/11/2026 é quinta; 13/11, sexta.
+    expect(mapa.dias[3]).toEqual({
+      dia: 4,
+      celulas: [
+        { hora: 19, pedidos: 1, faturamento: 50, nivel: 4 },
+        { hora: 20, pedidos: 1, faturamento: 30, nivel: 4 },
+      ],
+    })
+    expect(mapa.dias[0].celulas.map((celula) => celula.nivel)).toEqual([0, 0])
+  })
+})
+
+describe("mapaDeCalor: tons", () => {
+  test("cinco tons: 0 sem venda e de 1 a 4 em relação à célula mais cheia", () => {
+    // Segunda, 9/11/2026: 4 pedidos às 10h, 2 às 11h, 3 às 12h e 1 às 13h.
+    const em = (hora: number, quantos: number, primeiroId: number) =>
+      Array.from({ length: quantos }, (_, indice) =>
+        pedidoDeTeste(primeiroId + indice, new Date(2026, 10, 9, hora), 10),
+      )
+    const pedidos = [...em(10, 4, 1), ...em(11, 2, 10), ...em(12, 3, 20), ...em(13, 1, 30)]
+    const mapa = mapaDeCalor(pedidos, { de: new Date(2026, 10, 9), ate: new Date(2026, 10, 9) })
+    expect(mapa.dias[0].celulas.map((celula) => celula.nivel)).toEqual([4, 2, 3, 1])
+    expect(mapa.dias[1].celulas.map((celula) => celula.nivel)).toEqual([0, 0, 0, 0])
+  })
+})
+
+describe("mediaPorHora", () => {
+  test("média de pedidos e faturamento por dia do período, em cada hora com venda", () => {
+    expect(mediaPorHora(PEDIDOS, PERIODO)).toEqual([
+      { hora: 19, pedidos: 1, faturamento: 60 },
+      { hora: 20, pedidos: 1, faturamento: 25 },
+    ])
+  })
+})
+
+describe("origensDasVendas", () => {
+  test("vendas válidas por origem, da maior para a menor", () => {
+    const dia = new Date(2026, 10, 9, 12)
+    const pedidos = [
+      pedidoDeTeste(1, dia, 10),
+      pedidoDeTeste(2, dia, 10),
+      pedidoDeTeste(3, dia, 30, { origem: "pdv" }),
+      pedidoDeTeste(4, dia, 99, { origem: "garcom", status: "cancelado" }),
+    ]
+    expect(
+      origensDasVendas(pedidos, { de: new Date(2026, 10, 9), ate: new Date(2026, 10, 9) }),
+    ).toEqual([
+      { origem: "pdv", pedidos: 1, total: 30, percentual: 60 },
+      { origem: "site", pedidos: 2, total: 20, percentual: 40 },
     ])
   })
 })
