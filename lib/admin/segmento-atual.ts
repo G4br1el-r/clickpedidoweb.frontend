@@ -4,6 +4,7 @@ import { useEffect } from "react"
 import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import { ehSegmentoPainel, type SegmentoPainelId } from "./segmentos-painel"
+import { useUsuarioSalvo } from "./usuario-atual"
 
 type EstadoSegmento = {
   segmento: SegmentoPainelId
@@ -36,9 +37,10 @@ export const useSegmentoAtual = create<EstadoSegmento>()(
   ),
 )
 
-/** Carrega o segmento salvo uma vez, no cliente. */
+/** Carrega o segmento e o usuário salvos uma vez, no cliente. */
 export function useSegmentoCarregado() {
   useEffect(() => {
     if (!useSegmentoAtual.getState().hidratado) void useSegmentoAtual.persist.rehydrate()
+    if (!useUsuarioSalvo.persist.hasHydrated()) void useUsuarioSalvo.persist.rehydrate()
   }, [])
 }
