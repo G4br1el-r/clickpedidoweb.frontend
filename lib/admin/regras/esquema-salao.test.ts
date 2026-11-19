@@ -26,6 +26,24 @@ describe("esquema do salão", () => {
       "Já existe a área Varanda.",
     ],
     [{ areas: [{ id: "a", nome: "  ", ordem: 1 }] }, "Informe o nome da área."],
+    [
+      {
+        areas: [
+          { id: "a", nome: "Salão", ordem: 1 },
+          { id: "a", nome: "Varanda", ordem: 2 },
+        ],
+      },
+      "Há duas áreas com o mesmo identificador.",
+    ],
+    [
+      {
+        garcons: [
+          { id: "g", nome: "Ana", ativo: true },
+          { id: "g", nome: "Beto", ativo: true },
+        ],
+      },
+      "Há dois garçons com o mesmo identificador.",
+    ],
     [{ garcons: [{ id: "g", nome: "", ativo: true }] }, "Informe o nome do garçom."],
     [{ alertas: { ...padrao.alertas, semPedidoMin: 0 } }, "Os alertas vão de 1 a 600 minutos."],
   ])("recusa %o com a mensagem certa", (mudanca, mensagem) => {

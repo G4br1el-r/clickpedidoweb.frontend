@@ -67,6 +67,22 @@ export const esquemaSalao = z
     funcoes: z.object({ mapa: z.boolean(), reservas: z.boolean(), qr: z.boolean() }),
   })
   .superRefine((salao, contexto) => {
+    const repetido = (itens: { id: string }[]) =>
+      new Set(itens.map((item) => item.id)).size !== itens.length
+    if (repetido(salao.areas)) {
+      contexto.addIssue({
+        code: "custom",
+        path: ["areas"],
+        message: "Há duas áreas com o mesmo identificador.",
+      })
+    }
+    if (repetido(salao.garcons)) {
+      contexto.addIssue({
+        code: "custom",
+        path: ["garcons"],
+        message: "Há dois garçons com o mesmo identificador.",
+      })
+    }
     const vistas = new Map<string, string>()
     salao.areas.forEach((area, indice) => {
       const chave = normalizar(area.nome)
