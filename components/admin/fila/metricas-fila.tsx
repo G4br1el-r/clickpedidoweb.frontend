@@ -22,14 +22,12 @@ function Conteudo({
   sufixo,
   tom,
   escolhido,
-  lerValor,
 }: {
   rotulo: string
   valor: number | null
   sufixo?: string
   tom?: string | undefined
   escolhido?: boolean
-  lerValor?: boolean
 }) {
   return (
     <>
@@ -46,16 +44,11 @@ function Conteudo({
       >
         {valor === null ? "—" : <NumberFlow value={valor} suffix={sufixo} />}
       </span>
-      {/* Fora de botão e link, o número vai por escrito para o leitor de tela. */}
-      {lerValor && (
-        <span className="sr-only">{valor === null ? "sem dados" : `${valor}${sufixo ?? ""}`}</span>
-      )}
+      {/* Os dígitos rolam à parte: o número vai por escrito para o leitor de tela. */}
+      <span className="sr-only">{valor === null ? "sem dados" : `${valor}${sufixo ?? ""}`}</span>
     </>
   )
 }
-
-const comValor = (rotulo: string, valor: number | null, sufixo = "") =>
-  `${rotulo}, ${valor === null ? "sem dados" : `${valor}${sufixo}`}`
 
 /**
  * A régua da fila: números ao vivo entre fios, sem cartões. Os de pedidos em andamento
@@ -102,7 +95,6 @@ export function MetricasFila({
           key={rotulo}
           type="button"
           aria-pressed={escolhido}
-          aria-label={comValor(rotulo, valor)}
           className={cn(FATO, TOCAVEL, escolhido && "bg-foreground/[0.04]")}
           // "Em andamento" mostra tudo; os outros alternam o próprio filtro.
           onClick={() => aoFiltrar(id === null || escolhido ? null : id)}
@@ -113,17 +105,12 @@ export function MetricasFila({
     }),
     ...fatos.map(({ rotulo, valor, href, sufixo }) =>
       href ? (
-        <Link
-          key={rotulo}
-          href={href}
-          aria-label={comValor(rotulo, valor)}
-          className={cn(FATO, TOCAVEL)}
-        >
+        <Link key={rotulo} href={href} className={cn(FATO, TOCAVEL)}>
           <Conteudo rotulo={rotulo} valor={valor} />
         </Link>
       ) : (
         <div key={rotulo} className={FATO}>
-          <Conteudo rotulo={rotulo} valor={valor} lerValor {...(sufixo ? { sufixo } : {})} />
+          <Conteudo rotulo={rotulo} valor={valor} {...(sufixo ? { sufixo } : {})} />
         </div>
       ),
     ),

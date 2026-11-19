@@ -784,6 +784,36 @@ test("fila: pedido do site espera aceite; aceitar e recusar com motivo", async (
   // Sem axe aqui: com o relógio controlado as animações param no meio (cartão transparente).
 })
 
+test("fila: pausar, acrescentar ao prazo e filtrar os atrasados pela régua", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/fila")
+  await expect(page.getByRole("article").first()).toBeVisible({ timeout: 15_000 })
+
+  // Pausa de 15 min: mostra até quando e o que o cliente vê; Retomar volta.
+  await page.getByRole("button", { name: "Pausar pedidos" }).click()
+  await page.getByRole("menuitem", { name: "Loja toda por 15 min" }).click()
+  await expect(page.getByText("Loja pausada até 20:45 · 15 min")).toBeVisible()
+  await expect(page.getByText("O cliente vê: Loja ocupada, volte às 20:45")).toBeVisible()
+  await page.getByRole("button", { name: "Retomar" }).click()
+  await expect(page.getByRole("button", { name: "Pausar pedidos" })).toBeVisible()
+
+  // Cozinha cheia: +15 min no prazo dos pedidos novos.
+  await page.getByRole("radio", { name: "+15 min" }).click()
+  await expect(page.getByText("Entrega 65 min · Retirada 45 min")).toBeVisible()
+
+  // A régua filtra a fila; no celular, ela fica no Mais.
+  const mais = page.getByRole("button", { name: "Mais" })
+  if (await mais.isVisible()) await mais.click()
+  const atrasados = page.getByRole("button", { name: /^Atrasados/ })
+  await atrasados.click()
+  await expect(atrasados).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByText("Só os atrasados")).toBeVisible()
+  await esperarAnimacoes(page)
+  await verificarAcessibilidade(page)
+  await page.getByRole("button", { name: "Ver todos" }).click()
+  await expect(atrasados).toHaveAttribute("aria-pressed", "false")
+})
+
 test("fila: aceitar numa aba tira o aceite pendente da outra aba", async ({ page, context }, info) => {
   test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a fila usa abas")
   const relogio = new Date("2026-11-13T20:30:00-03:00")

@@ -483,8 +483,8 @@ describe("PaginaFila", () => {
     renderizar()
     const atrasados = await screen.findByRole("button", { name: /^Atrasados/ }, { timeout: 8000 })
     await waitFor(() => expect(screen.getAllByRole("article").length).toBeGreaterThan(0))
-    // O número vai no nome do botão ("Atrasados, 4"); os dígitos rolam à parte.
-    const total = Number(atrasados.getAttribute("aria-label")?.match(/\d+/)?.[0])
+    // Os dígitos rolam à parte; o número vai por escrito para o leitor de tela.
+    const total = Number(within(atrasados).getByText(/^\d+$/, { selector: ".sr-only" }).textContent)
     expect(total).toBeGreaterThan(0)
     const todos = screen.getAllByRole("article").length
 
