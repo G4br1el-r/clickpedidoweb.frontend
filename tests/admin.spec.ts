@@ -814,7 +814,10 @@ test("fila: pausar, acrescentar ao prazo e filtrar os atrasados pela régua", as
   await expect(atrasados).toHaveAttribute("aria-pressed", "false")
 })
 
-test("fila: aceitar numa aba tira o aceite pendente da outra aba", async ({ page, context }, info) => {
+test("fila: aceitar numa aba tira o aceite pendente da outra aba", async ({
+  page,
+  context,
+}, info) => {
   test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a fila usa abas")
   const relogio = new Date("2026-11-13T20:30:00-03:00")
   await page.clock.install({ time: relogio })
