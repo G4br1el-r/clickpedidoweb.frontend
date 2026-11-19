@@ -111,6 +111,19 @@ describe("acesso por perfil", () => {
     expect(screen.queryByRole("heading", { level: 1, name: "Estoque" })).not.toBeInTheDocument()
   })
 
+  test("o dono abre a Equipe", async () => {
+    useSegmentoAtual.setState({ segmento: "pizzaria", hidratado: true })
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <PaginaModulo id="equipe" />
+      </QueryClientProvider>,
+    )
+    expect(screen.getByRole("heading", { level: 1, name: "Equipe" })).toBeInTheDocument()
+    expect(
+      await screen.findByRole("table", { name: "Equipe" }, { timeout: 5000 }),
+    ).toBeInTheDocument()
+  })
+
   test("o gerente não abre a Equipe", async () => {
     useSegmentoAtual.setState({ segmento: "pizzaria", hidratado: true })
     useUsuarioSalvo.getState().entrar("pizzaria", "eq-gerente")

@@ -28,6 +28,7 @@ import { PaginaCategorias } from "./cardapio/pagina-categorias"
 import { PaginaCozinha } from "./cozinha/pagina-cozinha"
 import { PaginaBairros } from "./entrega/pagina-bairros"
 import { PaginaMotoboys } from "./entrega/pagina-motoboys"
+import { PaginaEquipe } from "./equipe/pagina-equipe"
 import { PaginaEstoque } from "./estoque/pagina-estoque"
 import { PaginaControlados } from "./farmacia/pagina-controlados"
 import { PaginaReceitas } from "./farmacia/pagina-receitas"
@@ -57,6 +58,7 @@ const PAGINAS: Partial<Record<ModuloId, ComponentType>> = {
   motoboys: PaginaMotoboys,
   bairros: PaginaBairros,
   loja: PaginaLoja,
+  equipe: PaginaEquipe,
   receitas: PaginaReceitas,
   controlados: PaginaControlados,
   validade: PaginaValidade,
