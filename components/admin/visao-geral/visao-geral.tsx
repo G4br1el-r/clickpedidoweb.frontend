@@ -1,19 +1,35 @@
 "use client"
 
-import { format, startOfDay } from "date-fns"
+import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { ReceiptTextIcon, SquareKanbanIcon } from "lucide-react"
 import Link from "next/link"
+import { parseAsString, useQueryState } from "nuqs"
 import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLoja, usePedidos } from "@/lib/admin/dados/consultas"
-import { resumir } from "@/lib/admin/regras/dashboard"
-import { periodoAnterior } from "@/lib/admin/regras/periodo"
+import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
+import { useMesas } from "@/lib/admin/dados/consultas-mesas"
+import { useFarmacia } from "@/lib/admin/farmacia-estado"
+import { useMetas } from "@/lib/admin/metas"
+import { abaEscolhida, abasDo } from "@/lib/admin/regras/dashboard/abas"
+import { alertasDoPainel } from "@/lib/admin/regras/dashboard/alertas"
+import { periodoDaBusca } from "@/lib/admin/regras/dashboard/busca"
+import { situacaoDaMeta } from "@/lib/admin/regras/dashboard/metas"
+import { resumir } from "@/lib/admin/regras/dashboard/resumo"
+import { destaquesDoSegmento } from "@/lib/admin/regras/dashboard/segmento"
+import { hojeVsSemanaPassada } from "@/lib/admin/regras/dashboard/semana-passada"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { temModulo } from "@/lib/admin/segmentos-painel"
+import { lotesDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
-import { PainelVisaoGeral } from "./painel-visao-geral"
+import { AbaFinanceiro, AbaResumo, AbaVendas } from "./painel-visao-geral"
+
+/** De quanto em quanto tempo o Resumo confere os pedidos. */
+const ATUALIZAR_RESUMO_A_CADA = 30_000
 
 /** Esqueleto no formato final da tela: blocos de hoje, do período, gráfico e listas. */
 function EsqueletoVisaoGeral() {
@@ -41,16 +57,69 @@ function EsqueletoVisaoGeral() {
 export function VisaoGeral() {
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const { agora, periodo } = usePeriodo()
+  const [valorDaAba, setAba] = useQueryState("aba", parseAsString)
+  const aba = abaEscolhida(valorDaAba, segmento)
   const { data: loja } = useLoja()
 
   // Uma busca só cobre o período, o anterior (para comparar) e hoje.
-  const filtro =
-    agora && periodo ? { de: periodoAnterior(periodo).de, ate: startOfDay(agora) } : undefined
-  const { data: pedidos } = usePedidos(filtro, { ativo: Boolean(filtro) })
+  const filtro = agora && periodo ? periodoDaBusca(periodo, agora) : undefined
+  // No Resumo, hoje e os alertas se atualizam sozinhos; as abas de análise, não.
+  const { data: pedidos } = usePedidos(filtro, {
+    ativo: Boolean(filtro),
+    atualizarACada: aba === "resumo" ? ATUALIZAR_RESUMO_A_CADA : undefined,
+  })
 
   const resumo = useMemo(
     () => (pedidos && periodo && agora ? resumir(pedidos, periodo, agora) : null),
     [pedidos, periodo, agora],
+  )
+  const comparacao = useMemo(
+    () => (pedidos && agora ? hojeVsSemanaPassada(pedidos, agora) : undefined),
+    [pedidos, agora],
+  )
+
+  const metaDefinida = useMetas((estado) => estado.metas[segmento])
+  const meta = useMemo(
+    () =>
+      metaDefinida && pedidos && loja && agora
+        ? situacaoDaMeta(metaDefinida, pedidos, loja.horarios, agora)
+        : null,
+    [metaDefinida, pedidos, loja, agora],
+  )
+
+  const temMesas = temModulo(segmento, "mesas")
+  const { data: mesas } = useMesas(30_000, { ativo: temMesas })
+
+  const { data: produtos } = useProdutos()
+  const decisoes = useFarmacia((estado) => estado.decisoes)
+  // A farmácia guarda receitas e lotes fora do servidor de demonstração.
+  const farmacia = useMemo(
+    () =>
+      segmento === "farmacia" && agora
+        ? { lotes: lotesDemo(agora), receitas: receitasDemo(agora) }
+        : { lotes: [], receitas: [] },
+    [segmento, agora],
+  )
+  const alertas = useMemo(
+    () =>
+      pedidos && produtos && loja && agora
+        ? alertasDoPainel({ segmento, agora, pedidos, produtos, loja, ...farmacia, decisoes, meta })
+        : [],
+    [pedidos, produtos, loja, agora, segmento, farmacia, decisoes, meta],
+  )
+  const destaques = useMemo(
+    () =>
+      pedidos && agora && (!temMesas || mesas)
+        ? destaquesDoSegmento({
+            segmento,
+            agora,
+            pedidos,
+            ...farmacia,
+            decisoes,
+            mesas: temMesas ? (mesas ?? []) : null,
+          })
+        : [],
+    [pedidos, agora, segmento, farmacia, decisoes, temMesas, mesas],
   )
 
   return (
@@ -81,13 +150,45 @@ export function VisaoGeral() {
         }
       />
 
-      <FiltroPeriodo />
+      <Tabs
+        value={aba}
+        // Resumo é o padrão: fica fora do endereço.
+        onValueChange={(valor) => void setAba(valor === "resumo" ? null : valor)}
+        className="gap-6"
+      >
+        <TabsList variant="line" aria-label="Abas da visão geral">
+          {abasDo(segmento).map((item) => (
+            <TabsTrigger key={item.id} value={item.id} className="cursor-pointer">
+              {item.titulo}
+            </TabsTrigger>
+          ))}
+        </TabsList>
 
-      {resumo && periodo ? (
-        <PainelVisaoGeral resumo={resumo} periodo={periodo} segmento={segmento} />
-      ) : (
-        <EsqueletoVisaoGeral />
-      )}
+        <FiltroPeriodo />
+
+        {/* Só a aba aberta é montada; cada uma é o painel da sua aba para leitores de tela. */}
+        <TabsContent value={aba}>
+          {resumo && periodo ? (
+            aba === "vendas" ? (
+              <AbaVendas resumo={resumo} segmento={segmento} />
+            ) : aba === "financeiro" ? (
+              <AbaFinanceiro resumo={resumo} />
+            ) : (
+              <AbaResumo
+                resumo={resumo}
+                periodo={periodo}
+                segmento={segmento}
+                comparacao={comparacao}
+                alertas={alertas}
+                meta={meta}
+                destaques={destaques}
+              />
+            )
+          ) : (
+            <EsqueletoVisaoGeral />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }
