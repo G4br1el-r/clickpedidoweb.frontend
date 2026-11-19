@@ -1063,7 +1063,7 @@ describe("servidor de demonstração", () => {
           ...atual,
           areas: [{ id: "area-varanda", nome: "Varanda", ordem: 1 }],
         }),
-      ).rejects.toThrow("Mova as mesas da Salão antes de excluir a área.")
+      ).rejects.toThrow("Mova as mesas da área Salão antes de excluí-la.")
       expect((await api.salao.config()).areas.map((area) => area.id)).toEqual(["area-salao"])
     })
   })

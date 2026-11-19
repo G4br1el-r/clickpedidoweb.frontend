@@ -1140,7 +1140,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           (area) => !mantidas.has(area.id) && base.mesas.some((mesa) => mesa.areaId === area.id),
         )
         if (retirada) {
-          throw new Error(`Mova as mesas da ${retirada.nome} antes de excluir a área.`)
+          throw new Error(`Mova as mesas da área ${retirada.nome} antes de excluí-la.`)
         }
         await substituir({ ...base, salao: lida.data })
         return responder(lida.data)
