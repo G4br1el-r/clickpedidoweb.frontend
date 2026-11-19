@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { proximoStatus } from "../regras/status"
 import { catalogoDeTeste as catalogo } from "./catalogo-de-teste"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
 import type { Pedido } from "./tipos"
@@ -163,6 +164,70 @@ describe("gerarPedidos", () => {
     expect(deHoje.some((pedido) => EM_ANDAMENTO.includes(pedido.status))).toBe(true)
     for (const pedido of pedidos.filter((pedido) => dia(pedido) < 13)) {
       expect(["concluido", "cancelado"]).toContain(pedido.status)
+    }
+  })
+
+  test("cada pedido traz as etapas por que passou, da criação até a atual, sem passar de agora", () => {
+    const pedidos = ["lanchonete", "salao"].flatMap((segmento) =>
+      gerarPedidos({
+        catalogo: catalogo(),
+        segmento: segmento as "lanchonete" | "salao",
+        de: new Date(2026, 10, 7),
+        agora: AGORA,
+      }),
+    )
+
+    for (const pedido of pedidos) {
+      const { historico } = pedido
+      expect(historico[0].em).toBe(pedido.criadoEm)
+      expect(historico.at(-1)?.status).toBe(pedido.status)
+      if (pedido.status === "concluido" || pedido.status === "cancelado") {
+        expect(historico.at(-1)?.em).toBe(pedido.atualizadoEm)
+      }
+      historico.forEach((etapa, indice) => {
+        expect(Date.parse(etapa.em)).toBeLessThanOrEqual(AGORA.getTime())
+        if (indice === 0) return
+        const antes = historico[indice - 1]
+        expect(Date.parse(etapa.em)).toBeGreaterThanOrEqual(Date.parse(antes.em))
+        const permitidas = [
+          proximoStatus(pedido.tipo, antes.status),
+          "cancelado",
+          ...(antes.status === "aguardando-pagamento" ? ["recebido"] : []),
+          // A mesa pronta só conclui ao fechar a conta.
+          ...(pedido.tipo === "mesa" && antes.status === "pronto" ? ["concluido"] : []),
+        ]
+        expect(permitidas).toContain(etapa.status)
+      })
+    }
+  })
+
+  test("uma entrega concluída passa por todas as etapas, cada uma levando alguns minutos", () => {
+    const pedidos = gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "lanchonete",
+      de: new Date(2026, 10, 9),
+      agora: AGORA,
+    })
+    const entregues = pedidos.filter(
+      (pedido) => pedido.tipo === "entrega" && pedido.status === "concluido",
+    )
+    expect(entregues.length).toBeGreaterThan(0)
+    for (const pedido of entregues) {
+      const etapas = pedido.historico.map((etapa) => etapa.status)
+      expect(etapas.slice(-5)).toEqual([
+        "recebido",
+        "em-preparo",
+        "pronto",
+        "saiu-para-entrega",
+        "concluido",
+      ])
+      const minutos = pedido.historico
+        .slice(1)
+        .map(
+          (etapa, indice) =>
+            (Date.parse(etapa.em) - Date.parse(pedido.historico[indice].em)) / 60_000,
+        )
+      for (const duracao of minutos) expect(duracao).toBeGreaterThan(0)
     }
   })
 

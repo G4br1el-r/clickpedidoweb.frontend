@@ -6,7 +6,7 @@ import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { carregarCatalogo } from "./catalogos"
 import { criarServidor, type FiltroPedidos, type Servidor, type VendaPdv } from "./servidor"
-import type { ConfigLoja, Pedido, StatusPedido } from "./tipos"
+import type { ConfigLoja, MotivoCancelamento, Pedido, StatusPedido } from "./tipos"
 
 /** Espera de rede simulada: dá para ver os estados de carregamento; zero nos testes. */
 const ESPERA = process.env.NODE_ENV === "test" ? 0 : 250
@@ -126,12 +126,12 @@ export function useAvancarPedido() {
 }
 
 export function useCancelarPedido() {
-  return useMutacaoDePedido<MudancaDeEtapa>(
-    (servidor, { id, de }) => servidor.pedidos.cancelar(id, de),
-    (pedido, { de }) =>
+  return useMutacaoDePedido<MudancaDeEtapa & { motivo?: MotivoCancelamento }>(
+    (servidor, { id, de, motivo }) => servidor.pedidos.cancelar(id, de, motivo),
+    (pedido, { de, motivo }) =>
       pedido.status === "concluido" || pedido.status !== de
         ? pedido
-        : { ...pedido, status: "cancelado" },
+        : { ...pedido, status: "cancelado", ...(motivo ? { motivoCancelamento: motivo } : {}) },
   )
 }
 

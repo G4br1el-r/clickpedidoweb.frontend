@@ -24,8 +24,21 @@ export type FormaPagamento =
 
 export type SituacaoPagamento = "pendente" | "pago" | "na-entrega" | "cancelado"
 
+/** Por que o pedido foi cancelado. Sem o campo no pedido, "Não informado". */
+export type MotivoCancelamento =
+  | "cliente-desistiu"
+  | "sem-estoque"
+  | "fora-da-area"
+  | "pagamento-nao-aprovado"
+  | "demora"
+  | "loja-fechou"
+  | "outro"
+
 /** Por onde o pedido entrou. "painel": agendamento marcado pela própria loja. */
 export type OrigemPedido = "site" | "pdv" | "garcom" | "painel"
+
+/** Uma mudança de etapa do pedido: para onde foi e quando. */
+export type EtapaDoPedido = { status: StatusPedido; em: string }
 
 export type ItemPedido = {
   id: string
@@ -91,6 +104,8 @@ export type Pedido = {
   observacao?: string
   criadoEm: string
   atualizadoEm: string
+  /** Cada etapa por que o pedido passou, da primeira à atual. */
+  historico: EtapaDoPedido[]
   impressoEm?: string
   /** Mesa: se a rodada vai para a cozinha. */
   enviarParaCozinha: boolean
@@ -100,6 +115,8 @@ export type Pedido = {
   dataRetirada?: string
   /** Açougue: resultado da pesagem. */
   pesagem?: { totalEstimado: number; diferenca: number; pesadoEm: string }
+  /** Cancelado: o motivo escolhido. Sem o campo, "Não informado". */
+  motivoCancelamento?: MotivoCancelamento
   /** O estoque já saiu por este pedido (para devolver no cancelamento uma vez só). */
   estoqueBaixado?: boolean
 }

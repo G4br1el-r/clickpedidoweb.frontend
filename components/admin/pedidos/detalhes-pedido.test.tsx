@@ -127,6 +127,33 @@ describe("DetalhesPedido", () => {
     expect(detalhes.queryByRole("button", { name: "Cancelar pedido" })).not.toBeInTheDocument()
   })
 
+  test("ao cancelar dá para escolher o motivo, que fica guardado e aparece no pedido", async () => {
+    const usuario = userEvent.setup()
+    const pedido = await umPedido((p) => p.status === "recebido")
+    renderizar(pedido.id)
+    const detalhes = await painel(pedido)
+
+    await usuario.click(detalhes.getByRole("button", { name: "Cancelar pedido" }))
+    const confirmacao = within(screen.getByRole("alertdialog"))
+    const motivos = confirmacao.getByRole("radiogroup", { name: "Motivo (opcional)" })
+    await usuario.click(within(motivos).getByRole("radio", { name: "Fora da área de entrega" }))
+    await usuario.click(confirmacao.getByRole("button", { name: "Sim, cancelar" }))
+
+    expect(await detalhes.findByText("Motivo: Fora da área de entrega")).toBeInTheDocument()
+    const guardado = await servidorDo(useSegmentoAtual.getState().segmento).pedidos.buscar(
+      pedido.id,
+    )
+    expect(guardado?.motivoCancelamento).toBe("fora-da-area")
+  })
+
+  test("cancelado sem motivo mostra Não informado", async () => {
+    const pedido = await umPedido((p) => p.status === "cancelado" && !p.motivoCancelamento)
+    renderizar(pedido.id)
+    const detalhes = await painel(pedido)
+
+    expect(detalhes.getByText("Motivo: Não informado")).toBeInTheDocument()
+  })
+
   test("marcar como pago some depois de pago", async () => {
     const usuario = userEvent.setup()
     const pedido = await umPedido(
