@@ -8,6 +8,7 @@ import {
   sincronizarOpcoes,
   soltarOpcoesDe,
 } from "../regras/cardapio"
+import { errosDoMembro } from "../regras/equipe"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
@@ -26,8 +27,10 @@ import {
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
+import { EQUIPE_DEMO } from "./equipe-demo"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
+import { gerarTurnos } from "./gerar-turnos"
 import type {
   Bairro,
   BaseLoja,
@@ -35,6 +38,7 @@ import type {
   Categoria,
   ConfigLoja,
   ItemPedido,
+  MembroEquipe,
   Mesa,
   Motoboy,
   MovimentoEstoque,
@@ -45,7 +49,7 @@ import type {
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 2
+const VERSAO = 3
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -123,6 +127,17 @@ export type OpcoesServidor = {
 
 /** Gerador de ids novos com prefixo: prod-1a2b3c4d. */
 const novoId = (prefixo: string) => () => `${prefixo}-${crypto.randomUUID().slice(0, 8)}`
+
+const novoMembro = novoId("eq")
+
+/** A pessoa pelo id, se o PIN confere e ela está ativa. */
+function membroComPin(base: BaseLoja, id: string, pin: string): MembroEquipe {
+  const membro = base.equipe.find((item) => item.id === id)
+  if (!membro) throw new Error("Pessoa não encontrada.")
+  if (!membro.ativo) throw new Error("Esta pessoa está desativada.")
+  if (membro.pin !== pin) throw new Error("PIN errado.")
+  return membro
+}
 
 const EM_ANDAMENTO: StatusPedido[] = ["recebido", "em-preparo", "pronto", "saiu-para-entrega"]
 
@@ -309,12 +324,15 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       agora,
     })
     const estoque = semearEstoque({ catalogo, segmento, agora })
+    const caixa = gerarTurnos({ pedidos, agora })
     const base = abrirMesas({
       ...catalogo,
       produtos: estoque.produtos,
       // O controle começa hoje: o saldo inicial já desconta os pedidos em andamento.
-      pedidos: pedidos.map(marcarEmAndamento),
+      pedidos: caixa.pedidos.map(marcarEmAndamento),
       movimentosEstoque: estoque.movimentos,
+      equipe: [...EQUIPE_DEMO],
+      turnos: caixa.turnos,
     })
     await salvar(base)
     return base
@@ -337,9 +355,12 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       ...(ultimo ? { ultimo } : {}),
       agendamentos: anteriores,
     })
+    // Os dias novos ganham os turnos deles; um turno que ficou aberto continua aberto.
+    const caixa = gerarTurnos({ pedidos: novos, agora })
     const completa = abrirMesas({
       ...base,
-      pedidos: [...anteriores, ...novos.map(marcarEmAndamento)],
+      pedidos: [...anteriores, ...caixa.pedidos.map(marcarEmAndamento)],
+      turnos: [...base.turnos, ...caixa.turnos],
     })
     await salvar(completa)
     return completa
@@ -1506,6 +1527,38 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           ? {}
           : { pagamentos: { ...loja.pagamentos, pix: false, "cartao-online": false } }),
       })
+    },
+
+    equipe: {
+      async listar(): Promise<MembroEquipe[]> {
+        return responder((await carregar()).equipe)
+      },
+
+      /** Cria (sem id) ou edita uma pessoa, conferida pelas regras da equipe. */
+      async salvar(dados: Omit<MembroEquipe, "id"> & { id?: string }): Promise<MembroEquipe> {
+        const base = await carregar()
+        const erro = errosDoMembro(dados, base.equipe)
+        if (erro) throw new Error(erro)
+        const membro: MembroEquipe = {
+          ...dados,
+          nome: dados.nome.trim(),
+          id: dados.id ?? novoMembro(),
+        }
+        const existe = base.equipe.some((item) => item.id === membro.id)
+        await substituir({
+          ...base,
+          equipe: existe
+            ? base.equipe.map((item) => (item.id === membro.id ? membro : item))
+            : [...base.equipe, membro],
+        })
+        return responder(membro)
+      },
+
+      /** Confere o PIN de quem vai usar o painel. */
+      async entrar(id: string, pin: string): Promise<MembroEquipe> {
+        const membro = membroComPin(await carregar(), id, pin)
+        return responder(membro)
+      },
     },
 
     /** Apaga as alterações e volta aos dados de demonstração. */

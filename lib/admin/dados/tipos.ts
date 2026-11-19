@@ -405,6 +405,9 @@ export type CatalogoLoja = {
 /** Tudo o que o painel de uma loja lê e altera. */
 export type BaseLoja = CatalogoLoja & {
   pedidos: Pedido[]
+  equipe: MembroEquipe[]
+  /** Turnos de caixa do PDV, do mais antigo para o mais novo. */
+  turnos: TurnoCaixa[]
   /** Histórico do estoque geral, do mais antigo para o mais novo. */
   movimentosEstoque: MovimentoEstoque[]
 }
