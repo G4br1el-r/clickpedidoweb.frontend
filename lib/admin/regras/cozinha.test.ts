@@ -8,6 +8,7 @@ import {
   minutosNaCozinha,
   rodadasNaCozinha,
   rodadasNovas,
+  ticketsDaCozinha,
   urgenciaNaCozinha,
 } from "./cozinha"
 import { AGORA_DE_TESTE as AGORA, PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
@@ -146,5 +147,65 @@ describe("urgenciaNaCozinha", () => {
   test("tempo em minutos desde a chegada à cozinha", () => {
     expect(minutosNaCozinha(QUADRO[2], AGORA)).toBe(6)
     expect(minutosNaCozinha(pedido(1, "recebido", 9), AGORA)).toBe(9)
+  })
+})
+
+describe("ticketsDaCozinha", () => {
+  const iniciado = { iniciadoEm: minutosAtras(8) }
+  const resumir = (tickets: ReturnType<typeof ticketsDaCozinha>) =>
+    tickets.map((ticket) => [ticket.id, ticket.status, nomes(ticket.itens)])
+
+  test("cada rodada da comanda é um ticket, com o estado tirado dos itens", () => {
+    const comanda = pedido(30, "recebido", 40, "mesa", [
+      { ...item("Pizza", 1, true, 30), ...iniciado },
+      item("Cerveja", 1, false, 30),
+      item("Batata", 2, true, 5),
+      item("Esfiha", 2, true, 5),
+    ])
+    expect(resumir(ticketsDaCozinha([comanda]))).toEqual([
+      ["30:1", "em-preparo", ["Pizza"]],
+      ["30:2", "recebido", ["Batata", "Esfiha"]],
+    ])
+  })
+
+  test("pronto quando todos os itens da rodada foram riscados", () => {
+    const feito = { ...iniciado, feitoEm: minutosAtras(2) }
+    const tudo = pedido(31, "pronto", 20, "entrega", [
+      { ...item("Pizza"), ...feito },
+      { ...item("Esfiha"), ...feito },
+    ])
+    const metade = pedido(32, "em-preparo", 20, "entrega", [
+      { ...item("Pizza"), ...feito },
+      { ...item("Esfiha"), ...iniciado },
+    ])
+    expect(resumir(ticketsDaCozinha([tudo, metade]))).toEqual([
+      ["31:1", "pronto", ["Pizza", "Esfiha"]],
+      ["32:1", "em-preparo", ["Pizza", "Esfiha"]],
+    ])
+  })
+
+  test("a chegada é o lançamento da rodada, ou a criação do pedido", () => {
+    const comanda = pedido(33, "recebido", 40, "mesa", [
+      item("Pizza", 1, true, 30),
+      item("Batata", 2, true, 5),
+    ])
+    const chegadas = ticketsDaCozinha([comanda, pedido(34, "recebido", 9)]).map(
+      (ticket) => ticket.chegouEm,
+    )
+    expect(chegadas).toEqual([minutosAtras(30), minutosAtras(5), minutosAtras(9)])
+  })
+
+  test("fica de fora o salão, a comanda sem cozinha e o que não está na cozinha", () => {
+    const fora = [
+      pedido(35, "em-preparo", 10, "atendimento"),
+      pedido(36, "pronto", 10, "mesa", [item("Cerveja", 1, false)]),
+      pedido(37, "saiu-para-entrega", 10),
+      pedido(38, "concluido", 10),
+      pedido(39, "cancelado", 10),
+      pedido(40, "aguardando-pagamento", 10),
+    ]
+    expect(ticketsDaCozinha([...fora, pedido(41, "recebido", 2)]).map((t) => t.id)).toEqual([
+      "41:1",
+    ])
   })
 })

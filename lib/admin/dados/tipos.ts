@@ -54,6 +54,10 @@ export type ItemPedido = {
   vaiParaCozinha?: boolean
   /** Comanda: quando o garçom lançou o item. */
   lancadoEm?: string
+  /** Cozinha: quando a rodada do item começou a ser preparada. */
+  iniciadoEm?: string
+  /** Cozinha: quando o item foi riscado como feito. */
+  feitoEm?: string
 }
 
 export type EnderecoEntrega = {
@@ -91,6 +95,10 @@ export type Pedido = {
   observacao?: string
   criadoEm: string
   atualizadoEm: string
+  /** Passa na frente na cozinha. */
+  prioridade?: boolean
+  /** Quando o pedido entrou em cada etapa por que passou. */
+  etapas?: Partial<Record<StatusPedido, string>>
   impressoEm?: string
   /** Mesa: se a rodada vai para a cozinha. */
   enviarParaCozinha: boolean

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { statusPelasRodadas } from "../regras/cozinha"
 import { catalogoDeTeste as catalogo } from "./catalogo-de-teste"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
 import type { Pedido } from "./tipos"
@@ -184,6 +185,40 @@ describe("gerarPedidos", () => {
     ]) {
       expect(etapas).toContain(etapa)
     }
+  })
+
+  test("cada pedido traz a hora de cada etapa, e a cozinha bate com o status", () => {
+    const pedidos = gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "lanchonete",
+      de: new Date(2026, 10, 12),
+      agora: AGORA,
+    })
+    const ORDEM = ["recebido", "em-preparo", "pronto", "saiu-para-entrega", "concluido"]
+    const NA_COZINHA = ["recebido", "em-preparo", "pronto"]
+
+    for (const pedido of pedidos) {
+      const etapas = pedido.etapas ?? {}
+      expect(etapas[pedido.status]).toBeDefined()
+      const horas = ORDEM.flatMap((status) => {
+        const hora = etapas[status as keyof typeof etapas]
+        return hora ? [Date.parse(hora)] : []
+      })
+      expect(horas).toEqual(horas.toSorted((a, b) => a - b))
+      expect(Math.max(...horas)).toBeLessThanOrEqual(AGORA.getTime())
+
+      if (NA_COZINHA.includes(pedido.status)) {
+        expect(statusPelasRodadas(pedido)).toBe(pedido.status)
+      }
+      // O que passou pela cozinha guarda quando começou e quando ficou pronto.
+      if (etapas.pronto) {
+        for (const item of pedido.itens) {
+          expect(item.iniciadoEm).toBe(etapas["em-preparo"])
+          expect(item.feitoEm).toBe(etapas.pronto)
+        }
+      }
+    }
+    expect(pedidos.filter((pedido) => pedido.etapas?.pronto).length).toBeGreaterThan(10)
   })
 
   test("na lanchonete o número do pedido recomeça no mês; nas outras é o id", () => {

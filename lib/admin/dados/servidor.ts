@@ -8,6 +8,13 @@ import {
   sincronizarOpcoes,
   soltarOpcoesDe,
 } from "../regras/cardapio"
+import {
+  avancarRodada,
+  riscarItem,
+  type StatusTicket,
+  ticketsDaCozinha,
+  voltarRodada,
+} from "../regras/cozinha"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
@@ -24,7 +31,7 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
-import { proximoStatus } from "../regras/status"
+import { etapasDoCaminho, proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
@@ -45,7 +52,7 @@ import type {
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 2
+const VERSAO = 3
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -176,6 +183,41 @@ function conferirEtapa(pedido: Pedido, de: StatusPedido) {
   if (pedido.status !== de) throw new Error("Este pedido já mudou de etapa. Atualize a tela.")
 }
 
+/**
+ * O pedido inteiro mudou de etapa (pela Fila): os itens da cozinha acompanham. Em preparo
+ * inicia todas as rodadas; pronto risca o que faltava. O que já tinha hora guarda a sua.
+ */
+function itensNaEtapa(pedido: Pedido, etapa: StatusPedido): ItemPedido[] {
+  if (etapa !== "em-preparo" && etapa !== "pronto") return pedido.itens
+  const daCozinha = new Set(
+    ticketsDaCozinha([pedido]).flatMap((ticket) => ticket.itens.map((item) => item.id)),
+  )
+  const agora = new Date().toISOString()
+  return pedido.itens.map((item) => {
+    if (!daCozinha.has(item.id)) return item
+    const iniciado = { ...item, iniciadoEm: item.iniciadoEm ?? agora }
+    return etapa === "pronto" ? { ...iniciado, feitoEm: item.feitoEm ?? agora } : iniciado
+  })
+}
+
+/**
+ * Guarda quando o pedido entrou na etapa nova. Voltar apaga as etapas que vinham depois
+ * (o pedido não está mais nelas); a etapa que ele já tinha passado mantém a primeira hora.
+ */
+function marcarEtapa(novo: Pedido, antes?: Pedido): Pedido {
+  if (antes?.status === novo.status) return novo
+  const caminho = etapasDoCaminho(novo.tipo)
+  const posicao = caminho.indexOf(novo.status)
+  const ficam = Object.entries(novo.etapas ?? {}).filter(
+    ([status]) => posicao < 0 || caminho.indexOf(status as StatusPedido) <= posicao,
+  )
+  const etapas: Partial<Record<StatusPedido, string>> = Object.fromEntries(ficam)
+  return {
+    ...novo,
+    etapas: { ...etapas, [novo.status]: etapas[novo.status] ?? new Date().toISOString() },
+  }
+}
+
 /** O que o pedido tira do estoque agora: nada se ainda não baixou ou foi cancelado. */
 const consumoAtivo = (pedido: Pedido | undefined, produtos: Produto[]) =>
   pedido?.estoqueBaixado && pedido.status !== "cancelado"
@@ -272,13 +314,20 @@ function aplicarEstoque(
 /** Pedido de um dia que já passou não fica aberto: entrega e comanda viram concluídas. */
 function encerrar(pedido: Pedido, momento: string): Pedido {
   if (pedido.status === "aguardando-pagamento") {
-    return { ...pedido, status: "cancelado", situacaoPagamento: "cancelado", atualizadoEm: momento }
+    return {
+      ...pedido,
+      status: "cancelado",
+      situacaoPagamento: "cancelado",
+      atualizadoEm: momento,
+      etapas: { ...pedido.etapas, cancelado: momento },
+    }
   }
   if (!EM_ANDAMENTO.includes(pedido.status)) return pedido
   return {
     ...pedido,
     status: "concluido",
     atualizadoEm: momento,
+    etapas: { ...pedido.etapas, concluido: momento },
     ...(pedido.situacaoPagamento === "na-entrega"
       ? { situacaoPagamento: "pago" as const, pagoEm: momento }
       : {}),
@@ -382,7 +431,10 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const indice = base.pedidos.findIndex((pedido) => pedido.id === id)
     if (indice < 0) throw new Error("Pedido não encontrado")
     const antes = base.pedidos[indice]
-    const novo = { ...mudar(antes, base), atualizadoEm: new Date().toISOString() }
+    const novo = marcarEtapa(
+      { ...mudar(antes, base), atualizadoEm: new Date().toISOString() },
+      antes,
+    )
     // O estoque acompanha o que o pedido passou a consumir (ou a devolver).
     const comEstoque = aplicarEstoque(base, antes, novo, estoque)
     const pedidos = comEstoque.pedidos.with(indice, novo)
@@ -650,11 +702,22 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           const pagoAgora = proximo === "concluido" && pedido.situacaoPagamento === "na-entrega"
           return {
             ...pedido,
+            itens: itensNaEtapa(pedido, proximo),
             status: proximo,
             ...(pagoAgora
               ? { situacaoPagamento: "pago" as const, pagoEm: new Date().toISOString() }
               : {}),
           }
+        })
+      },
+
+      /** Prioridade: o pedido passa na frente na cozinha. Cozinha, caixa e garçom marcam. */
+      priorizar(id: number, prioridade: boolean) {
+        return alterar(id, (pedido) => {
+          if (!EM_ANDAMENTO.includes(pedido.status)) {
+            throw new Error("Só pedido em andamento tem prioridade.")
+          }
+          return { ...pedido, prioridade }
         })
       },
 
@@ -710,8 +773,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           token: crypto.randomUUID(),
         }
         // Recebido, o estoque sai na hora; aguardando pagamento online, só quando pagar.
-        const chegou: Pedido =
-          novo.status === "aguardando-pagamento" ? novo : { ...novo, estoqueBaixado: true }
+        const chegou: Pedido = marcarEtapa(
+          novo.status === "aguardando-pagamento" ? novo : { ...novo, estoqueBaixado: true },
+        )
         const comEstoque = aplicarEstoque(base, undefined, chegou)
         await substituir({ ...comEstoque, pedidos: [...comEstoque.pedidos, chegou] })
         return responder(chegou)
@@ -995,8 +1059,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           estoqueBaixado: true,
         }
         const comEstoque = aplicarEstoque(base, undefined, pedido, { conferir: true })
-        await substituir({ ...comEstoque, pedidos: [...comEstoque.pedidos, pedido] })
-        return responder(pedido)
+        const vendido = marcarEtapa(pedido)
+        await substituir({ ...comEstoque, pedidos: [...comEstoque.pedidos, vendido] })
+        return responder(vendido)
       },
 
       /** Vendas do PDV de hoje, da mais nova para a mais antiga. */
@@ -1086,8 +1151,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           enviarParaCozinha: false,
           agendamento: { inicio: inicio.toISOString(), duracaoMin },
         }
-        await substituir({ ...base, pedidos: [...base.pedidos, pedido] })
-        return responder(pedido)
+        const marcado = marcarEtapa(pedido)
+        await substituir({ ...base, pedidos: [...base.pedidos, marcado] })
+        return responder(marcado)
       },
 
       /** Novo horário, com as mesmas regras; só antes de o atendimento começar. */
@@ -1103,6 +1169,24 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             agendamento: { ...pedido.agendamento, inicio: novoInicio.toISOString() },
           }
         })
+      },
+    },
+
+    /** Cada ticket da cozinha é uma rodada de um pedido; o pedido acompanha as rodadas. */
+    cozinha: {
+      /** `de`: a etapa que a tela mostrava no ticket. */
+      avancar(id: number, rodada: number, de: StatusTicket) {
+        return alterar(id, (pedido) => avancarRodada(pedido, rodada, de, new Date().toISOString()))
+      },
+
+      /** Desfaz a última etapa do ticket: o pronto volta a preparar, o preparo volta a fazer. */
+      voltar(id: number, rodada: number, de: StatusTicket) {
+        return alterar(id, (pedido) => voltarRodada(pedido, rodada, de))
+      },
+
+      /** Risca (ou desrisca) um item. Riscar num ticket de A fazer já começa a rodada. */
+      riscar(id: number, itemId: string, feito: boolean) {
+        return alterar(id, (pedido) => riscarItem(pedido, itemId, feito, new Date().toISOString()))
       },
     },
 
@@ -1177,39 +1261,42 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
         const garcom = lancamento.garcom?.trim().slice(0, 80)
         const cliente = lancamento.clienteNome?.trim().slice(0, 80)
-        const comanda: Pedido = recalcular(
-          aberta
-            ? {
-                ...aberta,
-                itens: [...aberta.itens, ...novos],
-                status: vaiParaCozinha ? "recebido" : aberta.status,
-                enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
-                ...(cliente ? { cliente: { ...aberta.cliente, nome: cliente } } : {}),
-                atualizadoEm: agora,
-                estoqueBaixado: true,
-              }
-            : {
-                id,
-                numero: numeroNovo(base, id),
-                token: crypto.randomUUID(),
-                origem: "garcom",
-                tipo: "mesa",
-                status: vaiParaCozinha ? "recebido" : "pronto",
-                cliente: { nome: cliente || mesa.nome, telefone: base.loja.telefone },
-                mesa: { id: mesa.id, numero: mesa.numero, ...(garcom ? { garcom } : {}) },
-                itens: novos,
-                subtotal: 0,
-                desconto: 0,
-                taxaEntrega: 0,
-                total: 0,
-                pagamento: "dinheiro",
-                situacaoPagamento: "na-entrega",
-                criadoEm: agora,
-                atualizadoEm: agora,
-                enviarParaCozinha: vaiParaCozinha,
-                // Cada lançamento do garçom tira do estoque.
-                estoqueBaixado: true,
-              },
+        const comanda: Pedido = marcarEtapa(
+          recalcular(
+            aberta
+              ? {
+                  ...aberta,
+                  itens: [...aberta.itens, ...novos],
+                  status: vaiParaCozinha ? "recebido" : aberta.status,
+                  enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
+                  ...(cliente ? { cliente: { ...aberta.cliente, nome: cliente } } : {}),
+                  atualizadoEm: agora,
+                  estoqueBaixado: true,
+                }
+              : {
+                  id,
+                  numero: numeroNovo(base, id),
+                  token: crypto.randomUUID(),
+                  origem: "garcom",
+                  tipo: "mesa",
+                  status: vaiParaCozinha ? "recebido" : "pronto",
+                  cliente: { nome: cliente || mesa.nome, telefone: base.loja.telefone },
+                  mesa: { id: mesa.id, numero: mesa.numero, ...(garcom ? { garcom } : {}) },
+                  itens: novos,
+                  subtotal: 0,
+                  desconto: 0,
+                  taxaEntrega: 0,
+                  total: 0,
+                  pagamento: "dinheiro",
+                  situacaoPagamento: "na-entrega",
+                  criadoEm: agora,
+                  atualizadoEm: agora,
+                  enviarParaCozinha: vaiParaCozinha,
+                  // Cada lançamento do garçom tira do estoque.
+                  estoqueBaixado: true,
+                },
+          ),
+          aberta,
         )
         const comEstoque = aplicarEstoque(base, aberta, comanda, { conferir: true })
         const pedidos = aberta

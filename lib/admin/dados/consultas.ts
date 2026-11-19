@@ -1,6 +1,7 @@
 "use client"
 
 import { type QueryKey, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { avancarRodada, riscarItem, type StatusTicket, voltarRodada } from "../regras/cozinha"
 import { proximoStatus } from "../regras/status"
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
@@ -174,6 +175,52 @@ export function useFila() {
 /** O que a cozinha acompanha: novos, em preparo e prontos, conferido a cada 4 s. */
 export function useCozinha(intervalo = 4_000) {
   return usePedidos({ status: ["recebido", "em-preparo", "pronto"] }, { atualizarACada: intervalo })
+}
+
+/** A previsão usa a mesma regra do servidor; se ela recusar, a tela fica como está. */
+const ouIgual =
+  <A>(mudar: (pedido: Pedido, argumentos: A) => Pedido) =>
+  (pedido: Pedido, argumentos: A) => {
+    try {
+      return mudar(pedido, argumentos)
+    } catch {
+      return pedido
+    }
+  }
+
+/** `de`: a etapa que o ticket mostrava. Se outra tela já mudou, o servidor recusa. */
+type MudancaDeTicket = { id: number; rodada: number; de: StatusTicket }
+
+export function useAvancarTicket() {
+  return useMutacaoDePedido<MudancaDeTicket>(
+    (servidor, { id, rodada, de }) => servidor.cozinha.avancar(id, rodada, de),
+    ouIgual((pedido, { rodada, de }) =>
+      avancarRodada(pedido, rodada, de, new Date().toISOString()),
+    ),
+  )
+}
+
+export function useVoltarTicket() {
+  return useMutacaoDePedido<MudancaDeTicket>(
+    (servidor, { id, rodada, de }) => servidor.cozinha.voltar(id, rodada, de),
+    ouIgual((pedido, { rodada, de }) => voltarRodada(pedido, rodada, de)),
+  )
+}
+
+export function useRiscarItem() {
+  return useMutacaoDePedido<{ id: number; itemId: string; feito: boolean }>(
+    (servidor, { id, itemId, feito }) => servidor.cozinha.riscar(id, itemId, feito),
+    ouIgual((pedido, { itemId, feito }) =>
+      riscarItem(pedido, itemId, feito, new Date().toISOString()),
+    ),
+  )
+}
+
+export function usePriorizarPedido() {
+  return useMutacaoDePedido<{ id: number; prioridade: boolean }>(
+    (servidor, { id, prioridade }) => servidor.pedidos.priorizar(id, prioridade),
+    (pedido, { prioridade }) => ({ ...pedido, prioridade }),
+  )
 }
 
 function useMudancaNaLoja(acao: (servidor: Servidor, valor: boolean) => Promise<ConfigLoja>) {

@@ -480,10 +480,63 @@ export function gerarPedidos({
           },
         }
       }
-      pedidos.push(novo)
+      pedidos.push(comHorarios(novo, atualizado))
     }
   }
   return pedidos
+}
+
+const CAMINHO_DA_COZINHA: StatusPedido[] = [
+  "recebido",
+  "em-preparo",
+  "pronto",
+  "saiu-para-entrega",
+  "concluido",
+]
+
+/**
+ * A hora de cada etapa do pedido gerado. Não sorteia de novo, para não mudar os outros
+ * pedidos: o preparo começa 2 a 5 min depois da chegada, fica pronto 8 a 15 min depois e
+ * a entrega sai 3 a 8 min depois de pronta, tudo antes dos 25 min em que o status muda.
+ * Concluído e cancelado fecham na última atualização; a venda do balcão não passa pela
+ * cozinha.
+ */
+function comHorarios(pedido: Pedido, atualizado: Date): Pedido {
+  const criado = new Date(pedido.criadoEm)
+  const hora = (data: Date) => data.toISOString()
+  if (pedido.status === "aguardando-pagamento") {
+    return { ...pedido, etapas: { "aguardando-pagamento": hora(criado) } }
+  }
+  const etapas: Partial<Record<StatusPedido, string>> = { recebido: hora(criado) }
+  if (pedido.status === "cancelado")
+    return { ...pedido, etapas: { ...etapas, cancelado: hora(atualizado) } }
+
+  if (pedido.agendamento) {
+    const inicio = new Date(pedido.agendamento.inicio)
+    if (pedido.status !== "recebido") etapas["em-preparo"] = hora(inicio)
+    if (pedido.status === "concluido") {
+      etapas.concluido = hora(addMinutes(inicio, pedido.agendamento.duracaoMin))
+    }
+    return { ...pedido, etapas }
+  }
+  if (pedido.origem === "pdv")
+    return { ...pedido, etapas: { ...etapas, concluido: hora(atualizado) } }
+
+  const ate = CAMINHO_DA_COZINHA.indexOf(pedido.status)
+  const iniciou = addMinutes(criado, 2 + (pedido.id % 4))
+  const pronto = addMinutes(iniciou, 8 + (pedido.id % 8))
+  if (ate >= 1) etapas["em-preparo"] = hora(iniciou)
+  if (ate >= 2) etapas.pronto = hora(pronto)
+  if (ate >= 3 && pedido.tipo === "entrega") {
+    etapas["saiu-para-entrega"] = hora(addMinutes(pronto, 3 + (pedido.id % 6)))
+  }
+  if (ate === 4) etapas.concluido = hora(atualizado)
+
+  const itens = pedido.itens.map((item) => {
+    if (ate < 1 || !(item.vaiParaCozinha ?? pedido.enviarParaCozinha)) return item
+    return { ...item, iniciadoEm: hora(iniciou), ...(ate >= 2 ? { feitoEm: hora(pronto) } : {}) }
+  })
+  return { ...pedido, itens, etapas }
 }
 
 export type OpcoesPedidoAgora = Omit<OpcoesGeracao, "de"> & {
