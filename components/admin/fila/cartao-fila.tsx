@@ -19,11 +19,11 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import type { MotivoEscolhido, Motoboy, Pedido } from "@/lib/admin/dados/tipos"
 import { esperaDoAceite } from "@/lib/admin/regras/aceite"
-import { textoCobranca, type Urgencia, urgencia } from "@/lib/admin/regras/fila"
+import { resumoDosItens, textoCobranca, type Urgencia, urgencia } from "@/lib/admin/regras/fila"
 import { textoRetirada } from "@/lib/admin/regras/numero"
 import { itensParaPesar } from "@/lib/admin/regras/pesagem"
 import { type TemposDaLoja, textoDoPrazo } from "@/lib/admin/regras/prazo"
-import { rotuloCanal } from "@/lib/admin/regras/rotulos"
+import { rotuloCanal, rotuloOrigem } from "@/lib/admin/regras/rotulos"
 import { rotuloAcao, tomDoStatus } from "@/lib/admin/regras/status"
 import { cn } from "@/lib/utils"
 import { ConfirmarComMotivo } from "../pedidos/confirmar-com-motivo"
@@ -170,6 +170,7 @@ export function CartaoFila({
           >
             {canal}
           </span>
+          <Badge variant="outline">{rotuloOrigem(pedido.origem)}</Badge>
           {aPesar && (
             <Badge variant="secondary" className="gap-1">
               <ScaleIcon aria-hidden="true" />A pesar
@@ -240,6 +241,7 @@ export function CartaoFila({
               {textoRetirada(pedido.dataRetirada)}
             </p>
           )}
+          <p className="text-xs text-muted-foreground tabular-nums">{resumoDosItens(pedido)}</p>
           <p className="text-xs text-muted-foreground">{textoCobranca(pedido)}</p>
           {pedido.impressoEm && (
             <p className="flex items-center gap-1 text-xs text-muted-foreground">

@@ -135,3 +135,9 @@ export function resumoDaFila(pedidos: Pedido[], segmento: SegmentoPainelId, agor
       .length,
   }
 }
+
+/** Tamanho do pedido no cartão: quantos itens (somando as quantidades) e o total. */
+export function resumoDosItens(pedido: Pedido): string {
+  const itens = pedido.itens.reduce((soma, item) => soma + item.quantidade, 0)
+  return `${itens} ${itens === 1 ? "item" : "itens"} · ${emReais(pedido.total)}`
+}

@@ -5,6 +5,7 @@ import {
   novosPedidos,
   pedidosDeDiasAnteriores,
   resumoDaFila,
+  resumoDosItens,
   textoCobranca,
   urgencia,
 } from "./fila"
@@ -195,5 +196,22 @@ describe("resumoDaFila", () => {
       concluidosHoje: 1,
       aguardandoPagamento: 1,
     })
+  })
+})
+
+describe("resumoDosItens", () => {
+  test("soma as quantidades e mostra o total do pedido", () => {
+    const comItens = (quantidades: number[]): Pedido => ({
+      ...base,
+      total: 137,
+      itens: quantidades.map((quantidade, indice) => ({
+        ...base.itens[0],
+        id: String(indice),
+        quantidade,
+      })),
+    })
+    // O Intl separa "R$" do valor com espaço não separável.
+    expect(resumoDosItens(comItens([2, 1]))).toBe("3 itens · R$ 137,00")
+    expect(resumoDosItens(comItens([1]))).toBe("1 item · R$ 137,00")
   })
 })

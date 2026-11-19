@@ -1,4 +1,4 @@
-import type { FormaPagamento, TipoPedido } from "../dados/tipos"
+import type { FormaPagamento, OrigemPedido, TipoPedido } from "../dados/tipos"
 
 const CANAIS: Record<TipoPedido, string> = {
   entrega: "Entrega",
@@ -17,3 +17,13 @@ const PAGAMENTOS: Record<FormaPagamento, string> = {
 
 export const rotuloCanal = (tipo: TipoPedido) => CANAIS[tipo]
 export const rotuloPagamento = (forma: FormaPagamento) => PAGAMENTOS[forma]
+
+const ORIGENS: Record<OrigemPedido, string> = {
+  site: "Site",
+  pdv: "PDV",
+  garcom: "Garçom",
+  painel: "Painel",
+}
+
+/** De onde o pedido veio, no selo do cartão da fila. */
+export const rotuloOrigem = (origem: OrigemPedido) => ORIGENS[origem]

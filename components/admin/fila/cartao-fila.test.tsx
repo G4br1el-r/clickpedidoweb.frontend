@@ -50,3 +50,16 @@ describe("CartaoFila: prazo prometido", () => {
     expect(screen.getByText("até 21:00 · +12 min")).toBeInTheDocument()
   })
 })
+
+describe("CartaoFila: o pedido de relance", () => {
+  test("mostra quantos itens, o total e de onde veio", () => {
+    renderizar({
+      ...PEDIDO,
+      origem: "garcom",
+      total: 52,
+      itens: [{ ...PEDIDO.itens[0], quantidade: 3 }],
+    })
+    expect(screen.getByText("3 itens · R$ 52,00")).toBeInTheDocument()
+    expect(screen.getByText("Garçom")).toBeInTheDocument()
+  })
+})
