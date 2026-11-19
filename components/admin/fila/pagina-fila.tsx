@@ -21,7 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAgora } from "@/hooks/use-agora"
-import { useTelaGrande } from "@/hooks/use-tela-grande"
+import { useTelaLarga } from "@/hooks/use-tela-grande"
 import {
   useAceitarPedido,
   useAvancarPedido,
@@ -247,7 +247,8 @@ export function PaginaFila({
   usePreferenciasCarregadas()
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const agora = useAgora(30_000)
-  const telaGrande = useTelaGrande()
+  // No tablet a barra lateral come 256 px: quatro colunas só a partir do notebook.
+  const telaGrande = useTelaLarga()
   const { data: fila } = useFila()
   const { data: loja } = useLoja()
   const { data: motoboys } = useMotoboys()

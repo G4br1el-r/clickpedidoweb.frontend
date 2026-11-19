@@ -726,7 +726,7 @@ test("o painel fala a mesma família da vitrine, título e texto", async ({ page
   expect(fontes.texto).toMatch(/Geist/)
 })
 
-test("fila: os botões de cada cartão ficam dentro do cartão, em qualquer tela", async ({
+test("fila: os botões de cada cartão ficam dentro do cartão, com o texto inteiro, em qualquer tela", async ({
   page,
 }) => {
   await page.goto("/admin/fila")
@@ -743,6 +743,9 @@ test("fila: os botões de cada cartão ficam dentro do cartão, em qualquer tela
       const nome = await botao.getAttribute("aria-label")
       expect(caixa.x, nome ?? "botão").toBeGreaterThanOrEqual(borda.x)
       expect(caixa.x + caixa.width, nome ?? "botão").toBeLessThanOrEqual(borda.x + borda.width)
+      // Texto cortado: o conteúdo é mais largo que o botão.
+      const sobra = await botao.evaluate((el) => el.clientWidth - el.scrollWidth)
+      expect(sobra, `texto de ${nome ?? (await botao.textContent())}`).toBeGreaterThanOrEqual(0)
     }
   }
 })

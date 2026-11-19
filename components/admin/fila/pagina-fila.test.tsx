@@ -129,6 +129,20 @@ describe("PaginaFila", () => {
     expect(screen.getByRole("tab", { name: /Em preparo/ })).toBeInTheDocument()
   })
 
+  test("no tablet, com a barra lateral, as colunas também viram abas", async () => {
+    // 768 a 1023 px: a barra lateral come 256 px e quatro colunas cortam os botões.
+    vi.stubGlobal("matchMedia", (consulta: string) => ({
+      matches: consulta === "(min-width: 768px)",
+      media: consulta,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
+    renderizar()
+    expect(await screen.findByRole("tab", { name: /Novos/ }, { timeout: 8000 })).toBeInTheDocument()
+    // Só a aba aberta aparece; as outras colunas ficam escondidas.
+    expect(screen.queryByRole("region", { name: /^Em preparo/ })).not.toBeInTheDocument()
+  })
+
   test("pedido novo chega com destaque e toca o alerta", async () => {
     telaGrande()
     const tocadas = vi.fn()
