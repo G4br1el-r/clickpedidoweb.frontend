@@ -39,6 +39,36 @@ function telaGrande() {
   }))
 }
 
+/** Web Audio de mentira: conta cada nota tocada. */
+function simularAudio() {
+  const tocadas = vi.fn()
+  vi.stubGlobal(
+    "AudioContext",
+    class {
+      currentTime = 0
+      destination = {}
+      state = "running"
+      createOscillator() {
+        tocadas()
+        return {
+          type: "sine",
+          frequency: { setValueAtTime: () => {}, linearRampToValueAtTime: () => {} },
+          connect: (no: unknown) => no,
+          start: () => {},
+          stop: () => {},
+        }
+      }
+      createGain() {
+        return {
+          gain: { setValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} },
+          connect: (no: unknown) => no,
+        }
+      }
+    },
+  )
+  return tocadas
+}
+
 function renderizar(intervaloSimulacao = 60_000) {
   return render(
     <Provedores>
@@ -112,7 +142,7 @@ describe("PaginaFila", () => {
           tocadas()
           return {
             type: "sine",
-            frequency: { setValueAtTime: () => {} },
+            frequency: { setValueAtTime: () => {}, linearRampToValueAtTime: () => {} },
             connect: (no: unknown) => no,
             start: () => {},
             stop: () => {},
@@ -258,6 +288,148 @@ describe("PaginaFila", () => {
 
     await usuario.click(within(cartao).getByRole("button", { name: "Detalhes" }))
     expect(await screen.findByRole("dialog", { name: `Pedido ${numero}` })).toBeInTheDocument()
+  })
+})
+
+describe("PaginaFila: aceite manual", () => {
+  /** Chega um pedido do site agora, com o aceite manual ligado. */
+  async function chegaPedidoDoSite() {
+    const servidor = servidorDo(useSegmentoAtual.getState().segmento)
+    await servidor.salvarLoja({ ...(await servidor.loja()), aceiteManual: true })
+    return servidor.pedidos.simular()
+  }
+
+  test("o pedido esperando aceite abre a coluna Novos, com Aceitar e Recusar", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    const novo = await chegaPedidoDoSite()
+    renderizar()
+
+    const [primeiro] = (await coluna("Novos")).getAllByRole("article")
+    const cartao = within(primeiro)
+    expect(cartao.getByRole("heading")).toHaveTextContent(`#${novo.numero}`)
+    expect(cartao.queryByRole("button", { name: "Iniciar preparo" })).not.toBeInTheDocument()
+
+    await usuario.click(cartao.getByRole("button", { name: "Aceitar" }))
+
+    expect(await cartao.findByRole("button", { name: "Iniciar preparo" })).toBeInTheDocument()
+    expect(cartao.queryByRole("button", { name: "Recusar" })).not.toBeInTheDocument()
+  })
+
+  test("mostra há quanto tempo espera e marca quando passa do limite", async () => {
+    telaGrande()
+    await chegaPedidoDoSite()
+    // O relógio da fila anda de 30 em 30 s: a tela já abre 6 min depois da chegada.
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 36))
+    renderizar()
+
+    const cartao = within((await coluna("Novos")).getAllByRole("article")[0])
+    expect(cartao.getByText("Esperando aceite há 6 min")).toBeInTheDocument()
+    expect(cartao.getByText(", passou do limite")).toHaveClass("sr-only")
+  })
+
+  test("o alarme repete enquanto o pedido espera e para quando a loja aceita", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    const tocadas = simularAudio()
+    await chegaPedidoDoSite()
+    usePreferenciasFila.setState({ somLigado: true })
+    render(
+      <Provedores>
+        <PaginaFila intervaloAlarme={100} />
+      </Provedores>,
+    )
+
+    const cartao = within((await coluna("Novos")).getAllByRole("article")[0])
+    await waitFor(() => expect(tocadas.mock.calls.length).toBeGreaterThanOrEqual(8))
+    await usuario.click(cartao.getByRole("button", { name: "Aceitar" }))
+    await cartao.findByRole("button", { name: "Iniciar preparo" })
+
+    const depoisDoAceite = tocadas.mock.calls.length
+    await new Promise((pronto) => setTimeout(pronto, 400))
+    expect(tocadas.mock.calls.length).toBe(depoisDoAceite)
+  })
+
+  test("som bloqueado pelo navegador: avisa e libera com um toque", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    simularAudio()
+    const Base = globalThis.AudioContext as unknown as new () => { state: string }
+    vi.stubGlobal(
+      "AudioContext",
+      class extends Base {
+        state = "suspended"
+        async resume() {
+          this.state = "running"
+        }
+      },
+    )
+    usePreferenciasFila.setState({ somLigado: true })
+    renderizar()
+
+    await usuario.click(
+      await screen.findByRole("button", { name: "Toque para ativar o som" }, { timeout: 8000 }),
+    )
+
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("button", { name: "Toque para ativar o som" }),
+      ).not.toBeInTheDocument(),
+    )
+  })
+
+  test("com a sirene como som da loja, o aparelho mostra a sirene como padrão", async () => {
+    const servidor = servidorDo(useSegmentoAtual.getState().segmento)
+    await servidor.salvarLoja({ ...(await servidor.loja()), som: "sirene" })
+    renderizar()
+
+    await waitFor(
+      () =>
+        expect(screen.getByRole("combobox", { name: "Tipo do alerta" })).toHaveTextContent(
+          "Padrão da loja (Sirene)",
+        ),
+      { timeout: 8000 },
+    )
+  })
+
+  test("recusar pede o motivo e tira o pedido da fila", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    const novo = await chegaPedidoDoSite()
+    renderizar()
+
+    const cartao = within((await coluna("Novos")).getAllByRole("article")[0])
+    await usuario.click(cartao.getByRole("button", { name: "Recusar" }))
+    const dialogo = within(
+      screen.getByRole("alertdialog", { name: `Recusar o pedido #${novo.numero}?` }),
+    )
+    await usuario.click(dialogo.getByRole("radio", { name: "Loja cheia" }))
+    await usuario.click(dialogo.getByRole("button", { name: "Sim, recusar" }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole("heading", { name: `#${novo.numero}` })).not.toBeInTheDocument(),
+    )
+  })
+})
+
+describe("PaginaFila: cancelar pelo cartão", () => {
+  test("pede o motivo, confirma e tira o pedido da fila", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const [primeiro] = (await coluna("Em preparo")).getAllByRole("article")
+    const numero = within(primeiro).getByRole("heading").textContent ?? ""
+
+    await usuario.click(within(primeiro).getByRole("button", { name: `Cancelar pedido ${numero}` }))
+    const dialogo = within(
+      screen.getByRole("alertdialog", { name: `Cancelar o pedido ${numero}?` }),
+    )
+    await usuario.click(dialogo.getByRole("radio", { name: "Sem estoque de um item" }))
+    await usuario.click(dialogo.getByRole("button", { name: "Sim, cancelar" }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole("heading", { name: numero })).not.toBeInTheDocument(),
+    )
   })
 })
 

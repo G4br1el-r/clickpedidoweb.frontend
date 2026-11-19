@@ -38,6 +38,10 @@ export function textoDoMotivo(cancelamento: Cancelamento, tipo: TipoPedido): str
   return opcao?.rotulo ?? OUTRO.rotulo
 }
 
+/** O alarme insiste enquanto algum pedido espera a loja aceitar ou recusar. */
+export const alarmeTocando = (pedidos: Pedido[]) =>
+  pedidos.some((pedido) => pedido.esperaAceite && pedido.status === "recebido")
+
 /** Quanto o pedido já espera o aceite e se passou do limite; `null` se não espera. */
 export function esperaDoAceite(
   pedido: Pedido,

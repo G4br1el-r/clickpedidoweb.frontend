@@ -327,7 +327,7 @@ export const catalogoAdega: CatalogoLoja = {
     },
     impressaoAutomatica: false,
     cortarPapel: true,
-    som: "alto",
+    som: "sirene",
     aceiteManual: true,
     limiteAceiteMin: 5,
     vitrines: {

@@ -37,6 +37,15 @@ describe("colunasDaFila", () => {
     ])
   })
 
+  test("quem espera aceite abre a coluna Novos, do mais antigo ao mais novo", () => {
+    const esperando = (id: number, minutosAtras: number): Pedido => ({
+      ...pedido(id, "recebido", minutosAtras),
+      esperaAceite: true,
+    })
+    const fila = [...FILA, esperando(30, 1), esperando(31, 2)]
+    expect(resumo(colunasDaFila(fila, "pizzaria", AGORA))[0]).toEqual(["Novos", [31, 30, 11, 10]])
+  })
+
   test("salão: agendados de hoje pela hora marcada e em atendimento", () => {
     const marcado = (id: number, status: StatusPedido, inicio: Date): Pedido => ({
       ...pedido(id, status, 60 * 24, "atendimento"),

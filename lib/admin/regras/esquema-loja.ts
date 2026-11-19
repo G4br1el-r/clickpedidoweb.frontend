@@ -81,9 +81,13 @@ export const esquemaLoja = z
     capacidadeAtendimentos: z.number().int().min(1).max(20).optional(),
     impressaoAutomatica: z.boolean(),
     cortarPapel: z.boolean(),
-    som: z.enum(["suave", "alto", "muito-alto"]),
+    som: z.enum(["suave", "alto", "muito-alto", "sirene"]),
     aceiteManual: z.boolean(),
-    limiteAceiteMin: z.number(),
+    limiteAceiteMin: z
+      .number()
+      .int({ error: "Entre 1 e 30 minutos." })
+      .min(1, { error: "Entre 1 e 30 minutos." })
+      .max(30, { error: "Entre 1 e 30 minutos." }),
     vitrines: z.object({ destaques: vitrine, ofertas: vitrine }),
     videoBanner: esquemaLinkDeVideo.optional(),
   })

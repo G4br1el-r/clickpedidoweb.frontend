@@ -329,7 +329,7 @@ export type Bairro = { id: string; cidade: string; nome: string; taxa: number; a
 /** Dia da semana: 0 = domingo. */
 export type HorarioFuncionamento = { dia: number; aberto: boolean; abre: string; fecha: string }
 
-export type SomAlerta = "suave" | "alto" | "muito-alto"
+export type SomAlerta = "suave" | "alto" | "muito-alto" | "sirene"
 
 export type ConfigLoja = {
   nome: string

@@ -51,11 +51,13 @@ export function colunasDaFila(
     ["prontos", "Prontos", "pronto"],
   ]
   if (temModulo(segmento, "motoboys")) colunas.push(["rota", "A caminho", "saiu-para-entrega"])
+  // Quem espera aceite vem antes: é o que pede ação primeiro.
+  const espera = (pedido: Pedido) => (pedido.esperaAceite ? 0 : 1)
   return colunas.map(([id, titulo, status]) => ({
     id,
     titulo,
     status,
-    pedidos: com(status).sort((a, b) => criado(a) - criado(b)),
+    pedidos: com(status).sort((a, b) => espera(a) - espera(b) || criado(a) - criado(b)),
   }))
 }
 

@@ -1,9 +1,14 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { tocarAlerta } from "./som"
+import { liberarSom, somBloqueado, tocarAlerta } from "./som"
 
-/** AudioContext de mentira: anota as notas tocadas (frequência e forma da onda). */
+/**
+ * AudioContext de mentira: anota as notas tocadas (frequência e forma da onda), as subidas
+ * de frequência e o volume mais alto de cada nota.
+ */
 function simularAudio() {
   const notas: { frequencia: number; onda: string }[] = []
+  const subidas: number[] = []
+  const volumes: number[] = []
   class ContextoFalso {
     currentTime = 0
     destination = {}
@@ -15,6 +20,7 @@ function simularAudio() {
         frequency: {
           setValueAtTime: (valor: number) =>
             notas.push({ frequencia: valor, onda: oscilador.type }),
+          linearRampToValueAtTime: (valor: number) => subidas.push(valor),
         },
         connect: () => oscilador,
         start: vi.fn(),
@@ -23,10 +29,17 @@ function simularAudio() {
       return oscilador
     }
     createGain() {
+      let pico = 0
       const ganho = {
         gain: {
           setValueAtTime: vi.fn(),
-          exponentialRampToValueAtTime: vi.fn(),
+          exponentialRampToValueAtTime: (valor: number) => {
+            if (valor > pico) {
+              if (pico > 0) volumes.pop()
+              pico = valor
+              volumes.push(valor)
+            }
+          },
           linearRampToValueAtTime: vi.fn(),
         },
         connect: () => ganho,
@@ -35,7 +48,7 @@ function simularAudio() {
     }
   }
   vi.stubGlobal("AudioContext", ContextoFalso)
-  return notas
+  return Object.assign(notas, { subidas, volumes })
 }
 
 afterEach(() => {
@@ -60,6 +73,51 @@ describe("tocarAlerta", () => {
     tocarAlerta("muito-alto")
     expect(notas).toHaveLength(4)
     expect(new Set(notas.map((nota) => nota.onda))).toEqual(new Set(["sawtooth"]))
+  })
+
+  test("sirene: quatro subidas de 650 a 1500 Hz, em onda quadrada, no volume máximo", () => {
+    const notas = simularAudio()
+    tocarAlerta("sirene")
+    expect([...notas]).toEqual(Array(4).fill({ frequencia: 650, onda: "square" }))
+    expect(notas.subidas).toEqual([1500, 1500, 1500, 1500])
+    expect(notas.volumes).toEqual([1, 1, 1, 1])
+  })
+
+  test("os alertas de sempre ficaram mais altos: suave 0,3, alto 0,6 e muito alto 0,8", () => {
+    const suave = simularAudio()
+    tocarAlerta("suave")
+    expect(new Set(suave.volumes)).toEqual(new Set([0.3]))
+
+    const alto = simularAudio()
+    tocarAlerta("alto")
+    expect(new Set(alto.volumes)).toEqual(new Set([0.6]))
+
+    const muitoAlto = simularAudio()
+    tocarAlerta("muito-alto")
+    expect(new Set(muitoAlto.volumes)).toEqual(new Set([0.8]))
+  })
+
+  test("som bloqueado: o navegador segura o áudio até a pessoa tocar na página", async () => {
+    simularAudio()
+    const Base = globalThis.AudioContext as unknown as new () => { state: string }
+    vi.stubGlobal(
+      "AudioContext",
+      class extends Base {
+        state = "suspended"
+        resume = vi.fn(async () => {
+          this.state = "running"
+        })
+      },
+    )
+
+    expect(somBloqueado()).toBe(true)
+    await liberarSom()
+    expect(somBloqueado()).toBe(false)
+  })
+
+  test("sem Web Audio, não há o que liberar: não aparece como bloqueado", () => {
+    vi.stubGlobal("AudioContext", undefined)
+    expect(somBloqueado()).toBe(false)
   })
 
   test("sem Web Audio no navegador, não quebra", () => {

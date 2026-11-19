@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { Pedido } from "../dados/tipos"
-import { esperaDoAceite, motivosDeCancelamento } from "./aceite"
+import { alarmeTocando, esperaDoAceite, motivosDeCancelamento } from "./aceite"
 import { PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
 
 /** Chegou às 20:30 de 13/11/2026 (São Paulo). */
@@ -40,6 +40,16 @@ describe("motivosDeCancelamento", () => {
       "Suspeita de fraude",
       "Outro motivo",
     ])
+  })
+})
+
+describe("alarmeTocando", () => {
+  test("toca enquanto houver um pedido esperando aceite; aceito ou recusado, para", () => {
+    const aceito: Pedido = { ...esperando, id: 2, esperaAceite: false }
+    expect(alarmeTocando([aceito, esperando])).toBe(true)
+    expect(alarmeTocando([aceito])).toBe(false)
+    expect(alarmeTocando([{ ...esperando, status: "cancelado" }])).toBe(false)
+    expect(alarmeTocando([])).toBe(false)
   })
 })
 
