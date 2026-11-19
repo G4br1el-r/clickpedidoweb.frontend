@@ -90,6 +90,26 @@ afterEach(() => {
 })
 
 describe("PaginaMesas", () => {
+  test("o resumo conta a rodada na cozinha pelo status da comanda, mesmo com a conta pedida", async () => {
+    // Na demonstração, as mesas 6, 7 e 8 têm rodada na cozinha; a mesa 1 já pediu a conta.
+    const [mesas, base] = await Promise.all([api().mesas.listar(), api().base()])
+    const contaPedida = mesas.find((mesa) => mesa.numero === 1)
+    const comanda = base.pedidos.find((pedido) => pedido.id === contaPedida?.pedidoAtivoId)
+    if (!contaPedida || !comanda?.contaPedidaEm) {
+      throw new Error("A demonstração devia ter a mesa 1 pedindo a conta")
+    }
+    const nova = await api().mesas.lancar({
+      mesaId: contaPedida.id,
+      enviarParaCozinha: true,
+      itens: [{ avulso: { nome: "Pizza", preco: 40 }, quantidade: 1 }],
+    })
+    await api().pedidos.avancar(nova.id, nova.status)
+    await abrir()
+
+    expect(await cartao(1)).toHaveAccessibleDescription(/^Pediu a conta/)
+    expect(await screen.findByText(/4 com rodada na cozinha/)).toBeInTheDocument()
+  })
+
   test("a demonstração mostra a mesa 20 bloqueada, a comanda mais antiga pedindo a conta e outra para servir", async () => {
     const [mesas, base] = await Promise.all([api().mesas.listar(), api().base()])
     const comComanda = mesas.flatMap((mesa) => {

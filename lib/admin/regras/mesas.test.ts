@@ -125,3 +125,12 @@ describe("estadoDaMesa", () => {
     ).toBe("servir")
   })
 })
+
+describe("estadoDaMesa com comanda residual em mesa livre", () => {
+  test("mesa livre continua livre, mesmo com comanda que pediu a conta, a servir ou na cozinha", () => {
+    const livre = { status: "livre" } as const
+    expect(estadoDaMesa(livre, { status: "recebido", contaPedidaEm: "x" }).estado).toBe("livre")
+    expect(estadoDaMesa(livre, { status: "pronto", servirDesde: "y" }).estado).toBe("livre")
+    expect(estadoDaMesa(livre, { status: "recebido" }).estado).toBe("livre")
+  })
+})

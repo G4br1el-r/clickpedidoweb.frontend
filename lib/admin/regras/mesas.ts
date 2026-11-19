@@ -42,10 +42,13 @@ export function estadoDaMesa(
       tom: "caminho",
     }
   }
-  if (comanda?.contaPedidaEm)
+  // A comanda só conta com a mesa ocupada: numa mesa livre ela é resto de um pedido antigo.
+  const aberta = mesa.status === "ocupada" ? comanda : undefined
+  if (aberta?.contaPedidaEm) {
     return { estado: "conta-pedida", rotulo: "Pediu a conta", tom: "novo" }
-  if (comanda?.servirDesde) return { estado: "servir", rotulo: "Servir", tom: "pronto" }
-  if (comanda?.status === "recebido" || comanda?.status === "em-preparo") {
+  }
+  if (aberta?.servirDesde) return { estado: "servir", rotulo: "Servir", tom: "pronto" }
+  if (aberta?.status === "recebido" || aberta?.status === "em-preparo") {
     return { estado: "na-cozinha", rotulo: "Na cozinha", tom: "preparo" }
   }
   if (mesa.status === "ocupada") return { estado: "ocupada", rotulo: "Ocupada", tom: "caminho" }
