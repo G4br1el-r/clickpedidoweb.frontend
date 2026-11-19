@@ -7,7 +7,12 @@ import { useState } from "react"
 import { Controller, useFormContext } from "react-hook-form"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { diasParaAgendar, duracaoDaSacola, horariosParaAgendar } from "@/lib/agendar"
+import {
+  diaInicialParaAgendar,
+  diasParaAgendar,
+  duracaoDaSacola,
+  horariosParaAgendar,
+} from "@/lib/agendar"
 import type { DadosCheckout } from "@/lib/checkout"
 import { useLoja } from "@/lib/loja-atual"
 import { useSacola } from "@/lib/sacola"
@@ -39,17 +44,21 @@ export function PassoHorario() {
   const duracao = duracaoDaSacola(itens)
   const agora = new Date()
   const expediente = loja.expediente ?? []
+  const capacidade = loja.capacidade ?? 1
   const dias = diasParaAgendar(expediente, agora, 7)
-  const [diaEscolhido, setDiaEscolhido] = useState(() => dias[0]?.toISOString() ?? "")
-  const dia = dias.find((item) => item.toISOString() === diaEscolhido) ?? dias[0]
-  const horas = dia
-    ? horariosParaAgendar({
-        dia,
+  const [diaEscolhido, setDiaEscolhido] = useState(
+    () =>
+      diaInicialParaAgendar({
+        dias,
         duracaoMin: duracao,
         horarios: expediente,
-        capacidade: loja.capacidade ?? 1,
+        capacidade,
         agora,
-      })
+      })?.toISOString() ?? "",
+  )
+  const dia = dias.find((item) => item.toISOString() === diaEscolhido) ?? dias[0]
+  const horas = dia
+    ? horariosParaAgendar({ dia, duracaoMin: duracao, horarios: expediente, capacidade, agora })
     : []
 
   return (

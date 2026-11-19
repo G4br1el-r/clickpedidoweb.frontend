@@ -33,6 +33,28 @@ async function abrirLoja(page: Page, nome: string) {
   expect(largura).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0)
 }
 
+/**
+ * Adianta ou atrasa só o `Date` da página para `inicio`, e dali ele anda normalmente, também
+ * entre uma página e outra. O `page.clock` do Playwright não serve aqui: ele também controla
+ * `requestAnimationFrame` e `performance.now`, e a saída animada de um passo do checkout
+ * (`AnimatePresence mode="wait"`) não termina, então o passo seguinte nunca aparece.
+ */
+async function relogioComecandoEm(page: Page, inicio: Date) {
+  await page.addInitScript((deslocamento) => {
+    const DateReal = Date
+    class DateDeslocado extends DateReal {
+      constructor(...args: unknown[]) {
+        if (args.length === 0) super(DateReal.now() + deslocamento)
+        else super(...(args as [string]))
+      }
+      static now() {
+        return DateReal.now() + deslocamento
+      }
+    }
+    globalThis.Date = DateDeslocado as DateConstructor
+  }, inicio.getTime() - Date.now())
+}
+
 async function preencherDados(page: Page) {
   await page.getByLabel("Nome").fill("Ana")
   await page.getByLabel("WhatsApp").fill("(12) 99888-7766")
@@ -43,6 +65,9 @@ test("salão: escolher o serviço, marcar dia e horário e ver o horário no ped
   page,
 }) => {
   test.setTimeout(90_000)
+  // Sábado, 14/11/2026, 18h30: o salão ainda está aberto (até as 19h), mas o corte de 1h
+  // não cabe mais hoje. O relógio parte daí, a qualquer hora em que o teste rode.
+  await relogioComecandoEm(page, new Date("2026-11-14T18:30:00-03:00"))
   await abrirLoja(page, "Empório das Deusas")
   await expect(page.locator("html")).toHaveAttribute("data-loja", "emporio-das-deusas")
   await esperarAnimacoes(page)
@@ -68,13 +93,17 @@ test("salão: escolher o serviço, marcar dia e horário e ver o horário no ped
   await expect(page.getByText("Escolha o dia e o horário")).toBeVisible()
 
   // A pessoa toca na pílula (o rótulo); o botão de rádio fica escondido dentro dela.
-  // O primeiro dia em que o salão abre já vem marcado; escolhe o primeiro horário livre dele.
+  // Hoje ainda aparece na lista, mas já vem marcado o primeiro dia com horário livre:
+  // a terça (domingo e segunda o salão fecha). Escolhe o primeiro horário dela.
+  const dias = page.getByRole("radiogroup", { name: "Dia" })
+  await expect(dias.getByRole("radio").first()).toHaveAccessibleName("sáb 14/11")
+  await expect(dias.getByRole("radio", { name: "ter 17/11" })).toBeChecked()
+  await expect(page.getByText(/Nenhum horário livre neste dia/)).toBeHidden()
   await page
     .getByRole("radiogroup", { name: "Horário" })
-    .getByText(/^\d\d:\d\d$/)
-    .first()
+    .getByText("09:00", { exact: true })
     .click()
-  await expect(page.getByText(/, das \d\d:\d\d às \d\d:\d\d/)).toBeVisible()
+  await expect(page.getByText("terça-feira, 17/11, das 09:00 às 10:00")).toBeVisible()
   await verificarAcessibilidade(page)
   await acaoCheckout(page).click()
 
@@ -82,12 +111,12 @@ test("salão: escolher o serviço, marcar dia e horário e ver o horário no ped
   await page.getByRole("radio", { name: /Cartão na maquininha/ }).click()
   await acaoCheckout(page).click()
   await expect(page.getByRole("heading", { name: "Confira e envie" })).toBeVisible()
-  await expect(page.getByText(/^\S+, \d\d\/\d\d, às \d\d:\d\d$/)).toBeVisible()
+  await expect(page.getByText("terça-feira, 17/11, às 09:00", { exact: true })).toBeVisible()
   await acaoCheckout(page).click()
 
   await expect(page).toHaveURL(/\/pedido$/, { timeout: 15_000 })
   await expect(page.getByText("Horário marcado")).toBeVisible()
-  await expect(page.getByText(/^\S+, \d\d\/\d\d, às \d\d:\d\d$/)).toBeVisible()
+  await expect(page.getByText("terça-feira, 17/11, às 09:00", { exact: true })).toBeVisible()
 })
 
 test("açougue: escolher o peso, ver o estimado e pagar depois da pesagem", async ({ page }) => {

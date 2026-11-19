@@ -61,6 +61,18 @@ describe("PassoHorario", () => {
     expect(dias[2]).toHaveAccessibleName("qua 18/11")
   })
 
+  test("no fim do expediente de hoje, já vem marcado o próximo dia com horário livre", () => {
+    // Sábado, 14/11/2026, 18h30: o salão fecha às 19h e a escova de 2h não cabe mais hoje.
+    vi.setSystemTime(new Date(2026, 10, 14, 18, 30))
+    render(<Formulario />)
+    const dias = within(screen.getByRole("radiogroup", { name: "Dia" })).getAllByRole("radio")
+    expect(dias[0]).toHaveAccessibleName("sáb 14/11")
+    expect(screen.getByRole("radio", { name: "ter 17/11" })).toBeChecked()
+    const horas = within(screen.getByRole("radiogroup", { name: "Horário" })).getAllByRole("radio")
+    expect(horas[0]).toHaveAccessibleName("09:00")
+    expect(screen.queryByText(/Nenhum horário livre neste dia/)).not.toBeInTheDocument()
+  })
+
   test("escolhe o dia e um horário em que tudo cabe antes de fechar", async () => {
     const usuario = userEvent.setup()
     render(<Formulario />)
