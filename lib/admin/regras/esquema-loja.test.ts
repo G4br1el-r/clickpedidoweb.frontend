@@ -90,4 +90,13 @@ describe("vídeo do banner (salão)", () => {
       videoBanner: "Use um link do YouTube, Shorts ou Reels.",
     })
   })
+
+  test("aceita pdv com fundo e alerta; recusa negativo", () => {
+    expect(erros({ ...VALIDA, pdv: { fundoSugerido: 150, alertaSangria: 800 } })).toEqual({})
+    expect(esquemaLoja.parse({ ...VALIDA }).pdv).toBeUndefined()
+    expect(erros({ ...VALIDA, pdv: { fundoSugerido: -1, alertaSangria: 10000 } })).toEqual({
+      "pdv.fundoSugerido": "O fundo vai de R$\u00a00,00 a R$\u00a09.999,00.",
+      "pdv.alertaSangria": "O alerta vai de R$\u00a00,00 a R$\u00a09.999,00.",
+    })
+  })
 })

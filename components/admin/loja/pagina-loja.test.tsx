@@ -181,6 +181,34 @@ describe("PaginaLoja: por perfil", () => {
   })
 })
 
+describe("PaginaLoja: PDV e caixa", () => {
+  test("muda o alerta para R$ 800 e salva", async () => {
+    const usuario = await abrir()
+    const pdv = secao("PDV e caixa")
+    expect(pdv.getByLabelText("Fundo de troco sugerido")).toHaveValue("R$ 100,00")
+    const alerta = pdv.getByLabelText("Alerta de sangria acima de")
+    expect(alerta).toHaveValue("R$ 500,00")
+    await usuario.tripleClick(alerta)
+    await usuario.keyboard("800")
+    expect(alerta).toHaveValue("R$ 800,00")
+    await usuario.click(
+      within(await screen.findByRole("region", { name: "Alterações não salvas" })).getByRole(
+        "button",
+        { name: "Salvar alterações" },
+      ),
+    )
+    // O aviso do teste anterior pode continuar na tela (o sonner guarda os avisos).
+    expect(await screen.findAllByText("Configurações salvas.")).not.toHaveLength(0)
+    expect((await api().loja()).pdv).toEqual({ fundoSugerido: 100, alertaSangria: 800 })
+  })
+
+  test("lanchonete não tem a seção", async () => {
+    useSegmentoAtual.setState({ segmento: "lanchonete" })
+    await abrir()
+    expect(screen.queryByRole("region", { name: "PDV e caixa" })).not.toBeInTheDocument()
+  })
+})
+
 describe("PaginaLoja: recursos de cada loja", () => {
   test("açougue: vitrines com título e liga/desliga", async () => {
     useSegmentoAtual.setState({ segmento: "acougue" })

@@ -33,6 +33,7 @@ import { useLoja } from "@/lib/admin/dados/consultas"
 import { useConectarPagamento, useSalvarLoja } from "@/lib/admin/dados/consultas-entrega"
 import { usePerfilAtual } from "@/lib/admin/dados/consultas-equipe"
 import type { ConfigLoja, FormaPagamento, PerfilAcesso, SomAlerta } from "@/lib/admin/dados/tipos"
+import { configPdv } from "@/lib/admin/regras/caixa"
 import { podeVerSecaoLoja } from "@/lib/admin/regras/equipe"
 import { esquemaLoja, type FormularioLoja } from "@/lib/admin/regras/esquema-loja"
 import { copiarParaTodos, textoDoHorario } from "@/lib/admin/regras/loja"
@@ -222,7 +223,7 @@ function CampoDinheiro({
   erro,
 }: {
   controle: Controle
-  nome: "taxaEntregaPadrao" | "pedidoMinimo"
+  nome: "taxaEntregaPadrao" | "pedidoMinimo" | "pdv.fundoSugerido" | "pdv.alertaSangria"
   rotulo: string
   erro?: ErroDoCampo
 }) {
@@ -513,6 +514,7 @@ const PAGAMENTOS: { forma: FormaPagamento; rotulo: string; online?: boolean }[] 
 const valoresIniciais = (loja: ConfigLoja): FormularioLoja => ({
   ...loja,
   videoBanner: loja.videoBanner ?? "",
+  pdv: configPdv(loja),
 })
 
 /**
@@ -590,6 +592,7 @@ function Formulario({ loja, perfil }: { loja: ConfigLoja; perfil: PerfilAcesso }
   // Conectar e desconectar salvam na hora: vale o que está no servidor, não o rascunho.
   const conectado = Boolean(loja.pagamentoOnlineConectado)
   const comEntrega = temModulo(segmento, "motoboys")
+  const comPdv = temModulo(segmento, "pdv")
   const salao = segmento === "salao"
 
   // Fechar a aba com alteração pendente pede confirmação do navegador.
@@ -920,6 +923,28 @@ function Formulario({ loja, perfil }: { loja: ConfigLoja; perfil: PerfilAcesso }
               </Button>
             </div>
           </Linhas>
+        </Secao>
+      )}
+
+      {comPdv && (
+        <Secao
+          titulo="PDV e caixa"
+          descricao="O fundo de troco que a abertura do caixa sugere e quando o painel do turno recomenda a sangria."
+        >
+          <Grade>
+            <CampoDinheiro
+              controle={controle}
+              nome="pdv.fundoSugerido"
+              rotulo="Fundo de troco sugerido"
+              erro={erros.pdv?.fundoSugerido}
+            />
+            <CampoDinheiro
+              controle={controle}
+              nome="pdv.alertaSangria"
+              rotulo="Alerta de sangria acima de"
+              erro={erros.pdv?.alertaSangria}
+            />
+          </Grade>
         </Secao>
       )}
 

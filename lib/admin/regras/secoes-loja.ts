@@ -8,6 +8,7 @@ export const SECOES = [
   "Entrega e retirada",
   "Formas de pagamento",
   "Pagamento online",
+  "PDV e caixa",
   "Impressão",
   "Alerta sonoro",
 ] as const
@@ -35,6 +36,7 @@ const SECAO_DO_CAMPO: Partial<Record<keyof ConfigLoja, SecaoLoja>> = {
   cidadesAtendidas: "Entrega e retirada",
   pagamentos: "Formas de pagamento",
   pagamentoOnlineConectado: "Pagamento online",
+  pdv: "PDV e caixa",
   impressaoAutomatica: "Impressão",
   cortarPapel: "Impressão",
   som: "Alerta sonoro",

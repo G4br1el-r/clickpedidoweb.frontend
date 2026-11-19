@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { emReais } from "@/lib/formato"
 import { esquemaLinkDeVideo } from "./video"
 
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -20,6 +21,12 @@ const dinheiro = (negativo: string) =>
     .number({ error: "Informe o valor." })
     .min(0, { error: negativo })
     .max(9999, { error: "Até R$ 9.999,00." })
+
+/** Valor do caixa, de R$ 0,00 a R$ 9.999,00, com a mensagem do campo. */
+const valorDoCaixa = (campo: string) => {
+  const erro = `${campo} vai de ${emReais(0)} a ${emReais(9999)}.`
+  return z.number({ error: "Informe o valor." }).min(0, { error: erro }).max(9999, { error: erro })
+}
 
 const esquemaHorario = z
   .object({
@@ -84,6 +91,12 @@ export const esquemaLoja = z
     som: z.enum(["suave", "alto", "muito-alto"]),
     vitrines: z.object({ destaques: vitrine, ofertas: vitrine }),
     videoBanner: esquemaLinkDeVideo.optional(),
+    pdv: z
+      .object({
+        fundoSugerido: valorDoCaixa("O fundo"),
+        alertaSangria: valorDoCaixa("O alerta"),
+      })
+      .optional(),
   })
   .superRefine((loja, contexto) => {
     if (!loja.aceitaEntrega && !loja.aceitaRetirada) {
