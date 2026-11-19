@@ -117,9 +117,7 @@ test("aba Vendas: da origem aos pedidos filtrados, com a etiqueta para tirar o f
   await expect(page.getByRole("region", { name: "Quando a loja vende" })).toBeVisible({
     timeout: 15_000,
   })
-  await expect(
-    page.getByRole("table", { name: "Pedidos por dia da semana e hora" }),
-  ).toBeVisible()
+  await expect(page.getByRole("table", { name: "Pedidos por dia da semana e hora" })).toBeVisible()
   await expect(page.locator(".barras-atual .recharts-bar-rectangle").first()).toBeVisible()
   await verificarAcessibilidade(page)
 
