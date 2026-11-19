@@ -10,6 +10,7 @@ import {
 } from "../regras/cardapio"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
+import { esquemaSalao } from "../regras/esquema-salao"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
 import { normalizar } from "../regras/filtro-pedidos"
 import { proximoNumero } from "../regras/numero"
@@ -35,6 +36,7 @@ import type {
   CatalogoLoja,
   Categoria,
   ConfigLoja,
+  ConfigSalao,
   ItemPedido,
   Mesa,
   Motoboy,
@@ -1120,6 +1122,28 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             agendamento: { ...pedido.agendamento, inicio: novoInicio.toISOString() },
           }
         })
+      },
+    },
+
+    salao: {
+      async config(): Promise<ConfigSalao> {
+        return responder((await carregar()).salao)
+      },
+
+      /** Valida, impede tirar área que ainda tem mesas e guarda a configuração limpa. */
+      async salvar(config: ConfigSalao): Promise<ConfigSalao> {
+        const lida = esquemaSalao.safeParse(config)
+        if (!lida.success) throw new Error(lida.error.issues[0].message)
+        const base = await carregar()
+        const mantidas = new Set(lida.data.areas.map((area) => area.id))
+        const retirada = base.salao.areas.find(
+          (area) => !mantidas.has(area.id) && base.mesas.some((mesa) => mesa.areaId === area.id),
+        )
+        if (retirada) {
+          throw new Error(`Mova as mesas da ${retirada.nome} antes de excluir a área.`)
+        }
+        await substituir({ ...base, salao: lida.data })
+        return responder(lida.data)
       },
     },
 

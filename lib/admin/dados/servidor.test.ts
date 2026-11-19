@@ -1031,6 +1031,43 @@ describe("servidor de demonstração", () => {
     })
   })
 
+  describe("salão", () => {
+    test("salvar a configuração guarda e devolve; a próxima leitura vê a mudança", async () => {
+      const api = servidor()
+      const atual = await api.salao.config()
+      expect(atual.areas).toEqual([{ id: "area-salao", nome: "Salão", ordem: 1 }])
+
+      const salva = await api.salao.salvar({
+        ...atual,
+        areas: [...atual.areas, { id: "area-varanda", nome: "  Varanda ", ordem: 2 }],
+        taxaServico: { ativa: true, percentual: 12 },
+      })
+      expect(salva.areas.map((area) => area.nome)).toEqual(["Salão", "Varanda"])
+      expect((await api.salao.config()).taxaServico).toEqual({ ativa: true, percentual: 12 })
+    })
+
+    test("configuração inválida é recusada com a primeira mensagem", async () => {
+      const api = servidor()
+      const atual = await api.salao.config()
+      await expect(
+        api.salao.salvar({ ...atual, taxaServico: { ativa: true, percentual: 21 } }),
+      ).rejects.toThrow("A taxa de serviço vai de 0% a 20%.")
+      expect((await api.salao.config()).taxaServico.percentual).toBe(10)
+    })
+
+    test("excluir uma área com mesas é recusado", async () => {
+      const api = servidor()
+      const atual = await api.salao.config()
+      await expect(
+        api.salao.salvar({
+          ...atual,
+          areas: [{ id: "area-varanda", nome: "Varanda", ordem: 1 }],
+        }),
+      ).rejects.toThrow("Mova as mesas da Salão antes de excluir a área.")
+      expect((await api.salao.config()).areas.map((area) => area.id)).toEqual(["area-salao"])
+    })
+  })
+
   describe("mesas", () => {
     test("mesa nova com número único; a lista vem pelo número", async () => {
       const api = servidor()
