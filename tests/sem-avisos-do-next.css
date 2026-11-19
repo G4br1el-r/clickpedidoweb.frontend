@@ -1,0 +1,4 @@
+/* Fora das fotos: o selo de avisos do Next no modo dev não faz parte da tela. */
+nextjs-portal {
+  display: none !important;
+}
