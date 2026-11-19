@@ -366,6 +366,29 @@ describe("servidor de demonstração", () => {
     expect(historico[ultimoDoFiel.id].anteriores).toBe(fiel.length - 1)
   })
 
+  test("avançar em lote: cada um vai para a própria próxima etapa; o que não pode é pulado", async () => {
+    const api = servidor()
+    const abertos = await api.pedidos.listar({ status: ["recebido", "em-preparo"] })
+    const novo = abertos.find((pedido) => pedido.status === "recebido" && !pedido.esperaAceite)
+    const emPreparo = abertos.find((pedido) => pedido.status === "em-preparo")
+    if (!novo || !emPreparo) throw new Error("A demonstração devia ter novo e em preparo")
+    await api.salvarLoja({ ...(await api.loja()), aceiteManual: true })
+    const esperando = await api.pedidos.simular()
+
+    const resultado = await api.pedidos.avancarEmLote([
+      { id: novo.id, de: "recebido" },
+      { id: emPreparo.id, de: "em-preparo" },
+      { id: esperando.id, de: "recebido" },
+      // A tela via uma etapa que já mudou: pula.
+      { id: novo.id, de: "pronto" },
+    ])
+    expect(resultado.avancados.map((pedido) => [pedido.id, pedido.status])).toEqual([
+      [novo.id, "em-preparo"],
+      [emPreparo.id, "pronto"],
+    ])
+    expect(resultado.pulados).toBe(2)
+  })
+
   test("um pedido simulado chega como novo, com o número seguinte", async () => {
     const api = servidor()
     const [ultimo] = await api.pedidos.listar()

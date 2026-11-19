@@ -191,6 +191,20 @@ function recalcular(pedido: Pedido): Pedido {
   return { ...pedido, subtotal, total: reais(subtotal - pedido.desconto) }
 }
 
+/** O pedido na etapa seguinte; concluir cobra o que se pagava na entrega ou no balcão. */
+function avancado(pedido: Pedido, de: StatusPedido): Pedido {
+  conferirEtapa(pedido, de)
+  if (pedido.esperaAceite) throw new Error("Aceite o pedido antes de começar.")
+  const proximo = proximoStatus(pedido.tipo, pedido.status)
+  if (!proximo) throw new Error("Este pedido não tem próxima etapa")
+  const pagoAgora = proximo === "concluido" && pedido.situacaoPagamento === "na-entrega"
+  return {
+    ...pedido,
+    status: proximo,
+    ...(pagoAgora ? { situacaoPagamento: "pago" as const, pagoEm: new Date().toISOString() } : {}),
+  }
+}
+
 /** O pagamento foi registrado no mesmo momento da conclusão (cobrado na entrega ou no balcão). */
 function foiPagoAoConcluir(pedido: Pedido): boolean {
   const concluiu = pedido.historico
@@ -724,20 +738,24 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
       /** `de`: a etapa que a tela mostrava. Outra aba pode ter mudado o pedido antes. */
       avancar(id: number, de: StatusPedido) {
-        return alterar(id, (pedido) => {
-          conferirEtapa(pedido, de)
-          if (pedido.esperaAceite) throw new Error("Aceite o pedido antes de começar.")
-          const proximo = proximoStatus(pedido.tipo, pedido.status)
-          if (!proximo) throw new Error("Este pedido não tem próxima etapa")
-          const pagoAgora = proximo === "concluido" && pedido.situacaoPagamento === "na-entrega"
-          return {
-            ...pedido,
-            status: proximo,
-            ...(pagoAgora
-              ? { situacaoPagamento: "pago" as const, pagoEm: new Date().toISOString() }
-              : {}),
+        return alterar(id, (pedido) => avancado(pedido, de))
+      },
+
+      /**
+       * Vários de uma vez (seleção na fila): cada um vai para a própria próxima etapa. O que
+       * não pode (espera aceite, sem próxima etapa, etapa mudada em outra aba) fica de fora.
+       */
+      async avancarEmLote(itens: { id: number; de: StatusPedido }[]) {
+        const avancados: Pedido[] = []
+        let pulados = 0
+        for (const { id, de } of itens) {
+          try {
+            avancados.push(await alterar(id, (pedido) => avancado(pedido, de)))
+          } catch {
+            pulados += 1
           }
-        })
+        }
+        return { avancados, pulados }
       },
 
       /** Volta uma etapa: desfazer, arrastar de volta ou reabrir. `de` é a etapa que a tela viu. */

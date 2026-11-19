@@ -178,6 +178,48 @@ describe("PaginaFila", () => {
     )
   })
 
+  test("seleção: marcar dois pedidos, imprimir os dois cupons e avançar os dois de uma vez", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const novos = await coluna("Novos")
+    await usuario.click(screen.getByRole("button", { name: "Selecionar" }))
+    const caixas = novos.getAllByRole("checkbox", { name: /^Selecionar #/ })
+    expect(caixas.length).toBeGreaterThanOrEqual(2)
+    const numeros = caixas
+      .slice(0, 2)
+      .map((caixa) => (caixa.getAttribute("aria-label") ?? "").replace("Selecionar ", ""))
+    await usuario.click(caixas[0])
+    await usuario.click(caixas[1])
+
+    const barra = within(screen.getByRole("region", { name: "Pedidos selecionados" }))
+    expect(barra.getByText("2 selecionados")).toBeInTheDocument()
+    await usuario.click(barra.getByRole("button", { name: "Imprimir" }))
+    expect(imprimir).toHaveBeenCalledTimes(2)
+
+    await usuario.click(barra.getByRole("button", { name: "Avançar" }))
+    const preparo = await coluna("Em preparo")
+    for (const numero of numeros) {
+      expect(await preparo.findByRole("heading", { name: numero })).toBeInTheDocument()
+    }
+    expect(screen.queryByRole("region", { name: "Pedidos selecionados" })).not.toBeInTheDocument()
+  })
+
+  test("Shift+clique num cartão seleciona sem entrar no modo de seleção", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const [cartao] = (await coluna("Em preparo")).getAllByRole("article")
+    await usuario.keyboard("{Shift>}")
+    await usuario.click(within(cartao).getByText(/itens? ·/))
+    await usuario.keyboard("{/Shift}")
+    expect(
+      within(screen.getByRole("region", { name: "Pedidos selecionados" })).getByText(
+        "1 selecionado",
+      ),
+    ).toBeInTheDocument()
+  })
+
   test("no celular, as colunas viram abas com a contagem", async () => {
     renderizar()
     const aba = await screen.findByRole("tab", { name: /Novos/ }, { timeout: 8000 })

@@ -2,7 +2,7 @@
 
 import NumberFlow from "@number-flow/react"
 import { startOfDay } from "date-fns"
-import { ArchiveIcon, ChevronDownIcon, InboxIcon, VolumeXIcon } from "lucide-react"
+import { ArchiveIcon, ChevronDownIcon, InboxIcon, ListChecksIcon, VolumeXIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
 import { parseAsStringLiteral, useQueryState, useQueryStates } from "nuqs"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
@@ -13,10 +13,12 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Toggle } from "@/components/ui/toggle"
 import { useAgora } from "@/hooks/use-agora"
 import { useTelaGrande, useTelaLarga } from "@/hooks/use-tela-grande"
 import {
   useAceitarPedido,
+  useAvancarEmLote,
   useAvancarPedido,
   useCancelarPedido,
   useDefinirEntrega,
@@ -68,6 +70,7 @@ import { Traco } from "../traco"
 import { AjustePrazo } from "./ajuste-prazo"
 import { AvisoDiasAnteriores } from "./aviso-dias-anteriores"
 import { avisarChegada } from "./avisos-do-aparelho"
+import { BarraSelecao } from "./barra-selecao"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
 import { EsteAparelho } from "./este-aparelho"
@@ -86,6 +89,9 @@ const _SONS: { valor: SomAlerta; rotulo: string }[] = [
 ]
 
 /** Quanto tempo o "Chegou agora" fica no cartão. */
+/** Seleção dos pedidos para as ações em lote. */
+type SelecaoDaFila = { ativa: boolean; ids: ReadonlySet<number>; alternar: (id: number) => void }
+
 const DESTAQUE_MS = 10_000
 /** Quanto tempo o "Desfazer" fica no aviso depois de avançar. */
 const DESFAZER_MS = 6_000
@@ -209,6 +215,7 @@ function Coluna({
   historico,
   nomeLoja,
   compacto,
+  selecao,
   acoes,
   comTitulo,
 }: {
@@ -222,6 +229,7 @@ function Coluna({
   historico: Record<number, HistoricoCliente> | undefined
   nomeLoja: string
   compacto: boolean
+  selecao: SelecaoDaFila
   acoes: AcoesDoCartao
   comTitulo: boolean
 }) {
@@ -259,6 +267,11 @@ function Coluna({
               seloCliente={historico?.[pedido.id] ? seloDoCliente(historico[pedido.id]) : null}
               nomeLoja={nomeLoja}
               compacto={compacto}
+              selecao={{
+                ativa: selecao.ativa,
+                marcado: selecao.ids.has(pedido.id),
+                alternar: () => selecao.alternar(pedido.id),
+              }}
               aoAceitar={() => acoes.aceitar(pedido)}
               aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
               aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
@@ -310,6 +323,10 @@ export function PaginaFila({
   const voltar = useVoltarPedido()
   const reabrir = useReabrirPedido()
   const [finalizadosAberto, setFinalizadosAberto] = useState(false)
+  // Seleção para ações em lote: o modo mostra as caixas; Shift+clique marca sem o modo.
+  const [selecionando, setSelecionando] = useState(false)
+  const [marcados, setMarcados] = useState<ReadonlySet<number>>(new Set())
+  const avancarEmLote = useAvancarEmLote()
   const aceitar = useAceitarPedido()
   const recusar = useRecusarPedido()
   const cancelar = useCancelarPedido()
@@ -427,6 +444,22 @@ export function PaginaFila({
         )
       : null
   const finalizados = finalizadosHoje(concluidos, criadosHoje)
+  // Só conta o que ainda está na fila: o que saiu (outra aba, cancelado) sai da seleção.
+  const selecionados = (fila ?? []).filter((pedido) => marcados.has(pedido.id))
+  const limparSelecao = () => {
+    setMarcados(new Set())
+    setSelecionando(false)
+  }
+  const selecao: SelecaoDaFila = {
+    ativa: selecionando,
+    ids: marcados,
+    alternar: (id) =>
+      setMarcados((atuais) => {
+        const novos = new Set(atuais)
+        if (!novos.delete(id)) novos.add(id)
+        return novos
+      }),
+  }
   const metricas =
     fila && agora
       ? metricasDaFila({
@@ -546,6 +579,16 @@ export function PaginaFila({
                 </p>
               )}
               <div className="ml-auto flex items-center gap-2">
+                <Toggle
+                  variant="outline"
+                  size="sm"
+                  pressed={selecionando}
+                  onPressedChange={(ligado) => (ligado ? setSelecionando(true) : limparSelecao())}
+                  className="cursor-pointer"
+                >
+                  <ListChecksIcon data-icon="inline-start" />
+                  Selecionar
+                </Toggle>
                 <Button
                   type="button"
                   variant="outline"
@@ -598,6 +641,7 @@ export function PaginaFila({
               historico={historico}
               nomeLoja={loja?.nome ?? ""}
               compacto={preferencias.compacto}
+              selecao={selecao}
               acoes={acoes}
               comTitulo
             />
@@ -629,6 +673,7 @@ export function PaginaFila({
                 historico={historico}
                 nomeLoja={loja?.nome ?? ""}
                 compacto={preferencias.compacto}
+                selecao={selecao}
                 acoes={acoes}
                 comTitulo={false}
               />
@@ -637,6 +682,31 @@ export function PaginaFila({
         </Tabs>
       )}
 
+      {selecionados.length > 0 && (
+        <BarraSelecao
+          quantos={selecionados.length}
+          ocupado={avancarEmLote.isPending}
+          aoLimpar={limparSelecao}
+          aoImprimir={() => {
+            for (const pedido of selecionados) impressao.imprimir(pedido)
+          }}
+          aoAvancar={() =>
+            avancarEmLote.mutate(
+              selecionados.map((pedido) => ({ id: pedido.id, de: pedido.status })),
+              {
+                ...avisoDeErro,
+                onSuccess: ({ avancados, pulados }) => {
+                  limparSelecao()
+                  toast.success(
+                    `${plural(avancados.length, "pedido avançou", "pedidos avançaram")}.` +
+                      (pulados > 0 ? ` ${plural(pulados, "ficou", "ficaram")} de fora.` : ""),
+                  )
+                },
+              },
+            )
+          }
+        />
+      )}
       <GavetaFinalizados
         pedidos={finalizados}
         aberta={finalizadosAberto}

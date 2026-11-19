@@ -20,6 +20,7 @@ import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
 import type { MotivoEscolhido, Motoboy, Pedido } from "@/lib/admin/dados/tipos"
 import { esperaDoAceite } from "@/lib/admin/regras/aceite"
 import { resumoDosItens, textoCobranca, type Urgencia, urgencia } from "@/lib/admin/regras/fila"
@@ -101,6 +102,7 @@ export function CartaoFila({
   seloCliente = null,
   nomeLoja = "",
   compacto = false,
+  selecao,
   aoAceitar,
   aoRecusar,
   aoCancelar,
@@ -122,6 +124,8 @@ export function CartaoFila({
   nomeLoja?: string
   /** Modo compacto deste aparelho: uma linha que abre ao tocar. */
   compacto?: boolean
+  /** Seleção para ações em lote: a caixa aparece no modo de seleção; Shift+clique marca. */
+  selecao?: { ativa: boolean; marcado: boolean; alternar: () => void }
   aoAceitar: () => void
   aoRecusar: (escolhido: MotivoEscolhido) => void
   aoCancelar: (escolhido: MotivoEscolhido) => void
@@ -156,11 +160,18 @@ export function CartaoFila({
       className="relative"
     >
       <Card
+        // Shift+clique (mouse) marca o pedido para as ações em lote, sem entrar no modo.
+        onClick={(evento) => {
+          if (!evento.shiftKey || !selecao) return
+          evento.preventDefault()
+          selecao.alternar()
+        }}
         className={cn(
           "gap-3 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 transition-[box-shadow] duration-200",
           ANEL_URGENCIA[espera?.passou ? "atrasado" : urgencia(pedido, agora, tempos)],
           novo && "ring-2 ring-(--atencao)/55",
           espera?.passou && "ring-2",
+          selecao?.marcado && "ring-2 ring-foreground",
         )}
       >
         {/* Chegou agora: um realce na cor de atenção que esmaece sozinho. */}
@@ -193,6 +204,14 @@ export function CartaoFila({
         ) : (
           <>
             <CardHeader className="flex flex-row flex-wrap items-center gap-x-2 gap-y-1 px-3">
+              {selecao?.ativa && (
+                <Checkbox
+                  checked={selecao.marcado}
+                  onCheckedChange={selecao.alternar}
+                  aria-label={`Selecionar #${pedido.numero}`}
+                  className="mr-1"
+                />
+              )}
               {/* O traço da etapa: troca de cor quando o pedido anda para a coluna seguinte. */}
               <Traco tom={tomDoStatus(pedido.status)} className="h-3" />
               <h3 id={`pedido-${pedido.id}`} className="text-base font-semibold tabular-nums">

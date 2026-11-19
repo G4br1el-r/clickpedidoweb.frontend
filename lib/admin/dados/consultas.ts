@@ -148,6 +148,16 @@ export function useReabrirPedido() {
   )
 }
 
+/** Vários pedidos de uma vez, cada um para a própria próxima etapa. */
+export function useAvancarEmLote() {
+  const segmento = useSegmento()
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: (itens: MudancaDeEtapa[]) => servidorDo(segmento).pedidos.avancarEmLote(itens),
+    onSettled: () => cliente.invalidateQueries({ queryKey: chaves.pedidos(segmento) }),
+  })
+}
+
 export function useCancelarPedido() {
   return useMutacaoDePedido<MudancaDeEtapa & MotivoEscolhido>(
     (servidor, { id, de, ...escolhido }) => servidor.pedidos.cancelar(id, de, escolhido),
