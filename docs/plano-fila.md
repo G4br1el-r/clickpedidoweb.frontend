@@ -130,3 +130,15 @@ Base: a [Fase 5 do plano do painel](plano-painel-admin.md#fase-5-fila-de-pedidos
   - **X fora do cartão:** no tablet (768) e no celular deitado, o X de cancelar saía do cartão. O rodapé agora quebra linha, com teste E2E ("os botões de cada cartão ficam dentro do cartão, com o texto inteiro").
   - **Colunas estreitas:** no tablet e no celular deitado as 4 colunas ficavam estreitas demais (vinha do commit-base) e o botão principal cortava o texto, porque a barra lateral ocupa 256 px. A fila agora usa abas abaixo de 1024 px (`useTelaLarga`) e colunas do notebook para cima, com teste de componente e E2E ("com o texto inteiro").
   - **Fica para depois:** a acessibilidade (axe) do cartão esperando aceite no E2E: com o relógio controlado as animações param no meio.
+- **Fase 2: pronta em 19/11/2026** (branch `claude/admin-fila-fase-2`, que parte da fase 1).
+  - **Decidido no caminho:**
+    - o prazo prometido sai do texto que a loja já mostra ao cliente ("40–60 min" promete 60; "1h30", 90), por canal: entrega pelo tempo de entrega, retirada e mesa pelo de retirada. Texto sem tempo: 50 min na entrega e 20 na retirada. Salão e retirada marcada para um dia seguem a hora marcada (`lib/admin/regras/prazo.ts`);
+    - o pedido grava o prazo ao chegar (`prazoMin`, com o acréscimo da hora): mudar o acréscimo depois não altera quem já está na fila. Os pedidos gerados da demonstração não gravam; usam o da loja;
+    - a vitrine do cliente ainda lê dados fixos. A pausa fica no servidor de demonstração e o texto que o cliente veria ("Loja ocupada, volte às 20:45") sai de `textoDaVitrine`, mostrado na barra; ligar na vitrine vem com o back-end;
+    - os tempos médios saem da linha do tempo. Os pedidos de hoje que a demonstração gera já trazem as etapas por que passaram (em preparo aos 8 min, pronto aos 25, saiu aos 40);
+    - concluídos e cancelados da régua levam à lista de pedidos filtrada (a gaveta "Finalizados hoje" é da fase 3);
+    - a recusa de licença do navegador (notificação, tela acesa) aparece embaixo da chave, no menu, e não num toast;
+    - o título da aba pisca só com a aba escondida, contando os que esperam aceite e os que chegaram enquanto ninguém olhava;
+    - a sincronização entre abas vale para o painel todo (`useSincronizarAbas` no `ShellAdmin`), e não só para a fila. Antes, uma aba nunca via o que a outra gravava: cada uma guardava a base em memória;
+    - no pé do cartão, imprimir, detalhes e cancelar andam juntos; o botão da etapa fica com a linha toda quando eles descem.
+  - **Fica para depois:** busca, filtros por canal, compacto, tela cheia, painel de chamada e o indicador da impressora entram na faixa de ferramentas nas fases 3 e 5.

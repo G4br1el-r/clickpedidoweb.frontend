@@ -33,7 +33,7 @@ Uma plataforma única de pedidos online para pequenos negócios locais, com vitr
 ## Operating Context
 
 - **Cliente:** celular, uma mão, com pressa, muitas vezes vindo de uma conversa no WhatsApp e voltando para ela (link de acompanhamento, conversa simulada em `/whatsapp`).
-- **Loja:** balcão, cozinha e salão em horário de pico. A fila atualiza a cada poucos segundos, toca alerta sonoro em pedido novo, marca atraso por tempo (25 e 40 min), imprime cupom de 80 mm (agente local, impressora do servidor ou navegador) e chama o motoboy pelo WhatsApp com mensagem pronta.
+- **Loja:** balcão, cozinha e salão em horário de pico. A fila atualiza a cada poucos segundos, toca alerta sonoro em pedido novo, marca atraso pelo prazo prometido a cada canal, pausa a loja quando a cozinha enche, imprime cupom de 80 mm (agente local, impressora do servidor ou navegador) e chama o motoboy pelo WhatsApp com mensagem pronta.
 - **Vocabulário de status:** Aguardando pagamento → Recebido → Em preparo → Pronto → (Saiu para entrega →) Concluído, Cancelado a qualquer momento. Mesa só conclui ao fechar a conta; atendimento do salão vai de Agendado a Em atendimento e Concluído.
 - Idioma: português do Brasil, moeda em reais formatada pelo `Intl`.
 
