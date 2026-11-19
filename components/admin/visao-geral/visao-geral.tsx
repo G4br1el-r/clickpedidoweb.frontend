@@ -11,6 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLoja, usePedidos } from "@/lib/admin/dados/consultas"
 import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
+import { useMesas } from "@/lib/admin/dados/consultas-mesas"
 import { useFarmacia } from "@/lib/admin/farmacia-estado"
 import { useMetas } from "@/lib/admin/metas"
 import { abaEscolhida, abasDo } from "@/lib/admin/regras/dashboard/abas"
@@ -18,8 +19,10 @@ import { alertasDoPainel } from "@/lib/admin/regras/dashboard/alertas"
 import { periodoDaBusca } from "@/lib/admin/regras/dashboard/busca"
 import { situacaoDaMeta } from "@/lib/admin/regras/dashboard/metas"
 import { resumir } from "@/lib/admin/regras/dashboard/resumo"
+import { destaquesDoSegmento } from "@/lib/admin/regras/dashboard/segmento"
 import { hojeVsSemanaPassada } from "@/lib/admin/regras/dashboard/semana-passada"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { temModulo } from "@/lib/admin/segmentos-painel"
 import { lotesDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
@@ -77,24 +80,40 @@ export function VisaoGeral() {
     [metaDefinida, pedidos, loja, agora],
   )
 
+  const temMesas = temModulo(segmento, "mesas")
+  const { data: mesas } = useMesas(30_000, { ativo: temMesas })
+
   const { data: produtos } = useProdutos()
   const decisoes = useFarmacia((estado) => estado.decisoes)
-  const alertas = useMemo(() => {
-    if (!pedidos || !produtos || !loja || !agora) return []
-    const ehFarmacia = segmento === "farmacia"
-    return alertasDoPainel({
-      segmento,
-      agora,
-      pedidos,
-      produtos,
-      loja,
-      // A farmácia guarda receitas e lotes fora do servidor de demonstração.
-      lotes: ehFarmacia ? lotesDemo(agora) : [],
-      receitas: ehFarmacia ? receitasDemo(agora) : [],
-      decisoes,
-      meta,
-    })
-  }, [pedidos, produtos, loja, agora, segmento, decisoes, meta])
+  // A farmácia guarda receitas e lotes fora do servidor de demonstração.
+  const farmacia = useMemo(
+    () =>
+      segmento === "farmacia" && agora
+        ? { lotes: lotesDemo(agora), receitas: receitasDemo(agora) }
+        : { lotes: [], receitas: [] },
+    [segmento, agora],
+  )
+  const alertas = useMemo(
+    () =>
+      pedidos && produtos && loja && agora
+        ? alertasDoPainel({ segmento, agora, pedidos, produtos, loja, ...farmacia, decisoes, meta })
+        : [],
+    [pedidos, produtos, loja, agora, segmento, farmacia, decisoes, meta],
+  )
+  const destaques = useMemo(
+    () =>
+      pedidos && agora && (!temMesas || mesas)
+        ? destaquesDoSegmento({
+            segmento,
+            agora,
+            pedidos,
+            ...farmacia,
+            decisoes,
+            mesas: temMesas ? (mesas ?? []) : null,
+          })
+        : [],
+    [pedidos, agora, segmento, farmacia, decisoes, temMesas, mesas],
+  )
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 md:p-6 lg:px-8">
@@ -153,6 +172,7 @@ export function VisaoGeral() {
             comparacao={comparacao}
             alertas={alertas}
             meta={meta}
+            destaques={destaques}
           />
         )
       ) : (

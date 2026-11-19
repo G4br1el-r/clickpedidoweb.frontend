@@ -126,6 +126,32 @@ describe("abas do painel", () => {
     )
   })
 
+  test("o bloco do segmento mostra cada número com o caminho para ver mais", () => {
+    renderizarResumo({
+      destaques: [
+        {
+          id: "mesas",
+          rotulo: "Mesas ocupadas",
+          valor: 2,
+          detalhe: "De 3 mesas",
+          href: "/admin/mesas",
+        },
+      ],
+    })
+    const bloco = regiao("Agora na loja")
+    const mesas = bloco.getByText("Mesas ocupadas").closest("[data-indicador]")
+    expect(mesas).toHaveTextContent("2De 3 mesas")
+    expect(within(mesas as HTMLElement).getByRole("link", { name: "De 3 mesas" })).toHaveAttribute(
+      "href",
+      "/admin/mesas",
+    )
+  })
+
+  test("sem destaques do segmento, o bloco não aparece", () => {
+    renderizarResumo({ destaques: [] })
+    expect(screen.queryByRole("region", { name: "Agora na loja" })).not.toBeInTheDocument()
+  })
+
   test("sem alertas, a faixa não aparece", () => {
     renderizarResumo({ alertas: [] })
     expect(screen.queryByRole("region", { name: "Precisa de atenção" })).not.toBeInTheDocument()
@@ -241,6 +267,14 @@ describe("VisaoGeral", () => {
     expect(meta.getByText("Vendido no mês").closest("[data-indicador]")).toHaveTextContent(
       "de R$ 60.000,00",
     )
+  })
+
+  test("no Resumo da pizzaria, o bloco do segmento mostra as mesas", async () => {
+    render(<VisaoGeral />, { wrapper: Provedores })
+    const bloco = within(
+      await screen.findByRole("region", { name: "Agora na loja" }, { timeout: 8000 }),
+    )
+    expect(bloco.getByText("Mesas ocupadas")).toBeInTheDocument()
   })
 
   test("a aba vem do endereço, e trocar de aba muda o endereço", async () => {

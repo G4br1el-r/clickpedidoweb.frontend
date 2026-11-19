@@ -23,6 +23,7 @@ import type { Alerta } from "@/lib/admin/regras/dashboard/alertas"
 import type { SituacaoMeta } from "@/lib/admin/regras/dashboard/metas"
 import { nomesDo } from "@/lib/admin/regras/dashboard/nomes"
 import type { Resumo } from "@/lib/admin/regras/dashboard/resumo"
+import type { Destaque } from "@/lib/admin/regras/dashboard/segmento"
 import {
   type ComparacaoHoje,
   textosDaSemanaPassada,
@@ -165,6 +166,7 @@ export function AbaResumo({
   comparacao,
   alertas = [],
   meta = null,
+  destaques = [],
 }: {
   resumo: Resumo
   periodo: Periodo
@@ -175,6 +177,8 @@ export function AbaResumo({
   alertas?: Alerta[]
   /** Situação da meta do mês; `null` quando a loja ainda não definiu. */
   meta?: SituacaoMeta | null
+  /** Os números próprios do segmento: agenda, receitas, pesagem, mesas. */
+  destaques?: Destaque[]
 }) {
   const [medida, setMedida] = useState<MedidaDoGrafico>("faturamento")
   const n = nomesDo(segmento)
@@ -234,6 +238,26 @@ export function AbaResumo({
       </Secao>
 
       <BlocoMeta segmento={segmento} situacao={meta} />
+
+      {destaques.length > 0 && (
+        <Secao titulo="Agora na loja">
+          <Regua>
+            {destaques.map((destaque) => (
+              <Indicador
+                key={destaque.id}
+                rotulo={destaque.rotulo}
+                detalhe={
+                  <Link href={destaque.href} className="underline-offset-4 hover:underline">
+                    {destaque.detalhe ?? "Ver"}
+                  </Link>
+                }
+              >
+                <Numero valor={destaque.valor} />
+              </Indicador>
+            ))}
+          </Regua>
+        </Secao>
+      )}
 
       <Secao titulo="Desempenho do período" descricao={dias === 1 ? "1 dia" : `${dias} dias`}>
         <Regua>
