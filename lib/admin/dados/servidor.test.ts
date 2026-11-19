@@ -227,18 +227,49 @@ describe("servidor de demonstração", () => {
     }
   })
 
-  test("ao reabrir em outro dia, completa os dias e encerra o que ficou aberto", async () => {
-    await servidor().pedidos.listar()
+  test("ao reabrir em outro dia, completa os dias; o que ficou aberto espera a loja resolver", async () => {
+    const doDia13 = await servidor().pedidos.listar({ status: EM_ANDAMENTO })
+    expect(doDia13.length).toBeGreaterThan(0)
 
     vi.setSystemTime(new Date(2026, 10, 15, 21, 0))
     const pedidos = await servidor().pedidos.listar()
 
     expect(pedidos.some((pedido) => new Date(pedido.criadoEm).getDate() === 15)).toBe(true)
-    for (const pedido of pedidos.filter((item) => new Date(item.criadoEm).getDate() === 13)) {
-      expect(["concluido", "cancelado"]).toContain(pedido.status)
+    // Nada é concluído (nem dado como pago) sem a loja dizer: vai para o aviso da fila.
+    for (const antes of doDia13) {
+      expect(pedidos.find((pedido) => pedido.id === antes.id)).toMatchObject({
+        status: antes.status,
+        situacaoPagamento: antes.situacaoPagamento,
+      })
     }
+    // Pix que não foi pago no dia não vira pedido: é cancelado.
+    const pixDo13 = pedidos.filter(
+      (pedido) =>
+        new Date(pedido.criadoEm).getDate() === 13 && pedido.status === "aguardando-pagamento",
+    )
+    expect(pixDo13).toEqual([])
     const ids = pedidos.map((pedido) => pedido.id)
     expect(new Set(ids).size).toBe(ids.length)
+  })
+
+  test("pedidos esquecidos de outro dia: concluir ou cancelar todos de uma vez", async () => {
+    const abertos = await servidor().pedidos.listar({ status: EM_ANDAMENTO })
+    vi.setSystemTime(new Date(2026, 10, 15, 21, 0))
+    const api = servidor()
+    const [primeiro, segundo, ...resto] = abertos
+
+    const concluidos = await api.pedidos.concluirEmLote([primeiro.id, segundo.id])
+    expect(concluidos.map((pedido) => pedido.status)).toEqual(["concluido", "concluido"])
+
+    const cancelados = await api.pedidos.cancelarEmLote(
+      resto.map((pedido) => pedido.id),
+      { motivo: "outro", detalhe: "Esquecido no sistema" },
+    )
+    expect(new Set(cancelados.map((pedido) => pedido.status))).toEqual(new Set(["cancelado"]))
+    expect(cancelados[0].cancelamento).toMatchObject({ detalhe: "Esquecido no sistema" })
+    expect(await api.pedidos.listar({ status: EM_ANDAMENTO })).not.toContainEqual(
+      expect.objectContaining({ id: primeiro.id }),
+    )
   })
 
   test("escolhe o motoboy de uma entrega e guarda", async () => {

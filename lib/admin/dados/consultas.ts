@@ -218,6 +218,24 @@ export function useSimularPedido() {
   })
 }
 
+/** Pedidos esquecidos de outro dia: concluir ou cancelar todos de uma vez. */
+export function useResolverEmLote() {
+  const segmento = useSegmento()
+  const cliente = useQueryClient()
+  const atualizar = () => cliente.invalidateQueries({ queryKey: chaves.tudo(segmento) })
+  return {
+    concluir: useMutation({
+      mutationFn: (ids: number[]) => servidorDo(segmento).pedidos.concluirEmLote(ids),
+      onSettled: atualizar,
+    }),
+    cancelar: useMutation({
+      mutationFn: ({ ids, ...escolhido }: { ids: number[] } & MotivoEscolhido) =>
+        servidorDo(segmento).pedidos.cancelarEmLote(ids, escolhido),
+      onSettled: atualizar,
+    }),
+  }
+}
+
 export function useUltimasVendas() {
   const segmento = useSegmento()
   return useQuery({

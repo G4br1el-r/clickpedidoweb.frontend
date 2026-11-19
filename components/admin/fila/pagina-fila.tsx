@@ -41,7 +41,13 @@ import {
   useSomDoAparelho,
 } from "@/lib/admin/preferencias-fila"
 import { alarmeTocando } from "@/lib/admin/regras/aceite"
-import { type ColunaFila, colunasDaFila, novosPedidos, resumoDaFila } from "@/lib/admin/regras/fila"
+import {
+  type ColunaFila,
+  colunasDaFila,
+  novosPedidos,
+  pedidosDeDiasAnteriores,
+  resumoDaFila,
+} from "@/lib/admin/regras/fila"
 import { rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
@@ -52,6 +58,7 @@ import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
 import { Traco } from "../traco"
+import { AvisoDiasAnteriores } from "./aviso-dias-anteriores"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
 
@@ -349,6 +356,7 @@ export function PaginaFila({
       />
 
       <AvisoSomBloqueado somLigado={preferencias.somLigado} agora={agora} />
+      {fila && agora && <AvisoDiasAnteriores pedidos={pedidosDeDiasAnteriores(fila, agora)} />}
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-y border-border/70 py-3">
         <ChaveDaLoja loja={loja} agora={agora} />

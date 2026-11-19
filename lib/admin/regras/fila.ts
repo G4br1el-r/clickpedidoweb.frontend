@@ -1,4 +1,4 @@
-import { isSameDay, startOfDay } from "date-fns"
+import { isSameDay, parseISO, startOfDay } from "date-fns"
 import { emReais } from "@/lib/formato"
 import type { Pedido, StatusPedido } from "../dados/tipos"
 import { type SegmentoPainelId, temModulo } from "../segmentos-painel"
@@ -10,6 +10,29 @@ export type Urgencia = "normal" | "atencao" | "atrasado"
 const criado = (pedido: Pedido) => Date.parse(pedido.criadoEm)
 const inicio = (pedido: Pedido) => Date.parse(pedido.agendamento?.inicio ?? pedido.criadoEm)
 
+const EM_ANDAMENTO: readonly StatusPedido[] = [
+  "recebido",
+  "em-preparo",
+  "pronto",
+  "saiu-para-entrega",
+]
+
+/**
+ * Em andamento desde um dia que já passou: alguém esqueceu de fechar. Na retirada marcada
+ * (açougue) vale o dia da retirada; o salão segue pela hora marcada, na própria coluna.
+ */
+function ficouParaTras(pedido: Pedido, agora: Date): boolean {
+  if (!EM_ANDAMENTO.includes(pedido.status) || pedido.tipo === "atendimento") return false
+  const hoje = startOfDay(agora).getTime()
+  if (pedido.dataRetirada) return parseISO(pedido.dataRetirada).getTime() < hoje
+  return criado(pedido) < hoje
+}
+
+/** O que ficou aberto de outro dia: sai das colunas e vai para o aviso, com ações em lote. */
+export function pedidosDeDiasAnteriores(pedidos: Pedido[], agora: Date): Pedido[] {
+  return pedidos.filter((pedido) => ficouParaTras(pedido, agora))
+}
+
 /**
  * Colunas do quadro: comida vai de Novos a A caminho (só com entrega no segmento);
  * o salão mostra os agendamentos de hoje (e os atrasados de dias anteriores), pela hora
@@ -20,7 +43,8 @@ export function colunasDaFila(
   segmento: SegmentoPainelId,
   agora: Date,
 ): ColunaFila[] {
-  const com = (status: StatusPedido) => pedidos.filter((pedido) => pedido.status === status)
+  const com = (status: StatusPedido) =>
+    pedidos.filter((pedido) => pedido.status === status && !ficouParaTras(pedido, agora))
 
   if (segmento === "salao") {
     return [

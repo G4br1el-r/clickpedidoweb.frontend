@@ -412,6 +412,67 @@ describe("PaginaFila: aceite manual", () => {
   })
 })
 
+describe("PaginaFila: pedidos de dias anteriores", () => {
+  /** A loja abriu no dia 13 e voltou no dia 14 com pedidos ainda abertos. */
+  async function voltarNoDiaSeguinte() {
+    const servidor = servidorDo(useSegmentoAtual.getState().segmento)
+    const abertos = await servidor.pedidos.listar({
+      status: ["recebido", "em-preparo", "pronto", "saiu-para-entrega"],
+    })
+    vi.setSystemTime(new Date(2026, 10, 14, 11, 0))
+    return abertos
+  }
+
+  test("ficam fora das colunas, num aviso; concluir todos esvazia o aviso", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    const abertos = await voltarNoDiaSeguinte()
+    renderizar()
+
+    const aviso = await screen.findByRole(
+      "button",
+      { name: `${abertos.length} pedidos de dias anteriores` },
+      { timeout: 8000 },
+    )
+    expect(screen.queryByRole("heading", { name: `#${abertos[0].numero}` })).not.toBeInTheDocument()
+    await usuario.click(aviso)
+    const lista = within(screen.getByRole("dialog", { name: "Pedidos de dias anteriores" }))
+    expect(lista.getAllByRole("listitem")).toHaveLength(abertos.length)
+    await usuario.click(lista.getByRole("button", { name: "Concluir todos" }))
+
+    // A lista fecha quando o servidor termina de gravar o lote.
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /de dias anteriores$/ })).not.toBeInTheDocument(),
+    )
+  })
+
+  test("cancelar todos pede um motivo só", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    const abertos = await voltarNoDiaSeguinte()
+    renderizar()
+
+    await usuario.click(
+      await screen.findByRole(
+        "button",
+        { name: `${abertos.length} pedidos de dias anteriores` },
+        { timeout: 8000 },
+      ),
+    )
+    await usuario.click(screen.getByRole("button", { name: "Cancelar todos" }))
+    const confirmacao = within(screen.getByRole("alertdialog"))
+    await usuario.click(confirmacao.getByRole("radio", { name: "Cliente pediu para cancelar" }))
+    await usuario.click(confirmacao.getByRole("button", { name: "Sim, cancelar todos" }))
+
+    // A lista fecha quando o servidor termina de gravar o lote.
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /de dias anteriores$/ })).not.toBeInTheDocument(),
+    )
+  })
+})
+
 describe("PaginaFila: cancelar pelo cartão", () => {
   test("pede o motivo, confirma e tira o pedido da fila", async () => {
     telaGrande()

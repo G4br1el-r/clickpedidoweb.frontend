@@ -292,20 +292,13 @@ function cancelado(pedido: Pedido, tipo: Cancelamento["tipo"], escolhido: Motivo
   }
 }
 
-/** Pedido de um dia que já passou não fica aberto: entrega e comanda viram concluídas. */
+/**
+ * Virou o dia: o Pix que não foi pago não vira pedido. O que ficou em andamento continua
+ * como está; a fila mostra no aviso de dias anteriores, e a loja conclui ou cancela.
+ */
 function encerrar(pedido: Pedido, momento: string): Pedido {
-  if (pedido.status === "aguardando-pagamento") {
-    return { ...pedido, status: "cancelado", situacaoPagamento: "cancelado", atualizadoEm: momento }
-  }
-  if (!EM_ANDAMENTO.includes(pedido.status)) return pedido
-  return {
-    ...pedido,
-    status: "concluido",
-    atualizadoEm: momento,
-    ...(pedido.situacaoPagamento === "na-entrega"
-      ? { situacaoPagamento: "pago" as const, pagoEm: momento }
-      : {}),
-  }
+  if (pedido.status !== "aguardando-pagamento") return pedido
+  return { ...pedido, status: "cancelado", situacaoPagamento: "cancelado", atualizadoEm: momento }
 }
 
 /**
@@ -706,6 +699,45 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           }
           return cancelado(pedido, "recusa", escolhido)
         })
+      },
+
+      /** Pedidos esquecidos de outro dia: a loja diz que foram entregues (e cobrados). */
+      async concluirEmLote(ids: number[]): Promise<Pedido[]> {
+        const feitos: Pedido[] = []
+        for (const id of ids) {
+          feitos.push(
+            await alterar(id, (pedido) => {
+              if (!EM_ANDAMENTO.includes(pedido.status)) {
+                throw new Error("Só pedido em andamento pode ser concluído.")
+              }
+              return {
+                ...pedido,
+                status: "concluido",
+                esperaAceite: false,
+                ...(pedido.situacaoPagamento === "na-entrega"
+                  ? { situacaoPagamento: "pago" as const, pagoEm: new Date().toISOString() }
+                  : {}),
+              }
+            }),
+          )
+        }
+        return feitos
+      },
+
+      /** Pedidos esquecidos de outro dia, cancelados todos com o mesmo motivo. */
+      async cancelarEmLote(ids: number[], escolhido: MotivoEscolhido): Promise<Pedido[]> {
+        const feitos: Pedido[] = []
+        for (const id of ids) {
+          feitos.push(
+            await alterar(id, (pedido) => {
+              if (!EM_ANDAMENTO.includes(pedido.status)) {
+                throw new Error("Só pedido em andamento pode ser cancelado.")
+              }
+              return cancelado(pedido, "cancelamento", escolhido)
+            }),
+          )
+        }
+        return feitos
       },
 
       cancelar(id: number, de: StatusPedido, escolhido: MotivoEscolhido) {
