@@ -237,6 +237,17 @@ describe("PaginaFila", () => {
     await waitFor(() => expect(chave).toHaveAttribute("aria-checked", "true"))
   })
 
+  test("com Vibrar ligado, o celular vibra quando chega pedido", async () => {
+    telaGrande()
+    const vibrar = vi.fn(() => true)
+    Object.defineProperty(navigator, "vibrate", { configurable: true, value: vibrar })
+    usePreferenciasFila.setState({ vibrar: true, simular: true })
+    renderizar(300)
+
+    await waitFor(() => expect(vibrar).toHaveBeenCalled(), { timeout: 8000 })
+    Reflect.deleteProperty(navigator, "vibrate")
+  })
+
   test("com a aba à vista, não manda notificação", async () => {
     telaGrande()
     const avisos = vi.fn()

@@ -2,13 +2,19 @@ import type { Pedido } from "@/lib/admin/dados/tipos"
 import type { ChaveDoAparelho } from "@/lib/admin/preferencias-fila"
 import { textoDaNotificacao } from "@/lib/admin/regras/aparelho"
 
-type Avisos = { notificar: boolean }
+type Avisos = { notificar: boolean; vibrar: boolean }
+
+/** Duas batidas curtas: dá para sentir no bolso sem confundir com ligação. */
+const VIBRACAO = [200, 100, 200]
 
 /**
- * O que este aparelho faz quando chega pedido, além do som: a notificação do sistema, só com
- * a aba escondida (à vista, a fila já mostra) e com a licença do navegador.
+ * O que este aparelho faz quando chega pedido, além do som: vibra (no celular) e manda a
+ * notificação do sistema, só com a aba escondida (à vista, a fila já mostra) e com a licença
+ * do navegador.
  */
-export function avisarChegada(chegaram: Pedido[], { notificar }: Avisos) {
+export function avisarChegada(chegaram: Pedido[], { notificar, vibrar }: Avisos) {
+  if (chegaram.length === 0) return
+  if (vibrar && typeof navigator.vibrate === "function") navigator.vibrate(VIBRACAO)
   const podeNotificar =
     notificar &&
     document.hidden &&
