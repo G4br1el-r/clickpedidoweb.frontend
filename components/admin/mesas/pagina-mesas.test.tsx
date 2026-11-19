@@ -90,6 +90,25 @@ afterEach(() => {
 })
 
 describe("PaginaMesas", () => {
+  test("a demonstração mostra a mesa 20 bloqueada, a comanda mais antiga pedindo a conta e outra para servir", async () => {
+    const [mesas, base] = await Promise.all([api().mesas.listar(), api().base()])
+    const comComanda = mesas.flatMap((mesa) => {
+      const comanda = base.pedidos.find((pedido) => pedido.id === mesa.pedidoAtivoId)
+      return comanda ? [{ mesa, comanda }] : []
+    })
+    const maisAntiga = comComanda.reduce((a, b) =>
+      a.comanda.criadoEm < b.comanda.criadoEm ? a : b,
+    )
+    const paraServir = comComanda.find(({ comanda }) => comanda.servirDesde)
+    if (!paraServir) throw new Error("A demonstração devia ter uma mesa para servir")
+    await abrir()
+
+    expect(await cartao(20)).toHaveAccessibleDescription(/^Bloqueada/)
+    expect(await cartao(maisAntiga.mesa.numero)).toHaveAccessibleDescription(/^Pediu a conta/)
+    expect(await cartao(paraServir.mesa.numero)).toHaveAccessibleDescription(/^Servir/)
+    expect(await cartao(9)).toHaveAccessibleDescription(/^Limpeza/)
+  })
+
   test("a grade mostra a mesa ocupada com cliente, tempo, garçom e total", async () => {
     await mesaOcupada()
     await abrir()
