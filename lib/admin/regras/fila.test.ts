@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import type { Pedido, StatusPedido, TipoPedido } from "../dados/tipos"
 import {
   colunasDaFila,
+  finalizadosHoje,
   novosPedidos,
   pedidosDeDiasAnteriores,
   resumoDaFila,
@@ -213,5 +214,21 @@ describe("resumoDosItens", () => {
     // O Intl separa "R$" do valor com espaço não separável.
     expect(resumoDosItens(comItens([2, 1]))).toBe("3 itens · R$ 137,00")
     expect(resumoDosItens(comItens([1]))).toBe("1 item · R$ 137,00")
+  })
+})
+
+describe("finalizadosHoje", () => {
+  test("concluídos e cancelados de hoje, sem repetir, do mais recente ao mais antigo", () => {
+    const fechou = (id: number, status: StatusPedido, minutosAtras: number): Pedido => ({
+      ...pedido(id, status, 90),
+      atualizadoEm: new Date(AGORA.getTime() - minutosAtras * 60_000).toISOString(),
+    })
+    const concluidos = [fechou(1, "concluido", 30), fechou(2, "concluido", 5)]
+    const criadosHoje = [
+      fechou(2, "concluido", 5),
+      fechou(3, "cancelado", 10),
+      fechou(4, "pronto", 1),
+    ]
+    expect(finalizadosHoje(concluidos, criadosHoje).map((item) => item.id)).toEqual([2, 3, 1])
   })
 })

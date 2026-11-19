@@ -414,6 +414,34 @@ describe("servidor de demonstração", () => {
       expect(reaberto.situacaoPagamento).toBe("na-entrega")
       expect(reaberto.pagoEm).toBeUndefined()
     })
+
+    test("reabrir um concluído o devolve para Prontos, desfazendo a cobrança da entrega", async () => {
+      const api = servidor()
+      const naRua = (await api.pedidos.listar({ status: ["saiu-para-entrega"] })).find(
+        (pedido) => pedido.situacaoPagamento === "na-entrega",
+      )
+      if (!naRua) throw new Error("A demonstração devia ter uma entrega na rua a cobrar")
+      await api.pedidos.avancar(naRua.id, "saiu-para-entrega")
+
+      const reaberto = await api.pedidos.reabrir(naRua.id)
+      expect(reaberto.status).toBe("pronto")
+      expect(reaberto.situacaoPagamento).toBe("na-entrega")
+      await expect(api.pedidos.reabrir(naRua.id)).rejects.toThrow("Só reabre pedido concluído.")
+    })
+
+    test("a conta fechada da mesa não reabre pela fila", async () => {
+      const api = servidor()
+      const mesa = await api.mesas.criar({ numero: 9 })
+      const comanda = await api.mesas.lancar({
+        mesaId: mesa.id,
+        enviarParaCozinha: false,
+        itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+      })
+      await api.mesas.fecharConta(comanda.id, "pix")
+      await expect(api.pedidos.reabrir(comanda.id)).rejects.toThrow(
+        "A conta da mesa reabre em Mesas.",
+      )
+    })
   })
 
   describe("prazo prometido", () => {

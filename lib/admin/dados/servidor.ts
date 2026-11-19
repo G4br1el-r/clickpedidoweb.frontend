@@ -755,6 +755,20 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         })
       },
 
+      /** Concluído por engano: volta para Prontos (no salão, Em atendimento), pela gaveta da fila. */
+      reabrir(id: number) {
+        return alterar(id, (pedido) => {
+          if (pedido.status !== "concluido") throw new Error("Só reabre pedido concluído.")
+          if (pedido.tipo === "mesa") throw new Error("A conta da mesa reabre em Mesas.")
+          const destino: StatusPedido = pedido.tipo === "atendimento" ? "em-preparo" : "pronto"
+          if (foiPagoAoConcluir(pedido)) {
+            const { pagoEm: _pagoEm, ...semPagamento } = pedido
+            return { ...semPagamento, status: destino, situacaoPagamento: "na-entrega" as const }
+          }
+          return { ...pedido, status: destino }
+        })
+      },
+
       aceitar(id: number) {
         return alterar(id, (pedido) => {
           if (!pedido.esperaAceite || pedido.status !== "recebido") {
