@@ -84,6 +84,13 @@ function abaEscondida(escondida: boolean) {
 
 /** Abre o menu com as preferências deste aparelho (som, avisos, demonstração). */
 async function abrirEsteAparelho(usuario = userEvent.setup()) {
+  // No celular, as ferramentas ficam no Mais.
+  const botao = await screen.findByRole(
+    "button",
+    { name: /^(Mais|Este aparelho)$/ },
+    { timeout: 8000 },
+  )
+  if (botao.textContent === "Mais") await usuario.click(botao)
   await usuario.click(
     await screen.findByRole("button", { name: "Este aparelho" }, { timeout: 8000 }),
   )
@@ -445,13 +452,39 @@ describe("PaginaFila", () => {
     expect(screen.getByRole("button", { name: "Pausar pedidos" })).toBeInTheDocument()
   })
 
+  test("no celular, a régua e as ferramentas ficam no Mais; o estado da loja fica à vista", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    const mais = await screen.findByRole("button", { name: "Mais" }, { timeout: 8000 })
+    expect(mais).toHaveAttribute("aria-expanded", "false")
+    expect(await screen.findByRole("button", { name: "Pausar pedidos" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /^Atrasados/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Este aparelho" })).not.toBeInTheDocument()
+
+    await usuario.click(mais)
+    expect(mais).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("button", { name: /^Atrasados/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Este aparelho" })).toBeInTheDocument()
+  })
+
+  test("do tablet em diante, a régua e as ferramentas ficam sempre à vista", async () => {
+    telaGrande()
+    renderizar()
+    expect(
+      await screen.findByRole("button", { name: /^Atrasados/ }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Este aparelho" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Mais" })).not.toBeInTheDocument()
+  })
+
   test("métricas: tocar em Atrasados mostra só os atrasados; tocar de novo mostra todos", async () => {
     telaGrande()
     const usuario = userEvent.setup()
     renderizar()
     const atrasados = await screen.findByRole("button", { name: /^Atrasados/ }, { timeout: 8000 })
     await waitFor(() => expect(screen.getAllByRole("article").length).toBeGreaterThan(0))
-    const total = Number(atrasados.textContent?.match(/\d+/)?.[0])
+    // O número vai no nome do botão ("Atrasados, 4"); os dígitos rolam à parte.
+    const total = Number(atrasados.getAttribute("aria-label")?.match(/\d+/)?.[0])
     expect(total).toBeGreaterThan(0)
     const todos = screen.getAllByRole("article").length
 
@@ -467,6 +500,7 @@ describe("PaginaFila", () => {
   })
 
   test("métricas: concluídos e cancelados levam à lista de pedidos filtrada", async () => {
+    telaGrande()
     renderizar()
     expect(
       await screen.findByRole("link", { name: /^Concluídos/ }, { timeout: 8000 }),

@@ -2,7 +2,7 @@
 
 import NumberFlow from "@number-flow/react"
 import { startOfDay } from "date-fns"
-import { InboxIcon, VolumeXIcon } from "lucide-react"
+import { ChevronDownIcon, InboxIcon, VolumeXIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
 import { parseAsStringLiteral, useQueryState } from "nuqs"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAgora } from "@/hooks/use-agora"
-import { useTelaLarga } from "@/hooks/use-tela-grande"
+import { useTelaGrande, useTelaLarga } from "@/hooks/use-tela-grande"
 import {
   useAceitarPedido,
   useAvancarPedido,
@@ -41,13 +41,19 @@ import {
   pedidosDeDiasAnteriores,
   resumoDaFila,
 } from "@/lib/admin/regras/fila"
-import { FILTROS_DA_FILA, filtrarFila, metricasDaFila } from "@/lib/admin/regras/metricas-fila"
+import {
+  FILTROS_DA_FILA,
+  type FiltroDaFila,
+  filtrarFila,
+  metricasDaFila,
+} from "@/lib/admin/regras/metricas-fila"
 import type { TemposDaLoja } from "@/lib/admin/regras/prazo"
 import { rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
 import { liberarSom, somBloqueado, tocarAlerta } from "@/lib/admin/som"
 import { plural } from "@/lib/formato"
+import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
@@ -73,6 +79,13 @@ const _SONS: { valor: SomAlerta; rotulo: string }[] = [
 
 /** Quanto tempo o "Chegou agora" fica no cartão. */
 const DESTAQUE_MS = 10_000
+
+/** O que a fila mostra quando uma métrica filtra as colunas. */
+const ROTULO_DO_FILTRO: Record<FiltroDaFila, string> = {
+  atrasados: "Só os atrasados",
+  aceite: "Só os que esperam aceite",
+  "ultima-hora": "Só os da última hora",
+}
 
 function Chave({
   id,
@@ -254,6 +267,9 @@ export function PaginaFila({
   const agora = useAgora(30_000)
   // No tablet a barra lateral come 256 px: quatro colunas só a partir do notebook.
   const telaGrande = useTelaLarga()
+  // Do tablet em diante a régua e as ferramentas ficam à vista; no celular, no Mais.
+  const aparelhoGrande = useTelaGrande()
+  const [maisAberto, setMaisAberto] = useState(false)
   const { data: fila } = useFila()
   const { data: loja } = useLoja()
   const { data: motoboys } = useMotoboys()
@@ -388,33 +404,69 @@ export function PaginaFila({
       <AvisoSomBloqueado somLigado={preferencias.somLigado} />
       {fila && agora && <AvisoDiasAnteriores pedidos={pedidosDeDiasAnteriores(fila, agora)} />}
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-y border-border/70 py-3">
-        <ChaveDaLoja loja={loja} agora={agora} />
-        {temEntrega && (
-          <Chave
-            id="aceita-entrega"
-            rotulo="Entrega"
-            marcada={loja?.aceitaEntrega ?? false}
-            aoMudar={(entrega) =>
-              definirEntrega.mutate(entrega, {
-                onSuccess: () =>
-                  toast(
-                    entrega
-                      ? "Entrega ligada."
-                      : "Entrega desligada. Os pedidos de entrega em andamento continuam na fila.",
-                  ),
-              })
-            }
-          />
-        )}
-        {loja && agora && <PausaPedidos loja={loja} agora={agora} comEntrega={temEntrega} />}
-        {loja && <AjustePrazo loja={loja} comEntrega={temEntrega} />}
-        <div className="sm:ml-auto">
-          <EsteAparelho loja={loja} />
+      <section aria-label="Barra da fila" className="flex flex-col">
+        {/* Faixa 1: o estado da loja, sempre à vista. */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-border/70 py-3">
+          <ChaveDaLoja loja={loja} agora={agora} />
+          {temEntrega && (
+            <Chave
+              id="aceita-entrega"
+              rotulo="Entrega"
+              marcada={loja?.aceitaEntrega ?? false}
+              aoMudar={(entrega) =>
+                definirEntrega.mutate(entrega, {
+                  onSuccess: () =>
+                    toast(
+                      entrega
+                        ? "Entrega ligada."
+                        : "Entrega desligada. Os pedidos de entrega em andamento continuam na fila.",
+                    ),
+                })
+              }
+            />
+          )}
+          {loja && agora && <PausaPedidos loja={loja} agora={agora} comEntrega={temEntrega} />}
+          {loja && <AjustePrazo loja={loja} comEntrega={temEntrega} />}
+          {!aparelhoGrande && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="ml-auto"
+              aria-expanded={maisAberto}
+              aria-controls="fila-mais"
+              onClick={() => setMaisAberto((aberto) => !aberto)}
+            >
+              Mais
+              <ChevronDownIcon
+                data-icon="inline-end"
+                className={cn("transition-transform duration-200", maisAberto && "rotate-180")}
+              />
+            </Button>
+          )}
         </div>
-      </div>
 
-      {metricas && <MetricasFila metricas={metricas} filtro={filtro} aoFiltrar={setFiltro} />}
+        {/* Faixas 2 e 3: a régua e as ferramentas. No celular, recolhidas no Mais. */}
+        {(aparelhoGrande || maisAberto) && (
+          <div id="fila-mais" className="flex flex-col">
+            {metricas && <MetricasFila metricas={metricas} filtro={filtro} aoFiltrar={setFiltro} />}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/70 py-3">
+              {filtro && (
+                <p className="flex items-center gap-2 text-sm">
+                  <Traco tom="novo" />
+                  {ROTULO_DO_FILTRO[filtro]}
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setFiltro(null)}>
+                    Ver todos
+                  </Button>
+                </p>
+              )}
+              <div className="ml-auto">
+                <EsteAparelho loja={loja} />
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
 
       {!colunas || !agora ? (
         <div role="status" aria-label="Carregando a fila" className="grid gap-3 lg:grid-cols-4">
