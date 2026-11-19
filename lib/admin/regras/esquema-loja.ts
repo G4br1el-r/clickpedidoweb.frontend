@@ -84,7 +84,7 @@ export const esquemaLoja = z
     som: z.enum(["suave", "alto", "muito-alto", "sirene"]),
     aceiteManual: z.boolean(),
     limiteAceiteMin: z
-      .number()
+      .number({ error: "Entre 1 e 30 minutos." })
       .int({ error: "Entre 1 e 30 minutos." })
       .min(1, { error: "Entre 1 e 30 minutos." })
       .max(30, { error: "Entre 1 e 30 minutos." }),

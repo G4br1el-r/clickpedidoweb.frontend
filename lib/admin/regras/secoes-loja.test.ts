@@ -33,6 +33,14 @@ describe("secoesAlteradas", () => {
       secoesAlteradas({ cortarPapel: true, videoBanner: true, mensagemFechada: true }),
     ).toEqual(["Loja", "Horários", "Impressão"])
   })
+
+  test("aceite manual e limite do aceite ficam em Fila e pedidos, antes do alerta sonoro", () => {
+    expect(secoesAlteradas({ som: true, limiteAceiteMin: true })).toEqual([
+      "Fila e pedidos",
+      "Alerta sonoro",
+    ])
+    expect(secoesAlteradas({ aceiteManual: true })).toEqual(["Fila e pedidos"])
+  })
 })
 
 describe("resumoDasAlteracoes", () => {

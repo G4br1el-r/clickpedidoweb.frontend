@@ -162,6 +162,43 @@ describe("PaginaLoja", () => {
   })
 })
 
+describe("PaginaLoja: fila e pedidos", () => {
+  test("aceite manual, limite do aceite e a sirene como som da loja", async () => {
+    const usuario = await abrir()
+    const fila = secao("Fila e pedidos")
+    const aceite = fila.getByRole("switch", { name: "Aceitar cada pedido do site na Fila" })
+    expect(aceite).toBeChecked()
+
+    const limite = fila.getByRole("spinbutton", { name: "Minutos até o alerta de atraso" })
+    await usuario.clear(limite)
+    await usuario.type(limite, "8")
+    await usuario.click(secao("Alerta sonoro").getByRole("combobox", { name: "Som da loja" }))
+    await usuario.click(await screen.findByRole("option", { name: "Sirene" }))
+    await usuario.click(screen.getByRole("button", { name: "Salvar alterações" }))
+    await waitFor(async () =>
+      expect(await api().loja()).toMatchObject({ limiteAceiteMin: 8, som: "sirene" }),
+    )
+
+    await usuario.click(aceite)
+    expect(limite).toBeDisabled()
+    await usuario.click(screen.getByRole("button", { name: "Salvar alterações" }))
+    await waitFor(async () => expect((await api().loja()).aceiteManual).toBe(false))
+  })
+
+  test("limite fora de 1 a 30 minutos mostra o erro no campo", async () => {
+    const usuario = await abrir()
+    const limite = secao("Fila e pedidos").getByRole("spinbutton", {
+      name: "Minutos até o alerta de atraso",
+    })
+    await usuario.clear(limite)
+    await usuario.type(limite, "45")
+    await usuario.click(screen.getByRole("button", { name: "Salvar alterações" }))
+
+    expect(await screen.findByText("Entre 1 e 30 minutos.")).toBeInTheDocument()
+    expect((await api().loja()).limiteAceiteMin).toBe(5)
+  })
+})
+
 describe("PaginaLoja: recursos de cada loja", () => {
   test("açougue: vitrines com título e liga/desliga", async () => {
     useSegmentoAtual.setState({ segmento: "acougue" })

@@ -35,6 +35,10 @@ describe("esquemaLoja", () => {
     expect(erros({ ...VALIDA, limiteAceiteMin: 2.5 })).toEqual({
       limiteAceiteMin: "Entre 1 e 30 minutos.",
     })
+    // Campo vazio: o número não existe.
+    expect(erros({ ...VALIDA, limiteAceiteMin: Number.NaN })).toEqual({
+      limiteAceiteMin: "Entre 1 e 30 minutos.",
+    })
   })
 
   test("dados da loja: nome, telefones com DDD", () => {

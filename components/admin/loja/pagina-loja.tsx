@@ -56,6 +56,7 @@ const SONS: { valor: SomAlerta; rotulo: string }[] = [
   { valor: "suave", rotulo: "Suave" },
   { valor: "alto", rotulo: "Alto" },
   { valor: "muito-alto", rotulo: "Muito alto" },
+  { valor: "sirene", rotulo: "Sirene" },
 ]
 
 const dinheiro = {
@@ -264,6 +265,7 @@ function Chave({
     | "aceitaRetirada"
     | "impressaoAutomatica"
     | "cortarPapel"
+    | "aceiteManual"
   rotulo: string
   descricao?: string
   desabilitada?: boolean
@@ -581,9 +583,9 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
     resetField,
   } = formulario
   const erros = formState.errors
-  const [horarios, textoHorario, som] = useWatch({
+  const [horarios, textoHorario, som, aceiteManual] = useWatch({
     control: controle,
-    name: ["horarios", "textoHorario", "som"],
+    name: ["horarios", "textoHorario", "som", "aceiteManual"],
   })
   // Conectar e desconectar salvam na hora: vale o que está no servidor, não o rascunho.
   const conectado = Boolean(loja.pagamentoOnlineConectado)
@@ -935,6 +937,43 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
           Imprimir cupom de teste
         </Button>
         {agora && <Cupom pedido={pedidoDeTeste(agora)} loja={loja.nome} area={area} />}
+      </Secao>
+
+      <Secao
+        titulo="Fila e pedidos"
+        descricao="Como o pedido do site entra na Fila. A loja nunca recusa sozinha."
+      >
+        <Linhas>
+          <Chave
+            controle={controle}
+            nome="aceiteManual"
+            rotulo="Aceitar cada pedido do site na Fila"
+            descricao="O alarme toca até alguém aceitar ou recusar. Desligado, o pedido entra aceito."
+          />
+        </Linhas>
+        <Controller
+          control={controle}
+          name="limiteAceiteMin"
+          render={({ field }) => (
+            <Field data-invalid={Boolean(erros.limiteAceiteMin)} className="max-w-xs">
+              <FieldLabel htmlFor="loja-limite-aceite">Minutos até o alerta de atraso</FieldLabel>
+              <Input
+                id="loja-limite-aceite"
+                type="number"
+                min={1}
+                max={30}
+                className="tabular-nums"
+                disabled={!aceiteManual}
+                value={Number.isNaN(field.value) ? "" : field.value}
+                onChange={(evento) => field.onChange(evento.target.valueAsNumber)}
+              />
+              <FieldDescription>
+                Sem aceite depois disso, o cartão fica vermelho na Fila.
+              </FieldDescription>
+              {erros.limiteAceiteMin && <FieldError>{erros.limiteAceiteMin.message}</FieldError>}
+            </Field>
+          )}
+        />
       </Secao>
 
       <Secao
