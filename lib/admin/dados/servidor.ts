@@ -12,6 +12,7 @@ import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
 import { normalizar } from "../regras/filtro-pedidos"
+import { eventosDaMudanca } from "../regras/historico"
 import { proximoNumero } from "../regras/numero"
 import {
   type Desconto,
@@ -382,7 +383,15 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const indice = base.pedidos.findIndex((pedido) => pedido.id === id)
     if (indice < 0) throw new Error("Pedido não encontrado")
     const antes = base.pedidos[indice]
-    const novo = { ...mudar(antes, base), atualizadoEm: new Date().toISOString() }
+    const agora = new Date().toISOString()
+    const mudado = mudar(antes, base)
+    // Toda ação passa por aqui: a linha do tempo se escreve sozinha.
+    const eventos = eventosDaMudanca(antes, mudado, agora)
+    const novo = {
+      ...mudado,
+      atualizadoEm: agora,
+      ...(eventos.length > 0 ? { historico: [...(antes.historico ?? []), ...eventos] } : {}),
+    }
     // O estoque acompanha o que o pedido passou a consumir (ou a devolver).
     const comEstoque = aplicarEstoque(base, antes, novo, estoque)
     const pedidos = comEstoque.pedidos.with(indice, novo)

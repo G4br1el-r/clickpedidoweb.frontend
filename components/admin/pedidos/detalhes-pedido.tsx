@@ -57,6 +57,7 @@ import {
 } from "@/lib/admin/regras/mensagens"
 import { faltaPesar } from "@/lib/admin/regras/pesagem"
 import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
+import { linhaDoTempo } from "@/lib/admin/regras/historico"
 import { etapasDoCaminho, rotuloAcao, rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
@@ -366,6 +367,19 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
             </div>
           </Bloco>
         )}
+
+        <Bloco titulo="Linha do tempo">
+          <ol aria-label="Linha do tempo" className="flex flex-col gap-1.5 text-sm">
+            {linhaDoTempo(pedido).map((linha, indice) => (
+              <li key={`${linha.em}-${indice}`} className="flex gap-3">
+                <span className="w-10 shrink-0 text-muted-foreground tabular-nums">
+                  {format(new Date(linha.em), "HH:mm")}
+                </span>
+                <span>{linha.texto}</span>
+              </li>
+            ))}
+          </ol>
+        </Bloco>
       </div>
 
       <SheetFooter className="border-t border-border/70 sm:flex-row sm:flex-wrap">

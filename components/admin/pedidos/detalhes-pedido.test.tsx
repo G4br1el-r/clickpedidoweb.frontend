@@ -85,6 +85,22 @@ describe("DetalhesPedido", () => {
     expect(etapas[2]).not.toHaveAttribute("data-feita")
   })
 
+  test("a linha do tempo mostra a chegada e cada ação, com a hora", async () => {
+    const pedido = await umPedido((p) => p.status === "recebido")
+    const servidor = servidorDo(useSegmentoAtual.getState().segmento)
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 41))
+    await servidor.pedidos.avancar(pedido.id, "recebido")
+    renderizar(pedido.id)
+    const detalhes = await painel(pedido)
+
+    const linha = within(detalhes.getByRole("list", { name: "Linha do tempo" }))
+    const horaDaChegada = new Date(pedido.criadoEm).toTimeString().slice(0, 5)
+    expect(linha.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      `${horaDaChegada}Pedido recebido`,
+      "20:41Em preparo",
+    ])
+  })
+
   test("entrega: itens, endereço com mapa e WhatsApp do cliente", async () => {
     const pedido = await umPedido((p) => p.tipo === "entrega" && p.status === "em-preparo")
     renderizar(pedido.id)

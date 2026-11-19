@@ -66,6 +66,11 @@ export type EnderecoEntrega = {
   referencia?: string
 }
 
+/** Uma linha da linha do tempo do pedido. A chegada não entra: é o `criadoEm`. */
+export type EventoPedido =
+  | { tipo: "etapa"; status: StatusPedido; em: string }
+  | { tipo: "pago" | "impresso"; em: string }
+
 export type Pedido = {
   id: number
   /** Número mostrado para a loja e o cliente. Na lanchonete, recomeça todo mês. */
@@ -102,6 +107,8 @@ export type Pedido = {
   pesagem?: { totalEstimado: number; diferenca: number; pesadoEm: string }
   /** O estoque já saiu por este pedido (para devolver no cancelamento uma vez só). */
   estoqueBaixado?: boolean
+  /** O que aconteceu depois da chegada, do mais antigo para o mais novo. */
+  historico?: EventoPedido[]
 }
 
 export type Categoria = {

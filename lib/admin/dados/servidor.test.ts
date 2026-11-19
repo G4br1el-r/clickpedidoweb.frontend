@@ -120,6 +120,20 @@ describe("servidor de demonstração", () => {
     expect((await servidor().pedidos.buscar(novo.id))?.status).toBe("em-preparo")
   })
 
+  test("cada ação no pedido entra na linha do tempo, com a hora, e fica guardada", async () => {
+    const api = servidor()
+    const [novo] = await api.pedidos.listar({ status: ["recebido"] })
+
+    await api.pedidos.avancar(novo.id, "recebido")
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 34))
+    await api.pedidos.marcarImpresso(novo.id)
+
+    expect((await servidor().pedidos.buscar(novo.id))?.historico).toEqual([
+      { tipo: "etapa", status: "em-preparo", em: "2026-11-13T23:30:00.000Z" },
+      { tipo: "impresso", em: "2026-11-13T23:34:00.000Z" },
+    ])
+  })
+
   test("duas abas: avançar ou cancelar a partir de uma etapa que já passou é recusado", async () => {
     const api = servidor()
     const [novo] = await api.pedidos.listar({ status: ["recebido"] })
