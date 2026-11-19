@@ -557,6 +557,9 @@ test("estoque: contagem, a venda no PDV baixa e esgota, o cancelamento devolve",
   await page.getByRole("button", { name: "Cancelar pedido" }).click()
   await page.getByRole("button", { name: "Sim, cancelar" }).click()
   await expect(page.getByRole("button", { name: "Cancelar pedido" })).toHaveCount(0)
+  // A tela muda antes de o servidor gravar (atualização otimista): o aviso só sai depois de
+  // gravado. Sem esperar, ir ao estoque corta a gravação e o saldo não volta.
+  await expect(page.getByText(/^Pedido #\d+: Cancelado$/)).toBeVisible()
 
   linha = await linhaNoEstoque()
   await expect(linha.getByText("1 un", { exact: true })).toBeVisible()
