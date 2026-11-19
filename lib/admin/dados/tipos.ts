@@ -47,6 +47,8 @@ export type ItemPedido = {
   nome: string
   quantidade: number
   precoUnitario: number
+  /** Custo de uma unidade (ou de 1 kg) na hora da venda, copiado do produto. Sem custo, fica de fora da margem. */
+  custoUnitario?: number
   /** Resumo das opções escolhidas, já em texto. Exemplo: "1º sabor: Calabresa". */
   opcoes: string[]
   /** Combos: produtos ligados às opções escolhidas (cada um sai 1 por unidade do item). */
@@ -181,6 +183,8 @@ export type Produto = {
   grupos: GrupoOpcao[]
   /** Farmácia: dados do medicamento. Sem o campo, é um item de venda livre (higiene, beleza). */
   medicamento?: DadosMedicamento
+  /** Custo de uma unidade (ou de 1 kg): a margem das vendas e o valor parado em estoque. */
+  custo?: number
   /** Controle de estoque do produto; sem o campo, não é controlado. */
   estoque?: ControleEstoque
 }
@@ -190,8 +194,6 @@ export type ControleEstoque = {
   controlar: boolean
   quantidade: number
   minimo: number
-  /** Custo de uma unidade (ou de 1 kg), para o valor parado em estoque. */
-  custo?: number
   /** Zerou, esgota no cardápio; a entrada seguinte devolve. */
   esgotarAoZerar: boolean
   /** O estoque (e não a pessoa) esgotou o produto: só esse volta sozinho. */

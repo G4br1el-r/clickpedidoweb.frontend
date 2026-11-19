@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter, type OnUrlUpdateFunction } from "nuqs/adapters/testing"
 import { type ReactNode, useState } from "react"
+import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -64,6 +65,9 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.useRealTimers()
+  // Os avisos ficam guardados no sonner entre os testes: sem isto, o "Produto salvo." de um
+  // teste aparece no seguinte.
+  toast.dismiss()
 })
 
 describe("FormularioProduto: campos por segmento", () => {
@@ -175,6 +179,55 @@ describe("FormularioProduto: salvar", () => {
     expect(
       within(campos.getByRole("group", { name: "Grupo 1" })).getByLabelText("Nome do grupo"),
     ).toHaveValue("Borda")
+  })
+
+  test("o custo é opcional, entra no produto salvo e volta ao editar", async () => {
+    const usuario = userEvent.setup()
+    abrir("pizzaria", "novo")
+    const campos = await formulario()
+    expect(
+      campos.getByText("Para a margem. Em branco, o produto fica sem custo."),
+    ).toBeInTheDocument()
+
+    await usuario.type(campos.getByLabelText("Nome"), "Pizza da casa")
+    await usuario.click(campos.getByRole("combobox", { name: "Categoria" }))
+    await usuario.click(await screen.findByRole("option", { name: "Tradicionais" }))
+    await usuario.type(campos.getByLabelText("Preço"), "59,90")
+    await usuario.type(campos.getByLabelText("Custo"), "22,50")
+    await usuario.click(campos.getByRole("button", { name: "Salvar produto" }))
+
+    expect(await screen.findByText("Produto salvo.")).toBeInTheDocument()
+    const salvo = (await servidorDo("pizzaria").produtos.listar()).find(
+      (p) => p.nome === "Pizza da casa",
+    )
+    expect(salvo?.custo).toBe(22.5)
+  })
+
+  test("salvar não apaga o que o formulário não edita: estoque e dados do medicamento", async () => {
+    const usuario = userEvent.setup()
+    const remedio = (await servidorDo("farmacia").produtos.listar()).find(
+      (produto) => produto.medicamento,
+    )
+    if (!remedio) throw new Error("A farmácia de demonstração devia ter medicamento")
+    await servidorDo("farmacia").estoque.configurar(remedio.id, {
+      controlar: true,
+      minimo: 3,
+      esgotarAoZerar: true,
+    })
+    const antes = (await servidorDo("farmacia").produtos.listar()).find(
+      (produto) => produto.id === remedio.id,
+    )
+    abrir("farmacia", remedio.id)
+    const campos = await formulario()
+
+    await usuario.click(campos.getByRole("button", { name: "Salvar produto" }))
+
+    expect(await screen.findByText("Produto salvo.")).toBeInTheDocument()
+    const depois = (await servidorDo("farmacia").produtos.listar()).find(
+      (produto) => produto.id === remedio.id,
+    )
+    expect(depois?.medicamento).toEqual(remedio.medicamento)
+    expect(depois?.estoque).toEqual(antes?.estoque)
   })
 
   test("editar carrega o produto", async () => {

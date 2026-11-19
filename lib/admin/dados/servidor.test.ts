@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto"
-import { clear } from "idb-keyval"
+import { clear, set } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { catalogoDeTeste } from "./catalogo-de-teste"
 import { carregarCatalogo } from "./catalogos"
@@ -69,6 +69,23 @@ describe("servidor de demonstração", () => {
     expect(maisAntigo < new Date(2026, 7, 20)).toBe(true)
     // Outra aba (ou recarregar) lê o que ficou guardado.
     expect(await servidor().pedidos.listar()).toEqual(pedidos)
+  })
+
+  test("os dados guardados na versão 2 são recriados: a demonstração nova traz custo e histórico", async () => {
+    await set("clickpedido-admin-dados:lanchonete", {
+      versao: 2,
+      geradoEm: AGORA.toISOString(),
+      base: { ...catalogoDeTeste(), pedidos: [], movimentosEstoque: [] },
+    })
+
+    const base = await servidor().base()
+    expect(base.pedidos.length).toBeGreaterThan(0)
+    const comCusto = base.produtos.filter((produto) => produto.custo !== undefined)
+    expect(comCusto.length).toBeGreaterThan(base.produtos.length / 2)
+    const custos = new Map(comCusto.map((produto) => [produto.id, produto.custo]))
+    for (const item of base.pedidos.flatMap((pedido) => pedido.itens)) {
+      expect(item.custoUnitario).toBe(custos.get(item.produtoId ?? ""))
+    }
   })
 
   test("lista do mais novo para o mais antigo e filtra por período e status", async () => {
@@ -395,6 +412,27 @@ describe("servidor de demonstração", () => {
         ["Água", 4.5, 4.5],
       ])
       expect(pedido.itens[0].opcoes).toEqual(["Adicional: Bacon"])
+    })
+
+    test("o item vendido guarda o custo do produto daquela hora; mudar o custo depois não mexe na venda", async () => {
+      const api = servidor()
+      const xBurger = (await api.produtos.listar()).find((item) => item.id === "prod-x-burger")
+      if (!xBurger) throw new Error("O catálogo de teste devia ter o X-Burger")
+      await api.produtos.salvar({ ...xBurger, custo: 9.4 })
+
+      const pedido = await api.pdv.finalizar(venda)
+      expect(pedido.itens.map((item) => item.custoUnitario)).toEqual([9.4, undefined])
+
+      const mesa = await api.mesas.criar({ numero: 7 })
+      const comanda = await api.mesas.lancar({
+        mesaId: mesa.id,
+        enviarParaCozinha: false,
+        itens: [venda.itens[0]],
+      })
+      expect(comanda.itens[0].custoUnitario).toBe(9.4)
+
+      await api.produtos.salvar({ ...xBurger, custo: 12 })
+      expect((await api.pedidos.buscar(pedido.id))?.itens[0].custoUnitario).toBe(9.4)
     })
 
     test("o preço do item do cardápio sai do servidor, nunca da tela", async () => {
@@ -992,8 +1030,16 @@ describe("servidor de demonstração", () => {
       catalogo.clientes = []
       const [modelo] = catalogo.produtos
       catalogo.produtos = [
-        { ...modelo, id: "corte", nome: "Corte", preco: 50, duracaoMin: 60, grupos: [] },
-        { ...modelo, id: "escova", nome: "Escova", preco: 40, duracaoMin: 30, grupos: [] },
+        { ...modelo, id: "corte", nome: "Corte", preco: 50, custo: 12, duracaoMin: 60, grupos: [] },
+        {
+          ...modelo,
+          id: "escova",
+          nome: "Escova",
+          preco: 40,
+          custo: 9,
+          duracaoMin: 30,
+          grupos: [],
+        },
       ]
       return criarServidor({ segmento: "salao", carregarCatalogo: async () => catalogo, espera: 0 })
     }
@@ -1005,6 +1051,14 @@ describe("servidor de demonstração", () => {
       servicos,
       inicio,
       pagamento: "pix" as const,
+    })
+
+    test("o atendimento guarda o custo de cada serviço", async () => {
+      const pedido = await salao().agendamentos.criar(novo(sabado(10), ["corte", "escova"]))
+      expect(pedido.itens.map((item) => [item.nome, item.custoUnitario])).toEqual([
+        ["Corte", 12],
+        ["Escova", 9],
+      ])
     })
 
     test("o preço e a duração saem dos serviços, e o atendimento é pago no salão", async () => {

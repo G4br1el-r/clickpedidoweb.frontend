@@ -12,7 +12,6 @@ const controle = (quantidade: number, mudanca: Partial<ControleEstoque> = {}): C
   controlar: true,
   quantidade,
   minimo: 2,
-  custo: 3,
   esgotarAoZerar: true,
   ...mudanca,
 })
@@ -30,6 +29,7 @@ function catalogoComEstoque(mudar?: (catalogo: CatalogoLoja) => void) {
     nome: "Refri lata",
     preco: 6,
     grupos: [],
+    custo: 3,
     estoque: controle(5),
   }
   const bacon: Produto = { ...refri, id: "bacon", nome: "Bacon", preco: 3, estoque: controle(10) }
@@ -79,7 +79,10 @@ describe("estoque: movimentos à mão", () => {
     })
     await api.estoque.saida("refri", { quantidade: 2, motivo: "Quebra" })
     await api.estoque.contagem("refri", { contado: 12 })
-    expect((await saldo(api, "refri"))?.estoque).toMatchObject({ quantidade: 12, custo: 2.8 })
+    // O custo da entrada passa a ser o custo do produto, o mesmo do cardápio.
+    const refri = await saldo(api, "refri")
+    expect(refri?.estoque?.quantidade).toBe(12)
+    expect(refri?.custo).toBe(2.8)
 
     const historico = await api.estoque.movimentos("refri")
     expect(historico.map((item) => [item.tipo, item.quantidade, item.saldo])).toEqual([
@@ -110,9 +113,9 @@ describe("estoque: movimentos à mão", () => {
       controlar: true,
       quantidade: 0,
       minimo: 4,
-      custo: 7.5,
       esgotarAoZerar: false,
     })
+    expect(configurado.custo).toBe(7.5)
   })
 })
 

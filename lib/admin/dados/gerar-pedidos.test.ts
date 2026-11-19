@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { MOTIVOS_CANCELAMENTO } from "../regras/rotulos"
 import { proximoStatus } from "../regras/status"
 import { catalogoDeTeste as catalogo } from "./catalogo-de-teste"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
@@ -120,6 +121,25 @@ describe("gerarPedidos", () => {
     }
   })
 
+  test("o item leva o custo do produto; produto sem custo, item sem custo", () => {
+    const comCusto = catalogo()
+    const [primeiro, ...resto] = comCusto.produtos
+    comCusto.produtos = [{ ...primeiro, custo: 7.25 }, ...resto.map(({ custo: _, ...p }) => p)]
+    const itens = gerarPedidos({
+      catalogo: comCusto,
+      segmento: "lanchonete",
+      de: new Date(2026, 10, 9),
+      agora: AGORA,
+    }).flatMap((pedido) => pedido.itens)
+
+    const doPrimeiro = itens.filter((item) => item.produtoId === primeiro.id)
+    expect(doPrimeiro.length).toBeGreaterThan(0)
+    for (const item of doPrimeiro) expect(item.custoUnitario).toBe(7.25)
+    for (const item of itens.filter((item) => item.produtoId !== primeiro.id)) {
+      expect(item).not.toHaveProperty("custoUnitario")
+    }
+  })
+
   test("um pedido de 2 lanches entregue custa R$ 51", () => {
     const pedidos = gerarPedidos({
       catalogo: catalogo(),
@@ -228,6 +248,36 @@ describe("gerarPedidos", () => {
             (Date.parse(etapa.em) - Date.parse(pedido.historico[indice].em)) / 60_000,
         )
       for (const duracao of minutos) expect(duracao).toBeGreaterThan(0)
+    }
+  })
+
+  test("os cancelados trazem um motivo que faz sentido; alguns ficam sem motivo", () => {
+    const cancelados = gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "lanchonete",
+      de: new Date(2026, 9, 15),
+      agora: AGORA,
+    }).filter((pedido) => pedido.status === "cancelado")
+
+    const motivos = cancelados.map((pedido) => pedido.motivoCancelamento)
+    expect(motivos).toContain(undefined)
+    expect(new Set(motivos).size).toBeGreaterThan(3)
+    for (const pedido of cancelados) {
+      if (pedido.motivoCancelamento)
+        expect(MOTIVOS_CANCELAMENTO).toContain(pedido.motivoCancelamento)
+      if (pedido.motivoCancelamento === "fora-da-area") expect(pedido.tipo).toBe("entrega")
+      // Cancelado antes de pagar online: o pagamento não foi aprovado.
+      if (pedido.historico.at(-2)?.status === "aguardando-pagamento") {
+        expect(pedido.motivoCancelamento).toBe("pagamento-nao-aprovado")
+      }
+    }
+    for (const pedido of gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "lanchonete",
+      de: new Date(2026, 10, 9),
+      agora: AGORA,
+    }).filter((item) => item.status !== "cancelado")) {
+      expect(pedido).not.toHaveProperty("motivoCancelamento")
     }
   })
 

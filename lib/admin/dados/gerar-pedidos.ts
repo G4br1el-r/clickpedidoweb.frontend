@@ -12,6 +12,7 @@ import type {
   FormaPagamento,
   ItemPedido,
   Mesa,
+  MotivoCancelamento,
   OrigemPedido,
   Pedido,
   Produto,
@@ -187,6 +188,7 @@ function montarItem(
     nome: produto.nome,
     quantidade,
     precoUnitario,
+    ...(produto.custo !== undefined ? { custoUnitario: produto.custo } : {}),
     opcoes,
     total: reais(precoUnitario * quantidade),
     ...(pesoGramas ? { pesoGramas, precoKg: precoBase } : {}),
@@ -305,6 +307,42 @@ function historicoGerado({
       indice === ate.length - 1 ? atualizado : new Date(criado.getTime() + decorrido * escala)
     return { status: etapa, em: em.toISOString() }
   })
+}
+
+const comMotivo = (motivo: MotivoCancelamento | undefined) =>
+  motivo ? { motivoCancelamento: motivo } : {}
+
+/** Motivos sorteados para os cancelados, com o peso de cada um. */
+const MOTIVOS_SORTEADOS: [MotivoCancelamento | undefined, number][] = [
+  [undefined, 20],
+  ["cliente-desistiu", 25],
+  ["demora", 15],
+  ["sem-estoque", 15],
+  ["fora-da-area", 10],
+  ["loja-fechou", 5],
+  ["pagamento-nao-aprovado", 5],
+  ["outro", 5],
+]
+
+/**
+ * Motivo de um cancelado gerado. Quem cancelou antes de pagar online teve o pagamento
+ * recusado; fora da área só vale para entrega. Uns ficam sem motivo, como na loja com pressa.
+ */
+function motivoGerado(id: number, tipo: TipoPedido, historico: EtapaDoPedido[]) {
+  if (historico.at(-2)?.status === "aguardando-pagamento") return "pagamento-nao-aprovado"
+  const sorte = sorteadorDaSemente((id * 7919) | 0)
+  const validos = MOTIVOS_SORTEADOS.filter(
+    ([motivo]) => motivo !== "fora-da-area" || tipo === "entrega",
+  )
+  let resto = sorte.inteiro(
+    1,
+    validos.reduce((soma, [, peso]) => soma + peso, 0),
+  )
+  for (const [motivo, peso] of validos) {
+    resto -= peso
+    if (resto <= 0) return motivo
+  }
+  return undefined
 }
 
 function formaDePagamento(
@@ -559,6 +597,7 @@ export function gerarPedidos({
         criadoEm: criado.toISOString(),
         atualizadoEm: atualizado.toISOString(),
         historico,
+        ...(status === "cancelado" ? comMotivo(motivoGerado(id, tipo, historico)) : {}),
         ...(encerrado ? { impressoEm: addMinutes(criado, 1).toISOString() } : {}),
         enviarParaCozinha: true,
         ...(agendamento ? { agendamento } : {}),

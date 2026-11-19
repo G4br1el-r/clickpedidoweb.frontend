@@ -27,6 +27,7 @@ import {
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
+import { semearCustos } from "./custos-demo"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
 import type {
@@ -47,7 +48,7 @@ import type {
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 2
+const VERSAO = 3
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -309,7 +310,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
   async function doZero(): Promise<BaseLoja> {
     const agora = new Date()
-    const catalogo = await carregarCatalogo()
+    const carregado = await carregarCatalogo()
+    // Custo nos produtos antes de gerar: cada item vendido guarda uma cópia dele.
+    const catalogo = { ...carregado, produtos: semearCustos(carregado.produtos, segmento) }
     const pedidos = gerarPedidos({
       catalogo,
       segmento,
@@ -476,9 +479,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         : {
             ...base,
             produtos: base.produtos.map((item) =>
-              item.id === produtoId && item.estoque
-                ? { ...item, estoque: { ...item.estoque, custo } }
-                : item,
+              item.id === produtoId ? { ...item, custo } : item,
             ),
           }
     const nova = movimentar(comCusto, produtoId, quantidade, { tipo, ...extra })
@@ -506,7 +507,12 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
    * (balcão quando o segmento usa), dos adicionais e do "grátis até"; as escolhas
    * passam pelo mínimo e o máximo de cada grupo.
    */
-  function precificar(base: BaseLoja, lancado: ItemLancado) {
+  function precificar(
+    base: BaseLoja,
+    lancado: ItemLancado,
+  ): Pick<ItemPedido, "produtoId" | "nome" | "precoUnitario" | "custoUnitario" | "opcoes"> & {
+    produtosDasOpcoes: string[]
+  } {
     if ("avulso" in lancado) {
       const nome = lancado.avulso.nome.trim().slice(0, 80)
       if (!nome) throw new Error("Informe o nome do item avulso.")
@@ -555,6 +561,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       produtoId: produto.id,
       nome: produto.nome,
       precoUnitario: precoComOpcoes(precoDeBalcao(produto, segmento), grupos, lancado.escolhas),
+      // A cópia do custo de agora: a margem do passado não muda quando o custo mudar.
+      ...(produto.custo !== undefined ? { custoUnitario: produto.custo } : {}),
       opcoes: resumoDasOpcoes(grupos, lancado.escolhas),
       produtosDasOpcoes,
     }
@@ -936,10 +944,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
         const base = await carregar()
         const itens = lancados.map((lancado) => {
-          const { produtoId, nome, precoUnitario, opcoes, produtosDasOpcoes } = precificar(
-            base,
-            lancado,
-          )
+          const { produtoId, nome, precoUnitario, custoUnitario, opcoes, produtosDasOpcoes } =
+            precificar(base, lancado)
           const observacao = lancado.observacao?.trim().slice(0, 140)
           return {
             chave: "",
@@ -947,6 +953,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             nome,
             quantidade: Math.min(lancado.quantidade, 999),
             precoUnitario,
+            ...(custoUnitario !== undefined ? { custoUnitario } : {}),
             opcoes,
             produtosDasOpcoes,
             ...(observacao ? { observacao } : {}),
@@ -983,6 +990,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
               nome: item.nome,
               quantidade: item.quantidade,
               precoUnitario: item.precoUnitario,
+              ...(item.custoUnitario !== undefined ? { custoUnitario: item.custoUnitario } : {}),
               opcoes: item.opcoes,
               ...(item.produtosDasOpcoes.length > 0
                 ? { produtosDasOpcoes: item.produtosDasOpcoes }
@@ -1076,6 +1084,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           nome: servico.nome,
           quantidade: 1,
           precoUnitario: servico.preco,
+          ...(servico.custo !== undefined ? { custoUnitario: servico.custo } : {}),
           opcoes: [],
           total: servico.preco,
         }))
@@ -1168,10 +1177,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const id = aberta?.id ?? (base.pedidos.at(-1)?.id ?? 0) + 1
         const vaiParaCozinha = lancamento.enviarParaCozinha
         const novos: ItemPedido[] = lancamento.itens.map((lancado, indice) => {
-          const { produtoId, nome, precoUnitario, opcoes, produtosDasOpcoes } = precificar(
-            base,
-            lancado,
-          )
+          const { produtoId, nome, precoUnitario, custoUnitario, opcoes, produtosDasOpcoes } =
+            precificar(base, lancado)
           // Como o 0 e o negativo, o que não é número vira 1.
           const pedida = Number.isFinite(lancado.quantidade) ? Math.round(lancado.quantidade) : 1
           const quantidade = Math.min(Math.max(pedida, 1), 999)
@@ -1182,6 +1189,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             nome,
             quantidade,
             precoUnitario,
+            ...(custoUnitario !== undefined ? { custoUnitario } : {}),
             opcoes,
             ...(produtosDasOpcoes.length > 0 ? { produtosDasOpcoes } : {}),
             ...(observacao ? { observacao } : {}),
@@ -1365,12 +1373,13 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         }
         return mudarProduto(produtoId, (produto) => ({
           ...produto,
+          // O custo é do produto: o mesmo da margem e do cardápio.
+          ...(dados.custo !== undefined ? { custo: Math.round(dados.custo * 100) / 100 } : {}),
           estoque: {
             ...produto.estoque,
             controlar: dados.controlar,
             quantidade: produto.estoque?.quantidade ?? 0,
             minimo: dados.minimo,
-            ...(dados.custo !== undefined ? { custo: Math.round(dados.custo * 100) / 100 } : {}),
             esgotarAoZerar: dados.esgotarAoZerar,
           },
         }))

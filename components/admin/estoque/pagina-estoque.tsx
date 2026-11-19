@@ -352,7 +352,7 @@ export function PaginaEstoque() {
         header: "Custo",
         enableSorting: false,
         cell: ({ row }) => {
-          const custo = row.original.produto.estoque?.custo
+          const custo = row.original.produto.custo
           return custo !== undefined ? emReais(custo) : "—"
         },
         meta: {

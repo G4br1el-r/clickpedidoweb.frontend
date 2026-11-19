@@ -112,6 +112,8 @@ describe("PaginaEstoque", { timeout: 15_000 }, () => {
     await waitFor(async () =>
       expect(await saldoNoServidor(produto.id)).toBe((produto.estoque?.quantidade ?? 0) + 10),
     )
+    // O custo da compra vira o custo do produto, que a coluna Custo mostra.
+    expect(await linha(produto.nome).findByText("R$ 4,50")).toBeInTheDocument()
   })
 
   test("saída só registra com o motivo", async () => {
