@@ -223,6 +223,48 @@ describe("servidor de demonstração", () => {
       const paraServir = base.pedidos.filter((pedido) => pedido.servirDesde)
       expect(paraServir).toHaveLength(1)
       expect(paraServir[0].servirDesde).toBe(antes(4))
+      expect(paraServir[0].status).toBe("pronto")
+      const { mesas } = await salaoCheio()
+      expect(mesas.find((mesa) => mesa.pedidoAtivoId === paraServir[0].id)?.status).toBe("ocupada")
+    })
+
+    test.each([
+      ["acougue" as const, new Date(2026, 10, 5, 20, 30)],
+      ["pizzaria" as const, new Date(2026, 10, 8, 20, 30)],
+    ])("em qualquer dia a promessa vale: %s em %s", async (segmento, dia) => {
+      vi.setSystemTime(dia)
+      const api = criarServidor({
+        segmento,
+        carregarCatalogo: () => carregarCatalogo(segmento),
+        espera: 0,
+      })
+      const mesas = await api.mesas.listar()
+      const base = await api.base()
+      const ocupadas = mesas.filter((mesa) => mesa.status === "ocupada")
+      expect(ocupadas).toHaveLength(8)
+      const comandas = ocupadas.map(
+        (mesa) => base.pedidos.find((pedido) => pedido.id === mesa.pedidoAtivoId) as Pedido,
+      )
+      const maisAntiga = comandas.reduce((a, b) => (a.criadoEm < b.criadoEm ? a : b))
+      expect(maisAntiga.contaPedidaEm).toBe(new Date(dia.getTime() - 5 * 60_000).toISOString())
+      const mesa9 = mesas.find((mesa) => mesa.id === "mesa-9")
+      expect(mesa9?.status).toBe("livre")
+      expect(mesa9?.limpezaDesde).toBe(new Date(dia.getTime() - 3 * 60_000).toISOString())
+    })
+
+    test("com a limpeza desligada no salão, a mesa 9 não fica em limpeza", async () => {
+      const api = criarServidor({
+        segmento: "acougue",
+        carregarCatalogo: async () => {
+          const catalogo = structuredClone(await carregarCatalogo("acougue"))
+          catalogo.salao.limpeza = false
+          return catalogo
+        },
+        espera: 0,
+      })
+      const mesa9 = (await api.mesas.listar()).find((mesa) => mesa.id === "mesa-9")
+      expect(mesa9?.status).toBe("livre")
+      expect(mesa9?.limpezaDesde).toBeUndefined()
     })
 
     test("a mesa 9 está em limpeza há 3 min; a 20 continua bloqueada e nunca recebe comanda", async () => {

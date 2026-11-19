@@ -329,10 +329,13 @@ export function gerarPedidos({
         const sorteio = sorte.inteiro(1, 100)
         tipo = vivo?.tipo ?? (sorteio <= 55 ? "entrega" : sorteio > 85 ? "mesa" : "retirada")
         if (tipo === "entrega" && !entrega) tipo = "retirada"
-        // Sem mesa livre (ou sem salão), o cliente leva para viagem.
+        // Sem mesa livre (ou sem salão), o cliente leva para viagem. Fora do roteiro ao vivo,
+        // mesa com menos de 2 h ficaria aberta e tiraria o salão do roteiro: também vira retirada.
         if (
           tipo === "mesa" &&
-          (!temMesas || mesasUsaveis.every((item) => mesasAbertas.has(item.id)))
+          (!temMesas ||
+            mesasUsaveis.every((item) => mesasAbertas.has(item.id)) ||
+            (!vivo && agora.getTime() - criado.getTime() < 120 * 60_000))
         ) {
           tipo = "retirada"
         }

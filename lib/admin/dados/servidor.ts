@@ -329,7 +329,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const base = {
       ...aberta,
       mesas: aberta.mesas.map((mesa) =>
-        mesa.id === "mesa-9" && mesa.status === "livre"
+        catalogo.salao.limpeza && mesa.id === "mesa-9" && mesa.status === "livre"
           ? { ...mesa, limpezaDesde: addMinutes(agora, -3).toISOString() }
           : mesa,
       ),
