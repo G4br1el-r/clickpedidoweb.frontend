@@ -1,4 +1,12 @@
-import { addDays, addMinutes, format, isSameDay, isSameMonth, startOfDay } from "date-fns"
+import {
+  addDays,
+  addMinutes,
+  format,
+  isSameDay,
+  isSameMonth,
+  startOfDay,
+  startOfHour,
+} from "date-fns"
 import { uniformInt } from "pure-rand/distribution/uniformInt"
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus"
 import type { RandomGenerator } from "pure-rand/types/RandomGenerator"
@@ -80,9 +88,15 @@ const GARCONS = ["Lucas", "Paula", "Rafa", "Bia"]
 /**
  * Movimento de agora: a demonstração sempre abre com pedidos em todas as etapas
  * (aguardando pagamento, novo, em preparo, pronto, a caminho e mesa aberta).
- * `idade` em minutos antes de agora.
+ * `idade` em minutos antes de agora. `agendado`: o cliente pediu para mais tarde, tantos
+ * minutos depois de agora (na meia hora cheia).
  */
-const AO_VIVO: readonly { idade: number; tipo: TipoPedido; pagamento: FormaPagamento }[] = [
+const AO_VIVO: readonly {
+  idade: number
+  tipo: TipoPedido
+  pagamento: FormaPagamento
+  agendado?: number
+}[] = [
   { idade: 80, tipo: "mesa", pagamento: "dinheiro" },
   { idade: 64, tipo: "entrega", pagamento: "pix" },
   { idade: 52, tipo: "entrega", pagamento: "cartao-na-entrega" },
@@ -93,6 +107,9 @@ const AO_VIVO: readonly { idade: number; tipo: TipoPedido; pagamento: FormaPagam
   { idade: 7, tipo: "mesa", pagamento: "dinheiro" },
   { idade: 5, tipo: "retirada", pagamento: "dinheiro" },
   { idade: 2, tipo: "entrega", pagamento: "pix" },
+  // Por último: os agendados não mudam o sorteio dos pedidos de antes.
+  { idade: 1, tipo: "entrega", pagamento: "dinheiro", agendado: 90 },
+  { idade: 0.5, tipo: "retirada", pagamento: "dinheiro", agendado: 60 },
 ]
 const OBSERVACOES = [
   "Sem cebola, por favor",
@@ -380,7 +397,11 @@ export function gerarPedidos({
         else status = inicio <= agora ? "em-preparo" : "recebido"
       } else if (hoje) {
         const idade = (agora.getTime() - criado.getTime()) / 60_000
-        status = origem === "pdv" ? "concluido" : statusPorIdade(tipo, idade, online)
+        status = vivo?.agendado
+          ? "recebido"
+          : origem === "pdv"
+            ? "concluido"
+            : statusPorIdade(tipo, idade, online)
         if (status === "concluido" && !vivo && sorte.chance(8)) status = "cancelado"
       } else {
         status = sorte.chance(8) ? "cancelado" : "concluido"
@@ -480,6 +501,10 @@ export function gerarPedidos({
           },
         }
       }
+      const agendadoPara = vivo?.agendado ? meiaHoraDepois(agora, vivo.agendado) : undefined
+      if (agendadoPara) {
+        novo = { ...novo, itens: novo.itens.map((item) => ({ ...item, agendadoPara })) }
+      }
       pedidos.push(comHorarios(novo, atualizado, agora))
     }
   }
@@ -501,6 +526,13 @@ const CAMINHO_DA_COZINHA: StatusPedido[] = [
  * Concluído e cancelado fecham na última atualização; a venda do balcão não passa pela
  * cozinha. Na mesa, o garçom serve 3 a 6 min depois de pronto, se já deu tempo.
  */
+/** A primeira meia hora cheia tantos minutos depois de agora, se ainda for hoje. */
+function meiaHoraDepois(agora: Date, minutos: number): string | undefined {
+  const depois = addMinutes(agora, minutos)
+  const para = addMinutes(startOfHour(depois), Math.ceil(depois.getMinutes() / 30) * 30)
+  return isSameDay(para, agora) ? para.toISOString() : undefined
+}
+
 function comHorarios(pedido: Pedido, atualizado: Date, agora: Date): Pedido {
   const criado = new Date(pedido.criadoEm)
   const hora = (data: Date) => data.toISOString()

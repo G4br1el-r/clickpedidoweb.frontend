@@ -37,3 +37,30 @@ describe("usePreferenciasFila", () => {
     })
   })
 })
+
+describe("sons de cada evento da cozinha", () => {
+  test("começam com novo, cancelado e atrasado ligados e o repetir desligado", () => {
+    expect(usePreferenciasFila.getState().sons).toEqual({
+      novo: true,
+      cancelado: true,
+      atrasado: true,
+      repetirNovo: false,
+    })
+  })
+
+  test("cada chave muda só o seu evento, e fica guardada neste navegador", async () => {
+    usePreferenciasFila.getState().ligarSomDoEvento("atrasado", false)
+    usePreferenciasFila.getState().ligarSomDoEvento("repetirNovo", true)
+    const guardado = JSON.parse(localStorage.getItem("clickpedido-admin-fila") ?? "{}")
+
+    usePreferenciasFila.setState(usePreferenciasFila.getInitialState(), true)
+    localStorage.setItem("clickpedido-admin-fila", JSON.stringify(guardado))
+    await usePreferenciasFila.persist.rehydrate()
+    expect(usePreferenciasFila.getState().sons).toEqual({
+      novo: true,
+      cancelado: true,
+      atrasado: false,
+      repetirNovo: true,
+    })
+  })
+})

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { catalogoDeTeste } from "../dados/catalogo-de-teste"
-import { esquemaLoja } from "./esquema-loja"
+import { esquemaLoja, esquemaTemposCozinha } from "./esquema-loja"
 
 const VALIDA = { ...catalogoDeTeste().loja, pagamentoOnlineConectado: true }
 
@@ -88,6 +88,61 @@ describe("vídeo do banner (salão)", () => {
     }
     expect(erros({ ...VALIDA, videoBanner: "https://vimeo.com/123" })).toEqual({
       videoBanner: "Use um link do YouTube, Shorts ou Reels.",
+    })
+  })
+})
+
+describe("prazos de entrega e retirada", () => {
+  const prazos = { entrega: { min: 35, max: 50 }, retirada: { min: 15, max: 15 } }
+
+  test("geram o texto da vitrine", () => {
+    const resultado = esquemaLoja.parse({ ...VALIDA, prazos })
+    expect(resultado.tempoEntrega).toBe("35–50 min")
+    expect(resultado.tempoRetirada).toBe("15 min")
+  })
+
+  test("o mínimo não passa do máximo, e os dois ficam entre 1 e 240 min", () => {
+    expect(
+      erros({
+        ...VALIDA,
+        prazos: { entrega: { min: 60, max: 40 }, retirada: { min: 0, max: 300 } },
+      }),
+    ).toEqual({
+      "prazos.entrega.max": "O máximo precisa ser maior ou igual ao mínimo.",
+      "prazos.retirada.min": "De 1 a 240 min.",
+      "prazos.retirada.max": "De 1 a 240 min.",
+    })
+  })
+
+  test("sem prazos (salão), o texto livre fica como veio", () => {
+    const { prazos: _semPrazos, ...salao } = VALIDA
+    const resultado = esquemaLoja.parse({ ...salao, tempoRetirada: "No Salão" })
+    expect(resultado.tempoRetirada).toBe("No Salão")
+  })
+})
+
+describe("esquemaTemposCozinha", () => {
+  const errosDosTempos = (valores: unknown) => {
+    const resultado = esquemaTemposCozinha.safeParse(valores)
+    if (resultado.success) return {}
+    return Object.fromEntries(
+      resultado.error.issues.map((erro) => [erro.path.join("."), erro.message]),
+    )
+  }
+
+  test("aceita atenção antes do atraso, e o pronto na tela", () => {
+    expect(errosDosTempos({ atencaoMin: 10, atrasoMin: 20, prontoFicaMin: 5 })).toEqual({})
+  })
+
+  test("a atenção vem antes do atraso, os dois de 1 a 120 min, e o pronto de 1 a 60", () => {
+    expect(errosDosTempos({ atencaoMin: 30, atrasoMin: 30, prontoFicaMin: 61 })).toEqual({
+      atrasoMin: "O atraso precisa vir depois da atenção.",
+      prontoFicaMin: "De 1 a 60 min.",
+    })
+    expect(errosDosTempos({ atencaoMin: 0, atrasoMin: 121, prontoFicaMin: 0 })).toEqual({
+      atencaoMin: "De 1 a 120 min.",
+      atrasoMin: "De 1 a 120 min.",
+      prontoFicaMin: "De 1 a 60 min.",
     })
   })
 })

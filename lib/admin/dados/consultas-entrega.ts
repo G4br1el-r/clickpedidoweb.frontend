@@ -11,7 +11,7 @@ import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { chaves, servidorDo } from "./consultas"
 import type { Servidor } from "./servidor"
-import type { Bairro, ConfigLoja, Motoboy } from "./tipos"
+import type { Bairro, ConfigLoja, Motoboy, TemposCozinha } from "./tipos"
 
 const useSegmento = () => useSegmentoAtual((estado) => estado.segmento)
 
@@ -102,6 +102,10 @@ export const useSalvarLoja = () =>
   })
 export const useConectarPagamento = () =>
   useCadastro((servidor, conectado: boolean) => servidor.conectarPagamentoOnline(conectado), {
+    aoSucesso: guardarLoja,
+  })
+export const useSalvarTemposCozinha = () =>
+  useCadastro((servidor, tempos: TemposCozinha) => servidor.salvarTemposCozinha(tempos), {
     aoSucesso: guardarLoja,
   })
 export const useMarcarImpresso = () =>

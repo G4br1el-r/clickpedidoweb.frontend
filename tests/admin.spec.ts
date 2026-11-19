@@ -1,5 +1,5 @@
 import { expect, type Page, test } from "@playwright/test"
-import { esperarAnimacoes, verificarAcessibilidade } from "./apoio"
+import { caixa, esperarAnimacoes, verificarAcessibilidade } from "./apoio"
 
 /** Cada teste começa com as configurações de fábrica. */
 test.beforeEach(async ({ page }) => {
@@ -207,6 +207,67 @@ test("PDV: venda em dinheiro com troco, ticket e últimas vendas", async ({ page
   await ticket.getByRole("button", { name: "Nova venda" }).click()
   await expect(venda.getByText("Nenhum item na venda.")).toBeVisible()
   await expect(page.getByRole("row", { name: /2× Água/ })).toBeVisible()
+})
+
+test("cozinha: a venda agendada no PDV espera em Mais tarde", async ({ page }, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a caixa abre pela barra")
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/pdv")
+  await page.getByRole("button", { name: "Lançar item avulso" }).click({ timeout: 15_000 })
+  await page.getByLabel("Item avulso", { exact: true }).fill("Batata")
+  await page.getByLabel("Valor", { exact: true }).fill("12")
+  await page.getByRole("button", { name: "Incluir item avulso" }).click()
+  const venda = page.getByRole("region", { name: "Venda" })
+  await venda.getByText("Pix").click()
+  await venda.getByRole("switch", { name: "Venda concluída no balcão" }).click()
+  await venda.getByRole("textbox", { name: "Para as" }).fill("2200")
+  await venda.getByRole("button", { name: /Mandar para a fila/ }).click()
+  const ticket = page.getByRole("dialog", { name: /^Venda #\d+/ })
+  const numero = (await ticket.getByRole("heading").textContent())?.match(/#(\d+)/)?.[1]
+  await ticket.getByRole("button", { name: "Nova venda" }).click()
+
+  await page.goto("/admin/cozinha")
+  const maisTarde = page.getByRole("region", { name: /^Mais tarde, / })
+  const linha = maisTarde.getByRole("listitem", { name: `Retirada · #${numero}` })
+  await expect(linha).toContainText("22:00", { timeout: 15_000 })
+  await expect(linha).toContainText("começa 21:40")
+  await expect(page.getByRole("region", { name: /^A fazer, / })).not.toContainText(`#${numero}`)
+  await page.waitForLoadState("networkidle")
+  await esperarAnimacoes(page)
+  await expect(maisTarde).toHaveScreenshot("cozinha-mais-tarde.png")
+})
+
+test("cozinha: os tempos de alerta mudam nos Ajustes e valem no quadro", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha")
+  await expect(page.locator("article").first()).toBeVisible({ timeout: 15_000 })
+  // A demonstração abre com agendados: a faixa Mais tarde cabe na tela, sem rolagem lateral.
+  const maisTarde = page.getByRole("region", { name: /^Mais tarde, / })
+  await expect(maisTarde).toBeVisible()
+  const largura = page.viewportSize()?.width ?? 0
+  for (const cartao of await maisTarde.getByRole("listitem").all()) {
+    const { x, width } = await caixa(cartao)
+    expect(x + width).toBeLessThanOrEqual(largura)
+  }
+  // No celular, conteúdo largo demais faz o navegador alargar a página inteira.
+  expect(await page.evaluate(() => window.innerWidth)).toBe(largura)
+  await page.getByRole("tab", { name: "Ajustes" }).click()
+  await expect(page).toHaveURL(/aba=ajustes/)
+
+  const tempos = page.getByRole("region", { name: "Tempos da cozinha" })
+  await tempos.getByRole("spinbutton", { name: "Atenção a partir de" }).fill("1")
+  await tempos.getByRole("spinbutton", { name: "Atraso a partir de" }).fill("2")
+  await tempos.getByRole("button", { name: "Salvar tempos" }).click()
+  await expect(page.getByText("Tempos da cozinha salvos.")).toBeVisible()
+  await verificarAcessibilidade(page)
+  await page.waitForLoadState("networkidle")
+  await esperarAnimacoes(page)
+  await expect(page.getByRole("region", { name: "Sons deste aparelho" })).toHaveScreenshot(
+    "cozinha-sons.png",
+  )
+
+  await page.getByRole("tab", { name: "Quadro" }).click()
+  await expect(page.locator('article[data-urgencia="atrasado"]').first()).toBeVisible()
 })
 
 test("salão: o garçom lança, a cozinha prepara e a mesa fecha a conta", async ({ page }) => {

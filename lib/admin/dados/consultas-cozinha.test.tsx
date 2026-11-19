@@ -13,12 +13,14 @@ import {
   useAvisarSobreRodada,
   useCozinha,
   useDarCiente,
+  useLoja,
   usePriorizarPedido,
   useRiscarItem,
   useServirRodada,
   useVerMensagem,
   useVoltarTicket,
 } from "./consultas"
+import { useSalvarTemposCozinha } from "./consultas-entrega"
 
 function envolver() {
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -171,5 +173,15 @@ describe("consultas da cozinha", () => {
 
     act(() => result.current.ver.mutate({ id: comanda.id, mensagemId: mensagens()[0].id }))
     await waitFor(() => expect(mensagens()).toEqual([]))
+  })
+
+  test("salvar os tempos da cozinha muda a loja na tela, sem recarregar", async () => {
+    const { result } = renderHook(() => ({ loja: useLoja(), salvar: useSalvarTemposCozinha() }), {
+      wrapper: envolver(),
+    })
+    await waitFor(() => expect(result.current.loja.data).toBeDefined())
+    const tempos = { atencaoMin: 8, atrasoMin: 12, prontoFicaMin: 4 }
+    act(() => result.current.salvar.mutate(tempos))
+    await waitFor(() => expect(result.current.loja.data?.temposCozinha).toEqual(tempos))
   })
 })

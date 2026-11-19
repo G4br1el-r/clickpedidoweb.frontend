@@ -3,7 +3,8 @@
 import NumberFlow from "@number-flow/react"
 import { ChefHatIcon, MaximizeIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
-import { useEffect, useRef, useState } from "react"
+import { parseAsStringLiteral, useQueryState } from "nuqs"
+import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -19,6 +20,7 @@ import {
   useAvisarSobreRodada,
   useCozinha,
   useDarCiente,
+  useLoja,
   usePriorizarPedido,
   useRiscarItem,
   useVoltarTicket,
@@ -26,8 +28,8 @@ import {
 import { useAlternarProduto, useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import type {
   AvisoCozinha,
+  ConfigLoja,
   ItemPedido,
-  Pedido,
   Produto,
   TipoMensagemCozinha,
 } from "@/lib/admin/dados/tipos"
@@ -38,18 +40,24 @@ import {
 } from "@/lib/admin/preferencias-fila"
 import {
   type ColunaCozinha,
-  chavesDaCozinha,
+  type ConfigCozinha,
   colunasDaCozinha,
   type FiltroCozinha,
-  novidadesNaCozinha,
+  maisTardeNaCozinha,
   type StatusTicket,
+  TEMPOS_PADRAO,
   type TicketCozinha as Ticket,
 } from "@/lib/admin/regras/cozinha"
 import { tomDoStatus } from "@/lib/admin/regras/status"
 import { tocarAlerta } from "@/lib/admin/som"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { Traco } from "../traco"
+import { AjustesCozinha } from "./ajustes-cozinha"
+import { MaisTarde } from "./mais-tarde"
 import { nomeDoTicket, TicketCozinha } from "./ticket-cozinha"
+import { useSonsDaCozinha } from "./use-sons-da-cozinha"
+
+const ABAS = ["quadro", "ajustes"] as const
 
 const FILTROS: { valor: FiltroCozinha; rotulo: string }[] = [
   { valor: "todos", rotulo: "Todos" },
@@ -71,29 +79,11 @@ const VAZIA: Record<ColunaCozinha["id"], string> = {
   prontos: "Marque um ticket como pronto e ele vem para cá.",
 }
 
-/** Toca o alerta quando chega pedido novo, rodada nova, cancelamento ou alteração. */
-function useAlertaDeRodadas(pedidos: Pedido[] | undefined) {
-  const conhecidas = useRef<Set<string> | null>(null)
-  const somLigado = usePreferenciasFila((estado) => estado.somLigado)
-  const tipoSom = useSomDoAparelho()
-
-  useEffect(() => {
-    if (!pedidos) return
-    // Na primeira leitura não há "novo": é o que já estava na tela.
-    if (
-      conhecidas.current &&
-      somLigado &&
-      novidadesNaCozinha(conhecidas.current, pedidos).length > 0
-    ) {
-      tocarAlerta(tipoSom)
-    }
-    conhecidas.current = chavesDaCozinha(pedidos)
-  }, [pedidos, somLigado, tipoSom])
-}
-
 function Coluna({
   coluna,
   agora,
+  tempos,
+  prazos,
   emAndamento,
   aoAvancar,
   aoRiscar,
@@ -107,6 +97,8 @@ function Coluna({
 }: {
   coluna: ColunaCozinha
   agora: Date
+  tempos: ConfigCozinha
+  prazos: ConfigLoja["prazos"]
   emAndamento: string | undefined
   aoAvancar: (ticket: Ticket) => void
   aoRiscar: (ticket: Ticket, item: ItemPedido, feito: boolean) => void
@@ -144,6 +136,8 @@ function Coluna({
               key={ticket.id}
               ticket={ticket}
               agora={agora}
+              tempos={tempos}
+              prazos={prazos}
               ocupado={emAndamento === ticket.id}
               aoAvancar={() => aoAvancar(ticket)}
               aoRiscar={(item, feito) => aoRiscar(ticket, item, feito)}
@@ -166,7 +160,14 @@ function Coluna({
  * pedidos do site e do balcão. Pronto sai daqui: entrega e retirada seguem pela Fila
  * e a mesa fecha a conta em Mesas.
  */
-export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
+export function PaginaCozinha({
+  intervalo = 4_000,
+  tique,
+}: {
+  intervalo?: number
+  /** De quanto em quanto tempo a cozinha confere atraso e repete os alarmes. */
+  tique?: number
+}) {
   usePreferenciasCarregadas()
   const agora = useAgora(15_000)
   const telaGrande = useTelaGrande()
@@ -180,13 +181,21 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
   const { data: produtos } = useProdutos()
   const alternarProduto = useAlternarProduto()
   const [filtro, setFiltro] = useState<FiltroCozinha>("todos")
+  const [aba, setAba] = useQueryState("aba", parseAsStringLiteral(ABAS).withDefault("quadro"))
+  const { data: loja } = useLoja()
+  // Os tempos de alerta e quanto a loja leva para preparar (o mínimo da retirada).
+  const tempos: ConfigCozinha = {
+    ...(loja?.temposCozinha ?? TEMPOS_PADRAO),
+    preparoMin: loja?.prazos?.retirada.min,
+  }
+  useSonsDaCozinha(pedidos, tempos, tique)
   const somLigado = usePreferenciasFila((estado) => estado.somLigado)
   const ligarSom = usePreferenciasFila((estado) => estado.ligarSom)
   const tipoSom = useSomDoAparelho()
   const quadro = useRef<HTMLDivElement>(null)
-  useAlertaDeRodadas(pedidos)
 
-  const colunas = pedidos && agora ? colunasDaCozinha(pedidos, filtro, agora) : null
+  const colunas = pedidos && agora ? colunasDaCozinha(pedidos, filtro, agora, tempos) : null
+  const maisTarde = pedidos && agora ? maisTardeNaCozinha(pedidos, filtro, agora, tempos) : []
   const aoErrar = (erro: Error) => toast.error(erro.message)
   /** O avanço e a volta avisam para onde o ticket foi, com Desfazer para o toque errado. */
   const avisar = (ticket: Ticket, para: StatusTicket, desfazer: () => void) =>
@@ -277,116 +286,156 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
         }
       />
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-y border-border/70 py-3">
-        <ToggleGroup
-          type="single"
-          variant="segmento"
-          size="sm"
-          aria-label="Mostrar"
-          value={filtro}
-          onValueChange={(valor) => valor && setFiltro(valor as FiltroCozinha)}
-        >
-          {FILTROS.map(({ valor, rotulo }) => (
-            <ToggleGroupItem key={valor} value={valor}>
-              {rotulo}
-            </ToggleGroupItem>
+      <Tabs
+        value={aba}
+        onValueChange={(valor) => void setAba(valor as (typeof ABAS)[number])}
+        className="gap-5"
+      >
+        <TabsList variant="line" aria-label="Partes da cozinha">
+          {/* Texto da aba inativa mais forte: o padrão não passa no contraste. */}
+          {ABAS.map((valor) => (
+            <TabsTrigger
+              key={valor}
+              value={valor}
+              className="text-foreground/80 dark:text-foreground/80"
+            >
+              {valor === "quadro" ? "Quadro" : "Ajustes"}
+            </TabsTrigger>
           ))}
-        </ToggleGroup>
-        <div className="flex items-center gap-2">
-          <Switch
-            id="cozinha-alerta"
-            checked={somLigado}
-            onCheckedChange={(ligado) => {
-              ligarSom(ligado)
-              // O toque na chave libera o som no navegador.
-              if (ligado) tocarAlerta(tipoSom)
-            }}
-          />
-          <Label htmlFor="cozinha-alerta" className="cursor-pointer">
-            Alerta sonoro
-          </Label>
-        </div>
-      </div>
+        </TabsList>
 
-      {!colunas || !agora ? (
-        // Esqueleto no formato do quadro: as pistas com o título e dois tickets.
-        <div role="status" aria-label="Carregando a cozinha" className="grid gap-3 md:grid-cols-3">
-          {[0, 1, 2].map((indice) => (
-            <div key={indice} className="flex flex-col gap-2.5 max-md:not-first:hidden">
-              <Skeleton className="mb-1 h-4 w-24" />
-              <Skeleton className="h-48 rounded-xl" />
-              <Skeleton className="h-36 rounded-xl" />
-            </div>
-          ))}
-        </div>
-      ) : colunas.every((coluna) => coluna.tickets.length === 0) ? (
-        <Empty className="border border-dashed">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <ChefHatIcon />
-            </EmptyMedia>
-            <EmptyTitle>Nada para preparar</EmptyTitle>
-            <EmptyDescription>
-              Os pedidos e as rodadas novas aparecem aqui sozinhos.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : telaGrande ? (
-        <div className="grid grid-cols-3 items-stretch divide-x divide-border/70">
-          {colunas.map((coluna) => (
-            <Coluna
-              key={coluna.id}
-              coluna={coluna}
-              agora={agora}
-              emAndamento={emAndamento}
-              aoAvancar={aoAvancar}
-              aoRiscar={aoRiscar}
-              aoVoltar={aoVoltar}
-              aoPriorizar={aoPriorizar}
-              aoCiente={aoCiente}
-              aoAvisar={aoAvisar}
-              esgotaveis={esgotaveis}
-              aoEsgotar={aoEsgotar}
-              comTitulo
-            />
-          ))}
-        </div>
-      ) : (
-        <Tabs defaultValue={colunas[0].id}>
-          <TabsList className="w-full">
-            {colunas.map((coluna) => (
-              // Texto da aba inativa mais forte: o padrão não passa no contraste sobre o fundo cinza.
-              <TabsTrigger
-                key={coluna.id}
-                value={coluna.id}
-                className="gap-1.5 text-foreground/80 dark:text-foreground/80"
-              >
-                <Traco tom={tomDoStatus(coluna.status)} />
-                {coluna.titulo}
-                <span className="text-xs tabular-nums">{coluna.tickets.length}</span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
-          {colunas.map((coluna) => (
-            <TabsContent key={coluna.id} value={coluna.id}>
-              <Coluna
-                coluna={coluna}
-                agora={agora}
-                emAndamento={emAndamento}
-                aoAvancar={aoAvancar}
-                aoRiscar={aoRiscar}
-                aoVoltar={aoVoltar}
-                aoPriorizar={aoPriorizar}
-                aoCiente={aoCiente}
-                aoAvisar={aoAvisar}
-                esgotaveis={esgotaveis}
-                aoEsgotar={aoEsgotar}
-                comTitulo={false}
+        <TabsContent value="ajustes">
+          <AjustesCozinha />
+        </TabsContent>
+
+        <TabsContent value="quadro" className="flex flex-col gap-5">
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-y border-border/70 py-3">
+            <ToggleGroup
+              type="single"
+              variant="segmento"
+              size="sm"
+              aria-label="Mostrar"
+              value={filtro}
+              onValueChange={(valor) => valor && setFiltro(valor as FiltroCozinha)}
+            >
+              {FILTROS.map(({ valor, rotulo }) => (
+                <ToggleGroupItem key={valor} value={valor}>
+                  {rotulo}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+            <div className="flex items-center gap-2">
+              <Switch
+                id="cozinha-alerta"
+                checked={somLigado}
+                onCheckedChange={(ligado) => {
+                  ligarSom(ligado)
+                  // O toque na chave libera o som no navegador.
+                  if (ligado) tocarAlerta(tipoSom)
+                }}
               />
-            </TabsContent>
-          ))}
-        </Tabs>
-      )}
+              <Label htmlFor="cozinha-alerta" className="cursor-pointer">
+                Alerta sonoro
+              </Label>
+            </div>
+          </div>
+
+          <MaisTarde
+            tickets={maisTarde}
+            tempos={tempos}
+            emAndamento={emAndamento}
+            aoIniciar={aoAvancar}
+          />
+
+          {!colunas || !agora ? (
+            // Esqueleto no formato do quadro: as pistas com o título e dois tickets.
+            <div
+              role="status"
+              aria-label="Carregando a cozinha"
+              className="grid gap-3 md:grid-cols-3"
+            >
+              {[0, 1, 2].map((indice) => (
+                <div key={indice} className="flex flex-col gap-2.5 max-md:not-first:hidden">
+                  <Skeleton className="mb-1 h-4 w-24" />
+                  <Skeleton className="h-48 rounded-xl" />
+                  <Skeleton className="h-36 rounded-xl" />
+                </div>
+              ))}
+            </div>
+          ) : colunas.every((coluna) => coluna.tickets.length === 0) ? (
+            <Empty className="border border-dashed">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <ChefHatIcon />
+                </EmptyMedia>
+                <EmptyTitle>Nada para preparar</EmptyTitle>
+                <EmptyDescription>
+                  Os pedidos e as rodadas novas aparecem aqui sozinhos.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : telaGrande ? (
+            <div className="grid grid-cols-3 items-stretch divide-x divide-border/70">
+              {colunas.map((coluna) => (
+                <Coluna
+                  key={coluna.id}
+                  coluna={coluna}
+                  agora={agora}
+                  tempos={tempos}
+                  prazos={loja?.prazos}
+                  emAndamento={emAndamento}
+                  aoAvancar={aoAvancar}
+                  aoRiscar={aoRiscar}
+                  aoVoltar={aoVoltar}
+                  aoPriorizar={aoPriorizar}
+                  aoCiente={aoCiente}
+                  aoAvisar={aoAvisar}
+                  esgotaveis={esgotaveis}
+                  aoEsgotar={aoEsgotar}
+                  comTitulo
+                />
+              ))}
+            </div>
+          ) : (
+            <Tabs defaultValue={colunas[0].id}>
+              <TabsList className="w-full">
+                {colunas.map((coluna) => (
+                  // Texto da aba inativa mais forte: o padrão não passa no contraste sobre o fundo cinza.
+                  <TabsTrigger
+                    key={coluna.id}
+                    value={coluna.id}
+                    className="gap-1.5 text-foreground/80 dark:text-foreground/80"
+                  >
+                    <Traco tom={tomDoStatus(coluna.status)} />
+                    {coluna.titulo}
+                    <span className="text-xs tabular-nums">{coluna.tickets.length}</span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+              {colunas.map((coluna) => (
+                <TabsContent key={coluna.id} value={coluna.id}>
+                  <Coluna
+                    coluna={coluna}
+                    agora={agora}
+                    tempos={tempos}
+                    prazos={loja?.prazos}
+                    emAndamento={emAndamento}
+                    aoAvancar={aoAvancar}
+                    aoRiscar={aoRiscar}
+                    aoVoltar={aoVoltar}
+                    aoPriorizar={aoPriorizar}
+                    aoCiente={aoCiente}
+                    aoAvisar={aoAvisar}
+                    esgotaveis={esgotaveis}
+                    aoEsgotar={aoEsgotar}
+                    comTitulo={false}
+                  />
+                </TabsContent>
+              ))}
+            </Tabs>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

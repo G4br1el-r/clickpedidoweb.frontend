@@ -48,12 +48,13 @@ function renderizar(intervaloSimulacao = 60_000, intervalo?: number) {
 }
 
 /** Retirada do balcão, mandada para a fila e a cozinha. */
-const retirada = () =>
+const retirada = (agendadoPara?: string) =>
   servidorDo("pizzaria").pdv.finalizar({
     itens: [{ avulso: { nome: "Batata", preco: 12 }, quantidade: 1 }],
     pagamento: "pix",
     desconto: { modo: "reais", valor: 0 },
     concluida: false,
+    ...(agendadoPara ? { agendadoPara } : {}),
   })
 
 /** Áudio: a fronteira com o navegador. Conta quantas vezes o alerta tocou. */
@@ -171,6 +172,16 @@ describe("PaginaFila", () => {
 
     expect(await screen.findByText("Chegou agora", {}, { timeout: 8000 })).toBeInTheDocument()
     expect(tocadas).toHaveBeenCalled()
+  })
+
+  test("o pedido agendado mostra para quando é", async () => {
+    telaGrande()
+    const pedido = await retirada(new Date(2026, 10, 13, 22, 0).toISOString())
+    renderizar()
+    const cartao = within(
+      await (await coluna("Novos")).findByRole("article", { name: `#${pedido.numero}` }),
+    )
+    expect(cartao.getByText("Para 22:00")).toBeInTheDocument()
   })
 
   test("mensagem da cozinha aparece no cartão, com Ok", async () => {

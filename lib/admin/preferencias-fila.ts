@@ -6,8 +6,13 @@ import { persist } from "zustand/middleware"
 import { useLoja } from "./dados/consultas"
 import type { SomAlerta } from "./dados/tipos"
 
+/** Os eventos da cozinha que tocam som, cada um com a sua chave. */
+export type EventoDeSom = "novo" | "cancelado" | "atrasado" | "repetirNovo"
+
 type Preferencias = {
   somLigado: boolean
+  /** Cozinha: que eventos tocam, com o "Alerta sonoro" ligado. */
+  sons: Record<EventoDeSom, boolean>
   /** `null`: segue o som padrão da loja, escolhido nas configurações. */
   tipoSom: SomAlerta | null
   /** Demonstração: chega um pedido novo a cada minuto, mais ou menos. */
@@ -15,6 +20,7 @@ type Preferencias = {
   ligarSom: (ligado: boolean) => void
   escolherSom: (tipo: SomAlerta | null) => void
   ligarSimulacao: (ligada: boolean) => void
+  ligarSomDoEvento: (evento: EventoDeSom, ligado: boolean) => void
 }
 
 /** Preferências da fila neste aparelho: cada caixa ou cozinha escolhe o seu som. */
@@ -24,15 +30,23 @@ export const usePreferenciasFila = create<Preferencias>()(
       somLigado: false,
       tipoSom: null,
       simular: true,
+      sons: { novo: true, cancelado: true, atrasado: true, repetirNovo: false },
       ligarSom: (somLigado) => set({ somLigado }),
       escolherSom: (tipoSom) => set({ tipoSom }),
       ligarSimulacao: (simular) => set({ simular }),
+      ligarSomDoEvento: (evento, ligado) =>
+        set((estado) => ({ sons: { ...estado.sons, [evento]: ligado } })),
     }),
     {
       name: "clickpedido-admin-fila",
       version: 1,
       skipHydration: true,
-      partialize: ({ somLigado, tipoSom, simular }) => ({ somLigado, tipoSom, simular }),
+      partialize: ({ somLigado, tipoSom, simular, sons }) => ({
+        somLigado,
+        tipoSom,
+        simular,
+        sons,
+      }),
     },
   ),
 )

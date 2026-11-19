@@ -1,9 +1,12 @@
+import { isSameDay } from "date-fns"
 import type {
   AvisoCozinha,
   ItemPedido,
   MensagemCozinha,
   Pedido,
+  Prazo,
   StatusPedido,
+  TemposCozinha,
   TipoMensagemCozinha,
 } from "../dados/tipos"
 import type { Urgencia } from "./fila"
@@ -17,8 +20,17 @@ export type ColunaCozinha = {
   tickets: TicketCozinha[]
 }
 
-/** Quanto tempo um pedido pronto continua na tela da cozinha. */
-const PRONTO_FICA_MINUTOS = 15
+/** Os tempos da cozinha quando a loja não escolheu os seus. */
+export const TEMPOS_PADRAO: TemposCozinha = { atencaoMin: 15, atrasoMin: 25, prontoFicaMin: 15 }
+
+/** Sem o tempo mínimo de retirada da loja, o agendado começa 20 minutos antes. */
+const PREPARO_PADRAO = 20
+
+/**
+ * Os tempos que o quadro usa: os de alerta da loja e quanto ela leva para preparar
+ * (o mínimo da retirada), que diz quando o agendado começa.
+ */
+export type ConfigCozinha = TemposCozinha & { preparoMin?: number }
 
 const rodadaDo = (item: ItemPedido) => item.rodada ?? 1
 
@@ -54,30 +66,148 @@ export function cozinhaJaPreparou(comanda: Pedido, item: ItemPedido): boolean {
 
 /**
  * O que pede o olho da cozinha: cada ticket em A fazer ("pedido:rodada") e cada aviso
- * sem ciente ("aviso:id").
+ * sem ciente ("aviso:id"). O agendado só conta quando chega a hora de começar.
  */
-function chavesDosTickets(tickets: TicketCozinha[]): string[] {
-  const novos = tickets.filter((ticket) => ticket.status === "recebido" && ticket.itens.length > 0)
+function chavesDosTickets(
+  tickets: TicketCozinha[],
+  agora: Date | undefined,
+  tempos: ConfigCozinha,
+): string[] {
+  const novos = tickets.filter(
+    (ticket) =>
+      ticket.status === "recebido" &&
+      ticket.itens.length > 0 &&
+      !(agora && esperando(ticket, agora, tempos)),
+  )
   const avisos = tickets.flatMap((ticket) => ticket.avisos.map((aviso) => `aviso:${aviso.id}`))
   return [...new Set([...novos.map((ticket) => ticket.id), ...avisos])]
 }
 
-export const chavesDaCozinha = (pedidos: Pedido[]): Set<string> =>
-  new Set(chavesDosTickets(ticketsDaCozinha(pedidos)))
+export const chavesDaCozinha = (
+  pedidos: Pedido[],
+  agora?: Date,
+  tempos: ConfigCozinha = TEMPOS_PADRAO,
+): Set<string> => new Set(chavesDosTickets(ticketsDaCozinha(pedidos), agora, tempos))
 
-/** O que chegou desde a última leitura: pedido novo, rodada nova, cancelamento ou alteração. */
-export const novidadesNaCozinha = (conhecidas: ReadonlySet<string>, pedidos: Pedido[]): string[] =>
-  chavesDosTickets(ticketsDaCozinha(pedidos)).filter((chave) => !conhecidas.has(chave))
+/**
+ * O que chegou desde a última leitura: pedido novo, rodada nova, agendado que chegou a
+ * hora de começar, cancelamento ou alteração.
+ */
+export const novidadesNaCozinha = (
+  conhecidas: ReadonlySet<string>,
+  pedidos: Pedido[],
+  agora?: Date,
+  tempos: ConfigCozinha = TEMPOS_PADRAO,
+): string[] =>
+  chavesDosTickets(ticketsDaCozinha(pedidos), agora, tempos).filter(
+    (chave) => !conhecidas.has(chave),
+  )
 
-export const minutosNaCozinha = (ticket: TicketCozinha, agora: Date) =>
-  Math.floor((agora.getTime() - Date.parse(ticket.chegouEm)) / 60_000)
+/**
+ * Quando a rodada começa a contar: a chegada ou, no agendado, o horário menos o tempo de
+ * preparo (nunca antes da chegada).
+ */
+export function comecaEm(ticket: TicketCozinha, tempos: ConfigCozinha = TEMPOS_PADRAO): number {
+  const chegou = Date.parse(ticket.chegouEm)
+  if (!ticket.agendadoPara) return chegou
+  const preparo = (tempos.preparoMin ?? PREPARO_PADRAO) * 60_000
+  return Math.max(chegou, Date.parse(ticket.agendadoPara) - preparo)
+}
 
-/** Âmbar a partir de 15 minutos e vermelho a partir de 25, contando da chegada da rodada. */
-export function urgenciaNaCozinha(ticket: TicketCozinha, agora: Date): Urgencia {
-  const minutos = minutosNaCozinha(ticket, agora)
-  if (minutos >= 25) return "atrasado"
-  if (minutos >= 15) return "atencao"
+/**
+ * O agendado que ainda não chegou a hora de começar: espera em Mais tarde. Com aviso
+ * sem ciente (cancelado ou alterado), vai para o quadro na hora.
+ */
+const esperando = (ticket: TicketCozinha, agora: Date, tempos: ConfigCozinha) =>
+  ticket.status === "recebido" &&
+  ticket.avisos.length === 0 &&
+  comecaEm(ticket, tempos) > agora.getTime()
+
+export const minutosNaCozinha = (
+  ticket: TicketCozinha,
+  agora: Date,
+  tempos: ConfigCozinha = TEMPOS_PADRAO,
+) => Math.floor((agora.getTime() - comecaEm(ticket, tempos)) / 60_000)
+
+/**
+ * Âmbar a partir do tempo de atenção e vermelho a partir do de atraso (15 e 25 minutos,
+ * se a loja não mudou), contando da chegada da rodada.
+ */
+export function urgenciaNaCozinha(
+  ticket: TicketCozinha,
+  agora: Date,
+  tempos: ConfigCozinha = TEMPOS_PADRAO,
+): Urgencia {
+  const minutos = minutosNaCozinha(ticket, agora, tempos)
+  if (minutos >= tempos.atrasoMin) return "atrasado"
+  if (minutos >= tempos.atencaoMin) return "atencao"
   return "normal"
+}
+
+/** As rodadas que passaram do atraso e ainda não ficaram prontas ("pedido:rodada"). */
+export const atrasadosNaCozinha = (
+  pedidos: Pedido[],
+  agora: Date,
+  tempos: ConfigCozinha = TEMPOS_PADRAO,
+): Set<string> =>
+  new Set(
+    ticketsDaCozinha(pedidos)
+      .filter(
+        (ticket) =>
+          ticket.status !== "pronto" &&
+          ticket.itens.length > 0 &&
+          ticket.pedido.status !== "cancelado" &&
+          urgenciaNaCozinha(ticket, agora, tempos) === "atrasado",
+      )
+      .map((ticket) => ticket.id),
+  )
+
+const HORA = /^([01]\d|2[0-3]):([0-5]\d)$/
+
+/**
+ * A hora digitada no campo "Para as" ("22:00") vira o horário de hoje. Campo vazio (ou só
+ * a máscara) é sem agendar.
+ */
+export function agendadoParaHoje(hora: string, agora: Date): string | undefined {
+  if (hora.replace(/[_:\s]/g, "") === "") return undefined
+  const partes = HORA.exec(hora)
+  if (!partes) throw new Error("Use o formato 20:00.")
+  const quando = new Date(agora)
+  quando.setHours(Number(partes[1]), Number(partes[2]), 0, 0)
+  return quando.toISOString()
+}
+
+/** O horário do agendado: mais tarde, ainda hoje. Devolve o próprio horário, conferido. */
+export function conferirAgendado(agendadoPara: string, agora: Date): string {
+  const quando = new Date(agendadoPara)
+  if (Number.isNaN(quando.getTime()) || quando <= agora || !isSameDay(quando, agora)) {
+    throw new Error("Escolha um horário mais tarde, ainda hoje.")
+  }
+  return agendadoPara
+}
+
+/**
+ * O horário prometido ao cliente da entrega e da retirada: o agendado ou a criação mais o
+ * tempo máximo da loja. `minutos` é o que falta (negativo: quanto já passou). A mesa não
+ * tem horário prometido.
+ */
+export function prometidoAoCliente(
+  ticket: TicketCozinha,
+  prazos: { entrega: Prazo; retirada: Prazo } | undefined,
+  agora: Date,
+): { ate: string; minutos: number } | null {
+  const { pedido } = ticket
+  if (pedido.tipo !== "entrega" && pedido.tipo !== "retirada") return null
+  const ate = ticket.agendadoPara
+    ? Date.parse(ticket.agendadoPara)
+    : prazos
+      ? Date.parse(pedido.criadoEm) + prazos[pedido.tipo].max * 60_000
+      : null
+  if (ate === null) return null
+  return {
+    ate: new Date(ate).toISOString(),
+    minutos: Math.round((ate - agora.getTime()) / 60_000),
+  }
 }
 
 export type StatusTicket = "recebido" | "em-preparo" | "pronto"
@@ -97,6 +227,8 @@ export type TicketCozinha = {
   chegouEm: string
   /** Cancelamento ou alteração que a cozinha ainda não viu. */
   avisos: AvisoCozinha[]
+  /** Agendado: para quando a rodada tem de ficar pronta. */
+  agendadoPara?: string
 }
 
 const pendentes = (pedido: Pedido) =>
@@ -111,6 +243,11 @@ export const naMaoDaCozinha = (pedido: Pedido) =>
 function statusDaRodada(itens: ItemPedido[]): StatusTicket {
   if (itens.every((item) => item.feitoEm)) return "pronto"
   return itens.some((item) => item.iniciadoEm) ? "em-preparo" : "recebido"
+}
+
+const agendadoDosItens = (itens: ItemPedido[]) => {
+  const agendadoPara = itens.find((item) => item.agendadoPara)?.agendadoPara
+  return agendadoPara ? { agendadoPara } : {}
 }
 
 /**
@@ -152,6 +289,7 @@ export function ticketsDaCozinha(pedidos: Pedido[]): TicketCozinha[] {
             ? (itens.find((item) => item.lancadoEm)?.lancadoEm ?? pedido.criadoEm)
             : (daRodada[0]?.em ?? pedido.criadoEm),
         avisos: daRodada,
+        ...agendadoDosItens(itens),
       }
     })
   })
@@ -348,25 +486,28 @@ const PASSA_NO_FILTRO: Record<FiltroCozinha, (pedido: Pedido) => boolean> = {
 
 /**
  * Quadro da cozinha. Fica de fora o salão (atendimento), o que não tem nada a
- * preparar e o pronto há mais de 15 minutos: dali em diante, entrega e retirada
+ * preparar e o pronto há mais tempo que a loja deixa na tela: dali em diante, entrega e retirada
  * seguem pela Fila e a mesa fecha em Mesas.
  */
 export function colunasDaCozinha(
   pedidos: Pedido[],
   filtro: FiltroCozinha,
   agora: Date,
+  tempos: ConfigCozinha = TEMPOS_PADRAO,
 ): ColunaCozinha[] {
-  const tickets = ticketsDaCozinha(pedidos.filter(PASSA_NO_FILTRO[filtro]))
+  const tickets = ticketsDaCozinha(pedidos.filter(PASSA_NO_FILTRO[filtro])).filter(
+    (ticket) => !esperando(ticket, agora, tempos),
+  )
   const com = (status: StatusTicket) =>
     tickets
       .filter((ticket) => ticket.status === status)
       .sort(
         (a, b) =>
-          // Prioridade primeiro; depois, quem chegou antes.
+          // Prioridade primeiro; depois, quem começou a contar antes.
           Number(Boolean(b.pedido.prioridade)) - Number(Boolean(a.pedido.prioridade)) ||
-          Date.parse(a.chegouEm) - Date.parse(b.chegouEm),
+          comecaEm(a, tempos) - comecaEm(b, tempos),
       )
-  const naTela = (ticket: TicketCozinha) => naTelaDaCozinha(ticket, agora)
+  const naTela = (ticket: TicketCozinha) => naTelaDaCozinha(ticket, agora, tempos)
 
   return [
     { id: "afazer", titulo: "A fazer", status: "recebido", tickets: com("recebido") },
@@ -375,13 +516,28 @@ export function colunasDaCozinha(
   ]
 }
 
+/** Os agendados que ainda esperam a hora de começar, do mais cedo ao mais tarde. */
+export const maisTardeNaCozinha = (
+  pedidos: Pedido[],
+  filtro: FiltroCozinha,
+  agora: Date,
+  tempos: ConfigCozinha = TEMPOS_PADRAO,
+): TicketCozinha[] =>
+  ticketsDaCozinha(pedidos.filter(PASSA_NO_FILTRO[filtro]))
+    .filter((ticket) => ticket.itens.length > 0 && esperando(ticket, agora, tempos))
+    .sort((a, b) => comecaEm(a, tempos) - comecaEm(b, tempos))
+
 /**
- * O ticket está na tela da cozinha: ainda não ficou pronto, ficou pronto há menos de
- * 15 minutos (contando do último item riscado) ou tem aviso sem ciente.
+ * O ticket está na tela da cozinha: ainda não ficou pronto, ficou pronto há menos do
+ * tempo da loja (contando do último item riscado) ou tem aviso sem ciente.
  */
-export function naTelaDaCozinha(ticket: TicketCozinha, agora: Date): boolean {
+export function naTelaDaCozinha(
+  ticket: TicketCozinha,
+  agora: Date,
+  tempos: ConfigCozinha = TEMPOS_PADRAO,
+): boolean {
   if (ticket.status !== "pronto" || ticket.avisos.length > 0) return true
-  return agora.getTime() - prontoEm(ticket) < PRONTO_FICA_MINUTOS * 60_000
+  return agora.getTime() - prontoEm(ticket) < tempos.prontoFicaMin * 60_000
 }
 
 /**
@@ -392,9 +548,10 @@ export function alteracoesParaCozinha(
   antes: Pedido,
   depois: Pedido,
   agora: Date,
+  tempos: ConfigCozinha = TEMPOS_PADRAO,
 ): Omit<AvisoCozinha, "id">[] {
   return ticketsDaCozinha([antes])
-    .filter((ticket) => ticket.itens.length > 0 && naTelaDaCozinha(ticket, agora))
+    .filter((ticket) => ticket.itens.length > 0 && naTelaDaCozinha(ticket, agora, tempos))
     .flatMap((ticket) =>
       ticket.itens.flatMap((item) => {
         const ficou = depois.itens.find((outro) => outro.id === item.id)?.quantidade ?? 0

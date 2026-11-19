@@ -677,6 +677,16 @@ describe("servidor de demonstração", () => {
       await expect(api.salvarLoja({ ...loja, nome: "" })).rejects.toThrow("Informe o nome da loja.")
     })
 
+    test("os tempos de alerta da cozinha são guardados na loja, conferidos", async () => {
+      const api = servidor()
+      const tempos = { atencaoMin: 10, atrasoMin: 20, prontoFicaMin: 5 }
+      expect((await api.salvarTemposCozinha(tempos)).temposCozinha).toEqual(tempos)
+      expect((await api.loja()).temposCozinha).toEqual(tempos)
+      await expect(
+        api.salvarTemposCozinha({ atencaoMin: 20, atrasoMin: 20, prontoFicaMin: 5 }),
+      ).rejects.toThrow("O atraso precisa vir depois da atenção.")
+    })
+
     test("a chave de abrir e fechar passa a loja para o controle manual", async () => {
       const api = servidor()
       expect((await api.loja()).controleAutomatico).toBe(true)
@@ -1358,6 +1368,40 @@ describe("cozinha", () => {
   const estados = (pedido: Pedido) =>
     ticketsDaCozinha([pedido]).map((ticket) => [ticket.rodada, ticket.status])
 
+  test("agendado: o PDV e o garçom marcam Para as; horário passado ou de outro dia é recusado", async () => {
+    const api = servidor()
+    const as22 = minutosDepois(90).toISOString()
+    const venda = {
+      itens: [LANCHE],
+      pagamento: "pix" as const,
+      desconto: { modo: "reais" as const, valor: 0 },
+      concluida: false,
+    }
+    const doBalcao = await api.pdv.finalizar({ ...venda, agendadoPara: as22 })
+    expect(doBalcao.itens.map((item) => item.agendadoPara)).toEqual([as22])
+    await expect(
+      api.pdv.finalizar({ ...venda, agendadoPara: minutosDepois(-5).toISOString() }),
+    ).rejects.toThrow("Escolha um horário mais tarde, ainda hoje.")
+
+    const mesa = await api.mesas.criar({ numero: 6 })
+    await api.mesas.lancar({ mesaId: mesa.id, enviarParaCozinha: true, itens: [LANCHE] })
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [LANCHE],
+      agendadoPara: as22,
+    })
+    expect(comanda.itens.map((item) => item.agendadoPara)).toEqual([undefined, as22])
+    await expect(
+      api.mesas.lancar({
+        mesaId: mesa.id,
+        enviarParaCozinha: true,
+        itens: [LANCHE],
+        agendadoPara: minutosDepois(24 * 60).toISOString(),
+      }),
+    ).rejects.toThrow("Escolha um horário mais tarde, ainda hoje.")
+  })
+
   /** Mesa 5 com duas rodadas na cozinha, lançadas às 20:30 e às 20:32. */
   async function mesaComDuasRodadas() {
     const api = servidor()
@@ -1610,6 +1654,23 @@ describe("cozinha", () => {
         itens: [{ nome: "X-Burger", quantidade: 1 }],
       },
     ])
+  })
+
+  test("o pronto que já saiu da tela, pelo tempo da loja, não avisa a alteração", async () => {
+    const api = servidor()
+    await api.salvarTemposCozinha({ atencaoMin: 15, atrasoMin: 25, prontoFicaMin: 5 })
+    const mesa = await api.mesas.criar({ numero: 5 })
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [LANCHE, { avulso: { nome: "Batata", preco: 12 }, quantidade: 1 }],
+    })
+    await api.cozinha.avancar(comanda.id, 1, "recebido")
+    await api.cozinha.avancar(comanda.id, 1, "em-preparo")
+    vi.setSystemTime(minutosDepois(6))
+
+    const atual = await api.mesas.removerItem(comanda.id, comanda.itens[1].id)
+    expect(atual.avisosCozinha).toBeUndefined()
   })
 
   test("ciente tira o aviso; o cancelado sai do quadro e não anda mais", async () => {

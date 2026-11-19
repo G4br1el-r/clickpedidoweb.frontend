@@ -326,3 +326,50 @@ As fronteiras de cada fase seguinte são escritas no início dela, como foi feit
    - Mesas: o estado, a mensagem no cartão, Servido na comanda e a chave do alerta;
    - Fila: a mensagem com Ok e o alerta de pronto.
 5. **E2E:** o fluxo do salão passa pela faixa do Garçom e pelo Servido na comanda antes de fechar a conta.
+
+## Fase 4: tempo e ajustes
+
+**Desenho**
+
+- **Tempos da loja em minutos:** a loja guarda o mínimo e o máximo da entrega e da retirada (`prazos`). Ao salvar, o servidor gera o texto da vitrine ("35–50 min", ou "15 min" quando os dois são iguais), e a vitrine continua lendo o texto. O salão não tem cozinha e segue com o texto livre.
+- **Horário prometido:** o ticket de entrega e o de retirada mostram "até 19:40 · faltam 12 min", e depois "passou 3 min" em vermelho. O horário é a criação do pedido mais o tempo máximo, ou o agendado. A mesa não tem horário prometido.
+- **Agendado:** `agendadoPara` fica nos itens da rodada, como o `lancadoEm`.
+  - O PDV, no modo "Mandar para a fila", e o garçom, ao lançar uma rodada para a cozinha, têm um campo opcional "Para as", só para hoje e sempre no futuro.
+  - O servidor recusa horário no passado ou de outro dia.
+  - O gerador da demo acrescenta, no fim do movimento de agora, uma entrega e uma retirada agendadas para a meia hora cheia uma hora e meia e uma hora depois. Ficam no fim para não mudar o sorteio dos pedidos de antes.
+- **Faixa Mais tarde:**
+  - o ticket agendado fica acima do quadro até a hora de começar: o agendado menos o tempo mínimo de retirada da loja (o tempo de preparo por produto chega na Fase 8);
+  - quando entra em A fazer, toca o alerta, e a urgência conta a partir dessa hora;
+  - cada agendado é um cartão compacto em grade, como a faixa Prontos para servir, com a hora, o pedido, quando começa e "Iniciar agora", que adianta;
+  - o cartão da Fila ganha o selo "Para 20:00".
+- **Tempos de alerta da loja:** atenção (15 min), atraso (25 min) e quanto o pronto fica na tela (15 min), guardados na loja e válidos para todos os aparelhos. Atenção menor que atraso, os dois entre 1 e 120 min, e o pronto entre 1 e 60 min.
+- **Sons por evento, no aparelho:** o "Alerta sonoro" continua sendo a chave geral. Cada evento tem a sua chave e o seu som:
+  - pedido ou rodada nova (ligada);
+  - cancelado ou alterado, repetindo a cada 5 s até o Ciente (ligada);
+  - ticket que ficou atrasado, um toque curto (ligada);
+  - repetir o alerta de novo a cada 30 s enquanto houver ticket em A fazer (desligada).
+- **Abas:** Quadro · Ajustes no topo da Cozinha, guardadas no endereço (`?aba=ajustes`). Histórico e Desempenho entram nas Fases 6 e 7. A aba Ajustes tem "Tempos da cozinha" (da loja, com Salvar) e "Sons deste aparelho" (salvam na hora), e um link para os tempos de entrega e retirada na tela Loja.
+
+**Fronteiras de teste**
+
+1. **Regras:**
+   - o texto gerado dos números;
+   - o horário prometido e o que falta ou passou;
+   - o agendado da rodada e a hora de começar;
+   - a faixa Mais tarde fora das colunas;
+   - a urgência e o pronto com os tempos da loja;
+   - o alerta quando o agendado entra em A fazer;
+   - os eventos de som.
+2. **Servidor:**
+   - salvar a loja gera o texto;
+   - "Para as" no PDV e no garçom, e a recusa;
+   - salvar os tempos da cozinha, com a validação;
+   - o gerador com agendados;
+   - a versão dos dados sobe para 5.
+3. **Hooks:** salvar os tempos muda o quadro sem recarregar.
+4. **Tela:**
+   - Cozinha: abas, Ajustes, Mais tarde com Iniciar agora, o horário prometido e os sons;
+   - PDV e Garçom: "Para as";
+   - Loja: mínimo e máximo;
+   - Fila: o selo.
+5. **E2E e screenshots:** agendado do PDV em Mais tarde, o tempo de atraso mudado nos Ajustes, e os screenshots revisados da Cozinha, do PDV e da Loja.

@@ -145,6 +145,32 @@ describe("PaginaLoja", () => {
     expect(secao("Pagamento online").getByText("Não conectada")).toBeInTheDocument()
   })
 
+  test("tempos de entrega e retirada em minutos geram o texto do site", async () => {
+    const usuario = await abrir()
+    const entrega = secao("Entrega e retirada")
+    expect(entrega.queryByRole("textbox", { name: "Tempo de entrega" })).not.toBeInTheDocument()
+    const minimo = entrega.getByRole("spinbutton", { name: "Entrega, de" })
+    const maximo = entrega.getByRole("spinbutton", { name: "Entrega, até" })
+    await usuario.clear(minimo)
+    await usuario.type(minimo, "30")
+    await usuario.clear(maximo)
+    await usuario.type(maximo, "45")
+    expect(entrega.getByText("No site: 30–45 min")).toBeInTheDocument()
+    const retirada = entrega.getByRole("spinbutton", { name: "Retirada, até" })
+    await usuario.clear(retirada)
+    await usuario.type(retirada, "10")
+    await usuario.click(screen.getByRole("button", { name: "Salvar alterações" }))
+    expect(
+      await entrega.findByText("O máximo precisa ser maior ou igual ao mínimo."),
+    ).toBeInTheDocument()
+
+    await usuario.clear(retirada)
+    await usuario.type(retirada, "30")
+    await usuario.click(screen.getByRole("button", { name: "Salvar alterações" }))
+    await waitFor(async () => expect((await api().loja()).tempoEntrega).toBe("30–45 min"))
+    expect((await api().loja()).prazos?.entrega).toEqual({ min: 30, max: 45 })
+  })
+
   test("cidades atendidas, cupom de teste e o som da loja", async () => {
     const usuario = await abrir()
     const entrega = secao("Entrega e retirada")

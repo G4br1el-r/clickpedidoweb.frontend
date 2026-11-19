@@ -4,6 +4,7 @@ import { format } from "date-fns"
 import {
   AlertTriangleIcon,
   BikeIcon,
+  CalendarClockIcon,
   CalendarIcon,
   ClockIcon,
   MapPinIcon,
@@ -98,6 +99,8 @@ export function CartaoFila({
   const motoboy = motoboys.find((item) => item.id === pedido.motoboyId)
   // Açougue: carne no quilo que ainda não passou pela balança.
   const aPesar = !pedido.pesagem && itensParaPesar(pedido).length > 0
+  // Agendado no balcão: a cozinha só começa perto da hora.
+  const agendadoPara = pedido.itens.find((item) => item.agendadoPara)?.agendadoPara
   // A mensagem da mesa vai para o salão; aqui só a da entrega e da retirada.
   const mensagens = pedido.tipo === "mesa" ? [] : mensagensPendentes(pedido)
   const canal = pedido.mesa
@@ -150,6 +153,12 @@ export function CartaoFila({
           {aPesar && (
             <Badge variant="secondary" className="gap-1">
               <ScaleIcon aria-hidden="true" />A pesar
+            </Badge>
+          )}
+          {agendadoPara && (
+            <Badge variant="secondary" className="gap-1 tabular-nums">
+              <CalendarClockIcon aria-hidden="true" />
+              Para {format(new Date(agendadoPara), "HH:mm")}
             </Badge>
           )}
           {novo && (

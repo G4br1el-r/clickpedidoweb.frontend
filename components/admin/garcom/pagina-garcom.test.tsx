@@ -159,6 +159,24 @@ describe("PaginaGarcom", () => {
     ])
   })
 
+  test("a rodada pode ir para a cozinha para mais tarde, com Para as", async () => {
+    const mesa = await api().mesas.criar({ numero: 74 })
+    const usuario = await abrir()
+    const { simples } = await produtos()
+    await escolherMesa(usuario, 74)
+    await usuario.click(botao(simples.nome))
+
+    await usuario.type(bandeja().getByRole("textbox", { name: "Para as" }), "2130")
+    await usuario.click(bandeja().getByRole("button", { name: "Enviar para a cozinha" }))
+    expect(await screen.findByText("Mesa 74: agendado para 21:30.")).toBeInTheDocument()
+    expect(bandeja().getByRole("textbox", { name: "Para as" })).toHaveValue("")
+
+    const comanda = await comandaDa(mesa.id)
+    expect(comanda?.itens.map((item) => item.agendadoPara)).toEqual([
+      new Date(2026, 10, 13, 21, 30).toISOString(),
+    ])
+  })
+
   test("produto com opções passa pela janela; lançar na mesa não vai para a cozinha", async () => {
     const mesa = await api().mesas.criar({ numero: 71 })
     const usuario = await abrir()

@@ -293,6 +293,7 @@ export const catalogoLanchonete: CatalogoLoja = {
     pedidoMinimo: 15,
     tempoEntrega: "40–60 min",
     tempoRetirada: "20–30 min",
+    prazos: { entrega: { min: 40, max: 60 }, retirada: { min: 20, max: 30 } },
     cidadesAtendidas: [],
     pagamentoOnlineConectado: true,
     pagamentos: {

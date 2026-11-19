@@ -54,6 +54,8 @@ export type ItemPedido = {
   vaiParaCozinha?: boolean
   /** Comanda: quando o garçom lançou o item. */
   lancadoEm?: string
+  /** Agendado: para quando a rodada tem de ficar pronta. Até a hora de começar, espera. */
+  agendadoPara?: string
   /** Cozinha: quando a rodada do item começou a ser preparada. */
   iniciadoEm?: string
   /** Cozinha: quando o item foi riscado como feito. */
@@ -332,6 +334,12 @@ export type HorarioFuncionamento = { dia: number; aberto: boolean; abre: string;
 
 export type SomAlerta = "suave" | "alto" | "muito-alto"
 
+/** Tempo prometido ao cliente, em minutos. */
+export type Prazo = { min: number; max: number }
+
+/** Quando o ticket pede atenção, quando atrasa e quanto o pronto fica na tela, em minutos. */
+export type TemposCozinha = { atencaoMin: number; atrasoMin: number; prontoFicaMin: number }
+
 export type ConfigLoja = {
   nome: string
   slogan: string
@@ -348,8 +356,13 @@ export type ConfigLoja = {
   aceitaRetirada: boolean
   taxaEntregaPadrao: number
   pedidoMinimo: number
+  /** Texto da vitrine. Com `prazos`, é gerado a partir deles ao salvar. */
   tempoEntrega: string
   tempoRetirada: string
+  /** Lojas com cozinha: os tempos em minutos. O salão não tem e usa o texto livre. */
+  prazos?: { entrega: Prazo; retirada: Prazo }
+  /** Tempos de alerta da cozinha. Sem o campo, 15, 25 e 15 min. */
+  temposCozinha?: TemposCozinha
   /** Vazio = qualquer cidade. */
   cidadesAtendidas: string[]
   pagamentos: Record<FormaPagamento, boolean>

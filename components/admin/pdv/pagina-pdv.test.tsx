@@ -290,6 +290,29 @@ describe("PaginaPdv", () => {
     expect(ultima.status).toBe("recebido")
   })
 
+  test("venda para a fila pode ser agendada para mais tarde, hoje", async () => {
+    const usuario = await abrir()
+    const { simples } = await produtos()
+    await usuario.click(botao(simples.nome))
+    await usuario.click(caixa().getByRole("radio", { name: "Pix" }))
+    expect(caixa().queryByRole("textbox", { name: "Para as" })).not.toBeInTheDocument()
+    await usuario.click(caixa().getByRole("switch", { name: "Venda concluída no balcão" }))
+
+    const para = caixa().getByRole("textbox", { name: "Para as" })
+    await usuario.type(para, "1900")
+    await usuario.click(caixa().getByRole("button", { name: /Mandar para a fila/ }))
+    expect(
+      await screen.findByText("Escolha um horário mais tarde, ainda hoje."),
+    ).toBeInTheDocument()
+
+    await usuario.clear(para)
+    await usuario.type(para, "2200")
+    await usuario.click(caixa().getByRole("button", { name: /Mandar para a fila/ }))
+    await screen.findByRole("dialog", { name: /^Venda #\d+/ })
+    const [ultima] = await servidorDo("pizzaria").pdv.ultimasVendas()
+    expect(ultima.itens[0].agendadoPara).toBe(new Date(2026, 10, 13, 22, 0).toISOString())
+  })
+
   test("atalhos: / vai para a busca e F9 finaliza", async () => {
     const usuario = await abrir()
     const { simples } = await produtos()

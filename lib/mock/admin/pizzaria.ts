@@ -68,6 +68,7 @@ export const catalogoPizzaria: CatalogoLoja = {
     pedidoMinimo: casaDaPizza.pedidoMinimo,
     tempoEntrega: casaDaPizza.entrega.tempo,
     tempoRetirada: casaDaPizza.retirada.tempo,
+    prazos: { entrega: { min: 35, max: 50 }, retirada: { min: 20, max: 30 } },
     cidadesAtendidas: ["São José dos Campos"],
     pagamentoOnlineConectado: true,
     pagamentos: {

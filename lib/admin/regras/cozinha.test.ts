@@ -1,16 +1,21 @@
 import { describe, expect, test } from "vitest"
 import type { ItemPedido, Pedido, StatusPedido, TipoPedido } from "../dados/tipos"
 import {
+  agendadoParaHoje,
+  atrasadosNaCozinha,
   avisarSobreRodada,
   chavesDaCozinha,
   chavesDeQuemServe,
   colunasDaCozinha,
+  conferirAgendado,
   cozinhaJaPreparou,
   type FiltroCozinha,
   itensDaCozinha,
+  maisTardeNaCozinha,
   mensagensPendentes,
   minutosNaCozinha,
   novidadesNaCozinha,
+  prometidoAoCliente,
   prontosParaServir,
   servirRodada,
   statusPelasRodadas,
@@ -130,6 +135,110 @@ const QUADRO = [
 const resumo = (colunas: ReturnType<typeof colunasDaCozinha>) =>
   colunas.map((coluna) => [coluna.titulo, coluna.tickets.map((ticket) => ticket.id)])
 
+const minutosDepois = (minutos: number) =>
+  new Date(AGORA.getTime() + minutos * 60_000).toISOString()
+
+/** Retirada criada há 10 minutos, agendada para daqui a tantos minutos. */
+const agendada = (id: number, daquiA: number, extra: Partial<ItemPedido> = {}) =>
+  pedido(id, extra.iniciadoEm ? "em-preparo" : "recebido", 10, "retirada", [
+    { ...item("Pizza"), agendadoPara: minutosDepois(daquiA), ...extra },
+  ])
+
+/** A loja leva 20 minutos para preparar (o mínimo da retirada). */
+const COM_PREPARO = { atencaoMin: 15, atrasoMin: 25, prontoFicaMin: 15, preparoMin: 20 }
+
+describe("agendado", () => {
+  const AGENDADOS = [agendada(30, 60), agendada(31, 15)]
+
+  test("espera em Mais tarde até a hora de começar: o agendado menos o preparo", () => {
+    expect(
+      maisTardeNaCozinha(AGENDADOS, "todos", AGORA, COM_PREPARO).map((ticket) => [
+        ticket.id,
+        ticket.agendadoPara,
+      ]),
+    ).toEqual([["30:1", minutosDepois(60)]])
+    const [aFazer] = colunasDaCozinha(AGENDADOS, "todos", AGORA, COM_PREPARO)
+    expect(aFazer.tickets.map((ticket) => ticket.id)).toEqual(["31:1"])
+  })
+
+  test("a urgência conta da hora de começar, não da criação", () => {
+    const [, deAgora] = ticketsDaCozinha(AGENDADOS)
+    expect(minutosNaCozinha(deAgora, AGORA, COM_PREPARO)).toBe(5)
+    expect(urgenciaNaCozinha(deAgora, AGORA, COM_PREPARO)).toBe("normal")
+  })
+
+  test("só toca o alerta quando entra em A fazer", () => {
+    expect(chavesDaCozinha(AGENDADOS, AGORA, COM_PREPARO)).toEqual(new Set(["31:1"]))
+    const depois = new Date(AGORA.getTime() + 41 * 60_000)
+    expect(novidadesNaCozinha(new Set(["31:1"]), AGENDADOS, depois, COM_PREPARO)).toEqual(["30:1"])
+  })
+
+  test("cancelado antes da hora vai para o quadro, para o ciente", () => {
+    const aviso = { id: "av-30", tipo: "cancelado" as const, em: minutosAtras(0) }
+    const cancelado = { ...agendada(33, 60), status: "cancelado" as const, avisosCozinha: [aviso] }
+    expect(maisTardeNaCozinha([cancelado], "todos", AGORA, COM_PREPARO)).toEqual([])
+    const [aFazer] = colunasDaCozinha([cancelado], "todos", AGORA, COM_PREPARO)
+    expect(aFazer.tickets.map((ticket) => ticket.id)).toEqual(["33:1"])
+  })
+
+  test("iniciado antes da hora, sai de Mais tarde e vai para Preparando", () => {
+    const adiantado = agendada(32, 60, { iniciadoEm: minutosAtras(1) })
+    expect(maisTardeNaCozinha([adiantado], "todos", AGORA, COM_PREPARO)).toEqual([])
+    const [, preparando] = colunasDaCozinha([adiantado], "todos", AGORA, COM_PREPARO)
+    expect(preparando.tickets.map((ticket) => ticket.id)).toEqual(["32:1"])
+  })
+})
+
+describe("agendadoParaHoje", () => {
+  test("a hora digitada vira o horário de hoje; vazio é sem agendar", () => {
+    expect(agendadoParaHoje("22:00", AGORA)).toBe(new Date(2026, 10, 13, 22, 0).toISOString())
+    expect(agendadoParaHoje("", AGORA)).toBeUndefined()
+    expect(agendadoParaHoje("__:__", AGORA)).toBeUndefined()
+  })
+
+  test("hora pela metade ou que não existe pede o formato", () => {
+    expect(() => agendadoParaHoje("22:_", AGORA)).toThrow("Use o formato 20:00.")
+    expect(() => agendadoParaHoje("25:00", AGORA)).toThrow("Use o formato 20:00.")
+  })
+})
+
+describe("conferirAgendado", () => {
+  test("aceita um horário mais tarde, ainda hoje", () => {
+    expect(conferirAgendado(minutosDepois(60), AGORA)).toBe(minutosDepois(60))
+  })
+
+  test("recusa horário que já passou e de outro dia", () => {
+    const mensagem = "Escolha um horário mais tarde, ainda hoje."
+    expect(() => conferirAgendado(minutosAtras(1), AGORA)).toThrow(mensagem)
+    expect(() => conferirAgendado(minutosDepois(24 * 60), AGORA)).toThrow(mensagem)
+    expect(() => conferirAgendado("amanhã", AGORA)).toThrow(mensagem)
+  })
+})
+
+describe("prometidoAoCliente", () => {
+  const PRAZOS = { entrega: { min: 35, max: 50 }, retirada: { min: 20, max: 30 } }
+  const unico = (p: Pedido) => ticketsDaCozinha([p])[0]
+
+  test("a criação mais o tempo máximo, com o que falta ou já passou", () => {
+    expect(prometidoAoCliente(unico(pedido(40, "recebido", 20)), PRAZOS, AGORA)).toEqual({
+      ate: minutosDepois(30),
+      minutos: 30,
+    })
+    expect(
+      prometidoAoCliente(unico(pedido(41, "recebido", 33, "retirada")), PRAZOS, AGORA),
+    ).toEqual({ ate: minutosAtras(3), minutos: -3 })
+  })
+
+  test("o agendado promete o próprio horário; a mesa e a loja sem prazos não prometem", () => {
+    expect(prometidoAoCliente(unico(agendada(42, 60)), PRAZOS, AGORA)).toEqual({
+      ate: minutosDepois(60),
+      minutos: 60,
+    })
+    expect(prometidoAoCliente(unico(QUADRO[3]), PRAZOS, AGORA)).toBeNull()
+    expect(prometidoAoCliente(unico(pedido(43, "recebido", 5)), undefined, AGORA)).toBeNull()
+  })
+})
+
 describe("colunasDaCozinha", () => {
   test("cada rodada na coluna da sua etapa, do que chegou primeiro ao último", () => {
     expect(resumo(colunasDaCozinha(QUADRO, "todos", AGORA))).toEqual([
@@ -137,6 +246,17 @@ describe("colunasDaCozinha", () => {
       ["Preparando", ["12:1", "13:1"]],
       ["Prontos", ["14:1"]],
     ])
+  })
+
+  test("o pronto fica na tela o tempo que a loja escolheu", () => {
+    const tempos = { atencaoMin: 15, atrasoMin: 25, prontoFicaMin: 45 }
+    expect(resumo(colunasDaCozinha(QUADRO, "todos", AGORA, tempos))[2]).toEqual([
+      "Prontos",
+      // Pela chegada: o 15 chegou há 60 minutos; o 14, há 30.
+      ["15:1", "14:1"],
+    ])
+    const curto = { ...tempos, prontoFicaMin: 10 }
+    expect(resumo(colunasDaCozinha(QUADRO, "todos", AGORA, curto))[2]).toEqual(["Prontos", []])
   })
 
   test("filtros: mesas, entrega (sem retirada) e retirada", () => {
@@ -226,6 +346,14 @@ describe("novidadesNaCozinha", () => {
   })
 })
 
+describe("atrasadosNaCozinha", () => {
+  test("as rodadas que passaram do atraso e ainda não ficaram prontas", () => {
+    expect(atrasadosNaCozinha(QUADRO, AGORA)).toEqual(new Set(["12:1"]))
+    const tempos = { atencaoMin: 5, atrasoMin: 10, prontoFicaMin: 15 }
+    expect(atrasadosNaCozinha(QUADRO, AGORA, tempos)).toEqual(new Set(["12:1", "13:1"]))
+  })
+})
+
 describe("urgenciaNaCozinha", () => {
   const unico = (p: Pedido) => ticketsDaCozinha([p])[0]
 
@@ -233,6 +361,13 @@ describe("urgenciaNaCozinha", () => {
     expect(urgenciaNaCozinha(unico(pedido(1, "recebido", 14)), AGORA)).toBe("normal")
     expect(urgenciaNaCozinha(unico(pedido(1, "recebido", 15)), AGORA)).toBe("atencao")
     expect(urgenciaNaCozinha(unico(pedido(1, "em-preparo", 25)), AGORA)).toBe("atrasado")
+  })
+
+  test("com os tempos da loja: atenção aos 5 e atraso aos 10 minutos", () => {
+    const tempos = { atencaoMin: 5, atrasoMin: 10, prontoFicaMin: 15 }
+    expect(urgenciaNaCozinha(unico(pedido(1, "recebido", 4)), AGORA, tempos)).toBe("normal")
+    expect(urgenciaNaCozinha(unico(pedido(1, "recebido", 5)), AGORA, tempos)).toBe("atencao")
+    expect(urgenciaNaCozinha(unico(pedido(1, "recebido", 10)), AGORA, tempos)).toBe("atrasado")
   })
 
   test("cada rodada conta da própria chegada", () => {

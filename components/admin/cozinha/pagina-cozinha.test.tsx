@@ -1,8 +1,9 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
+import { NuqsTestingAdapter } from "nuqs/adapters/testing"
 import { type ReactNode, useState } from "react"
 import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
@@ -19,12 +20,14 @@ function Provedores({ children }: { children: ReactNode }) {
     () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
   )
   return (
-    <QueryClientProvider client={cliente}>
-      <TooltipProvider>
-        {children}
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <NuqsTestingAdapter hasMemory>
+      <QueryClientProvider client={cliente}>
+        <TooltipProvider>
+          {children}
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </NuqsTestingAdapter>
   )
 }
 
@@ -58,13 +61,51 @@ async function comandaNaMesa(numero: number, quantidade = 2) {
   return { produto, mesa, comanda }
 }
 
-function renderizar(intervalo = 60_000) {
+function renderizar(intervalo = 60_000, tique?: number) {
   return render(
     <Provedores>
-      <PaginaCozinha intervalo={intervalo} />
+      <PaginaCozinha intervalo={intervalo} tique={tique} />
     </Provedores>,
   )
 }
+
+/** AudioContext de mentira: anota a frequência de cada nota tocada. */
+function simularAudio() {
+  const notas: number[] = []
+  vi.stubGlobal(
+    "AudioContext",
+    class {
+      currentTime = 0
+      destination = {}
+      state = "running"
+      createOscillator() {
+        return {
+          type: "sine",
+          frequency: { setValueAtTime: (valor: number) => notas.push(valor) },
+          connect: (no: unknown) => no,
+          start: () => {},
+          stop: () => {},
+        }
+      }
+      createGain() {
+        return {
+          gain: { setValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} },
+          connect: (no: unknown) => no,
+        }
+      }
+      resume() {}
+    },
+  )
+  return {
+    /** Quantas vezes tocou o som de cancelado ou alterado (a primeira nota dele). */
+    cancelado: () => notas.filter((nota) => nota === 659.25).length / 2,
+    atrasado: () => notas.filter((nota) => nota === 392).length,
+    /** O alerta de novo, no som "alto" da loja: a primeira nota da campainha. */
+    novo: () => notas.filter((nota) => nota === 1046.5).length,
+  }
+}
+
+const esperar = (ms: number) => new Promise((resolver) => setTimeout(resolver, ms))
 
 const coluna = async (nome: string) =>
   within(await screen.findByRole("region", { name: new RegExp(`^${nome}`) }, { timeout: 8000 }))
@@ -436,5 +477,189 @@ describe("PaginaCozinha", () => {
 
     await usuario.click(screen.getByRole("button", { name: "Tela cheia" }))
     expect(cheia).toHaveBeenCalled()
+  })
+})
+
+describe("PaginaCozinha: ajustes", () => {
+  test("os tempos da loja, salvos na aba Ajustes, mudam o atraso no quadro", async () => {
+    telaGrande()
+    await comandaNaMesa(57)
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 36))
+    const usuario = userEvent.setup()
+    renderizar()
+    expect(await ticket("Mesa 57")).toHaveAttribute("data-urgencia", "normal")
+
+    await usuario.click(screen.getByRole("tab", { name: "Ajustes" }))
+    const tempos = within(await screen.findByRole("region", { name: "Tempos da cozinha" }))
+    expect(tempos.getByRole("link", { name: "Tempos de entrega e retirada" })).toHaveAttribute(
+      "href",
+      "/admin/loja",
+    )
+    const atencao = tempos.getByRole("spinbutton", { name: "Atenção a partir de" })
+    const atraso = tempos.getByRole("spinbutton", { name: "Atraso a partir de" })
+    await usuario.clear(atencao)
+    await usuario.type(atencao, "3")
+    await usuario.clear(atraso)
+    await usuario.type(atraso, "2")
+    await usuario.click(tempos.getByRole("button", { name: "Salvar tempos" }))
+    expect(await tempos.findByText("O atraso precisa vir depois da atenção.")).toBeInTheDocument()
+
+    await usuario.clear(atraso)
+    await usuario.type(atraso, "5")
+    await usuario.click(tempos.getByRole("button", { name: "Salvar tempos" }))
+    expect(await screen.findByText("Tempos da cozinha salvos.")).toBeInTheDocument()
+    expect((await api().loja()).temposCozinha).toEqual({
+      atencaoMin: 3,
+      atrasoMin: 5,
+      prontoFicaMin: 15,
+    })
+
+    await usuario.click(screen.getByRole("tab", { name: "Quadro" }))
+    expect(await ticket("Mesa 57")).toHaveAttribute("data-urgencia", "atrasado")
+  })
+})
+
+describe("PaginaCozinha: sons", () => {
+  test("Ajustes: cada evento tem a sua chave, e ligar toca o som para ouvir", async () => {
+    const audio = simularAudio()
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("tab", { name: "Ajustes" }))
+    const sons = within(await screen.findByRole("region", { name: "Sons deste aparelho" }))
+
+    expect(sons.getByRole("switch", { name: "Pedido ou rodada nova" })).toBeChecked()
+    expect(sons.getByRole("switch", { name: "Repetir o alerta de novo" })).not.toBeChecked()
+    await usuario.click(sons.getByRole("switch", { name: "Ticket atrasado" }))
+    expect(usePreferenciasFila.getState().sons.atrasado).toBe(false)
+
+    await usuario.click(sons.getByRole("switch", { name: "Ticket atrasado" }))
+    expect(usePreferenciasFila.getState().sons.atrasado).toBe(true)
+    expect(audio.atrasado()).toBe(1)
+  })
+
+  beforeEach(() => {
+    telaGrande()
+    usePreferenciasFila.setState({ somLigado: true })
+  })
+
+  test("com a chave de novo desligada, a rodada nova chega sem tocar", async () => {
+    const audio = simularAudio()
+    usePreferenciasFila.getState().ligarSomDoEvento("novo", false)
+    renderizar(200, 60_000)
+    await coluna("A fazer")
+
+    await comandaNaMesa(70)
+    expect(await ticket("Mesa 70")).toBeInTheDocument()
+    expect(audio.novo()).toBe(0)
+  })
+
+  test("o cancelado toca o alarme até alguém dar Ciente", async () => {
+    const audio = simularAudio()
+    const { comanda } = await comandaNaMesa(71)
+    await api().pedidos.cancelar(comanda.id, "recebido")
+    const usuario = userEvent.setup()
+    renderizar(60_000, 50)
+
+    const cancelado = within(await ticket("Mesa 71"))
+    await waitFor(() => expect(audio.cancelado()).toBeGreaterThanOrEqual(2))
+    await usuario.click(cancelado.getByRole("button", { name: "Ciente" }))
+    await waitFor(() => expect(screen.queryByRole("article", { name: /^Mesa 71 ·/ })).toBeNull())
+    const depoisDoCiente = audio.cancelado()
+    await esperar(300)
+    expect(audio.cancelado()).toBe(depoisDoCiente)
+  })
+
+  test("o ticket que passa do atraso toca um toque curto, uma vez", async () => {
+    const audio = simularAudio()
+    await comandaNaMesa(72)
+    renderizar(60_000, 50)
+    await ticket("Mesa 72")
+    await esperar(150)
+    expect(audio.atrasado()).toBe(0)
+
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 56))
+    await waitFor(() => expect(audio.atrasado()).toBeGreaterThan(0))
+    const tocou = audio.atrasado()
+    await esperar(300)
+    expect(audio.atrasado()).toBe(tocou)
+  })
+
+  test("repetir: o alerta de novo volta enquanto houver ticket em A fazer", async () => {
+    const audio = simularAudio()
+    await comandaNaMesa(73)
+    renderizar(60_000, 50)
+    await ticket("Mesa 73")
+    expect(audio.novo()).toBe(0)
+
+    act(() => usePreferenciasFila.getState().ligarSomDoEvento("repetirNovo", true))
+    await waitFor(() => expect(audio.novo()).toBeGreaterThanOrEqual(2), { timeout: 3000 })
+  })
+})
+
+/** Venda do balcão que vai para a fila, agendada ou não. */
+const retiradaDoBalcao = (agendadoPara?: string) =>
+  api().pdv.finalizar({
+    itens: [{ avulso: { nome: "Batata", preco: 12 }, quantidade: 1 }],
+    pagamento: "pix",
+    desconto: { modo: "reais", valor: 0 },
+    concluida: false,
+    ...(agendadoPara ? { agendadoPara } : {}),
+  })
+
+describe("PaginaCozinha: tempo", () => {
+  test("o agendado espera em Mais tarde, e Iniciar agora leva para Preparando", async () => {
+    telaGrande()
+    const pedido = await retiradaDoBalcao(new Date(2026, 10, 13, 22, 0).toISOString())
+    const usuario = userEvent.setup()
+    renderizar()
+
+    const maisTarde = within(await screen.findByRole("region", { name: /^Mais tarde, / }))
+    const linha = within(maisTarde.getByRole("listitem", { name: `Retirada · #${pedido.numero}` }))
+    // A pizzaria leva 20 minutos para preparar (o mínimo da retirada).
+    expect(linha.getByText("22:00")).toBeInTheDocument()
+    expect(linha.getByText("começa 21:40")).toBeInTheDocument()
+    expect(
+      (await coluna("A fazer")).queryByRole("article", { name: `Retirada · #${pedido.numero}` }),
+    ).not.toBeInTheDocument()
+
+    await usuario.click(linha.getByRole("button", { name: "Iniciar agora" }))
+    expect(
+      await (await coluna("Preparando")).findByRole("article", {
+        name: `Retirada · #${pedido.numero}`,
+      }),
+    ).toBeInTheDocument()
+  })
+
+  test("o agendado toca o alerta de novo quando chega a hora de começar", async () => {
+    telaGrande()
+    usePreferenciasFila.setState({ somLigado: true })
+    const audio = simularAudio()
+    const pedido = await retiradaDoBalcao(new Date(2026, 10, 13, 22, 0).toISOString())
+    renderizar(60_000, 50)
+    await screen.findByRole("listitem", { name: `Retirada · #${pedido.numero}` })
+    await esperar(150)
+    expect(audio.novo()).toBe(0)
+
+    vi.setSystemTime(new Date(2026, 10, 13, 21, 41))
+    await waitFor(() => expect(audio.novo()).toBe(1))
+  })
+
+  test("o ticket de entrega e de retirada mostra até quando o cliente espera", async () => {
+    telaGrande()
+    vi.setSystemTime(new Date(2026, 10, 13, 19, 55))
+    const atrasada = await retiradaDoBalcao()
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 30))
+    const nova = await retiradaDoBalcao()
+    renderizar()
+
+    // A retirada da pizzaria leva até 30 minutos.
+    const daNova = within(
+      await screen.findByRole("article", { name: `Retirada · #${nova.numero}` }),
+    )
+    expect(daNova.getByText("até 21:00 · faltam 30 min")).toBeInTheDocument()
+    const daAtrasada = within(
+      await screen.findByRole("article", { name: `Retirada · #${atrasada.numero}` }),
+    )
+    expect(daAtrasada.getByText("até 20:25 · passou 5 min")).toBeInTheDocument()
   })
 })

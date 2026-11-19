@@ -1,5 +1,5 @@
 import { addDays, isSameDay } from "date-fns"
-import type { Bairro, ConfigLoja, HorarioFuncionamento, Pedido } from "../dados/tipos"
+import type { Bairro, ConfigLoja, HorarioFuncionamento, Pedido, Prazo } from "../dados/tipos"
 
 const NOMES = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"]
 /** A semana do texto começa na segunda, como se fala. */
@@ -114,3 +114,7 @@ export function entregasDoDia(pedidos: Pedido[], dia: Date): Map<string, number>
   }
   return contagem
 }
+
+/** "35–50 min", ou "15 min" quando o mínimo e o máximo são iguais. */
+export const textoDoPrazo = ({ min, max }: Prazo): string =>
+  min === max ? `${min} min` : `${min}–${max} min`

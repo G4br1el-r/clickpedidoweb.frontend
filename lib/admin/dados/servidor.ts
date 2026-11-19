@@ -12,6 +12,7 @@ import {
   alteracoesParaCozinha,
   avancarRodada,
   avisarSobreRodada,
+  conferirAgendado,
   darCiente,
   naMaoDaCozinha,
   riscarItem,
@@ -21,7 +22,7 @@ import {
   verMensagem,
   voltarRodada,
 } from "../regras/cozinha"
-import { esquemaLoja } from "../regras/esquema-loja"
+import { esquemaLoja, esquemaTemposCozinha } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
 import { normalizar } from "../regras/filtro-pedidos"
@@ -54,12 +55,13 @@ import type {
   Pedido,
   Produto,
   StatusPedido,
+  TemposCozinha,
   TipoMensagemCozinha,
   TipoMovimento,
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 4
+const VERSAO = 5
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -75,6 +77,8 @@ export type VendaPdv = {
   observacao?: string
   /** Falso: a venda vai para a fila e a cozinha. */
   concluida: boolean
+  /** Só com a venda indo para a fila: para quando fica pronta (hoje, mais tarde). */
+  agendadoPara?: string
 }
 
 export type FiltroPedidos = {
@@ -128,6 +132,8 @@ export type LancamentoMesa = {
   enviarParaCozinha: boolean
   garcom?: string
   clienteNome?: string
+  /** Só com a rodada indo para a cozinha: para quando fica pronta (hoje, mais tarde). */
+  agendadoPara?: string
 }
 
 export type OpcoesServidor = {
@@ -463,13 +469,18 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
   function alterarComanda(id: number, mudar: (comanda: Pedido) => Pedido) {
     return alterar(
       id,
-      (pedido) => {
+      (pedido, base) => {
         if (pedido.tipo !== "mesa" || !EM_ANDAMENTO.includes(pedido.status)) {
           throw new Error("Só a comanda aberta de uma mesa pode mudar.")
         }
         const depois = recalcular(mudar(pedido))
         // A cozinha fica sabendo do que saiu de um ticket que ela ainda tem na tela.
-        const avisos = alteracoesParaCozinha(pedido, depois, new Date()).map((aviso) => ({
+        const avisos = alteracoesParaCozinha(
+          pedido,
+          depois,
+          new Date(),
+          base.loja.temposCozinha,
+        ).map((aviso) => ({
           id: novoId("aviso")(),
           ...aviso,
         }))
@@ -1028,6 +1039,10 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           .map((item) => ({ ...item, quantidade: Math.round(item.quantidade) }))
           .filter((item) => Number.isFinite(item.quantidade) && item.quantidade >= 1)
         if (lancados.length === 0) throw new Error("Inclua pelo menos um item.")
+        const agendadoPara =
+          !venda.concluida && venda.agendadoPara
+            ? conferirAgendado(venda.agendadoPara, new Date())
+            : undefined
 
         const base = await carregar()
         const itens = lancados.map((lancado) => {
@@ -1083,6 +1098,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
               : {}),
             ...(item.observacao ? { observacao: item.observacao } : {}),
             total: reais(item.precoUnitario * item.quantidade),
+            ...(agendadoPara ? { agendadoPara } : {}),
           })),
           subtotal: totais.subtotal,
           desconto: totais.desconto,
@@ -1294,6 +1310,10 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const rodada = Math.max(0, ...(aberta?.itens.map((item) => item.rodada ?? 1) ?? [])) + 1
         const id = aberta?.id ?? (base.pedidos.at(-1)?.id ?? 0) + 1
         const vaiParaCozinha = lancamento.enviarParaCozinha
+        const agendadoPara =
+          vaiParaCozinha && lancamento.agendadoPara
+            ? conferirAgendado(lancamento.agendadoPara, new Date())
+            : undefined
         const novos: ItemPedido[] = lancamento.itens.map((lancado, indice) => {
           const { produtoId, nome, precoUnitario, opcoes, produtosDasOpcoes } = precificar(
             base,
@@ -1316,6 +1336,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             rodada,
             vaiParaCozinha,
             lancadoEm: agora,
+            ...(agendadoPara ? { agendadoPara } : {}),
           }
         })
 
@@ -1642,6 +1663,13 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       })
       if (!resultado.success) throw new Error(resultado.error.issues[0].message)
       return mudarLoja(resultado.data)
+    },
+
+    /** Os tempos de alerta da cozinha, que valem para todos os aparelhos da loja. */
+    async salvarTemposCozinha(tempos: TemposCozinha): Promise<ConfigLoja> {
+      const resultado = esquemaTemposCozinha.safeParse(tempos)
+      if (!resultado.success) throw new Error(resultado.error.issues[0].message)
+      return mudarLoja({ temposCozinha: resultado.data })
     },
 
     /** Demonstração: conecta ou desconecta a conta online. Sem ela, Pix e cartão online desligam. */

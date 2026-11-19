@@ -247,6 +247,38 @@ describe("gerarPedidos", () => {
     expect(naCozinha.some((pedido) => pedido.itens.some((item) => item.servidoEm))).toBe(true)
   })
 
+  test("hoje, uma entrega e uma retirada do movimento de agora vêm agendadas para mais tarde", () => {
+    const pedidos = gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "lanchonete",
+      de: new Date(2026, 10, 12),
+      agora: AGORA,
+    })
+    const agendados = pedidos
+      .filter((pedido) => pedido.itens.some((item) => item.agendadoPara))
+      .map((pedido) => ({
+        tipo: pedido.tipo,
+        status: pedido.status,
+        para: [...new Set(pedido.itens.map((item) => item.agendadoPara))],
+        semPreparo: pedido.itens.every((item) => !item.iniciadoEm),
+      }))
+    // Na meia hora cheia, uma hora e uma hora e meia depois de agora (20:30).
+    expect(agendados).toEqual([
+      {
+        tipo: "entrega",
+        status: "recebido",
+        para: [new Date(2026, 10, 13, 22, 0).toISOString()],
+        semPreparo: true,
+      },
+      {
+        tipo: "retirada",
+        status: "recebido",
+        para: [new Date(2026, 10, 13, 21, 30).toISOString()],
+        semPreparo: true,
+      },
+    ])
+  })
+
   test("na lanchonete o número do pedido recomeça no mês; nas outras é o id", () => {
     const agora = new Date(2026, 10, 2, 20, 30)
     const lanchonete = gerarPedidos({

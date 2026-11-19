@@ -1,5 +1,6 @@
 "use client"
 
+import { format } from "date-fns"
 import {
   AlertTriangleIcon,
   BanIcon,
@@ -23,10 +24,18 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import type { AvisoCozinha, ItemPedido, Pedido, TipoMensagemCozinha } from "@/lib/admin/dados/tipos"
+import type {
+  AvisoCozinha,
+  ConfigLoja,
+  ItemPedido,
+  Pedido,
+  TipoMensagemCozinha,
+} from "@/lib/admin/dados/tipos"
 import {
+  type ConfigCozinha,
   mensagensPendentes,
   minutosNaCozinha,
+  prometidoAoCliente,
   TEXTO_DA_MENSAGEM,
   type TicketCozinha as Ticket,
   urgenciaNaCozinha,
@@ -139,6 +148,8 @@ export const nomeDoTicket = ({ pedido, rodada }: Ticket) =>
 export function TicketCozinha({
   ticket,
   agora,
+  tempos,
+  prazos,
   ocupado,
   aoAvancar,
   aoRiscar,
@@ -151,6 +162,10 @@ export function TicketCozinha({
 }: {
   ticket: Ticket
   agora: Date
+  /** Os tempos de atenção e atraso da loja, e quanto ela leva para preparar. */
+  tempos: ConfigCozinha
+  /** O tempo de entrega e de retirada da loja: o horário prometido ao cliente sai dele. */
+  prazos?: ConfigLoja["prazos"]
   ocupado: boolean
   aoAvancar: () => void
   aoRiscar: (item: ItemPedido, feito: boolean) => void
@@ -167,12 +182,13 @@ export function TicketCozinha({
   const { pedido, rodada, itens } = ticket
   const pronto = ticket.status === "pronto"
   // Pronto não corre mais contra o relógio: o ticket fica quieto.
-  const nivel = pronto ? "normal" : urgenciaNaCozinha(ticket, agora)
-  const minutos = Math.max(0, minutosNaCozinha(ticket, agora))
+  const nivel = pronto ? "normal" : urgenciaNaCozinha(ticket, agora, tempos)
+  const minutos = Math.max(0, minutosNaCozinha(ticket, agora, tempos))
   const IconeTempo = nivel === "normal" ? ClockIcon : AlertTriangleIcon
   const feitos = itens.filter((item) => item.feitoEm).length
   const cancelamento = ticket.avisos.find((aviso) => aviso.tipo === "cancelado")
   const cancelado = pedido.status === "cancelado"
+  const prometido = pronto || cancelado ? null : prometidoAoCliente(ticket, prazos, agora)
   const alteracoes = ticket.avisos.filter((aviso) => aviso.tipo === "alterado")
   const avisados = mensagensPendentes(pedido).filter((mensagem) => mensagem.rodada === rodada)
 
@@ -302,6 +318,19 @@ export function TicketCozinha({
       <div className="-mt-1.5 flex flex-col text-[13px] text-muted-foreground">
         <span className="font-medium text-foreground">{pedido.cliente.nome}</span>
         {pedido.mesa?.garcom && <span>Garçom: {pedido.mesa.garcom}</span>}
+        {prometido && (
+          <span
+            className={cn(
+              "tabular-nums",
+              prometido.minutos < 0 && "font-medium text-destructive dark:text-(--tom-cancelado)",
+            )}
+          >
+            até {format(new Date(prometido.ate), "HH:mm")} ·{" "}
+            {prometido.minutos < 0
+              ? `passou ${-prometido.minutos} min`
+              : `faltam ${prometido.minutos} min`}
+          </span>
+        )}
       </div>
 
       {alteracoes.map((aviso) => (

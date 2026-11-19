@@ -316,6 +316,7 @@ export const catalogoAdega: CatalogoLoja = {
     pedidoMinimo: 15,
     tempoEntrega: "30–50 min",
     tempoRetirada: "15–25 min",
+    prazos: { entrega: { min: 30, max: 50 }, retirada: { min: 15, max: 25 } },
     cidadesAtendidas: [],
     pagamentoOnlineConectado: true,
     pagamentos: {
