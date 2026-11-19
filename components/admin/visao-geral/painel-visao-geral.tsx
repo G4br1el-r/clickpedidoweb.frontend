@@ -150,7 +150,8 @@ function ListaMaisVendidos({ produtos }: { produtos: Resumo["maisVendidos"]["per
   )
 }
 
-export function PainelVisaoGeral({
+/** Resumo: o dia de hoje e o essencial do período. */
+export function AbaResumo({
   resumo,
   periodo,
   segmento,
@@ -160,7 +161,6 @@ export function PainelVisaoGeral({
   segmento: SegmentoPainelId
 }) {
   const [medida, setMedida] = useState<MedidaDoGrafico>("faturamento")
-  const [tabelaAberta, setTabelaAberta] = useState(false)
   const n = nomesDo(segmento)
   const dias = diasNoPeriodo(periodo)
   const { hoje, periodo: kpi } = resumo
@@ -276,29 +276,6 @@ export function PainelVisaoGeral({
       </Secao>
 
       <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
-        <BlocoSecao titulo="Formas de pagamento" descricao="No período">
-          <ListaDeFatias
-            vazio="Nenhuma venda no período."
-            itens={resumo.pagamentos.map((fatia) => ({
-              ...fatia,
-              chave: fatia.forma,
-              nome: rotuloPagamento(fatia.forma),
-            }))}
-          />
-        </BlocoSecao>
-        <BlocoSecao titulo="Canais de venda" descricao="No período">
-          <ListaDeFatias
-            vazio="Nenhuma venda no período."
-            itens={resumo.canais.map((fatia) => ({
-              ...fatia,
-              chave: fatia.tipo,
-              nome: rotuloCanal(fatia.tipo),
-            }))}
-          />
-        </BlocoSecao>
-      </div>
-
-      <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
         <Tabs defaultValue="periodo" className="contents">
           <BlocoSecao
             titulo="Mais vendidos"
@@ -356,6 +333,26 @@ export function PainelVisaoGeral({
           </Table>
         </BlocoSecao>
       </div>
+    </div>
+  )
+}
+
+/** Vendas: por onde o dinheiro entra e o dia a dia do período. Cresce na etapa 2. */
+export function AbaVendas({ resumo, segmento }: { resumo: Resumo; segmento: SegmentoPainelId }) {
+  const [tabelaAberta, setTabelaAberta] = useState(false)
+  const n = nomesDo(segmento)
+  return (
+    <div className="flex flex-col gap-10">
+      <BlocoSecao titulo="Canais de venda" descricao="No período">
+        <ListaDeFatias
+          vazio="Nenhuma venda no período."
+          itens={resumo.canais.map((fatia) => ({
+            ...fatia,
+            chave: fatia.tipo,
+            nome: rotuloCanal(fatia.tipo),
+          }))}
+        />
+      </BlocoSecao>
 
       <Collapsible open={tabelaAberta} onOpenChange={setTabelaAberta}>
         <div className="border-y border-border/70">
@@ -399,6 +396,24 @@ export function PainelVisaoGeral({
           </CollapsibleContent>
         </div>
       </Collapsible>
+    </div>
+  )
+}
+
+/** Financeiro: como a loja recebe. Cresce na etapa 4. */
+export function AbaFinanceiro({ resumo }: { resumo: Resumo }) {
+  return (
+    <div className="flex flex-col gap-10">
+      <BlocoSecao titulo="Formas de pagamento" descricao="No período">
+        <ListaDeFatias
+          vazio="Nenhuma venda no período."
+          itens={resumo.pagamentos.map((fatia) => ({
+            ...fatia,
+            chave: fatia.forma,
+            nome: rotuloPagamento(fatia.forma),
+          }))}
+        />
+      </BlocoSecao>
     </div>
   )
 }

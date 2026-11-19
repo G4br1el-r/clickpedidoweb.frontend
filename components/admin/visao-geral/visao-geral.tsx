@@ -4,16 +4,19 @@ import { format, startOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { ReceiptTextIcon, SquareKanbanIcon } from "lucide-react"
 import Link from "next/link"
+import { parseAsString, useQueryState } from "nuqs"
 import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLoja, usePedidos } from "@/lib/admin/dados/consultas"
+import { abaEscolhida, abasDo } from "@/lib/admin/regras/dashboard/abas"
 import { resumir } from "@/lib/admin/regras/dashboard/resumo"
 import { periodoAnterior } from "@/lib/admin/regras/periodo"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
-import { PainelVisaoGeral } from "./painel-visao-geral"
+import { AbaFinanceiro, AbaResumo, AbaVendas } from "./painel-visao-geral"
 
 /** Esqueleto no formato final da tela: blocos de hoje, do período, gráfico e listas. */
 function EsqueletoVisaoGeral() {
@@ -41,6 +44,8 @@ function EsqueletoVisaoGeral() {
 export function VisaoGeral() {
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const { agora, periodo } = usePeriodo()
+  const [valorDaAba, setAba] = useQueryState("aba", parseAsString)
+  const aba = abaEscolhida(valorDaAba, segmento)
   const { data: loja } = useLoja()
 
   // Uma busca só cobre o período, o anterior (para comparar) e hoje.
@@ -81,10 +86,30 @@ export function VisaoGeral() {
         }
       />
 
+      <Tabs
+        value={aba}
+        // Resumo é o padrão: fica fora do endereço.
+        onValueChange={(valor) => void setAba(valor === "resumo" ? null : valor)}
+      >
+        <TabsList variant="line" aria-label="Abas da visão geral">
+          {abasDo(segmento).map((item) => (
+            <TabsTrigger key={item.id} value={item.id} className="cursor-pointer">
+              {item.titulo}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+
       <FiltroPeriodo />
 
       {resumo && periodo ? (
-        <PainelVisaoGeral resumo={resumo} periodo={periodo} segmento={segmento} />
+        aba === "vendas" ? (
+          <AbaVendas resumo={resumo} segmento={segmento} />
+        ) : aba === "financeiro" ? (
+          <AbaFinanceiro resumo={resumo} />
+        ) : (
+          <AbaResumo resumo={resumo} periodo={periodo} segmento={segmento} />
+        )
       ) : (
         <EsqueletoVisaoGeral />
       )}

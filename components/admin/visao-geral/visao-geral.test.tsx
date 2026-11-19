@@ -16,7 +16,7 @@ import {
 } from "@/lib/admin/regras/pedidos-de-teste"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { FiltroPeriodo } from "./filtro-periodo"
-import { PainelVisaoGeral } from "./painel-visao-geral"
+import { AbaFinanceiro, AbaResumo, AbaVendas } from "./painel-visao-geral"
 import { VisaoGeral } from "./visao-geral"
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
@@ -24,13 +24,15 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
 function Provedores({
   children,
   onUrlUpdate,
+  endereco,
 }: {
   children: ReactNode
   onUrlUpdate?: OnUrlUpdateFunction
+  endereco?: string
 }) {
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return (
-    <NuqsTestingAdapter onUrlUpdate={onUrlUpdate}>
+    <NuqsTestingAdapter onUrlUpdate={onUrlUpdate} searchParams={endereco}>
       <QueryClientProvider client={cliente}>
         <TooltipProvider>{children}</TooltipProvider>
       </QueryClientProvider>
@@ -53,9 +55,9 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe("PainelVisaoGeral", () => {
+describe("abas do painel", () => {
   test("mostra o movimento de hoje", () => {
-    render(<PainelVisaoGeral resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="pizzaria" />, {
+    render(<AbaResumo resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="pizzaria" />, {
       wrapper: Provedores,
     })
     const hoje = regiao("Hoje")
@@ -71,7 +73,7 @@ describe("PainelVisaoGeral", () => {
   })
 
   test("mostra os indicadores do período, com a variação e o melhor dia", () => {
-    render(<PainelVisaoGeral resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="pizzaria" />, {
+    render(<AbaResumo resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="pizzaria" />, {
       wrapper: Provedores,
     })
     const periodo = regiao("Desempenho do período")
@@ -86,20 +88,31 @@ describe("PainelVisaoGeral", () => {
     )
   })
 
-  test("mostra pagamentos, canais, mais vendidos e recentes", () => {
-    render(<PainelVisaoGeral resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="pizzaria" />, {
+  test("o Resumo mostra mais vendidos e recentes, sem pagamentos nem canais", () => {
+    render(<AbaResumo resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="pizzaria" />, {
       wrapper: Provedores,
     })
+    expect(regiao("Mais vendidos").getAllByRole("listitem")[0]).toHaveTextContent("Coca4 vendidos")
+    expect(regiao("Pedidos recentes").getAllByRole("row")[1]).toHaveTextContent("#6")
+    expect(screen.queryByRole("region", { name: "Formas de pagamento" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("region", { name: "Canais de venda" })).not.toBeInTheDocument()
+  })
+
+  test("Vendas mostra os canais; Financeiro, as formas de pagamento", () => {
+    const { unmount } = render(<AbaVendas resumo={RESUMO} segmento="pizzaria" />, {
+      wrapper: Provedores,
+    })
+    expect(regiao("Canais de venda").getAllByRole("listitem")[0]).toHaveTextContent("Entrega")
+    unmount()
+
+    render(<AbaFinanceiro resumo={RESUMO} />, { wrapper: Provedores })
     expect(regiao("Formas de pagamento").getAllByRole("listitem")[0]).toHaveTextContent(
       "Dinheiro2 pedidosR$ 100,0059%",
     )
-    expect(regiao("Canais de venda").getAllByRole("listitem")[0]).toHaveTextContent("Entrega")
-    expect(regiao("Mais vendidos").getAllByRole("listitem")[0]).toHaveTextContent("Coca4 vendidos")
-    expect(regiao("Pedidos recentes").getAllByRole("row")[1]).toHaveTextContent("#6")
   })
 
   test("no salão, os pedidos são atendimentos", () => {
-    render(<PainelVisaoGeral resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="salao" />, {
+    render(<AbaResumo resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="salao" />, {
       wrapper: Provedores,
     })
     expect(regiao("Hoje").getByText("Atendimentos hoje")).toBeInTheDocument()
@@ -136,5 +149,35 @@ describe("VisaoGeral", () => {
     expect(
       screen.queryByRole("status", { name: "Carregando a visão geral" }),
     ).not.toBeInTheDocument()
+  })
+
+  test("a aba vem do endereço, e trocar de aba muda o endereço", async () => {
+    const usuario = userEvent.setup()
+    const aoMudar = vi.fn<OnUrlUpdateFunction>()
+    render(
+      <Provedores endereco="?aba=financeiro" onUrlUpdate={aoMudar}>
+        <VisaoGeral />
+      </Provedores>,
+    )
+
+    const abas = screen.getByRole("tablist", { name: "Abas da visão geral" })
+    expect(
+      within(abas)
+        .getAllByRole("tab")
+        .map((aba) => aba.textContent),
+    ).toEqual(["Resumo", "Vendas", "Financeiro"])
+    expect(within(abas).getByRole("tab", { name: "Financeiro" })).toHaveAttribute(
+      "aria-selected",
+      "true",
+    )
+    expect(
+      await screen.findByRole("region", { name: "Formas de pagamento" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("region", { name: "Hoje" })).not.toBeInTheDocument()
+
+    await usuario.click(within(abas).getByRole("tab", { name: "Vendas" }))
+
+    expect(aoMudar.mock.lastCall?.[0].searchParams.get("aba")).toBe("vendas")
+    expect(await screen.findByRole("region", { name: "Canais de venda" })).toBeInTheDocument()
   })
 })
