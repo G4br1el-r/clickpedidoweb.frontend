@@ -1,7 +1,13 @@
 "use client"
 
 import { type QueryKey, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { avancarRodada, riscarItem, type StatusTicket, voltarRodada } from "../regras/cozinha"
+import {
+  avancarRodada,
+  darCiente,
+  riscarItem,
+  type StatusTicket,
+  voltarRodada,
+} from "../regras/cozinha"
 import { proximoStatus } from "../regras/status"
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
@@ -172,9 +178,12 @@ export function useFila() {
   return usePedidos({ status: STATUS_DA_FILA }, { atualizarACada: 5_000 })
 }
 
-/** O que a cozinha acompanha: novos, em preparo e prontos, conferido a cada 4 s. */
+/**
+ * O que a cozinha acompanha, conferido a cada 4 s: novos, em preparo, prontos e o
+ * cancelado de que ela ainda não deu ciente.
+ */
 export function useCozinha(intervalo = 4_000) {
-  return usePedidos({ status: ["recebido", "em-preparo", "pronto"] }, { atualizarACada: intervalo })
+  return usePedidos({ naCozinha: true }, { atualizarACada: intervalo })
 }
 
 /** A previsão usa a mesma regra do servidor; se ela recusar, a tela fica como está. */
@@ -213,6 +222,14 @@ export function useRiscarItem() {
     ouIgual((pedido, { itemId, feito }) =>
       riscarItem(pedido, itemId, feito, new Date().toISOString()),
     ),
+  )
+}
+
+/** A cozinha viu o cancelamento ou a alteração: o aviso sai de todas as telas. */
+export function useDarCiente() {
+  return useMutacaoDePedido<{ id: number; avisoId: string }>(
+    (servidor, { id, avisoId }) => servidor.cozinha.ciente(id, avisoId),
+    ouIgual((pedido, { avisoId }) => darCiente(pedido, avisoId, new Date().toISOString())),
   )
 }
 

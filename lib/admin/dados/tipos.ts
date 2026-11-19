@@ -60,6 +60,21 @@ export type ItemPedido = {
   feitoEm?: string
 }
 
+/**
+ * Aviso para a cozinha: o pedido foi cancelado, ou a comanda perdeu itens, depois de
+ * chegar à cozinha. Fica no ticket até alguém dar ciente.
+ */
+export type AvisoCozinha = {
+  id: string
+  tipo: "cancelado" | "alterado"
+  em: string
+  cienteEm?: string
+  /** Alterado: a rodada que mudou, a etapa em que ela estava e o que saiu dela. */
+  rodada?: number
+  etapa?: "recebido" | "em-preparo" | "pronto"
+  itens?: { nome: string; quantidade: number }[]
+}
+
 export type EnderecoEntrega = {
   cep: string
   logradouro: string
@@ -97,6 +112,8 @@ export type Pedido = {
   atualizadoEm: string
   /** Passa na frente na cozinha. */
   prioridade?: boolean
+  /** Cancelamentos e alterações que a cozinha precisa ver. */
+  avisosCozinha?: AvisoCozinha[]
   /** Quando o pedido entrou em cada etapa por que passou. */
   etapas?: Partial<Record<StatusPedido, string>>
   impressoEm?: string

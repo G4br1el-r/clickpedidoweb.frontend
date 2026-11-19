@@ -11,6 +11,7 @@ import {
   servidorDo,
   useAvancarTicket,
   useCozinha,
+  useDarCiente,
   usePriorizarPedido,
   useRiscarItem,
   useVoltarTicket,
@@ -96,6 +97,23 @@ describe("consultas da cozinha", () => {
     )
     expect(ticket()?.status).toBe("recebido")
     expect((await api.pedidos.buscar(comanda.id))?.status).toBe("recebido")
+  })
+
+  test("dar ciente do cancelamento tira o ticket do quadro", async () => {
+    const { api, comanda } = await mesaNaCozinha()
+    const cancelado = await api.pedidos.cancelar(comanda.id, "recebido")
+    const [aviso] = cancelado.avisosCozinha ?? []
+    const { result } = renderHook(() => ({ ...useQuadro(), ciente: useDarCiente() }), {
+      wrapper: envolver(),
+    })
+    const tickets = () =>
+      ticketsDaCozinha(result.current.cozinha.data ?? []).filter(
+        (item) => item.pedido.id === comanda.id,
+      )
+    await waitFor(() => expect(tickets()).toHaveLength(1))
+
+    act(() => result.current.ciente.mutate({ id: comanda.id, avisoId: aviso.id }))
+    await waitFor(() => expect(tickets()).toHaveLength(0))
   })
 
   test("riscar um item e marcar prioridade aparecem no quadro", async () => {

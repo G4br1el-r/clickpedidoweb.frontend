@@ -9,7 +9,10 @@ import {
   soltarOpcoesDe,
 } from "../regras/cardapio"
 import {
+  alteracoesParaCozinha,
   avancarRodada,
+  darCiente,
+  naMaoDaCozinha,
   riscarItem,
   type StatusTicket,
   ticketsDaCozinha,
@@ -77,6 +80,8 @@ export type FiltroPedidos = {
   status?: StatusPedido[]
   /** Só os concluídos neste dia, mesmo que criados antes (pelo `atualizadoEm`). */
   concluidosEm?: Date
+  /** Só o que está na mão da cozinha, mais o cancelado de que ela ainda não deu ciente. */
+  naCozinha?: boolean
 }
 
 /**
@@ -458,7 +463,15 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (pedido.tipo !== "mesa" || !EM_ANDAMENTO.includes(pedido.status)) {
           throw new Error("Só a comanda aberta de uma mesa pode mudar.")
         }
-        return recalcular(mudar(pedido))
+        const depois = recalcular(mudar(pedido))
+        // A cozinha fica sabendo do que saiu de um ticket que ela ainda tem na tela.
+        const avisos = alteracoesParaCozinha(pedido, depois, new Date()).map((aviso) => ({
+          id: novoId("aviso")(),
+          ...aviso,
+        }))
+        return avisos.length > 0
+          ? { ...depois, avisosCozinha: [...(depois.avisosCozinha ?? []), ...avisos] }
+          : depois
       },
       // O garçom não lança mais do que há.
       { conferir: true },
@@ -670,7 +683,13 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     },
 
     pedidos: {
-      async listar({ de, ate, status, concluidosEm }: FiltroPedidos = {}): Promise<Pedido[]> {
+      async listar({
+        de,
+        ate,
+        status,
+        concluidosEm,
+        naCozinha,
+      }: FiltroPedidos = {}): Promise<Pedido[]> {
         const inicio = de ? startOfDay(de).getTime() : -Infinity
         const fim = ate ? endOfDay(ate).getTime() : Infinity
         const { pedidos } = await carregar()
@@ -680,6 +699,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             criado >= inicio &&
             criado <= fim &&
             (!status || status.includes(pedido.status)) &&
+            (!naCozinha || naMaoDaCozinha(pedido)) &&
             (!concluidosEm ||
               (pedido.status === "concluido" &&
                 isSameDay(new Date(pedido.atualizadoEm), concluidosEm)))
@@ -726,8 +746,22 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           conferirEtapa(pedido, de)
           if (pedido.status === "concluido")
             throw new Error("Pedido concluído não pode ser cancelado")
+          // Já estava na cozinha: ela precisa saber para parar o preparo.
+          const naCozinha = ticketsDaCozinha([pedido]).some((ticket) => ticket.itens.length > 0)
           return {
             ...pedido,
+            ...(naCozinha
+              ? {
+                  avisosCozinha: [
+                    ...(pedido.avisosCozinha ?? []),
+                    {
+                      id: novoId("aviso")(),
+                      tipo: "cancelado" as const,
+                      em: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : {}),
             status: "cancelado",
             situacaoPagamento: pedido.situacaoPagamento === "pago" ? "pago" : "cancelado",
             // O que saiu do estoque volta (o alterar leva a diferença).
@@ -1187,6 +1221,11 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       /** Risca (ou desrisca) um item. Riscar num ticket de A fazer já começa a rodada. */
       riscar(id: number, itemId: string, feito: boolean) {
         return alterar(id, (pedido) => riscarItem(pedido, itemId, feito, new Date().toISOString()))
+      },
+
+      /** A cozinha viu o cancelamento ou a alteração. */
+      ciente(id: number, avisoId: string) {
+        return alterar(id, (pedido) => darCiente(pedido, avisoId, new Date().toISOString()))
       },
     },
 

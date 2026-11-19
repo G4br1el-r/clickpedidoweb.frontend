@@ -223,3 +223,59 @@ Cada fase segue TDD e só fecha com `pnpm check` e `pnpm test:e2e:rapido` verdes
 4. **Gerador:** cada pedido traz a hora de cada etapa, em ordem e até agora, e a cozinha bate com o status.
 
 As fronteiras de cada fase seguinte são escritas no início dela, como foi feito no plano do painel.
+
+## Fase 2: quadro
+
+**Desenho**
+
+- **Ticket por rodada na tela:** o quadro monta as colunas com `colunasDaCozinha`, uma rodada por ticket. A partir da 2ª rodada, o cabeçalho mostra "2ª rodada". O bloco "Já servido" saiu.
+- **Riscar item:** cada linha é um `Checkbox` com rótulo, e a linha inteira é o alvo de toque. O rodapé mostra o andamento ("1 de 2"). Riscar o último item leva o ticket para Prontos.
+- **Menu "⋯" do ticket:**
+  - Prioridade (liga e desliga);
+  - Voltar para A fazer, ou Voltar para Preparando;
+  - Acabou…, com os produtos do ticket que ainda estão à venda.
+- **Desfazer:** o toast de 6 s com Desfazer aparece depois de Iniciar preparo, Marcar pronto, Voltar e Acabou.
+- **Prioridade:** o ticket fica no topo da coluna, com o anel e o raio no laranja de atenção. O texto "Prioridade" fica na tinta.
+- **Avisos para a cozinha** (`Pedido.avisosCozinha`):
+  - o servidor grava um aviso ao cancelar um pedido que já tinha chegado à cozinha;
+  - também grava ao tirar ou diminuir um item de um ticket que ainda está na tela;
+  - o cancelado fica tachado, marcado "Cancelado" e com o botão Ciente, e o preparo dele não anda;
+  - o alterado mostra a faixa "Alterado: tirou 2× …" com Ciente;
+  - a rodada que ficou sem itens continua na tela até o ciente;
+  - o Ciente vale para todas as telas;
+  - o aviso novo toca o alerta uma vez.
+- **Lista da cozinha:** um filtro novo no servidor, `naCozinha`, traz o que está com a cozinha e o cancelado ainda sem ciente.
+- **Prontos:** o tempo na coluna conta do último item riscado, e não mais do `atualizadoEm`. Por isso os prontos da demonstração passaram a aparecer.
+- **Cronômetro:** passou a ser de cada ticket (`urgenciaNaCozinha(ticket)`).
+- **Cabeçalho do ticket:** quebra linha em coluna estreita. No tablet com a lateral aberta, o tempo e o menu passavam da borda.
+
+**Ambiente de teste**
+
+- O Playwright lê a porta de `PORTA_E2E` (o padrão continua 3010). Com o reaproveitamento ligado, outra worktree na mesma porta era testada no lugar desta.
+- Os screenshots escondem `nextjs-portal`, a camada de desenvolvimento do Next 16.4. O selo "Insights", com o aviso de segurança, aparecia mesmo com `devIndicators: false` e quebrava todas as comparações.
+
+**Fronteiras de teste**
+
+1. **Regras:**
+   - cada rodada na coluna da sua etapa;
+   - o filtro continua valendo;
+   - a prioridade vai para o topo;
+   - o cancelado fica até o ciente;
+   - o alterado fica no ticket da rodada, e a rodada esvaziada continua;
+   - o cronômetro é de cada rodada;
+   - novidades para o alerta.
+2. **Servidor:**
+   - aviso ao cancelar, e só para o que já chegou à cozinha;
+   - aviso ao tirar ou diminuir um item;
+   - o ciente, e o cancelado não anda mais;
+   - a lista da cozinha.
+3. **Hooks:** o ciente tira o ticket do quadro.
+4. **Tela:**
+   - a rodada nova é outro ticket;
+   - riscar item;
+   - voltar pelo menu;
+   - Desfazer;
+   - prioridade;
+   - cancelado e alterado com Ciente;
+   - Acabou com Desfazer.
+5. **Screenshots:** a cozinha nas 11 telas, revisados antes de atualizar.

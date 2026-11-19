@@ -1554,4 +1554,98 @@ describe("cozinha", () => {
       "Só pedido em andamento tem prioridade.",
     )
   })
+
+  test("cancelar o que já chegou à cozinha deixa um aviso; o que não chegou, não", async () => {
+    const api = servidor()
+    const pedido = await retirada(api)
+    vi.setSystemTime(minutosDepois(4))
+    const cancelado = await api.pedidos.cancelar(pedido.id, "recebido")
+    expect(cancelado.avisosCozinha).toEqual([
+      { id: expect.any(String), tipo: "cancelado", em: minutosDepois(4).toISOString() },
+    ])
+
+    const aPagar = (await api.pedidos.listar({ status: ["aguardando-pagamento"] }))[0]
+    expect(aPagar).toBeDefined()
+    const semCozinha = await api.pedidos.cancelar(aPagar.id, "aguardando-pagamento")
+    expect(semCozinha.avisosCozinha).toBeUndefined()
+  })
+
+  test("tirar ou diminuir item da cozinha na comanda deixa um aviso na rodada", async () => {
+    const api = servidor()
+    const mesa = await api.mesas.criar({ numero: 5 })
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [LANCHE, { avulso: { nome: "Batata", preco: 12 }, quantidade: 3 }],
+    })
+    const agua = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    const [lanche, batata] = comanda.itens
+    await api.cozinha.avancar(comanda.id, 1, "recebido")
+    vi.setSystemTime(minutosDepois(6))
+
+    await api.mesas.alterarQuantidade(comanda.id, batata.id, 1)
+    // Bebida que não passou pela cozinha não avisa.
+    await api.mesas.removerItem(comanda.id, agua.itens[2].id)
+    const atual = await api.mesas.removerItem(comanda.id, lanche.id)
+
+    expect(atual.avisosCozinha).toEqual([
+      {
+        id: expect.any(String),
+        tipo: "alterado",
+        em: minutosDepois(6).toISOString(),
+        rodada: 1,
+        etapa: "em-preparo",
+        itens: [{ nome: "Batata", quantidade: 2 }],
+      },
+      {
+        id: expect.any(String),
+        tipo: "alterado",
+        em: minutosDepois(6).toISOString(),
+        rodada: 1,
+        etapa: "em-preparo",
+        itens: [{ nome: "X-Burger", quantidade: 1 }],
+      },
+    ])
+  })
+
+  test("ciente tira o aviso; o cancelado sai do quadro e não anda mais", async () => {
+    const api = servidor()
+    const pedido = await retirada(api)
+    await api.cozinha.avancar(pedido.id, 1, "recebido")
+    const cancelado = await api.pedidos.cancelar(pedido.id, "em-preparo")
+    expect(estados(cancelado)).toEqual([[1, "em-preparo"]])
+
+    await expect(api.cozinha.avancar(pedido.id, 1, "em-preparo")).rejects.toThrow(
+      "Este pedido foi cancelado.",
+    )
+    await expect(api.cozinha.riscar(pedido.id, pedido.itens[0].id, true)).rejects.toThrow(
+      "Este pedido foi cancelado.",
+    )
+
+    vi.setSystemTime(minutosDepois(2))
+    const [aviso] = cancelado.avisosCozinha ?? []
+    const visto = await api.cozinha.ciente(pedido.id, aviso.id)
+    expect(visto.avisosCozinha?.[0].cienteEm).toBe(minutosDepois(2).toISOString())
+    expect(visto.status).toBe("cancelado")
+    expect(ticketsDaCozinha([visto])).toEqual([])
+  })
+
+  test("a lista da cozinha traz o que está com ela e o cancelado ainda sem ciente", async () => {
+    const api = servidor()
+    const pedido = await retirada(api)
+    const cancelado = await api.pedidos.cancelar(pedido.id, "recebido")
+    const ids = async () => (await api.pedidos.listar({ naCozinha: true })).map((p) => p.id)
+
+    const naCozinha = await ids()
+    expect(naCozinha).toContain(pedido.id)
+    const status = (await api.pedidos.listar({ naCozinha: true })).map((p) => p.status)
+    expect(new Set(status)).toEqual(new Set(["recebido", "em-preparo", "pronto", "cancelado"]))
+
+    await api.cozinha.ciente(pedido.id, cancelado.avisosCozinha?.[0].id ?? "")
+    expect(await ids()).not.toContain(pedido.id)
+  })
 })

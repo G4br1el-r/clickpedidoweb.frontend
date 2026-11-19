@@ -1,13 +1,14 @@
 import { describe, expect, test } from "vitest"
 import type { ItemPedido, Pedido, StatusPedido, TipoPedido } from "../dados/tipos"
 import {
+  chavesDaCozinha,
   colunasDaCozinha,
   cozinhaJaPreparou,
   type FiltroCozinha,
   itensDaCozinha,
   minutosNaCozinha,
-  rodadasNaCozinha,
-  rodadasNovas,
+  novidadesNaCozinha,
+  statusPelasRodadas,
   ticketsDaCozinha,
   urgenciaNaCozinha,
 } from "./cozinha"
@@ -87,15 +88,24 @@ describe("itensDaCozinha", () => {
   })
 })
 
+const iniciadoHa = (minutos: number) => ({ iniciadoEm: minutosAtras(minutos) })
+const feitoHa = (minutos: number) => ({
+  iniciadoEm: minutosAtras(minutos + 8),
+  feitoEm: minutosAtras(minutos),
+})
+
 const QUADRO = [
   pedido(10, "recebido", 3),
   pedido(11, "recebido", 9, "retirada"),
-  // Comanda antiga com rodada nova: conta da hora em que a rodada foi lançada.
-  pedido(12, "recebido", 90, "mesa", [item("Pizza", 1, true), item("Batata", 2, true, 6)]),
-  pedido(13, "em-preparo", 20, "mesa"),
-  pedido(14, "pronto", 12),
+  // Comanda com a rodada 1 no fogo e a rodada 2 nova: dois tickets, em colunas diferentes.
+  pedido(12, "recebido", 90, "mesa", [
+    { ...item("Pizza", 1, true, 30), ...iniciadoHa(20) },
+    item("Batata", 2, true, 6),
+  ]),
+  pedido(13, "em-preparo", 20, "mesa", [{ ...item("Pizza", 1, true, 20), ...iniciadoHa(10) }]),
+  pedido(14, "pronto", 30, "entrega", [{ ...item("Pizza"), ...feitoHa(12) }]),
   // Pronto há mais de 15 minutos: já saiu da mão da cozinha.
-  pedido(15, "pronto", 40, "mesa"),
+  pedido(15, "pronto", 60, "mesa", [{ ...item("Pizza", 1, true, 60), ...feitoHa(40) }]),
   pedido(16, "saiu-para-entrega", 30),
   pedido(17, "concluido", 60),
   pedido(18, "aguardando-pagamento", 1),
@@ -104,49 +114,119 @@ const QUADRO = [
 ]
 
 const resumo = (colunas: ReturnType<typeof colunasDaCozinha>) =>
-  colunas.map((coluna) => [coluna.titulo, coluna.pedidos.map((item) => item.id)])
+  colunas.map((coluna) => [coluna.titulo, coluna.tickets.map((ticket) => ticket.id)])
 
 describe("colunasDaCozinha", () => {
-  test("a fazer, preparando e prontos, do que chegou primeiro ao último", () => {
+  test("cada rodada na coluna da sua etapa, do que chegou primeiro ao último", () => {
     expect(resumo(colunasDaCozinha(QUADRO, "todos", AGORA))).toEqual([
-      ["A fazer", [11, 12, 10]],
-      ["Preparando", [13]],
-      ["Prontos", [14]],
+      ["A fazer", ["11:1", "12:2", "10:1"]],
+      ["Preparando", ["12:1", "13:1"]],
+      ["Prontos", ["14:1"]],
     ])
   })
 
   test("filtros: mesas, entrega (sem retirada) e retirada", () => {
     const ids = (filtro: FiltroCozinha) =>
-      colunasDaCozinha(QUADRO, filtro, AGORA).flatMap((coluna) => coluna.pedidos.map((p) => p.id))
-    expect(ids("mesas")).toEqual([12, 13])
-    expect(ids("entrega")).toEqual([10, 14])
-    expect(ids("retirada")).toEqual([11])
+      colunasDaCozinha(QUADRO, filtro, AGORA).flatMap((coluna) => coluna.tickets.map((t) => t.id))
+    expect(ids("mesas")).toEqual(["12:2", "12:1", "13:1"])
+    expect(ids("entrega")).toEqual(["10:1", "14:1"])
+    expect(ids("retirada")).toEqual(["11:1"])
+  })
+
+  test("pedido com prioridade passa na frente na coluna", () => {
+    const comPrioridade = QUADRO.map((p) => (p.id === 10 ? { ...p, prioridade: true } : p))
+    const [aFazer] = resumo(colunasDaCozinha(comPrioridade, "todos", AGORA))
+    expect(aFazer).toEqual(["A fazer", ["10:1", "11:1", "12:2"]])
+  })
+
+  test("cancelado fica no quadro, com o aviso, até a cozinha dar ciente", () => {
+    const aviso = { id: "av-1", tipo: "cancelado" as const, em: minutosAtras(1) }
+    const cancelado = {
+      ...pedido(40, "cancelado", 10, "entrega", [{ ...item("Pizza"), ...iniciadoHa(5) }]),
+      avisosCozinha: [aviso],
+    }
+    const ciente = {
+      ...cancelado,
+      id: 41,
+      avisosCozinha: [{ ...aviso, cienteEm: minutosAtras(0) }],
+    }
+    const semAviso = { ...cancelado, id: 42, avisosCozinha: undefined }
+
+    const colunas = colunasDaCozinha([cancelado, ciente, semAviso], "todos", AGORA)
+    expect(resumo(colunas)).toEqual([
+      ["A fazer", []],
+      ["Preparando", ["40:1"]],
+      ["Prontos", []],
+    ])
+    expect(colunas[1].tickets[0].avisos).toEqual([aviso])
+  })
+
+  test("alterado fica no ticket da rodada; rodada esvaziada continua até o ciente", () => {
+    const tirou = (rodada: number, etapa: "recebido" | "em-preparo") => ({
+      id: `av-${rodada}`,
+      tipo: "alterado" as const,
+      em: minutosAtras(1),
+      rodada,
+      etapa,
+      itens: [{ nome: "Batata", quantidade: 1 }],
+    })
+    const comanda = {
+      ...pedido(43, "recebido", 40, "mesa", [
+        { ...item("Pizza", 1, true, 30), ...iniciadoHa(20) },
+        item("Esfiha", 2, true, 6),
+      ]),
+      avisosCozinha: [tirou(2, "recebido"), tirou(3, "em-preparo")],
+    }
+    const colunas = colunasDaCozinha([comanda], "todos", AGORA)
+    expect(resumo(colunas)).toEqual([
+      ["A fazer", ["43:2"]],
+      ["Preparando", ["43:1", "43:3"]],
+      ["Prontos", []],
+    ])
+    const [primeira, esvaziada] = colunas[1].tickets
+    expect(primeira.avisos).toEqual([])
+    expect(esvaziada.itens).toEqual([])
+    expect(esvaziada.avisos.map((aviso) => aviso.id)).toEqual(["av-3"])
+    // A rodada vazia não segura o status do pedido.
+    expect(statusPelasRodadas(comanda)).toBe("recebido")
   })
 })
 
-describe("rodadasNovas", () => {
+describe("novidadesNaCozinha", () => {
   test("pedido novo e rodada nova de uma comanda que já estava na tela tocam o alerta", () => {
-    const antes = rodadasNaCozinha([
+    const antes = chavesDaCozinha([
       QUADRO[0],
-      pedido(12, "pronto", 90, "mesa", [item("Pizza", 1, true)]),
+      pedido(12, "pronto", 90, "mesa", [{ ...item("Pizza", 1, true), ...feitoHa(2) }]),
     ])
     // A comanda 20 só tem bebida: não chega nada na cozinha, nada toca.
     const depois = [QUADRO[0], QUADRO[1], QUADRO[2], QUADRO[3], QUADRO[10]]
-    expect(rodadasNovas(antes, depois)).toEqual(["11:1", "12:2"])
+    expect(novidadesNaCozinha(antes, depois)).toEqual(["11:1", "12:2"])
+  })
+
+  test("cancelamento ou alteração que chega também toca, uma vez", () => {
+    const antes = chavesDaCozinha([QUADRO[0]])
+    const aviso = { id: "av-9", tipo: "cancelado" as const, em: minutosAtras(0) }
+    const cancelado = { ...QUADRO[0], status: "cancelado" as const, avisosCozinha: [aviso] }
+    expect(novidadesNaCozinha(antes, [cancelado])).toEqual(["aviso:av-9"])
+    expect(novidadesNaCozinha(chavesDaCozinha([cancelado]), [cancelado])).toEqual([])
   })
 })
 
 describe("urgenciaNaCozinha", () => {
+  const unico = (p: Pedido) => ticketsDaCozinha([p])[0]
+
   test("âmbar a partir de 15 minutos e vermelho a partir de 25, contando da rodada", () => {
-    expect(urgenciaNaCozinha(pedido(1, "recebido", 14), AGORA)).toBe("normal")
-    expect(urgenciaNaCozinha(pedido(1, "recebido", 15), AGORA)).toBe("atencao")
-    expect(urgenciaNaCozinha(pedido(1, "em-preparo", 25), AGORA)).toBe("atrasado")
-    expect(urgenciaNaCozinha(QUADRO[2], AGORA)).toBe("normal")
+    expect(urgenciaNaCozinha(unico(pedido(1, "recebido", 14)), AGORA)).toBe("normal")
+    expect(urgenciaNaCozinha(unico(pedido(1, "recebido", 15)), AGORA)).toBe("atencao")
+    expect(urgenciaNaCozinha(unico(pedido(1, "em-preparo", 25)), AGORA)).toBe("atrasado")
   })
 
-  test("tempo em minutos desde a chegada à cozinha", () => {
-    expect(minutosNaCozinha(QUADRO[2], AGORA)).toBe(6)
-    expect(minutosNaCozinha(pedido(1, "recebido", 9), AGORA)).toBe(9)
+  test("cada rodada conta da própria chegada", () => {
+    const [primeira, segunda] = ticketsDaCozinha([QUADRO[2]])
+    expect(minutosNaCozinha(primeira, AGORA)).toBe(30)
+    expect(urgenciaNaCozinha(primeira, AGORA)).toBe("atrasado")
+    expect(minutosNaCozinha(segunda, AGORA)).toBe(6)
+    expect(urgenciaNaCozinha(segunda, AGORA)).toBe("normal")
   })
 })
 

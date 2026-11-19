@@ -14,8 +14,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAgora } from "@/hooks/use-agora"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
-import { useAvancarPedido, useCozinha } from "@/lib/admin/dados/consultas"
-import type { Pedido } from "@/lib/admin/dados/tipos"
+import {
+  useAvancarTicket,
+  useCozinha,
+  useDarCiente,
+  usePriorizarPedido,
+  useRiscarItem,
+  useVoltarTicket,
+} from "@/lib/admin/dados/consultas"
+import { useAlternarProduto, useProdutos } from "@/lib/admin/dados/consultas-cardapio"
+import type { AvisoCozinha, ItemPedido, Pedido, Produto } from "@/lib/admin/dados/tipos"
 import {
   usePreferenciasCarregadas,
   usePreferenciasFila,
@@ -23,16 +31,18 @@ import {
 } from "@/lib/admin/preferencias-fila"
 import {
   type ColunaCozinha,
+  chavesDaCozinha,
   colunasDaCozinha,
   type FiltroCozinha,
-  rodadasNaCozinha,
-  rodadasNovas,
+  novidadesNaCozinha,
+  type StatusTicket,
+  type TicketCozinha as Ticket,
 } from "@/lib/admin/regras/cozinha"
 import { tomDoStatus } from "@/lib/admin/regras/status"
 import { tocarAlerta } from "@/lib/admin/som"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { Traco } from "../traco"
-import { TicketCozinha } from "./ticket-cozinha"
+import { nomeDoTicket, TicketCozinha } from "./ticket-cozinha"
 
 const FILTROS: { valor: FiltroCozinha; rotulo: string }[] = [
   { valor: "todos", rotulo: "Todos" },
@@ -41,6 +51,12 @@ const FILTROS: { valor: FiltroCozinha; rotulo: string }[] = [
   { valor: "retirada", rotulo: "Retirada" },
 ]
 
+const NOME_DA_COLUNA: Record<StatusTicket, string> = {
+  recebido: "A fazer",
+  "em-preparo": "Preparando",
+  pronto: "Prontos",
+}
+
 /** O que chega em cada coluna: a coluna vazia ensina, em vez de só dizer "nada". */
 const VAZIA: Record<ColunaCozinha["id"], string> = {
   afazer: "Os pedidos novos e as rodadas das mesas chegam aqui.",
@@ -48,7 +64,7 @@ const VAZIA: Record<ColunaCozinha["id"], string> = {
   prontos: "Marque um ticket como pronto e ele vem para cá.",
 }
 
-/** Toca o alerta quando chega pedido novo ou rodada nova de uma comanda. */
+/** Toca o alerta quando chega pedido novo, rodada nova, cancelamento ou alteração. */
 function useAlertaDeRodadas(pedidos: Pedido[] | undefined) {
   const conhecidas = useRef<Set<string> | null>(null)
   const somLigado = usePreferenciasFila((estado) => estado.somLigado)
@@ -57,10 +73,14 @@ function useAlertaDeRodadas(pedidos: Pedido[] | undefined) {
   useEffect(() => {
     if (!pedidos) return
     // Na primeira leitura não há "novo": é o que já estava na tela.
-    if (conhecidas.current && somLigado && rodadasNovas(conhecidas.current, pedidos).length > 0) {
+    if (
+      conhecidas.current &&
+      somLigado &&
+      novidadesNaCozinha(conhecidas.current, pedidos).length > 0
+    ) {
       tocarAlerta(tipoSom)
     }
-    conhecidas.current = rodadasNaCozinha(pedidos)
+    conhecidas.current = chavesDaCozinha(pedidos)
   }, [pedidos, somLigado, tipoSom])
 }
 
@@ -69,17 +89,29 @@ function Coluna({
   agora,
   emAndamento,
   aoAvancar,
+  aoRiscar,
+  aoVoltar,
+  aoPriorizar,
+  aoCiente,
+  esgotaveis,
+  aoEsgotar,
   comTitulo,
 }: {
   coluna: ColunaCozinha
   agora: Date
-  emAndamento: number | undefined
-  aoAvancar: (pedido: Pedido) => void
+  emAndamento: string | undefined
+  aoAvancar: (ticket: Ticket) => void
+  aoRiscar: (ticket: Ticket, item: ItemPedido, feito: boolean) => void
+  aoVoltar: (ticket: Ticket) => void
+  aoPriorizar: (ticket: Ticket, prioridade: boolean) => void
+  aoCiente: (ticket: Ticket, aviso: AvisoCozinha) => void
+  esgotaveis: (ticket: Ticket) => Produto[]
+  aoEsgotar: (produto: { id: string; nome: string }) => void
   comTitulo: boolean
 }) {
   return (
     <section
-      aria-label={`${coluna.titulo}, ${coluna.pedidos.length}`}
+      aria-label={`${coluna.titulo}, ${coluna.tickets.length}`}
       // Coluna sem bandeja: os tickets ficam direto na folha, e um fio separa as colunas.
       className="flex min-w-0 flex-col gap-2.5 md:px-3 md:first:pl-0 md:last:pr-0"
     >
@@ -88,23 +120,29 @@ function Coluna({
           <Traco tom={tomDoStatus(coluna.status)} />
           {coluna.titulo}
           <span className="ml-auto text-[13px] font-medium text-muted-foreground tabular-nums">
-            <NumberFlow value={coluna.pedidos.length} />
+            <NumberFlow value={coluna.tickets.length} />
           </span>
         </h2>
       )}
-      {coluna.pedidos.length === 0 ? (
+      {coluna.tickets.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-[13px] text-balance text-muted-foreground">
           {VAZIA[coluna.id]}
         </p>
       ) : (
         <AnimatePresence initial={false}>
-          {coluna.pedidos.map((pedido) => (
+          {coluna.tickets.map((ticket) => (
             <TicketCozinha
-              key={pedido.id}
-              pedido={pedido}
+              key={ticket.id}
+              ticket={ticket}
               agora={agora}
-              ocupado={emAndamento === pedido.id}
-              aoAvancar={() => aoAvancar(pedido)}
+              ocupado={emAndamento === ticket.id}
+              aoAvancar={() => aoAvancar(ticket)}
+              aoRiscar={(item, feito) => aoRiscar(ticket, item, feito)}
+              aoVoltar={() => aoVoltar(ticket)}
+              aoPriorizar={(prioridade) => aoPriorizar(ticket, prioridade)}
+              aoCiente={(aviso) => aoCiente(ticket, aviso)}
+              esgotaveis={esgotaveis(ticket)}
+              aoEsgotar={aoEsgotar}
             />
           ))}
         </AnimatePresence>
@@ -123,7 +161,13 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
   const agora = useAgora(15_000)
   const telaGrande = useTelaGrande()
   const { data: pedidos } = useCozinha(intervalo)
-  const avancar = useAvancarPedido()
+  const avancar = useAvancarTicket()
+  const riscar = useRiscarItem()
+  const voltar = useVoltarTicket()
+  const priorizar = usePriorizarPedido()
+  const ciente = useDarCiente()
+  const { data: produtos } = useProdutos()
+  const alternarProduto = useAlternarProduto()
   const [filtro, setFiltro] = useState<FiltroCozinha>("todos")
   const somLigado = usePreferenciasFila((estado) => estado.somLigado)
   const ligarSom = usePreferenciasFila((estado) => estado.ligarSom)
@@ -132,12 +176,69 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
   useAlertaDeRodadas(pedidos)
 
   const colunas = pedidos && agora ? colunasDaCozinha(pedidos, filtro, agora) : null
-  const aoAvancar = (pedido: Pedido) =>
-    avancar.mutate(
-      { id: pedido.id, de: pedido.status },
+  const aoErrar = (erro: Error) => toast.error(erro.message)
+  /** O avanço e a volta avisam para onde o ticket foi, com Desfazer para o toque errado. */
+  const avisar = (ticket: Ticket, para: StatusTicket, desfazer: () => void) =>
+    toast(`${nomeDoTicket(ticket)} foi para ${NOME_DA_COLUNA[para]}.`, {
+      duration: 6_000,
+      action: { label: "Desfazer", onClick: desfazer },
+    })
+  const aoAvancar = (ticket: Ticket) => {
+    const mudanca = { id: ticket.pedido.id, rodada: ticket.rodada, de: ticket.status }
+    const para: StatusTicket = ticket.status === "recebido" ? "em-preparo" : "pronto"
+    avancar.mutate(mudanca, {
+      onError: aoErrar,
+      onSuccess: () =>
+        avisar(ticket, para, () => voltar.mutate({ ...mudanca, de: para }, { onError: aoErrar })),
+    })
+  }
+  const aoRiscar = (ticket: Ticket, item: ItemPedido, feito: boolean) =>
+    riscar.mutate(
+      { id: ticket.pedido.id, itemId: item.id, feito },
       { onError: (erro) => toast.error(erro.message) },
     )
-  const emAndamento = avancar.isPending ? avancar.variables?.id : undefined
+  const aoVoltar = (ticket: Ticket) => {
+    const mudanca = { id: ticket.pedido.id, rodada: ticket.rodada, de: ticket.status }
+    const para: StatusTicket = ticket.status === "pronto" ? "em-preparo" : "recebido"
+    voltar.mutate(mudanca, {
+      onError: aoErrar,
+      onSuccess: () =>
+        avisar(ticket, para, () => avancar.mutate({ ...mudanca, de: para }, { onError: aoErrar })),
+    })
+  }
+  const aoPriorizar = (ticket: Ticket, prioridade: boolean) =>
+    priorizar.mutate({ id: ticket.pedido.id, prioridade }, { onError: aoErrar })
+  const aoCiente = (ticket: Ticket, aviso: AvisoCozinha) =>
+    ciente.mutate({ id: ticket.pedido.id, avisoId: aviso.id }, { onError: aoErrar })
+  /** Os produtos do ticket que ainda estão à venda. */
+  const esgotaveis = (ticket: Ticket): Produto[] => {
+    const ids = new Set(ticket.itens.flatMap((item) => (item.produtoId ? [item.produtoId] : [])))
+    return (produtos ?? []).filter((produto) => ids.has(produto.id) && produto.disponivel)
+  }
+  /** Acabou na cozinha: sai do cardápio na hora; o desfazer devolve. */
+  const aoEsgotar = (produto: { id: string; nome: string }) =>
+    alternarProduto.mutate(
+      { id: produto.id, campo: "disponivel" },
+      {
+        onError: aoErrar,
+        onSuccess: () =>
+          toast(`${produto.nome} acabou e saiu do cardápio.`, {
+            duration: 6_000,
+            action: {
+              label: "Desfazer",
+              onClick: () =>
+                alternarProduto.mutate(
+                  { id: produto.id, campo: "disponivel" },
+                  { onError: aoErrar },
+                ),
+            },
+          }),
+      },
+    )
+  const emAndamento =
+    avancar.isPending && avancar.variables
+      ? `${avancar.variables.id}:${avancar.variables.rodada}`
+      : undefined
 
   return (
     // Em tela cheia o quadro vira a página toda: precisa do próprio fundo.
@@ -147,7 +248,7 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
         vivo
         resumo={
           colunas
-            ? `${colunas[0].pedidos.length} a fazer · ${colunas[1].pedidos.length} preparando`
+            ? `${colunas[0].tickets.length} a fazer · ${colunas[1].tickets.length} preparando`
             : "Carregando a cozinha…"
         }
         acoes={
@@ -205,7 +306,7 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
             </div>
           ))}
         </div>
-      ) : colunas.every((coluna) => coluna.pedidos.length === 0) ? (
+      ) : colunas.every((coluna) => coluna.tickets.length === 0) ? (
         <Empty className="border border-dashed">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -226,6 +327,12 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
               agora={agora}
               emAndamento={emAndamento}
               aoAvancar={aoAvancar}
+              aoRiscar={aoRiscar}
+              aoVoltar={aoVoltar}
+              aoPriorizar={aoPriorizar}
+              aoCiente={aoCiente}
+              esgotaveis={esgotaveis}
+              aoEsgotar={aoEsgotar}
               comTitulo
             />
           ))}
@@ -242,7 +349,7 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
               >
                 <Traco tom={tomDoStatus(coluna.status)} />
                 {coluna.titulo}
-                <span className="text-xs tabular-nums">{coluna.pedidos.length}</span>
+                <span className="text-xs tabular-nums">{coluna.tickets.length}</span>
               </TabsTrigger>
             ))}
           </TabsList>
@@ -253,6 +360,12 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
                 agora={agora}
                 emAndamento={emAndamento}
                 aoAvancar={aoAvancar}
+                aoRiscar={aoRiscar}
+                aoVoltar={aoVoltar}
+                aoPriorizar={aoPriorizar}
+                aoCiente={aoCiente}
+                esgotaveis={esgotaveis}
+                aoEsgotar={aoEsgotar}
                 comTitulo={false}
               />
             </TabsContent>
