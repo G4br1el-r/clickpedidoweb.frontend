@@ -27,6 +27,7 @@ import {
   ShieldAlertIcon,
   SquareKanbanIcon,
   TagsIcon,
+  UsersIcon,
   WineIcon,
 } from "lucide-react"
 
@@ -121,6 +122,7 @@ export type ModuloId =
   | "motoboys"
   | "bairros"
   | "loja"
+  | "equipe"
 
 /** Módulos de comida com salão e entrega (adega, açougue, pizzaria). */
 const COMPLETO: readonly ModuloId[] = [
@@ -137,6 +139,7 @@ const COMPLETO: readonly ModuloId[] = [
   "motoboys",
   "bairros",
   "loja",
+  "equipe",
 ]
 
 const MODULOS: Record<SegmentoPainelId, readonly ModuloId[]> = {
@@ -154,6 +157,7 @@ const MODULOS: Record<SegmentoPainelId, readonly ModuloId[]> = {
     "categorias",
     "estoque",
     "loja",
+    "equipe",
   ],
   // Quiosque do Mineiro: sem PDV.
   lanchonete: COMPLETO.filter((modulo) => modulo !== "pdv"),
@@ -172,6 +176,7 @@ const MODULOS: Record<SegmentoPainelId, readonly ModuloId[]> = {
     "motoboys",
     "bairros",
     "loja",
+    "equipe",
   ],
 }
 
@@ -298,6 +303,7 @@ export const MODULOS_PAINEL: readonly InfoModulo[] = [
     grupo: "Loja",
     icone: Settings2Icon,
   },
+  { id: "equipe", titulo: "Equipe", href: "/admin/equipe", grupo: "Loja", icone: UsersIcon },
 ]
 
 const GRUPOS_MENU: readonly GrupoMenu[] = ["Operação", "Farmácia", "Gestão", "Entrega", "Loja"]

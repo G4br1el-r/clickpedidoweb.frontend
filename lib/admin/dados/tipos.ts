@@ -327,6 +327,19 @@ export type ConfigLoja = {
   }
 }
 
+/** Quem usa o painel. Garçom e Cozinha ficam para depois. */
+export type PerfilAcesso = "dono" | "gerente" | "caixa"
+
+/** Pessoa da equipe: entra no painel e autoriza ações com o PIN. */
+export type MembroEquipe = {
+  id: string
+  nome: string
+  perfil: PerfilAcesso
+  /** Só números, de 4 a 6 dígitos. */
+  pin: string
+  ativo: boolean
+}
+
 /** Catálogo e cadastros de uma loja, sem os pedidos (que são gerados). */
 export type CatalogoLoja = {
   loja: ConfigLoja
