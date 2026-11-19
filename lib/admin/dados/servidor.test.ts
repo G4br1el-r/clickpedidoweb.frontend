@@ -348,6 +348,24 @@ describe("servidor de demonstração", () => {
     expect(new Set(tokens).size).toBe(3)
   })
 
+  test("o histórico do cliente de cada pedido: quem pede pela primeira vez e quem volta", async () => {
+    const api = servidor()
+    const todos = await api.pedidos.listar()
+    const porTelefone = Map.groupBy(
+      todos.filter((pedido) => pedido.status !== "cancelado"),
+      (pedido) => pedido.cliente.telefone,
+    )
+    const unico = [...porTelefone.values()].find((lista) => lista.length === 1)?.[0]
+    const fiel = [...porTelefone.values()].sort((a, b) => b.length - a.length)[0]
+    if (!unico || !fiel) throw new Error("A demonstração devia ter cliente novo e freguês")
+    // Listar vem do mais novo para o mais antigo: o primeiro do freguês é o último pedido dele.
+    const ultimoDoFiel = fiel[0]
+
+    const historico = await api.pedidos.historicoDosClientes([unico.id, ultimoDoFiel.id])
+    expect(historico[unico.id]).toEqual({ anteriores: 0, nosUltimos30: 0 })
+    expect(historico[ultimoDoFiel.id].anteriores).toBe(fiel.length - 1)
+  })
+
   test("um pedido simulado chega como novo, com o número seguinte", async () => {
     const api = servidor()
     const [ultimo] = await api.pedidos.listar()

@@ -481,6 +481,19 @@ describe("PaginaFila", () => {
     expect(screen.queryByRole("button", { name: "Mais" })).not.toBeInTheDocument()
   })
 
+  test("os cartões marcam o cliente novo e o freguês da casa", async () => {
+    telaGrande()
+    renderizar()
+    await coluna("Novos")
+    await waitFor(
+      () => {
+        const textos = screen.getAllByRole("article").map((cartao) => cartao.textContent ?? "")
+        expect(textos.some((texto) => texto.includes("Cliente frequente"))).toBe(true)
+      },
+      { timeout: 8000 },
+    )
+  })
+
   test("a busca acha pelo nome em todas as colunas e fica no endereço", async () => {
     telaGrande()
     const usuario = userEvent.setup()

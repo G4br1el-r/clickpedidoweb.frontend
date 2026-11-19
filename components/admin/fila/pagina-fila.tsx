@@ -21,6 +21,7 @@ import {
   useCancelarPedido,
   useDefinirEntrega,
   useFila,
+  useHistoricoDosClientes,
   useLoja,
   useMotoboys,
   usePedidos,
@@ -34,6 +35,7 @@ import {
   useSomDoAparelho,
 } from "@/lib/admin/preferencias-fila"
 import { alarmeTocando } from "@/lib/admin/regras/aceite"
+import { type HistoricoCliente, seloDoCliente } from "@/lib/admin/regras/clientes"
 import {
   type ColunaFila,
   colunasDaFila,
@@ -198,6 +200,7 @@ function Coluna({
   emAndamento,
   limiteAceiteMin,
   tempos,
+  historico,
   acoes,
   comTitulo,
 }: {
@@ -208,6 +211,7 @@ function Coluna({
   emAndamento: number | undefined
   limiteAceiteMin: number
   tempos: TemposDaLoja
+  historico: Record<number, HistoricoCliente> | undefined
   acoes: AcoesDoCartao
   comTitulo: boolean
 }) {
@@ -242,6 +246,7 @@ function Coluna({
               ocupado={emAndamento === pedido.id}
               limiteAceiteMin={limiteAceiteMin}
               tempos={tempos}
+              seloCliente={historico?.[pedido.id] ? seloDoCliente(historico[pedido.id]) : null}
               aoAceitar={() => acoes.aceitar(pedido)}
               aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
               aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
@@ -280,6 +285,7 @@ export function PaginaFila({
   const { data: concluidos = [] } = usePedidos(hoje ? { concluidosEm: hoje } : undefined, {
     ativo: Boolean(hoje),
   })
+  const { data: historico } = useHistoricoDosClientes(fila?.map((pedido) => pedido.id) ?? [])
   const { data: criadosHoje = [] } = usePedidos(hoje ? { de: hoje, ate: hoje } : undefined, {
     ativo: Boolean(hoje),
   })
@@ -537,6 +543,7 @@ export function PaginaFila({
               emAndamento={idEmAndamento}
               limiteAceiteMin={limiteAceiteMin}
               tempos={tempos}
+              historico={historico}
               acoes={acoes}
               comTitulo
             />
@@ -565,6 +572,7 @@ export function PaginaFila({
                 emAndamento={idEmAndamento}
                 limiteAceiteMin={limiteAceiteMin}
                 tempos={tempos}
+                historico={historico}
                 acoes={acoes}
                 comTitulo={false}
               />

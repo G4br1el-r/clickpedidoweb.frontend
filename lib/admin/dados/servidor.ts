@@ -8,6 +8,7 @@ import {
   sincronizarOpcoes,
   soltarOpcoesDe,
 } from "../regras/cardapio"
+import { type HistoricoCliente, historicoDoCliente } from "../regras/clientes"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
@@ -694,6 +695,17 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           )
         })
         return responder(filtrados.toReversed())
+      },
+
+      /** O que cada cliente já pediu antes destes pedidos: dá o selo "1º pedido" ou "frequente". */
+      async historicoDosClientes(ids: number[]): Promise<Record<number, HistoricoCliente>> {
+        const { pedidos } = await carregar()
+        const historico: Record<number, HistoricoCliente> = {}
+        for (const id of ids) {
+          const pedido = pedidos.find((item) => item.id === id)
+          if (pedido) historico[id] = historicoDoCliente(pedido, pedidos)
+        }
+        return responder(historico)
       },
 
       async buscar(id: number): Promise<Pedido | undefined> {

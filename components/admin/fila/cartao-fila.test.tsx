@@ -15,7 +15,7 @@ const PEDIDO: Pedido = {
   criadoEm: new Date(2026, 10, 13, 20, 0).toISOString(),
 }
 
-function renderizar(pedido: Pedido, agora = AGORA) {
+function renderizar(pedido: Pedido, agora = AGORA, seloCliente: string | null = null) {
   const nada = () => {}
   return render(
     <TooltipProvider>
@@ -23,6 +23,7 @@ function renderizar(pedido: Pedido, agora = AGORA) {
         pedido={pedido}
         agora={agora}
         tempos={TEMPOS}
+        seloCliente={seloCliente}
         motoboys={[]}
         novo={false}
         ocupado={false}
@@ -61,5 +62,12 @@ describe("CartaoFila: o pedido de relance", () => {
     })
     expect(screen.getByText("3 itens · R$ 52,00")).toBeInTheDocument()
     expect(screen.getByText("Garçom")).toBeInTheDocument()
+  })
+})
+
+describe("CartaoFila: o cliente", () => {
+  test("mostra o selo de cliente novo", () => {
+    renderizar(PEDIDO, AGORA, "1º pedido")
+    expect(screen.getByText("1º pedido")).toBeInTheDocument()
   })
 })

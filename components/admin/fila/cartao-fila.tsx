@@ -94,6 +94,7 @@ export function CartaoFila({
   ocupado,
   limiteAceiteMin,
   tempos,
+  seloCliente = null,
   aoAceitar,
   aoRecusar,
   aoCancelar,
@@ -109,6 +110,8 @@ export function CartaoFila({
   limiteAceiteMin: number
   /** Tempos de entrega e retirada da loja: dão o prazo prometido. */
   tempos: TemposDaLoja
+  /** "1º pedido" ou "Cliente frequente", pelo que o cliente já pediu. */
+  seloCliente?: string | null
   aoAceitar: () => void
   aoRecusar: (escolhido: MotivoEscolhido) => void
   aoCancelar: (escolhido: MotivoEscolhido) => void
@@ -171,6 +174,7 @@ export function CartaoFila({
             {canal}
           </span>
           <Badge variant="outline">{rotuloOrigem(pedido.origem)}</Badge>
+          {seloCliente && <Badge variant="secondary">{seloCliente}</Badge>}
           {aPesar && (
             <Badge variant="secondary" className="gap-1">
               <ScaleIcon aria-hidden="true" />A pesar

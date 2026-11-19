@@ -182,6 +182,19 @@ export const STATUS_DA_FILA: StatusPedido[] = [
 ]
 
 /** Fila ao vivo: o que está em aberto, de qualquer dia, conferido a cada 5 s. */
+/** O histórico de quem fez cada pedido da fila: dá o selo de cliente novo ou frequente. */
+export function useHistoricoDosClientes(ids: number[]) {
+  const segmento = useSegmento()
+  const ordenados = [...ids].sort((a, b) => a - b)
+  return useQuery({
+    // Fora de "pedidos", que guarda listas: a atualização otimista das listas não passa aqui.
+    // Pedido novo muda a lista de ids, e a chave muda junto.
+    queryKey: [...chaves.tudo(segmento), "clientes", ordenados],
+    queryFn: () => servidorDo(segmento).pedidos.historicoDosClientes(ordenados),
+    enabled: ordenados.length > 0,
+  })
+}
+
 export function useFila() {
   return usePedidos({ status: STATUS_DA_FILA }, { atualizarACada: 5_000 })
 }
