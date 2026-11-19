@@ -31,8 +31,7 @@ export function AjustePrazo({ loja, comEntrega }: { loja: ConfigLoja; comEntrega
       <ToggleGroup
         type="single"
         size="sm"
-        variant="outline"
-        spacing={0}
+        variant="segmento"
         aria-label="Acréscimo no prazo"
         value={acrescimo ? String(acrescimo) : ""}
         onValueChange={(valor) => {
@@ -53,7 +52,7 @@ export function AjustePrazo({ loja, comEntrega }: { loja: ConfigLoja; comEntrega
             key={minutos}
             value={String(minutos)}
             aria-label={`+${minutos} min`}
-            className="tabular-nums"
+            className="cursor-pointer px-2.5 tabular-nums max-md:h-10"
           >
             +{minutos}
           </ToggleGroupItem>

@@ -12,7 +12,7 @@ import { Traco } from "../traco"
  * cima, recolhidos 1 px): a régua corta o que sobra na borda, em qualquer número de colunas.
  */
 const FATO =
-  "-mt-px -ml-px flex basis-1/2 flex-col gap-1.5 border-t border-l border-border/70 px-3 py-3 text-left @xl:basis-1/4 @5xl:basis-1/8"
+  "-mt-px -ml-px flex basis-1/2 flex-col gap-1.5 border-t border-l border-border/70 px-3 py-3 text-left @md:basis-1/4 @5xl:basis-1/8"
 const TOCAVEL =
   "transition-colors duration-150 hover:bg-foreground/[0.025] focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring"
 
@@ -60,7 +60,7 @@ const comValor = (rotulo: string, valor: number | null, sufixo = "") =>
 /**
  * A régua da fila: números ao vivo entre fios, sem cartões. Os de pedidos em andamento
  * filtram as colunas (tocar de novo tira o filtro); concluídos e cancelados levam à lista de
- * pedidos. Quatro por linha num contêiner médio, oito do largo em diante.
+ * pedidos. Quatro por linha num contêiner a partir de 448 px, oito do largo em diante.
  */
 export function MetricasFila({
   metricas,

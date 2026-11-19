@@ -425,25 +425,28 @@ export function PaginaFila({
               }
             />
           )}
-          {loja && agora && <PausaPedidos loja={loja} agora={agora} comEntrega={temEntrega} />}
+          {/* No celular, o Mais fica na linha da pausa, sem ocupar uma linha só para ele. */}
+          <div className="flex items-center gap-2 max-md:w-full">
+            {loja && agora && <PausaPedidos loja={loja} agora={agora} comEntrega={temEntrega} />}
+            {!aparelhoGrande && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="ml-auto"
+                aria-expanded={maisAberto}
+                aria-controls="fila-mais"
+                onClick={() => setMaisAberto((aberto) => !aberto)}
+              >
+                Mais
+                <ChevronDownIcon
+                  data-icon="inline-end"
+                  className={cn("transition-transform duration-200", maisAberto && "rotate-180")}
+                />
+              </Button>
+            )}
+          </div>
           {loja && <AjustePrazo loja={loja} comEntrega={temEntrega} />}
-          {!aparelhoGrande && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="ml-auto"
-              aria-expanded={maisAberto}
-              aria-controls="fila-mais"
-              onClick={() => setMaisAberto((aberto) => !aberto)}
-            >
-              Mais
-              <ChevronDownIcon
-                data-icon="inline-end"
-                className={cn("transition-transform duration-200", maisAberto && "rotate-180")}
-              />
-            </Button>
-          )}
         </div>
 
         {/* Faixas 2 e 3: a régua e as ferramentas. No celular, recolhidas no Mais. */}

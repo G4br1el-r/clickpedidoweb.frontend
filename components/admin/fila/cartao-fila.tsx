@@ -292,47 +292,50 @@ export function CartaoFila({
           ) : (
             <span className="flex-1 text-xs text-muted-foreground">Fecha em Mesas</span>
           )}
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="outline"
-            aria-label={`${pedido.impressoEm ? "Reimprimir" : "Imprimir"} cupom de #${pedido.numero}`}
-            onClick={aoImprimir}
-          >
-            <PrinterIcon />
-          </Button>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="outline"
-            aria-label="Detalhes"
-            title={`Detalhes de #${pedido.numero}`}
-            onClick={aoAbrir}
-          >
-            <PanelRightOpenIcon />
-          </Button>
-          {/* Quem espera aceite se recusa; o resto se cancela, sempre com motivo. */}
-          {!espera && (
-            <ConfirmarComMotivo
-              gatilho={
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  className="text-muted-foreground hover:text-destructive"
-                  aria-label={`Cancelar pedido #${pedido.numero}`}
-                  title={`Cancelar #${pedido.numero}`}
-                  disabled={ocupado}
-                >
-                  <XIcon />
-                </Button>
-              }
-              titulo={`Cancelar o pedido #${pedido.numero}?`}
-              descricao="O pedido sai da fila e da cozinha. Se já estava pago, fica marcado para devolver ao cliente."
-              confirmar="Sim, cancelar"
-              aoConfirmar={aoCancelar}
-            />
-          )}
+          {/* Os ícones andam juntos: sem lugar, descem inteiros para a linha de baixo. */}
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              aria-label={`${pedido.impressoEm ? "Reimprimir" : "Imprimir"} cupom de #${pedido.numero}`}
+              onClick={aoImprimir}
+            >
+              <PrinterIcon />
+            </Button>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              aria-label="Detalhes"
+              title={`Detalhes de #${pedido.numero}`}
+              onClick={aoAbrir}
+            >
+              <PanelRightOpenIcon />
+            </Button>
+            {/* Quem espera aceite se recusa; o resto se cancela, sempre com motivo. */}
+            {!espera && (
+              <ConfirmarComMotivo
+                gatilho={
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label={`Cancelar pedido #${pedido.numero}`}
+                    title={`Cancelar #${pedido.numero}`}
+                    disabled={ocupado}
+                  >
+                    <XIcon />
+                  </Button>
+                }
+                titulo={`Cancelar o pedido #${pedido.numero}?`}
+                descricao="O pedido sai da fila e da cozinha. Se já estava pago, fica marcado para devolver ao cliente."
+                confirmar="Sim, cancelar"
+                aoConfirmar={aoCancelar}
+              />
+            )}
+          </div>
         </CardFooter>
       </Card>
     </motion.article>
