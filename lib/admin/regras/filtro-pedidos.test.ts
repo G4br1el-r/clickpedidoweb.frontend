@@ -30,6 +30,37 @@ describe("filtrarPedidos", () => {
     expect(ids(filtrarPedidos(PEDIDOS, { busca: "8888" }))).toEqual([42])
   })
 
+  test("busca pelo bairro da entrega, sem precisar do acento", () => {
+    const noCentro = {
+      ...JOAO,
+      id: 43,
+      numero: 43,
+      endereco: {
+        cep: "12630-000",
+        logradouro: "Rua A",
+        numero: "1",
+        bairro: "Jardim Esplanada",
+        cidade: "Lorena",
+      },
+    }
+    expect(ids(filtrarPedidos([...PEDIDOS, noCentro], { busca: "esplanada" }))).toEqual([43])
+  })
+
+  test("não pagos: a cobrar na entrega ou aguardando pagamento", () => {
+    const aCobrar = { ...JOAO, id: 50, situacaoPagamento: "na-entrega" as const }
+    const aguardando = { ...JOAO, id: 51, situacaoPagamento: "pendente" as const }
+    const estorno = { ...JOAO, id: 52, situacaoPagamento: "estorno-pendente" as const }
+    const lista = [...PEDIDOS, aCobrar, aguardando, estorno]
+    expect(ids(filtrarPedidos(lista, { naoPagos: true })).filter((id) => id >= 50)).toEqual([
+      50, 51,
+    ])
+    expect(
+      filtrarPedidos(lista, { naoPagos: true }).every((pedido) =>
+        ["na-entrega", "pendente"].includes(pedido.situacaoPagamento),
+      ),
+    ).toBe(true)
+  })
+
   test("busca pelo item do pedido", () => {
     expect(ids(filtrarPedidos(PEDIDOS, { busca: "guarana" }))).toEqual([5])
   })

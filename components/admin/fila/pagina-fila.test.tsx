@@ -16,12 +16,15 @@ import { PaginaFila } from "./pagina-fila"
 const imprimir = vi.fn()
 vi.mock("react-to-print", () => ({ useReactToPrint: () => imprimir }))
 
+/** O endereço da página: a busca e os filtros da fila ficam nele. */
+const urlMudou = vi.fn()
+
 function Provedores({ children }: { children: ReactNode }) {
   const [cliente] = useState(
     () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
   )
   return (
-    <NuqsTestingAdapter hasMemory>
+    <NuqsTestingAdapter hasMemory onUrlUpdate={urlMudou}>
       <QueryClientProvider client={cliente}>
         <TooltipProvider>{children}</TooltipProvider>
       </QueryClientProvider>
@@ -106,6 +109,7 @@ beforeEach(async () => {
   await clear()
   reiniciarServidores()
   imprimir.mockClear()
+  urlMudou.mockClear()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
   usePreferenciasFila.setState({ ...usePreferenciasFila.getInitialState(), simular: false }, true)
 })
@@ -475,6 +479,47 @@ describe("PaginaFila", () => {
     ).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Este aparelho" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Mais" })).not.toBeInTheDocument()
+  })
+
+  test("a busca acha pelo nome em todas as colunas e fica no endereço", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+    const [primeiro] = await servidorDo("pizzaria").pedidos.listar({ status: ["em-preparo"] })
+    const nome = primeiro.cliente.nome
+
+    await usuario.type(screen.getByRole("searchbox", { name: "Buscar pedido" }), nome)
+    await waitFor(() => {
+      const cartoes = screen.getAllByRole("article")
+      expect(cartoes.length).toBeGreaterThan(0)
+      for (const cartao of cartoes) expect(cartao).toHaveTextContent(nome)
+    })
+    expect(urlMudou).toHaveBeenLastCalledWith(
+      expect.objectContaining({ queryString: expect.stringContaining("busca=") }),
+    )
+  })
+
+  test("filtros rápidos: só um canal e só os não pagos", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+
+    await usuario.click(screen.getByRole("button", { name: "Entrega" }))
+    await waitFor(() => {
+      for (const cartao of screen.getAllByRole("article")) {
+        expect(within(cartao).getByText("Entrega")).toBeInTheDocument()
+      }
+    })
+    await usuario.click(screen.getByRole("button", { name: "Entrega" }))
+
+    await usuario.click(screen.getByRole("button", { name: "Não pagos" }))
+    await waitFor(() => {
+      for (const cartao of screen.getAllByRole("article")) {
+        expect(cartao).toHaveTextContent(/Cobrar|Aguardando pagamento/)
+      }
+    })
   })
 
   test("métricas: tocar em Atrasados mostra só os atrasados; tocar de novo mostra todos", async () => {

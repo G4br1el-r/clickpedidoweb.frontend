@@ -4,7 +4,7 @@ import NumberFlow from "@number-flow/react"
 import { startOfDay } from "date-fns"
 import { ChevronDownIcon, InboxIcon, VolumeXIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
-import { parseAsStringLiteral, useQueryState } from "nuqs"
+import { parseAsStringLiteral, useQueryState, useQueryStates } from "nuqs"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -27,7 +27,7 @@ import {
   useRecusarPedido,
   useSimularPedido,
 } from "@/lib/admin/dados/consultas"
-import type { MotivoEscolhido, Pedido, SomAlerta } from "@/lib/admin/dados/tipos"
+import type { MotivoEscolhido, Pedido, SomAlerta, TipoPedido } from "@/lib/admin/dados/tipos"
 import {
   usePreferenciasCarregadas,
   usePreferenciasFila,
@@ -41,6 +41,7 @@ import {
   pedidosDeDiasAnteriores,
   resumoDaFila,
 } from "@/lib/admin/regras/fila"
+import { filtrarPedidos } from "@/lib/admin/regras/filtro-pedidos"
 import {
   FILTROS_DA_FILA,
   type FiltroDaFila,
@@ -65,6 +66,7 @@ import { avisarChegada } from "./avisos-do-aparelho"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
 import { EsteAparelho } from "./este-aparelho"
+import { FerramentasFila, PARAMETROS_FILA } from "./ferramentas-fila"
 import { MetricasFila } from "./metricas-fila"
 import { PausaPedidos } from "./pausa-pedidos"
 import { useTelaAcesa } from "./use-tela-acesa"
@@ -283,6 +285,9 @@ export function PaginaFila({
   })
   // Filtro das métricas ("só atrasados"), no endereço da página.
   const [filtro, setFiltro] = useQueryState("ver", parseAsStringLiteral(FILTROS_DA_FILA))
+  const [ferramentas, setFerramentas] = useQueryStates(PARAMETROS_FILA)
+  const filtrando =
+    Boolean(filtro || ferramentas.busca) || ferramentas.canal.length > 0 || ferramentas.naoPagos
   const avancar = useAvancarPedido()
   const aceitar = useAceitarPedido()
   const recusar = useRecusarPedido()
@@ -366,7 +371,22 @@ export function PaginaFila({
   }
 
   const colunas =
-    fila && agora ? colunasDaFila(filtrarFila(fila, filtro, agora, tempos), segmento, agora) : null
+    fila && agora
+      ? colunasDaFila(
+          filtrarFila(
+            filtrarPedidos(fila, {
+              busca: ferramentas.busca,
+              tipos: ferramentas.canal,
+              naoPagos: ferramentas.naoPagos,
+            }),
+            filtro,
+            agora,
+            tempos,
+          ),
+          segmento,
+          agora,
+        )
+      : null
   const metricas =
     fila && agora
       ? metricasDaFila({
@@ -380,6 +400,14 @@ export function PaginaFila({
       : null
   const resumo = fila && agora ? resumoDaFila([...fila, ...concluidos], segmento, agora) : null
   const temEntrega = temModulo(segmento, "motoboys")
+  const canaisDoSegmento: TipoPedido[] =
+    segmento === "salao"
+      ? []
+      : [
+          ...(temEntrega ? (["entrega"] as const) : []),
+          "retirada",
+          ...(temModulo(segmento, "mesas") ? (["mesa"] as const) : []),
+        ]
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
@@ -454,6 +482,13 @@ export function PaginaFila({
           <div id="fila-mais" className="flex flex-col">
             {metricas && <MetricasFila metricas={metricas} filtro={filtro} aoFiltrar={setFiltro} />}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/70 py-3">
+              <FerramentasFila
+                busca={ferramentas.busca}
+                canais={ferramentas.canal}
+                canaisDoSegmento={canaisDoSegmento}
+                naoPagos={ferramentas.naoPagos}
+                aoMudar={(mudanca) => void setFerramentas(mudanca)}
+              />
               {filtro && (
                 <p className="flex items-center gap-2 text-sm">
                   <Traco tom="novo" />
@@ -477,7 +512,7 @@ export function PaginaFila({
             <Skeleton key={indice} className="h-96 rounded-xl" />
           ))}
         </div>
-      ) : !filtro && colunas.every((coluna) => coluna.pedidos.length === 0) ? (
+      ) : !filtrando && colunas.every((coluna) => coluna.pedidos.length === 0) ? (
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">

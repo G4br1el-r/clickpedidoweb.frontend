@@ -1,4 +1,10 @@
-import type { FormaPagamento, Pedido, StatusPedido, TipoPedido } from "../dados/tipos"
+import type {
+  FormaPagamento,
+  Pedido,
+  SituacaoPagamento,
+  StatusPedido,
+  TipoPedido,
+} from "../dados/tipos"
 import { ehValido } from "./dashboard"
 
 export type FiltrosLista = {
@@ -6,6 +12,8 @@ export type FiltrosLista = {
   status?: StatusPedido[]
   tipos?: TipoPedido[]
   pagamentos?: FormaPagamento[]
+  /** Só o que ainda falta receber: a cobrar na entrega ou aguardando pagamento. */
+  naoPagos?: boolean
 }
 
 /** Minúsculas e sem acento: "João" acha "joao". */
@@ -24,22 +32,26 @@ function combinaBusca(pedido: Pedido, busca: string) {
   if (digitos.length >= 4 && pedido.cliente.telefone.includes(digitos)) return true
   return (
     normalizar(pedido.cliente.nome).includes(texto) ||
+    (pedido.endereco ? normalizar(pedido.endereco.bairro).includes(texto) : false) ||
     pedido.itens.some((item) => normalizar(item.nome).includes(texto))
   )
 }
 
+const A_RECEBER: readonly SituacaoPagamento[] = ["na-entrega", "pendente"]
+
 const aceita = <T>(lista: T[] | undefined, valor: T) => !lista?.length || lista.includes(valor)
 
-/** Busca (número, cliente, telefone ou item) combinada com os filtros de status, canal e pagamento. */
+/** Busca (número, cliente, telefone, bairro ou item) combinada com os filtros de status, canal e pagamento. */
 export function filtrarPedidos(
   pedidos: Pedido[],
-  { busca = "", status, tipos, pagamentos }: FiltrosLista,
+  { busca = "", status, tipos, pagamentos, naoPagos = false }: FiltrosLista,
 ) {
   return pedidos.filter(
     (pedido) =>
       aceita(status, pedido.status) &&
       aceita(tipos, pedido.tipo) &&
       aceita(pagamentos, pedido.pagamento) &&
+      (!naoPagos || A_RECEBER.includes(pedido.situacaoPagamento)) &&
       combinaBusca(pedido, busca),
   )
 }
