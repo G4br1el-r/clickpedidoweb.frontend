@@ -31,24 +31,24 @@ import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
 import { type BaseLojaV2, migrarDaVersao2 } from "./migracao"
-import type {
-  Bairro,
-  BaseLoja,
-  CatalogoLoja,
-  Categoria,
-  ConfigLoja,
-  ConfigSalao,
-  FormaMesa,
-  ItemPedido,
-  Mesa,
-  Motoboy,
-  MovimentoEstoque,
-  Pedido,
-  Produto,
-  StatusPedido,
-  TipoMovimento,
+import {
+  type Bairro,
+  type BaseLoja,
+  type CatalogoLoja,
+  type Categoria,
+  type ConfigLoja,
+  type ConfigSalao,
+  FORMAS_MESA,
+  type FormaMesa,
+  type ItemPedido,
+  type Mesa,
+  type Motoboy,
+  type MovimentoEstoque,
+  type Pedido,
+  type Produto,
+  type StatusPedido,
+  type TipoMovimento,
 } from "./tipos"
-import { FORMAS_MESA } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a 2 é migrada; qualquer outra é descartada e gerada de novo. */
 const VERSAO = 3
@@ -149,9 +149,11 @@ function abrirMesas(base: BaseLoja): BaseLoja {
     ...base,
     mesas: base.mesas.map(({ pedidoAtivoId, clienteNome, ocupadaEm, ...mesa }) => {
       const comanda = abertas.get(mesa.id)
+      // Mesa ocupada deixa de estar em limpeza.
+      const { limpezaDesde: _limpezaDesde, ...semLimpeza } = mesa
       return comanda
         ? {
-            ...mesa,
+            ...semLimpeza,
             status: "ocupada",
             pedidoAtivoId: comanda.id,
             clienteNome: comanda.cliente.nome,
@@ -1225,6 +1227,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const base = await carregar()
         const mesa = base.mesas.find((item) => item.id === lancamento.mesaId)
         if (!mesa) throw new Error("Mesa não encontrada")
+        if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
         if (lancamento.itens.length === 0) throw new Error("Inclua pelo menos um item.")
 
         const agora = new Date().toISOString()

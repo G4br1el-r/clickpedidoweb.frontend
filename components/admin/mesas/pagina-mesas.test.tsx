@@ -90,6 +90,7 @@ afterEach(() => {
 })
 
 describe("PaginaMesas", () => {
+  // A Fase 3 (Q23) inverte isto de propósito: rodada nova passa a limpar o "Pediu a conta".
   test("o resumo conta a rodada na cozinha pelo status da comanda, mesmo com a conta pedida", async () => {
     // Na demonstração, as mesas 6, 7 e 8 têm rodada na cozinha; a mesa 1 já pediu a conta.
     const [mesas, base] = await Promise.all([api().mesas.listar(), api().base()])

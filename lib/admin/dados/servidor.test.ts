@@ -1249,6 +1249,50 @@ describe("servidor de demonstração", () => {
       )
     })
 
+    /** Altera a mesa direto na base guardada, como se outra aba a tivesse bloqueado ou posto em limpeza. */
+    async function alterarGuardada(mesaId: string, mudanca: Partial<Mesa>) {
+      const chave = "clickpedido-admin-dados:lanchonete"
+      const guardado = (await get(chave)) as { base: { mesas: Mesa[] } }
+      guardado.base.mesas = guardado.base.mesas.map((mesa) =>
+        mesa.id === mesaId ? { ...mesa, ...mudanca } : mesa,
+      )
+      await set(chave, guardado)
+    }
+
+    test("mesa bloqueada não recebe comanda", async () => {
+      const mesa = await servidor().mesas.criar({ numero: 5 })
+      await alterarGuardada(mesa.id, { bloqueio: { motivo: "Em manutenção" } })
+      const api = servidor()
+      await expect(
+        api.mesas.lancar({
+          mesaId: mesa.id,
+          enviarParaCozinha: false,
+          itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+        }),
+      ).rejects.toThrow("A mesa 5 está bloqueada.")
+      expect((await api.mesas.listar()).find((item) => item.id === mesa.id)?.status).toBe("livre")
+    })
+
+    test("lançar numa mesa em limpeza ocupa a mesa e tira a limpeza; ao fechar a conta ela fica livre sem limpeza", async () => {
+      const mesa = await servidor().mesas.criar({ numero: 5 })
+      await alterarGuardada(mesa.id, {
+        limpezaDesde: new Date(AGORA.getTime() - 60_000).toISOString(),
+      })
+      const outra = servidor()
+      const comanda = await outra.mesas.lancar({
+        mesaId: mesa.id,
+        enviarParaCozinha: false,
+        itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+      })
+      const ocupada = (await outra.mesas.listar()).find((item) => item.id === mesa.id)
+      expect(ocupada?.status).toBe("ocupada")
+      expect(ocupada?.limpezaDesde).toBeUndefined()
+      await outra.mesas.fecharConta(comanda.id, "pix")
+      const liberada = (await outra.mesas.listar()).find((item) => item.id === mesa.id)
+      expect(liberada?.status).toBe("livre")
+      expect(liberada?.limpezaDesde).toBeUndefined()
+    })
+
     const BACON = { "grp-x-burger-1": ["opc-x-burger-1-1"] }
 
     test("o preço vem do cardápio e das escolhas, nunca da tela", async () => {
@@ -1560,18 +1604,76 @@ describe("migração", () => {
     } as unknown as BaseLojaV2
   }
 
-  test("base da versão 2 é migrada: mesmos pedidos, mesa ocupada com a mesma comanda", async () => {
+  test("base da versão 2 é migrada: mesmos pedidos, mesa ocupada com a mesma comanda e o mesmo total", async () => {
     const antiga = await baseDaVersao2()
+    const ocupadaAntes = antiga.mesas.find((mesa) => mesa.status === "ocupada")
+    const comandaAntes = antiga.pedidos.find((pedido) => pedido.id === ocupadaAntes?.pedidoAtivoId)
+    expect(comandaAntes).toBeDefined()
     await set(CHAVE, { versao: 2, geradoEm: AGORA.toISOString(), base: antiga })
     const api = servidor()
     const mesas = await api.mesas.listar()
     expect(mesas.every((mesa) => mesa.areaId === "area-salao")).toBe(true)
     const ocupada = mesas.find((mesa) => mesa.status === "ocupada")
-    expect(ocupada?.pedidoAtivoId).toBe(
-      antiga.mesas.find((mesa) => mesa.status === "ocupada")?.pedidoAtivoId,
+    expect(ocupada).toBeDefined()
+    expect(ocupada?.pedidoAtivoId).toBe(ocupadaAntes?.pedidoAtivoId)
+    const comandaDepois = (await api.base()).pedidos.find(
+      (pedido) => pedido.id === ocupada?.pedidoAtivoId,
     )
+    expect(comandaDepois?.total).toBe(comandaAntes?.total)
     const guardado = (await get(CHAVE)) as { versao: number; base: { pedidos: unknown[] } }
     expect(guardado.base.pedidos).toHaveLength(antiga.pedidos.length)
     expect(guardado.versao).toBe(3)
+  })
+
+  test("base da versão 2 guardada há 3 dias: migra, completa os dias que faltam e mantém os garçons", async () => {
+    const antiga = await baseDaVersao2()
+    const encerrados = antiga.pedidos.filter((pedido) => pedido.status === "concluido")
+    encerrados[0].tipo = "mesa"
+    encerrados[0].mesa = { id: "mesa-1", numero: 1, garcom: "Paula" }
+    encerrados[1].tipo = "mesa"
+    encerrados[1].mesa = { id: "mesa-2", numero: 2, garcom: "Bia" }
+    const garconsAntigos = [
+      ...new Set(antiga.pedidos.map((pedido) => pedido.mesa?.garcom?.trim()).filter(Boolean)),
+    ]
+    expect(garconsAntigos.length).toBeGreaterThan(0)
+    const tresDiasAntes = new Date(2026, 10, 10, 20, 30)
+    await set(CHAVE, { versao: 2, geradoEm: tresDiasAntes.toISOString(), base: antiga })
+
+    const api = servidor()
+    const pedidos = await api.pedidos.listar()
+    const guardado = (await get(CHAVE)) as { versao: number }
+    expect(guardado.versao).toBe(3)
+    // dias 11, 12 e 13 de novembro, na hora local
+    for (const dia of [11, 12, 13])
+      expect(pedidos.some((pedido) => new Date(pedido.criadoEm).getDate() === dia)).toBe(true)
+
+    const { nomes } = {
+      nomes: (await api.salao.config()).garcons.map((garcom) => garcom.nome).sort(),
+    }
+    expect(nomes).toEqual((garconsAntigos as string[]).toSorted())
+
+    const base = await api.base()
+    const ocupadas = (await api.mesas.listar()).filter((mesa) => mesa.status === "ocupada")
+    for (const mesa of ocupadas) {
+      const comanda = base.pedidos.find((pedido) => pedido.id === mesa.pedidoAtivoId)
+      expect(comanda?.mesa?.pessoas).toBeGreaterThanOrEqual(1)
+      expect(comanda?.mesa?.pessoas).toBeLessThanOrEqual(4)
+    }
+  })
+
+  test("depois de migrar uma base com 'Bia', 'bia ' e 'Bía', o salão ainda salva", async () => {
+    const antiga = await baseDaVersao2()
+    const [primeiro, segundo, terceiro] = antiga.pedidos
+    antiga.pedidos = [
+      { ...primeiro, mesa: { id: "mesa-1", numero: 1, garcom: "Bia" } },
+      { ...segundo, mesa: { id: "mesa-1", numero: 1, garcom: "bia " } },
+      { ...terceiro, mesa: { id: "mesa-1", numero: 1, garcom: "Bía" } },
+      ...antiga.pedidos.slice(3),
+    ]
+    await set(CHAVE, { versao: 2, geradoEm: AGORA.toISOString(), base: antiga })
+    const api = servidor()
+    const config = await api.salao.config()
+    expect(config.garcons).toEqual([{ id: "garcom-bia", nome: "Bia", ativo: true }])
+    await expect(api.salao.salvar(config)).resolves.toEqual(config)
   })
 })
