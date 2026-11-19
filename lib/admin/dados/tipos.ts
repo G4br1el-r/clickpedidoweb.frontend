@@ -102,6 +102,10 @@ export type Pedido = {
   pesagem?: { totalEstimado: number; diferenca: number; pesadoEm: string }
   /** O estoque já saiu por este pedido (para devolver no cancelamento uma vez só). */
   estoqueBaixado?: boolean
+  /** PDV: turno de caixa em que a venda entrou. */
+  turnoId?: string
+  /** PDV: quem estava no caixa (id da equipe). */
+  operadorId?: string
 }
 
 export type Categoria = {
@@ -325,7 +329,53 @@ export type ConfigLoja = {
     destaques: { titulo: string; ativo: boolean }
     ofertas: { titulo: string; ativo: boolean }
   }
+  /** Seção "PDV e caixa". Sem o campo, valem os padrões de `configPdv`. */
+  pdv?: ConfigPdv
 }
+
+export type ConfigPdv = {
+  fundoSugerido: number
+  /** Dinheiro na gaveta acima disso: "Sangria recomendada". */
+  alertaSangria: number
+}
+
+/** Formas que o caixa recebe no balcão. */
+export type FormaNoCaixa = "dinheiro" | "pix" | "cartao-na-entrega"
+
+/** Sangria (retirada) ou suprimento (reforço) de dinheiro durante o turno. */
+export type MovimentoCaixa = {
+  id: string
+  tipo: "sangria" | "suprimento"
+  valor: number
+  motivo: string
+  feitoPor: string
+  /** Gerente ou dono que deu o PIN, quando quem fez é Caixa. */
+  autorizadoPor?: string
+  criadoEm: string
+}
+
+/** Fechamento: esperado pelo sistema × contado na gaveta. Pix e cartão chegam conciliados. */
+export type Conferencia = {
+  esperado: Record<FormaNoCaixa, number>
+  contado: Record<FormaNoCaixa, number>
+  justificativa?: string
+}
+
+/** Turno de caixa: da abertura ao fechamento. Um caixa por loja. */
+export type TurnoCaixa = {
+  id: string
+  abertoPor: string
+  abertoEm: string
+  fundo: number
+  movimentos: MovimentoCaixa[]
+  fechadoPor?: string
+  fechadoEm?: string
+  conferencia?: Conferencia
+  reaberturas?: { em: string; autorizadoPor: string }[]
+}
+
+/** PIN de um gerente ou dono para uma ação sensível. */
+export type Autorizacao = { membroId: string; pin: string }
 
 /** Quem usa o painel. Garçom e Cozinha ficam para depois. */
 export type PerfilAcesso = "dono" | "gerente" | "caixa"
