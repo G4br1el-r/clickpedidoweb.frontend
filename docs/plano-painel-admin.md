@@ -555,7 +555,7 @@ Situação: pronta em 13/11/2026.
 - **Fora da tela:** o pedido passa a guardar o horário de cada status, o produto ganha custo (com cópia na venda), o cancelamento ganha motivo, as Configurações ganham a taxa de cada forma de pagamento e o gerador de demonstração sobe para a versão 3.
 - **Etapas,** cada uma num PR: 1. Resumo; 2. Vendas; 3. Base de dados; 4. Produtos e Financeiro; 5. Operação e Clientes; 6. Entrega e abas do segmento; 7. CSV e impressão.
 
-Situação: planejada em 19/11/2026; etapa 1 (Resumo) e etapa 2 (Vendas) prontas em 19/11/2026.
+Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 3 (Base de dados) prontas em 19/11/2026.
 
 - **Etapa 1:**
   - abas Resumo, Vendas e Financeiro no endereço (`?aba=`), dentro do painel de cada aba para leitores de tela;
@@ -571,4 +571,15 @@ Situação: planejada em 19/11/2026; etapa 1 (Resumo) e etapa 2 (Vendas) prontas
   - no celular, a barra de abas fica presa embaixo do cabeçalho e rola para o lado, com a borda esmaecida;
   - regras em `lib/admin/regras/dashboard/vendas.ts`; o `fatias` foi para `comum.ts`.
 - **Etapa 2, diferente do desenho:** a semana agrupa os dias de 7 em 7 a partir do início do período (a última pode ser menor), para cada semana ter a mesma semana do período anterior ao lado; o mapa de calor mostra só as horas entre a primeira e a última com venda.
+- **Etapa 3:**
+  - o pedido guarda o `historico` de status (etapa e hora), anotado pelo `comEtapa` (`lib/admin/regras/historico.ts`) em toda mudança do servidor: Fila, Pedidos, PDV, Cozinha, Mesas, Garçom, agenda, pagamento e o encerramento do dia;
+  - cancelar aceita um motivo opcional, escolhido na confirmação (lista fixa em `rotulos.ts`); o pedido cancelado mostra "Motivo: …" ou "Não informado";
+  - o produto ganha `custo`, com o campo Custo no formulário do cardápio; PDV, mesa, agenda e o gerador copiam o custo no item vendido (`custoUnitario`);
+  - as Configurações ganham a seção Taxas de pagamento;
+  - gerador v3: histórico com tempos plausíveis (num sorteador próprio, para os outros sorteios não mudarem), custos de 31% a 59% do preço (no salão, 16% a 34%; cerca de 1 em 12 sem custo), motivos nos cancelados (uns sem motivo) e taxas nas lojas de demonstração.
+- **Etapa 3, diferente do desenho:**
+  - **taxas por forma do painel,** não por crédito e débito: o pedido não diz qual cartão foi usado. São três: Pix online, cartão online e cartão na maquininha. Dinheiro e Pix no balcão não têm taxa;
+  - **um custo só,** no produto: o custo que ficava no estoque saiu, e a entrada de compra e a configuração do estoque passam a gravar o custo do produto;
+  - nos pedidos em andamento gerados, o `atualizadoEm` continua o da criação (a Cozinha usa esse campo para os prontos recentes); o histórico tem as horas de cada etapa.
+- **Etapa 3, corrigido no caminho:** salvar o formulário do produto apagava o estoque e os dados do medicamento; agora eles ficam como estavam.
 - **Também mudou:** as fotos do Playwright escondem o selo de avisos do Next no modo dev (`tests/sem-avisos-do-next.css`), que aparecia mesmo com `devIndicators: false`.
