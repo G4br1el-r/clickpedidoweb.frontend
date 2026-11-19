@@ -1,6 +1,19 @@
 import { describe, expect, test } from "vitest"
 import { pedidoDeTeste as pedido } from "../pedidos-de-teste"
-import { hojeVsSemanaPassada } from "./semana-passada"
+import { hojeVsSemanaPassada, textosDaSemanaPassada } from "./semana-passada"
+
+describe("textosDaSemanaPassada", () => {
+  test("dia de semana é feminino; sábado e domingo, masculinos", () => {
+    expect(textosDaSemanaPassada(new Date(2026, 10, 6))).toEqual({
+      comparacao: "vs sexta passada",
+      semBase: "Sem base na sexta passada",
+    })
+    expect(textosDaSemanaPassada(new Date(2026, 10, 7))).toEqual({
+      comparacao: "vs sábado passado",
+      semBase: "Sem base no sábado passado",
+    })
+  })
+})
 
 /** Sexta, 13/11/2026, 20:30. A sexta passada é 06/11. */
 const AGORA = new Date(2026, 10, 13, 20, 30)

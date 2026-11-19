@@ -4,7 +4,7 @@ import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter, type OnUrlUpdateFunction } from "nuqs/adapters/testing"
-import type { ReactNode } from "react"
+import type { ComponentProps, ReactNode } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores } from "@/lib/admin/dados/consultas"
@@ -43,6 +43,14 @@ function Provedores({
 const RESUMO = resumir(PEDIDOS_DE_TESTE, PERIODO_DE_TESTE, AGORA_DE_TESTE)
 const regiao = (nome: string) => within(screen.getByRole("region", { name: nome }))
 
+/** O Resumo com os dados de teste; cada teste muda só o que importa para ele. */
+function renderizarResumo(mudancas: Partial<ComponentProps<typeof AbaResumo>> = {}) {
+  return render(
+    <AbaResumo resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="pizzaria" {...mudancas} />,
+    { wrapper: Provedores },
+  )
+}
+
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["Date"] })
   vi.setSystemTime(AGORA_DE_TESTE)
@@ -57,9 +65,7 @@ afterEach(() => {
 
 describe("abas do painel", () => {
   test("mostra o movimento de hoje", () => {
-    render(<AbaResumo resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="pizzaria" />, {
-      wrapper: Provedores,
-    })
+    renderizarResumo()
     const hoje = regiao("Hoje")
     expect(hoje.getByText("Faturamento hoje").closest("[data-indicador]")).toHaveTextContent(
       "R$ 90,00",
@@ -72,10 +78,34 @@ describe("abas do painel", () => {
     expect(hoje.getByText("1 aguardando pagamento online")).toBeInTheDocument()
   })
 
-  test("mostra os indicadores do período, com a variação e o melhor dia", () => {
-    render(<AbaResumo resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="pizzaria" />, {
-      wrapper: Provedores,
+  test("cada número de hoje se compara com o mesmo dia da semana passada", () => {
+    renderizarResumo({
+      comparacao: {
+        dia: new Date(2026, 10, 6),
+        variacao: { pedidos: 100, faturamento: 50, ticket: -25 },
+      },
     })
+    const hoje = regiao("Hoje")
+    expect(hoje.getByText("Pedidos hoje").closest("[data-indicador]")).toHaveTextContent(
+      "+100% vs sexta passada",
+    )
+    expect(hoje.getByText("Faturamento hoje").closest("[data-indicador]")).toHaveTextContent(
+      "+50% vs sexta passada",
+    )
+    expect(hoje.getByText("Ticket médio hoje").closest("[data-indicador]")).toHaveTextContent(
+      "-25% vs sexta passada",
+    )
+  })
+
+  test("sem venda no mesmo dia da semana passada, avisa que não há base", () => {
+    renderizarResumo({ comparacao: { dia: new Date(2026, 10, 6), variacao: null } })
+    expect(
+      regiao("Hoje").getByText("Faturamento hoje").closest("[data-indicador]"),
+    ).toHaveTextContent("Sem base na sexta passada")
+  })
+
+  test("mostra os indicadores do período, com a variação e o melhor dia", () => {
+    renderizarResumo()
     const periodo = regiao("Desempenho do período")
     const faturamento = periodo.getByText("Faturamento").closest("[data-indicador]")
     expect(faturamento).toHaveTextContent("R$ 170,00")
@@ -89,9 +119,7 @@ describe("abas do painel", () => {
   })
 
   test("o Resumo mostra mais vendidos e recentes, sem pagamentos nem canais", () => {
-    render(<AbaResumo resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="pizzaria" />, {
-      wrapper: Provedores,
-    })
+    renderizarResumo()
     expect(regiao("Mais vendidos").getAllByRole("listitem")[0]).toHaveTextContent("Coca4 vendidos")
     expect(regiao("Pedidos recentes").getAllByRole("row")[1]).toHaveTextContent("#6")
     expect(screen.queryByRole("region", { name: "Formas de pagamento" })).not.toBeInTheDocument()
@@ -112,9 +140,7 @@ describe("abas do painel", () => {
   })
 
   test("no salão, os pedidos são atendimentos", () => {
-    render(<AbaResumo resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="salao" />, {
-      wrapper: Provedores,
-    })
+    renderizarResumo({ segmento: "salao" })
     expect(regiao("Hoje").getByText("Atendimentos hoje")).toBeInTheDocument()
   })
 })
@@ -149,6 +175,18 @@ describe("VisaoGeral", () => {
     expect(
       screen.queryByRole("status", { name: "Carregando a visão geral" }),
     ).not.toBeInTheDocument()
+  })
+
+  test("no Resumo, hoje vem comparado com a sexta passada, mesmo no período de hoje", async () => {
+    render(
+      <Provedores endereco="?de=2026-11-13&ate=2026-11-13">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    const hoje = within(await screen.findByRole("region", { name: "Hoje" }, { timeout: 8000 }))
+    expect(hoje.getByText("Faturamento hoje").closest("[data-indicador]")).toHaveTextContent(
+      /sexta passada/,
+    )
   })
 
   test("a aba vem do endereço, e trocar de aba muda o endereço", async () => {

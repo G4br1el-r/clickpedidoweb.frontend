@@ -22,6 +22,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { nomesDo } from "@/lib/admin/regras/dashboard/nomes"
 import type { Resumo } from "@/lib/admin/regras/dashboard/resumo"
+import {
+  type ComparacaoHoje,
+  textosDaSemanaPassada,
+} from "@/lib/admin/regras/dashboard/semana-passada"
 import { diasNoPeriodo, type Periodo } from "@/lib/admin/regras/periodo"
 import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
@@ -150,34 +154,67 @@ function ListaMaisVendidos({ produtos }: { produtos: Resumo["maisVendidos"]["per
   )
 }
 
+/** Variação em %, verde para cima e vermelha para baixo, com a seta e o "sobre o quê". */
+function Variacao({ valor, texto }: { valor: number; texto: string }) {
+  const Seta = valor >= 0 ? TrendingUpIcon : TrendingDownIcon
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1",
+        valor >= 0 ? "text-(--tom-pronto)" : "text-(--tom-cancelado)",
+      )}
+    >
+      <Seta className="size-3.5" aria-hidden="true" />
+      {porcentagem.format(valor / 100)} {texto}
+    </span>
+  )
+}
+
 /** Resumo: o dia de hoje e o essencial do período. */
 export function AbaResumo({
   resumo,
   periodo,
   segmento,
+  comparacao,
 }: {
   resumo: Resumo
   periodo: Periodo
   segmento: SegmentoPainelId
+  /** Hoje contra o mesmo dia da semana passada, até a mesma hora. */
+  comparacao?: ComparacaoHoje
 }) {
   const [medida, setMedida] = useState<MedidaDoGrafico>("faturamento")
   const n = nomesDo(segmento)
+  const textos = comparacao && textosDaSemanaPassada(comparacao.dia)
+  const comparar = (escolher: (variacao: NonNullable<ComparacaoHoje["variacao"]>) => number) =>
+    comparacao && textos ? (
+      comparacao.variacao ? (
+        <Variacao valor={escolher(comparacao.variacao)} texto={textos.comparacao} />
+      ) : (
+        textos.semBase
+      )
+    ) : undefined
   const dias = diasNoPeriodo(periodo)
   const { hoje, periodo: kpi } = resumo
   const anteriores = dias === 1 ? "o dia anterior" : `os ${dias} dias anteriores`
-  const Tendencia = (kpi.variacao ?? 0) >= 0 ? TrendingUpIcon : TrendingDownIcon
 
   return (
     <div className="flex flex-col gap-10">
       <Secao titulo="Hoje" descricao={<AoVivo>Ao vivo, desde a abertura</AoVivo>}>
         <Regua>
-          <Indicador rotulo={`${n.Pedidos} hoje`}>
+          <Indicador
+            rotulo={`${n.Pedidos} hoje`}
+            detalhe={comparar((variacao) => variacao.pedidos)}
+          >
             <Numero valor={hoje.pedidos} />
           </Indicador>
-          <Indicador rotulo="Faturamento hoje" detalhe="Sem cancelados e pagamentos pendentes">
+          <Indicador
+            rotulo="Faturamento hoje"
+            detalhe={comparar((variacao) => variacao.faturamento)}
+          >
             <Numero valor={hoje.faturamento} moeda />
           </Indicador>
-          <Indicador rotulo="Ticket médio hoje">
+          <Indicador rotulo="Ticket médio hoje" detalhe={comparar((variacao) => variacao.ticket)}>
             <Numero valor={hoje.ticket} moeda />
           </Indicador>
           <Indicador
@@ -191,16 +228,15 @@ export function AbaResumo({
             <Numero valor={hoje.emAndamento} />
           </Indicador>
         </Regua>
-        {(hoje.aguardandoPagamento > 0 || hoje.cancelados > 0) && (
-          <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
-            {hoje.aguardandoPagamento > 0 && (
-              <span>{hoje.aguardandoPagamento} aguardando pagamento online</span>
-            )}
-            {hoje.cancelados > 0 && (
-              <span>{plural(hoje.cancelados, "cancelado", "cancelados")} hoje</span>
-            )}
-          </p>
-        )}
+        <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
+          <span>Faturamento sem cancelados e pagamentos pendentes</span>
+          {hoje.aguardandoPagamento > 0 && (
+            <span>{hoje.aguardandoPagamento} aguardando pagamento online</span>
+          )}
+          {hoje.cancelados > 0 && (
+            <span>{plural(hoje.cancelados, "cancelado", "cancelados")} hoje</span>
+          )}
+        </p>
       </Secao>
 
       <Secao titulo="Desempenho do período" descricao={dias === 1 ? "1 dia" : `${dias} dias`}>
@@ -211,15 +247,7 @@ export function AbaResumo({
               kpi.variacao === null ? (
                 "Sem vendas no período anterior"
               ) : (
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1",
-                    (kpi.variacao ?? 0) >= 0 ? "text-(--tom-pronto)" : "text-(--tom-cancelado)",
-                  )}
-                >
-                  <Tendencia className="size-3.5" aria-hidden="true" />
-                  {porcentagem.format(kpi.variacao / 100)} sobre {anteriores}
-                </span>
+                <Variacao valor={kpi.variacao} texto={`sobre ${anteriores}`} />
               )
             }
           >

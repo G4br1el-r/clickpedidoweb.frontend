@@ -9,6 +9,15 @@ export type ComparacaoHoje = {
   variacao: { pedidos: number; faturamento: number; ticket: number } | null
 }
 
+const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"]
+
+/** "vs sexta passada" e "Sem base na sexta passada"; sábado e domingo vão no masculino. */
+export function textosDaSemanaPassada(dia: Date) {
+  const masculino = dia.getDay() === 0 || dia.getDay() === 6
+  const nome = `${DIAS[dia.getDay()]} ${masculino ? "passado" : "passada"}`
+  return { comparacao: `vs ${nome}`, semBase: `Sem base ${masculino ? "no" : "na"} ${nome}` }
+}
+
 const vendasEntre = (pedidos: Pedido[], inicio: Date, fim: Date) =>
   pedidos.filter((pedido) => {
     const criado = Date.parse(pedido.criadoEm)

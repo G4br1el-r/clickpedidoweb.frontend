@@ -1,6 +1,6 @@
 "use client"
 
-import { format, startOfDay } from "date-fns"
+import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { ReceiptTextIcon, SquareKanbanIcon } from "lucide-react"
 import Link from "next/link"
@@ -11,8 +11,9 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLoja, usePedidos } from "@/lib/admin/dados/consultas"
 import { abaEscolhida, abasDo } from "@/lib/admin/regras/dashboard/abas"
+import { periodoDaBusca } from "@/lib/admin/regras/dashboard/busca"
 import { resumir } from "@/lib/admin/regras/dashboard/resumo"
-import { periodoAnterior } from "@/lib/admin/regras/periodo"
+import { hojeVsSemanaPassada } from "@/lib/admin/regras/dashboard/semana-passada"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
@@ -49,13 +50,16 @@ export function VisaoGeral() {
   const { data: loja } = useLoja()
 
   // Uma busca só cobre o período, o anterior (para comparar) e hoje.
-  const filtro =
-    agora && periodo ? { de: periodoAnterior(periodo).de, ate: startOfDay(agora) } : undefined
+  const filtro = agora && periodo ? periodoDaBusca(periodo, agora) : undefined
   const { data: pedidos } = usePedidos(filtro, { ativo: Boolean(filtro) })
 
   const resumo = useMemo(
     () => (pedidos && periodo && agora ? resumir(pedidos, periodo, agora) : null),
     [pedidos, periodo, agora],
+  )
+  const comparacao = useMemo(
+    () => (pedidos && agora ? hojeVsSemanaPassada(pedidos, agora) : undefined),
+    [pedidos, agora],
   )
 
   return (
@@ -108,7 +112,12 @@ export function VisaoGeral() {
         ) : aba === "financeiro" ? (
           <AbaFinanceiro resumo={resumo} />
         ) : (
-          <AbaResumo resumo={resumo} periodo={periodo} segmento={segmento} />
+          <AbaResumo
+            resumo={resumo}
+            periodo={periodo}
+            segmento={segmento}
+            comparacao={comparacao}
+          />
         )
       ) : (
         <EsqueletoVisaoGeral />
