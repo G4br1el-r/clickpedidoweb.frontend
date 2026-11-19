@@ -157,13 +157,23 @@ export function VisaoGeral() {
         onValueChange={(valor) => void setAba(valor === "resumo" ? null : valor)}
         className="gap-6"
       >
-        <TabsList variant="line" aria-label="Abas da visão geral">
-          {abasDo(segmento).map((item) => (
-            <TabsTrigger key={item.id} value={item.id} className="cursor-pointer">
-              {item.titulo}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {/*
+          No celular, a barra fica presa embaixo do cabeçalho e rola para o lado, com a borda
+          direita esmaecida quando há mais abas. No notebook em diante, as abas cabem inteiras.
+        */}
+        <div className="max-md:sticky max-md:top-14 max-md:z-20 max-md:-mx-4 max-md:border-b max-md:border-border/70 max-md:bg-card max-md:px-4">
+          <TabsList
+            variant="line"
+            aria-label="Abas da visão geral"
+            className="max-md:w-full max-md:justify-start max-md:overflow-x-auto max-md:[mask-image:linear-gradient(to_right,black_85%,transparent)] max-md:[scrollbar-width:none]"
+          >
+            {abasDo(segmento).map((item) => (
+              <TabsTrigger key={item.id} value={item.id} className="flex-none cursor-pointer">
+                {item.titulo}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         <FiltroPeriodo />
 

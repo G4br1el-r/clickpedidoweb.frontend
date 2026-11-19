@@ -72,6 +72,18 @@ for (const tema of ["light", "dark"] as const) {
     })
   }
 
+  test(`painel: visão geral, abas com a página rolada (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin?aba=vendas")
+    const mapa = page.getByRole("region", { name: "Quando a loja vende" })
+    await expect(mapa).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState("networkidle")
+    await mapa.scrollIntoViewIfNeeded()
+    await esperarAnimacoes(page)
+    // Só a tela visível: no celular, a barra de abas fica presa embaixo do cabeçalho.
+    await expect(page).toHaveScreenshot(`painel-visao-geral-abas-rolada-${tema}.png`)
+  })
+
   test(`painel: pedidos (${tema})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
     await page.goto("/admin/pedidos")
