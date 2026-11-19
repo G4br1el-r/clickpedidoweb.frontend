@@ -10,11 +10,15 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLoja, usePedidos } from "@/lib/admin/dados/consultas"
+import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
+import { useFarmacia } from "@/lib/admin/farmacia-estado"
 import { abaEscolhida, abasDo } from "@/lib/admin/regras/dashboard/abas"
+import { alertasDoPainel } from "@/lib/admin/regras/dashboard/alertas"
 import { periodoDaBusca } from "@/lib/admin/regras/dashboard/busca"
 import { resumir } from "@/lib/admin/regras/dashboard/resumo"
 import { hojeVsSemanaPassada } from "@/lib/admin/regras/dashboard/semana-passada"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { lotesDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
 import { AbaFinanceiro, AbaResumo, AbaVendas } from "./painel-visao-geral"
@@ -61,6 +65,25 @@ export function VisaoGeral() {
     () => (pedidos && agora ? hojeVsSemanaPassada(pedidos, agora) : undefined),
     [pedidos, agora],
   )
+
+  const { data: produtos } = useProdutos()
+  const decisoes = useFarmacia((estado) => estado.decisoes)
+  const alertas = useMemo(() => {
+    if (!pedidos || !produtos || !loja || !agora) return []
+    const ehFarmacia = segmento === "farmacia"
+    return alertasDoPainel({
+      segmento,
+      agora,
+      pedidos,
+      produtos,
+      loja,
+      // A farmácia guarda receitas e lotes fora do servidor de demonstração.
+      lotes: ehFarmacia ? lotesDemo(agora) : [],
+      receitas: ehFarmacia ? receitasDemo(agora) : [],
+      decisoes,
+      meta: null,
+    })
+  }, [pedidos, produtos, loja, agora, segmento, decisoes])
 
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 md:p-6 lg:px-8">
@@ -117,6 +140,7 @@ export function VisaoGeral() {
             periodo={periodo}
             segmento={segmento}
             comparacao={comparacao}
+            alertas={alertas}
           />
         )
       ) : (

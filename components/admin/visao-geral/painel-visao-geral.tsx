@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import type { Alerta } from "@/lib/admin/regras/dashboard/alertas"
 import { nomesDo } from "@/lib/admin/regras/dashboard/nomes"
 import type { Resumo } from "@/lib/admin/regras/dashboard/resumo"
 import {
@@ -34,6 +35,7 @@ import { cn } from "@/lib/utils"
 import { BlocoSecao } from "../bloco-secao"
 import { SeloStatus } from "../pedidos/selos"
 import { AoVivo, Indicador, Regua } from "../regua"
+import { FaixaAtencao } from "./faixa-atencao"
 import type { MedidaDoGrafico } from "./grafico-por-dia"
 
 // Recharts pesa: o gráfico chega depois, só no navegador, com o esqueleto no lugar.
@@ -176,12 +178,15 @@ export function AbaResumo({
   periodo,
   segmento,
   comparacao,
+  alertas = [],
 }: {
   resumo: Resumo
   periodo: Periodo
   segmento: SegmentoPainelId
   /** Hoje contra o mesmo dia da semana passada, até a mesma hora. */
   comparacao?: ComparacaoHoje
+  /** O que precisa de atenção agora; vazio esconde a faixa. */
+  alertas?: Alerta[]
 }) {
   const [medida, setMedida] = useState<MedidaDoGrafico>("faturamento")
   const n = nomesDo(segmento)
@@ -200,6 +205,7 @@ export function AbaResumo({
 
   return (
     <div className="flex flex-col gap-10">
+      <FaixaAtencao alertas={alertas} />
       <Secao titulo="Hoje" descricao={<AoVivo>Ao vivo, desde a abertura</AoVivo>}>
         <Regua>
           <Indicador

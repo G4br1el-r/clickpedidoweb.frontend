@@ -97,6 +97,38 @@ describe("abas do painel", () => {
     )
   })
 
+  test("a faixa de atenção lista cada alerta com o caminho para resolver", () => {
+    renderizarResumo({
+      alertas: [
+        {
+          id: "atrasados",
+          texto: "2 pedidos atrasados",
+          acao: { rotulo: "Abrir a fila", href: "/admin/fila" },
+        },
+        {
+          id: "estoque-baixo",
+          texto: "1 produto com estoque baixo",
+          acao: { rotulo: "Ver estoque", href: "/admin/estoque" },
+        },
+      ],
+    })
+    const faixa = regiao("Precisa de atenção")
+    const itens = faixa.getAllByRole("listitem")
+    expect(itens.map((item) => item.textContent)).toEqual([
+      "2 pedidos atrasadosAbrir a fila",
+      "1 produto com estoque baixoVer estoque",
+    ])
+    expect(within(itens[0]).getByRole("link", { name: "Abrir a fila" })).toHaveAttribute(
+      "href",
+      "/admin/fila",
+    )
+  })
+
+  test("sem alertas, a faixa não aparece", () => {
+    renderizarResumo({ alertas: [] })
+    expect(screen.queryByRole("region", { name: "Precisa de atenção" })).not.toBeInTheDocument()
+  })
+
   test("sem venda no mesmo dia da semana passada, avisa que não há base", () => {
     renderizarResumo({ comparacao: { dia: new Date(2026, 10, 6), variacao: null } })
     expect(
@@ -187,6 +219,14 @@ describe("VisaoGeral", () => {
     expect(hoje.getByText("Faturamento hoje").closest("[data-indicador]")).toHaveTextContent(
       /sexta passada/,
     )
+  })
+
+  test("no Resumo, a faixa de atenção avisa do estoque da loja", async () => {
+    render(<VisaoGeral />, { wrapper: Provedores })
+    const faixa = within(
+      await screen.findByRole("region", { name: "Precisa de atenção" }, { timeout: 8000 }),
+    )
+    expect(faixa.getAllByRole("link", { name: "Ver estoque" }).length).toBeGreaterThan(0)
   })
 
   test("a aba vem do endereço, e trocar de aba muda o endereço", async () => {
