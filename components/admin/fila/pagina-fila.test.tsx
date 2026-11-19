@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter } from "nuqs/adapters/testing"
 import { type ReactNode, useState } from "react"
+import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -122,6 +123,7 @@ afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
   abaEscondida(false)
+  toast.dismiss()
 })
 
 describe("PaginaFila", () => {
@@ -163,7 +165,10 @@ describe("PaginaFila", () => {
 
     await usuario.click(within(cartao).getByRole("button", { name: "Iniciar preparo" }))
     await (await coluna("Em preparo")).findByRole("heading", { name: numero })
-    await usuario.click(await screen.findByRole("button", { name: "Desfazer" }))
+    // O aviso deste pedido (os de outros testes podem ainda estar saindo da tela).
+    const aviso = (await screen.findByText(`${numero}: Em preparo`)).closest("li")
+    if (!aviso) throw new Error("O aviso do avanço devia estar na tela")
+    await usuario.click(within(aviso).getByRole("button", { name: "Desfazer" }))
 
     expect(
       await (await coluna("Novos")).findByRole("heading", { name: numero }),
