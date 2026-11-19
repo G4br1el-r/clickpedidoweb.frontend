@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom/vitest"
 import { cleanup } from "@testing-library/react"
+import { toast } from "sonner"
 import { afterEach, vi } from "vitest"
 
 // jsdom não implementa matchMedia; hooks de tela e animações dependem dele.
@@ -63,6 +64,9 @@ vi.mock("next/font/google", () => {
 
 afterEach(() => {
   cleanup()
+  // O sonner guarda os avisos num estado global e repete os ainda ativos para o próximo
+  // Toaster: sem dispensar, o aviso de um teste aparece no seguinte.
+  toast.dismiss()
   localStorage.clear()
 })
 

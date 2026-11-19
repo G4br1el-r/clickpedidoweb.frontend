@@ -23,12 +23,12 @@
 - Diferença diferente de zero no dinheiro exige justificativa com pelo menos 5 caracteres.
 - Equipe de demonstração (os PINs aparecem na tela Equipe para o Dono):
 
-  | id | Nome | Perfil | PIN |
-  | --- | --- | --- | --- |
-  | `eq-dono` | Carla N. | dono | 1234 |
+  | id           | Nome      | Perfil  | PIN  |
+  | ------------ | --------- | ------- | ---- |
+  | `eq-dono`    | Carla N.  | dono    | 1234 |
   | `eq-gerente` | Rafael M. | gerente | 2580 |
-  | `eq-marina` | Marina S. | caixa | 1111 |
-  | `eq-joao` | João P. | caixa | 2222 |
+  | `eq-marina`  | Marina S. | caixa   | 1111 |
+  | `eq-joao`    | João P.   | caixa   | 2222 |
 
 - Textos em pt-BR, dinheiro pelo `emReais` de `lib/formato`. Números vivos com NumberFlow. Visual segue o `DESIGN.md` (traço de 3 px para estado, laranja só para o alerta de sangria, régua entre fios).
 - Formato guardado: `VERSAO` de `servidor.ts` sobe de 2 para 3 (a base antiga é gerada de novo).
@@ -46,16 +46,20 @@
 ### Tarefa 1: tipos e regras da equipe
 
 **Arquivos:**
+
 - Modificar: `lib/admin/dados/tipos.ts`, `lib/admin/segmentos-painel.ts` (novo módulo `equipe`)
 - Criar: `lib/admin/regras/equipe.ts`
 - Teste: `lib/admin/regras/equipe.test.ts`, `lib/admin/segmentos-painel.test.ts`
 
 **Interfaces:**
+
 - Produz (em `tipos.ts`):
+
   ```ts
   export type PerfilAcesso = "dono" | "gerente" | "caixa"
   export type MembroEquipe = { id: string; nome: string; perfil: PerfilAcesso; pin: string; ativo: boolean }
   ```
+
   `BaseLoja` ganha `equipe: MembroEquipe[]` e `turnos: TurnoCaixa[]` (o tipo vem na tarefa 2).
 - Produz (em `regras/equipe.ts`):
   - `TITULO_PERFIL: Record<PerfilAcesso, string>`, com "Dono", "Gerente" e "Caixa"
@@ -91,12 +95,15 @@
 ### Tarefa 2: regras do caixa
 
 **Arquivos:**
+
 - Modificar: `lib/admin/dados/tipos.ts`
 - Criar: `lib/admin/regras/caixa.ts`
 - Teste: `lib/admin/regras/caixa.test.ts`
 
 **Interfaces:**
+
 - Produz (em `tipos.ts`):
+
   ```ts
   export type FormaNoCaixa = "dinheiro" | "pix" | "cartao-na-entrega"
   export type MovimentoCaixa = { id: string; tipo: "sangria" | "suprimento"; valor: number; motivo: string; feitoPor: string; autorizadoPor?: string; criadoEm: string }
@@ -104,6 +111,7 @@
   export type TurnoCaixa = { id: string; abertoPor: string; abertoEm: string; fundo: number; movimentos: MovimentoCaixa[]; fechadoPor?: string; fechadoEm?: string; conferencia?: Conferencia; reaberturas?: { em: string; autorizadoPor: string }[] }
   export type ConfigPdv = { fundoSugerido: number; alertaSangria: number }
   ```
+
   - `ConfigLoja` ganha `pdv?: ConfigPdv`.
   - `Pedido` ganha `turnoId?: string` e `operadorId?: string`.
 - Produz (em `regras/caixa.ts`):
@@ -142,17 +150,20 @@
 ### Tarefa 3: equipe e turnos de demonstração
 
 **Arquivos:**
+
 - Criar: `lib/admin/dados/equipe-demo.ts`, `lib/admin/dados/gerar-turnos.ts`
 - Modificar: `lib/admin/dados/gerar-pedidos.ts` (sem venda de PDV no dia de hoje)
 - Teste: `lib/admin/dados/gerar-turnos.test.ts`, `lib/admin/dados/gerar-pedidos.test.ts`
 
 **Interfaces:**
+
 - Consome: `sorteadorDaSemente` (de `gerar-pedidos.ts`) e `resumoDoTurno`, `conferir` e `CEDULAS` (tarefa 2).
 - Produz:
   - `EQUIPE_DEMO: readonly MembroEquipe[]`, a tabela das restrições globais
   - `gerarTurnos({ pedidos, agora }: { pedidos: Pedido[]; agora: Date }): { turnos: TurnoCaixa[]; pedidos: Pedido[] }`
 
 **Regras do gerador:**
+
 - Um turno por dia anterior a hoje que teve venda do PDV. O id é `turno-AAAAMMDD`.
 - Marina abre nos dias pares e João nos ímpares.
 - Abre 30 min antes da primeira venda e fecha 20 min depois da última.
@@ -178,12 +189,15 @@
 ### Tarefa 4: servidor, base e equipe
 
 **Arquivos:**
+
 - Modificar: `lib/admin/dados/servidor.ts`
 - Teste: `lib/admin/dados/servidor-caixa.test.ts` (novo, no padrão de `servidor-estoque.test.ts`)
 
 **Interfaces:**
+
 - Consome: `EQUIPE_DEMO` e `gerarTurnos` (tarefa 3), e `errosDoMembro` e `errosDoPin` (tarefa 1).
 - Produz, dentro de `criarServidor`:
+
   ```ts
   equipe: {
     listar(): Promise<MembroEquipe[]>
@@ -191,6 +205,7 @@
     entrar(id: string, pin: string): Promise<MembroEquipe>
   }
   ```
+
   - `VERSAO = 3`.
   - `doZero` grava `equipe: EQUIPE_DEMO` e os turnos de `gerarTurnos`.
   - `completar` gera turnos só para os pedidos dos dias novos e mantém um turno que ficou aberto.
@@ -210,12 +225,15 @@
 ### Tarefa 5: servidor, caixa e venda com turno
 
 **Arquivos:**
+
 - Modificar: `lib/admin/dados/servidor.ts` (seção `caixa` e `pdv.finalizar`)
 - Teste: `lib/admin/dados/servidor-caixa.test.ts` e os casos de `pdv.finalizar` em `servidor.test.ts`
 
 **Interfaces:**
+
 - Consome: as regras das tarefas 1 e 2.
 - Produz:
+
   ```ts
   type Autorizacao = { membroId: string; pin: string }
   caixa: {
@@ -228,6 +246,7 @@
     historico(): Promise<{ turno: TurnoCaixa; resumo: ResumoTurno }[]>
   }
   ```
+
   - `VendaPdv` ganha `operadorId: string`.
   - `finalizar` recusa sem turno aberto e grava `turnoId` e `operadorId` no pedido.
   - Uma função interna `autorizar(base, operadorId, acao, autorizacao?)` lança `"Precisa do PIN de um gerente."` quando falta a autorização e `"PIN do gerente errado."` quando o PIN não confere.
@@ -260,11 +279,13 @@
 ### Tarefa 6: hooks e usuário atual
 
 **Arquivos:**
+
 - Criar: `lib/admin/usuario-atual.ts`, `lib/admin/dados/consultas-equipe.ts`, `lib/admin/dados/consultas-caixa.ts`
 - Modificar: `lib/admin/segmento-atual.ts` (`useSegmentoCarregado` também reidrata o usuário)
 - Teste: `lib/admin/usuario-atual.test.ts`, `lib/admin/dados/consultas-caixa.test.tsx`
 
 **Interfaces:**
+
 - Produz:
   - `useUsuarioSalvo`: store zustand `persist` chamado `"clickpedido-admin-usuario"`, com `skipHydration`. Estado: `{ porSegmento: Partial<Record<SegmentoPainelId, string>>; entrar(segmento, id): void; sair(segmento): void }`.
   - `useEquipe()`, `useSalvarMembro()`, `useEntrar()` (confere no servidor e grava no store) e `useUsuarioAtual(): { membro: MembroEquipe | undefined; carregando: boolean }` (o salvo, se estiver ativo, senão `membroPadrao`).
@@ -286,6 +307,7 @@
 ### Tarefa 7: menu, páginas e seções por perfil
 
 **Arquivos:**
+
 - Modificar:
   - `lib/admin/segmentos-painel.ts`: `menuDo(segmento, perfil)`
   - `components/admin/menu-modulos.tsx`
@@ -296,6 +318,7 @@
 - Teste: `menu-modulos.test.tsx`, `pagina-modulo.test.tsx`, `barra-lateral-admin.test.tsx`, `loja/pagina-loja.test.tsx`
 
 **Interfaces:**
+
 - Consome: `podeVerModulo`, `podeVerAparencia` e `podeVerSecaoLoja` (tarefa 1) e `useUsuarioAtual` (tarefa 6).
 - Produz: `menuDo(segmento: SegmentoPainelId, perfil: PerfilAcesso = "dono")`.
 
@@ -314,11 +337,13 @@
 ### Tarefa 8: teclado de PIN, trocar usuário e autorização do gerente
 
 **Arquivos:**
+
 - Criar: `components/admin/equipe/teclado-pin.tsx`, `components/admin/equipe/trocar-usuario.tsx`, `components/admin/equipe/janela-autorizacao.tsx`
 - Modificar: `components/admin/cabecalho-admin.tsx`
 - Teste: os `*.test.tsx` ao lado de cada um
 
 **Interfaces:**
+
 - Produz:
   - `TecladoPin({ id, rotulo, valor, aoMudar, aoConfirmar })`: um campo `type="password"` com `inputMode="numeric"`, máximo de 6, só dígitos, mais o teclado na tela (1–9, Limpar, 0, Apagar) e os pontos.
   - `TrocarUsuario()`: no topo, mostra "Nome · Perfil". Ao clicar ou com `Ctrl+U`, abre a janela "Trocar usuário": escolhe a pessoa, digita o PIN e entra.
@@ -339,11 +364,13 @@
 ### Tarefa 9: módulo Equipe
 
 **Arquivos:**
+
 - Criar: `components/admin/equipe/pagina-equipe.tsx`
 - Modificar: `components/admin/pagina-modulo.tsx` (`PAGINAS.equipe`)
 - Teste: `components/admin/equipe/pagina-equipe.test.tsx`
 
 **Interfaces:**
+
 - Consome: `useEquipe` e `useSalvarMembro` (tarefa 6).
 - Produz: a página com `CabecalhoPagina` ("Equipe", resumo "4 pessoas · 1 dono, 1 gerente, 2 no caixa") e a lista em linhas (nome, perfil, ativo, PIN escondido com "Mostrar"). "Adicionar pessoa" e editar abrem uma janela com nome, perfil (controle segmentado), PIN e ativo.
 
@@ -360,10 +387,12 @@
 ### Tarefa 10: seção "PDV e caixa" na tela da loja
 
 **Arquivos:**
+
 - Modificar: `lib/admin/regras/esquema-loja.ts` (`pdv` opcional) e `components/admin/loja/pagina-loja.tsx` (seção nova, só quando o segmento tem PDV)
 - Teste: `lib/admin/regras/esquema-loja.test.ts`, `components/admin/loja/pagina-loja.test.tsx`
 
 **Interfaces:**
+
 - Consome: `configPdv` (tarefa 2).
 - Produz: os campos "Fundo de troco sugerido" e "Alerta de sangria acima de", em `CampoDinheiro`, de 0 a 9.999.
 
@@ -379,11 +408,13 @@
 ### Tarefa 11: abertura do caixa
 
 **Arquivos:**
+
 - Criar: `components/admin/pdv/caixa/abertura-caixa.tsx`, `components/admin/pdv/caixa/contagem-cedulas.tsx`
 - Modificar: `components/admin/pdv/pagina-pdv.tsx` (sem turno → abertura)
 - Teste: `components/admin/pdv/caixa/abertura-caixa.test.tsx` e os testes atuais de `pagina-pdv.test.tsx` (agora abrem o caixa antes)
 
 **Interfaces:**
+
 - Consome: `useEquipe`, `useAbrirCaixa`, `configPdv`, `TecladoPin` e `totalDaContagem`.
 - Produz:
   - `ContagemCedulas({ quantidades, aoMudar })`: uma linha por cédula, com `label` "R$ 100" e um campo de quantidade.
@@ -404,11 +435,13 @@
 ### Tarefa 12: painel do turno, sangria e suprimento
 
 **Arquivos:**
+
 - Criar: `components/admin/pdv/caixa/painel-turno.tsx`, `components/admin/pdv/caixa/janela-movimento.tsx`
 - Modificar: `components/admin/pdv/pagina-pdv.tsx` (painel em cima da venda; `F11` e `F12`)
 - Teste: `components/admin/pdv/caixa/painel-turno.test.tsx`
 
 **Interfaces:**
+
 - Consome: `useCaixaAtual`, `useResumoTurno`, `precisaSangria`, `useMovimentarCaixa`, `JanelaAutorizacao` e `precisaAutorizacao`.
 - Produz:
   - `PainelTurno()`: régua com Turno ("Desde 08:02 · 4h12"), Vendas, Total vendido, Ticket médio e Dinheiro na gaveta.
@@ -430,11 +463,13 @@
 ### Tarefa 13: fechamento, reabertura e histórico de caixas
 
 **Arquivos:**
+
 - Criar: `components/admin/pdv/caixa/fechamento-caixa.tsx`, `components/admin/pdv/caixa/historico-caixas.tsx`
 - Modificar: `components/admin/pdv/pagina-pdv.tsx` (`?tela=fechar` e `?tela=caixas` por `useQueryState` do nuqs)
 - Teste: `components/admin/pdv/caixa/fechamento-caixa.test.tsx`, `components/admin/pdv/caixa/historico-caixas.test.tsx`
 
 **Interfaces:**
+
 - Consome: `conferir`, `diferencaDinheiro`, `errosDoFechamento`, `ContagemCedulas`, `useFecharCaixa`, `useReabrirCaixa` e `useHistoricoCaixas`.
 - Produz:
   - `FechamentoCaixa()`: segue a tela 4 da prévia. Tem a régua do turno, a tabela "Conferência por forma de pagamento" (esperado, conferido e diferença), a contagem e a justificativa quando há diferença. Ao fechar, volta para a abertura.
@@ -454,6 +489,7 @@
 ### Tarefa 14: E2E, screenshots e verificação
 
 **Arquivos:**
+
 - Modificar: `tests/apoio.ts` (`abrirCaixa(page, { pessoa = "Marina S.", pin = "1111" } = {})`), `tests/admin.spec.ts` (os 3 testes do PDV abrem o caixa antes) e `tests/visual-admin.spec.ts`
 - Criar: um E2E novo em `tests/admin.spec.ts`
 

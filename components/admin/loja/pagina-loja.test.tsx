@@ -197,8 +197,7 @@ describe("PaginaLoja: PDV e caixa", () => {
         { name: "Salvar alterações" },
       ),
     )
-    // O aviso do teste anterior pode continuar na tela (o sonner guarda os avisos).
-    expect(await screen.findAllByText("Configurações salvas.")).not.toHaveLength(0)
+    expect(await screen.findByText("Configurações salvas.")).toBeInTheDocument()
     expect((await api().loja()).pdv).toEqual({ fundoSugerido: 100, alertaSangria: 800 })
   })
 

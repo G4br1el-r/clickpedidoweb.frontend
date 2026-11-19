@@ -162,10 +162,12 @@ describe("PaginaBairros", () => {
         { name: "Excluir" },
       ),
     )
+    // A linha excluída sai com animação: espera ela sumir, senão a busca abaixo acharia a
+    // linha antiga (ainda saindo) em vez da que o desfazer traz de volta.
+    const nome = new RegExp(`^Selecionar ${bairro.nome}\\b`)
+    await waitFor(() => expect(screen.queryByRole("row", { name: nome })).not.toBeInTheDocument())
     await usuario.click(await screen.findByRole("button", { name: "Desfazer" }))
-    expect(
-      await screen.findByRole("row", { name: new RegExp(`^Selecionar ${bairro.nome}\\b`) }),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole("row", { name: nome })).toBeInTheDocument()
     expect((await api().bairros.listar()).find((item) => item.id === bairro.id)).toEqual(bairro)
   })
 

@@ -38,16 +38,16 @@ Base: o PDV da fase 7 de [plano-painel-admin.md](plano-painel-admin.md) e a pré
 - Venda em espera: até 5 por turno. Orçamento: validade de 7 dias, vira venda com preços atualizados e não baixa estoque.
 - Desconto e acréscimo por item e na venda. Consulta de preço (`Shift+F2`) mostra preço, estoque, lote e validade sem lançar.
 
-| Tecla | Ação | Tecla | Ação |
-| --- | --- | --- | --- |
-| `F1` | Ajuda | `F8` | Receber |
-| `F2` | Catálogo | `F9` | Finalizar |
-| `Shift+F2` | Consulta de preço | `F10` | Reimprimir |
-| `F3` | Cliente / CPF | `F11` | Sangria / suprimento |
-| `F4` | Desconto | `F12` | Fechar caixa |
-| `F5` | Quantidade | `Esc` | Voltar / fechar janela |
-| `F6` | Cancelar item | `Ctrl+U` | Trocar usuário |
-| `F7` | Venda em espera | `Ctrl+O` | Orçamento |
+| Tecla      | Ação              | Tecla    | Ação                   |
+| ---------- | ----------------- | -------- | ---------------------- |
+| `F1`       | Ajuda             | `F8`     | Receber                |
+| `F2`       | Catálogo          | `F9`     | Finalizar              |
+| `Shift+F2` | Consulta de preço | `F10`    | Reimprimir             |
+| `F3`       | Cliente / CPF     | `F11`    | Sangria / suprimento   |
+| `F4`       | Desconto          | `F12`    | Fechar caixa           |
+| `F5`       | Quantidade        | `Esc`    | Voltar / fechar janela |
+| `F6`       | Cancelar item     | `Ctrl+U` | Trocar usuário         |
+| `F7`       | Venda em espera   | `Ctrl+O` | Orçamento              |
 
 ### Pagamento
 
@@ -78,30 +78,30 @@ Base: o PDV da fase 7 de [plano-painel-admin.md](plano-painel-admin.md) e a pré
 
 ### Por segmento
 
-| Segmento | No PDV |
-| --- | --- |
-| Açougue | Peso com 3 casas, balança simulada com tara, etiqueta de balança, baixa fracionada em kg |
-| Farmácia | CPF e receita para controlados (gravada em Receitas como `canal: "balcao"` e no livro de Controlados), escolha de lote, lote vencido bloqueado |
-| Adega | "+18" no produto alcoólico e uma confirmação de maioridade por venda |
-| Salão | Profissional por serviço, comissão por profissional com relatório, cobrança dos agendamentos do dia |
-| Pizzaria | Nada exclusivo além das comandas |
-| Com Mesas | O PDV puxa comandas abertas para cobrar |
+| Segmento  | No PDV                                                                                                                                         |
+| --------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| Açougue   | Peso com 3 casas, balança simulada com tara, etiqueta de balança, baixa fracionada em kg                                                       |
+| Farmácia  | CPF e receita para controlados (gravada em Receitas como `canal: "balcao"` e no livro de Controlados), escolha de lote, lote vencido bloqueado |
+| Adega     | "+18" no produto alcoólico e uma confirmação de maioridade por venda                                                                           |
+| Salão     | Profissional por serviço, comissão por profissional com relatório, cobrança dos agendamentos do dia                                            |
+| Pizzaria  | Nada exclusivo além das comandas                                                                                                               |
+| Com Mesas | O PDV puxa comandas abertas para cobrar                                                                                                        |
 
 ### Valores padrão (editáveis na tela da loja, seção "PDV e caixa")
 
-| Configuração | Padrão |
-| --- | --- |
-| Desconto sem autorização | até 10% |
-| Alerta de sangria | dinheiro na gaveta acima de R$ 500 |
-| Fundo de troco sugerido | R$ 100 |
-| Vendas em espera | 5 |
-| Limite de fiado por cliente | R$ 300 |
-| Fiado em atraso | 30 dias |
-| Validade do orçamento | 7 dias |
-| Parcelas no crédito | até 12x, sem juros até 3x, 2,99% a.m. a partir da 4ª |
-| Pix simulado | confirma em 4 s |
-| TEF simulado | aprova em 3 s; final 0002 negado |
-| Cancelamento de NFC-e | até 30 min |
+| Configuração                | Padrão                                               |
+| --------------------------- | ---------------------------------------------------- |
+| Desconto sem autorização    | até 10%                                              |
+| Alerta de sangria           | dinheiro na gaveta acima de R$ 500                   |
+| Fundo de troco sugerido     | R$ 100                                               |
+| Vendas em espera            | 5                                                    |
+| Limite de fiado por cliente | R$ 300                                               |
+| Fiado em atraso             | 30 dias                                              |
+| Validade do orçamento       | 7 dias                                               |
+| Parcelas no crédito         | até 12x, sem juros até 3x, 2,99% a.m. a partir da 4ª |
+| Pix simulado                | confirma em 4 s                                      |
+| TEF simulado                | aprova em 3 s; final 0002 negado                     |
+| Cancelamento de NFC-e       | até 30 min                                           |
 
 ### Dados de demonstração
 
