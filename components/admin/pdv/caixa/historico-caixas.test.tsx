@@ -62,6 +62,12 @@ describe("HistoricoCaixas", () => {
     expect(within(detalhe).getByText("Sangria · Cofre")).toBeInTheDocument()
     expect(within(detalhe).getByText(/autorizou Rafael M\./)).toBeInTheDocument()
     expect(within(detalhe).getByText("Troco dado a mais")).toBeInTheDocument()
+    const vendas = within(await within(detalhe).findByRole("list", { name: "Vendas" }))
+    const [venda] = vendas.getAllByRole("listitem")
+    expect(venda).toHaveTextContent(/#\d+/)
+    expect(venda).toHaveTextContent("20:30")
+    expect(venda).toHaveTextContent("Dinheiro")
+    expect(venda).toHaveTextContent("R$ 30,00")
   })
 
   test("reabrir pela Marina pede o PIN do gerente", async () => {

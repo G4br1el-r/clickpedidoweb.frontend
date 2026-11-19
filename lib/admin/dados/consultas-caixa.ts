@@ -16,6 +16,8 @@ export const chavesCaixa = {
   resumo: (segmento: SegmentoPainelId, turnoId?: string) =>
     ["admin", segmento, "caixa", "resumo", turnoId] as const,
   historico: (segmento: SegmentoPainelId) => ["admin", segmento, "caixa", "historico"] as const,
+  vendas: (segmento: SegmentoPainelId, turnoId: string) =>
+    ["admin", segmento, "caixa", "vendas", turnoId] as const,
 }
 
 type ApiCaixa = Servidor["caixa"]
@@ -43,6 +45,15 @@ export function useHistoricoCaixas() {
   return useQuery({
     queryKey: chavesCaixa.historico(segmento),
     queryFn: () => servidorDo(segmento).caixa.historico(),
+  })
+}
+
+/** Vendas de um turno, da mais nova para a mais antiga. */
+export function useVendasDoTurno(turnoId: string) {
+  const segmento = useSegmento()
+  return useQuery({
+    queryKey: chavesCaixa.vendas(segmento, turnoId),
+    queryFn: () => servidorDo(segmento).caixa.vendas(turnoId),
   })
 }
 

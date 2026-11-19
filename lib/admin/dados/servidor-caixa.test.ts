@@ -281,6 +281,22 @@ describe("caixa", () => {
     expect((await api.caixa.atual())?.id).toBe(turno.id)
   })
 
+  test("as vendas do turno, da mais nova para a mais antiga, sem as de outro turno", async () => {
+    const api = servidor()
+    const turno = await abrirMarina(api)
+    const primeira = await api.pdv.finalizar(venda("eq-marina", 30))
+    const segunda = await api.pdv.finalizar(venda("eq-marina", 12, "pix"))
+    const vendas = await api.caixa.vendas(turno.id)
+    expect(vendas.map((pedido) => pedido.id)).toEqual([segunda.id, primeira.id])
+    const [anterior] = (await api.caixa.historico()).slice(1)
+    const daquele = await api.caixa.vendas(anterior.turno.id)
+    // A lista mostra também as canceladas; o resumo conta só as válidas.
+    expect(daquele.filter((pedido) => pedido.status !== "cancelado").length).toBe(
+      anterior.resumo.vendas,
+    )
+    expect(daquele.every((pedido) => pedido.turnoId === anterior.turno.id)).toBe(true)
+  })
+
   test("histórico do mais novo para o mais antigo, com resumo", async () => {
     const api = servidor()
     const turno = await abrirMarina(api)

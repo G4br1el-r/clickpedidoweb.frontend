@@ -24,11 +24,13 @@ import {
   useCaixaAtual,
   useHistoricoCaixas,
   useReabrirCaixa,
+  useVendasDoTurno,
 } from "@/lib/admin/dados/consultas-caixa"
 import { useEquipe, usePerfilAtual } from "@/lib/admin/dados/consultas-equipe"
 import type { Autorizacao, MembroEquipe, TurnoCaixa } from "@/lib/admin/dados/tipos"
 import { diferencaDinheiro, type ResumoTurno } from "@/lib/admin/regras/caixa"
 import { precisaAutorizacao } from "@/lib/admin/regras/equipe"
+import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import { emReais, plural } from "@/lib/formato"
 import { EsqueletoLinhas } from "../../entrega/linha-animada"
 import { JanelaAutorizacao } from "../../equipe/janela-autorizacao"
@@ -39,6 +41,42 @@ const dia = (iso: string) => format(new Date(iso), "dd/MM")
 
 function nomeDe(equipe: MembroEquipe[], id?: string) {
   return equipe.find((membro) => membro.id === id)?.nome ?? "alguém da equipe"
+}
+
+/** As vendas do turno: número, hora, forma e total; a cancelada aparece riscada. */
+function VendasDoTurno({ turnoId }: { turnoId: string }) {
+  const id = useId()
+  const { data: vendas } = useVendasDoTurno(turnoId)
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span id={id} className="text-[13px] text-muted-foreground">
+        Vendas
+      </span>
+      {!vendas ? (
+        <p className="text-sm text-muted-foreground">Carregando as vendas…</p>
+      ) : vendas.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Nenhuma venda neste turno.</p>
+      ) : (
+        <ul aria-labelledby={id} className="flex max-h-56 flex-col overflow-y-auto text-sm">
+          {vendas.map((venda) => (
+            <li
+              key={venda.id}
+              className={
+                venda.status === "cancelado"
+                  ? "flex justify-between gap-3 border-b border-border/60 py-1.5 text-muted-foreground line-through tabular-nums"
+                  : "flex justify-between gap-3 border-b border-border/60 py-1.5 tabular-nums"
+              }
+            >
+              <span>
+                #{venda.numero} · {hora(venda.criadoEm)} · {rotuloPagamento(venda.pagamento)}
+              </span>
+              <span className="font-medium">{emReais(venda.total)}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
 }
 
 /** Detalhe de um turno: os números, os movimentos com quem fez e quem autorizou. */
@@ -100,6 +138,7 @@ function DetalheTurno({
             <p className="text-sm">{turno.conferencia.justificativa}</p>
           </div>
         )}
+        <VendasDoTurno turnoId={turno.id} />
         <div className="flex flex-col gap-1.5">
           <span className="text-[13px] text-muted-foreground">Sangrias e suprimentos</span>
           {turno.movimentos.length === 0 ? (

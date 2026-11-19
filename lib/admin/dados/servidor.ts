@@ -1758,6 +1758,12 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return responder(reaberto)
       },
 
+      /** Vendas de um turno, da mais nova para a mais antiga (as canceladas também). */
+      async vendas(turnoId: string): Promise<Pedido[]> {
+        const { pedidos } = await carregar()
+        return responder(pedidos.filter((pedido) => pedido.turnoId === turnoId).toReversed())
+      },
+
       /** Todos os turnos, do mais novo para o mais antigo, com o resumo de cada um. */
       async historico(): Promise<{ turno: TurnoCaixa; resumo: ResumoTurno }[]> {
         const base = await carregar()
