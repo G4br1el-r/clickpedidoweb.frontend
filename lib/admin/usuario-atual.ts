@@ -7,6 +7,7 @@ import { ehSegmentoPainel, type SegmentoPainelId } from "./segmentos-painel"
 type EstadoUsuario = {
   /** Quem entrou em cada segmento (id da equipe). Sem nada, vale o primeiro Dono ativo. */
   porSegmento: Partial<Record<SegmentoPainelId, string>>
+  hidratado: boolean
   entrar: (segmento: SegmentoPainelId, id: string) => void
   sair: (segmento: SegmentoPainelId) => void
 }
@@ -26,6 +27,7 @@ export const useUsuarioSalvo = create<EstadoUsuario>()(
   persist(
     (set) => ({
       porSegmento: {},
+      hidratado: false,
       entrar: (segmento, id) =>
         set((estado) => ({ porSegmento: { ...estado.porSegmento, [segmento]: id } })),
       sair: (segmento) =>
@@ -44,6 +46,7 @@ export const useUsuarioSalvo = create<EstadoUsuario>()(
         ...atual,
         porSegmento: limpar((salvo as { porSegmento?: unknown } | undefined)?.porSegmento),
       }),
+      onRehydrateStorage: () => () => useUsuarioSalvo.setState({ hidratado: true }),
     },
   ),
 )

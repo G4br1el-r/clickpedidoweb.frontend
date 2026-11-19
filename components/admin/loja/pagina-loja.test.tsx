@@ -9,6 +9,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { useUsuarioSalvo } from "@/lib/admin/usuario-atual"
 import { PaginaLoja } from "./pagina-loja"
 
 const imprimir = vi.fn()
@@ -50,6 +51,8 @@ beforeEach(async () => {
   reiniciarServidores()
   imprimir.mockClear()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
+  localStorage.clear()
+  useUsuarioSalvo.setState(useUsuarioSalvo.getInitialState(), true)
 })
 
 afterEach(() => {
@@ -159,6 +162,22 @@ describe("PaginaLoja", () => {
     await usuario.click(screen.getByRole("button", { name: "Salvar alterações" }))
     await waitFor(async () => expect((await api().loja()).som).toBe("suave"))
     expect((await api().loja()).cidadesAtendidas).toEqual(["São José dos Campos", "Jacareí"])
+  })
+})
+
+describe("PaginaLoja: por perfil", () => {
+  test("o gerente não vê Formas de pagamento nem Pagamento online na loja", async () => {
+    useUsuarioSalvo.getState().entrar("pizzaria", "eq-gerente")
+    await abrir()
+    expect(screen.getByRole("region", { name: "Impressão" })).toBeInTheDocument()
+    expect(screen.queryByRole("region", { name: "Formas de pagamento" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("region", { name: "Pagamento online" })).not.toBeInTheDocument()
+  })
+
+  test("o dono vê as duas", async () => {
+    await abrir()
+    expect(screen.getByRole("region", { name: "Formas de pagamento" })).toBeInTheDocument()
+    expect(screen.getByRole("region", { name: "Pagamento online" })).toBeInTheDocument()
   })
 })
 

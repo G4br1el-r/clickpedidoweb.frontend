@@ -6,7 +6,7 @@ import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { useUsuarioSalvo } from "../usuario-atual"
 import { servidorDo } from "./consultas"
-import type { MembroEquipe } from "./tipos"
+import type { MembroEquipe, PerfilAcesso } from "./tipos"
 
 const useSegmento = () => useSegmentoAtual((estado) => estado.segmento)
 
@@ -49,4 +49,16 @@ export function useUsuarioAtual(): { membro: MembroEquipe | undefined; carregand
   if (!equipe) return { membro: undefined, carregando: isPending }
   const escolhido = equipe.find((membro) => membro.id === salvo && membro.ativo)
   return { membro: escolhido ?? membroPadrao(equipe), carregando: false }
+}
+
+/**
+ * Perfil de quem está usando o painel. Sem ninguém salvo, é o Dono na hora; com
+ * alguém salvo, `undefined` até a equipe carregar (para não mostrar o que não pode).
+ */
+export function usePerfilAtual(): PerfilAcesso | undefined {
+  const segmento = useSegmento()
+  const salvo = useUsuarioSalvo((estado) => estado.porSegmento[segmento])
+  const { membro } = useUsuarioAtual()
+  if (membro) return membro.perfil
+  return salvo ? undefined : "dono"
 }

@@ -41,6 +41,6 @@ export const useSegmentoAtual = create<EstadoSegmento>()(
 export function useSegmentoCarregado() {
   useEffect(() => {
     if (!useSegmentoAtual.getState().hidratado) void useSegmentoAtual.persist.rehydrate()
-    if (!useUsuarioSalvo.persist.hasHydrated()) void useUsuarioSalvo.persist.rehydrate()
+    if (!useUsuarioSalvo.getState().hidratado) void useUsuarioSalvo.persist.rehydrate()
   }, [])
 }

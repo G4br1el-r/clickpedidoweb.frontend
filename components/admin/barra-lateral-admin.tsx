@@ -44,6 +44,8 @@ import {
   SidebarRail,
 } from "@/components/ui/sidebar"
 import { useConfig } from "@/lib/admin/config"
+import { usePerfilAtual } from "@/lib/admin/dados/consultas-equipe"
+import { podeVerAparencia } from "@/lib/admin/regras/equipe"
 import { GRUPOS, type GrupoSecoes, normalizar, SECOES } from "@/lib/admin/secoes"
 import { liberarPro } from "./campos"
 import { MarcaLoja } from "./marca-loja"
@@ -219,6 +221,7 @@ export function BarraLateralAdmin() {
   // Como os outros grupos: começa fechado e só abre sozinho numa página de configuração.
   const [configAberto, setConfigAberto] = useState(() => caminho.startsWith("/admin/configuracoes"))
   const idConfig = useId()
+  const perfil = usePerfilAtual()
   const termo = normalizar(busca)
   const encontradas = termo
     ? SECOES.filter((secao) =>
@@ -235,66 +238,71 @@ export function BarraLateralAdmin() {
       <SidebarContent>
         <MenuModulos />
 
-        <Collapsible open={configAberto} onOpenChange={setConfigAberto} asChild>
-          <SidebarGroup>
-            <TituloGrupo controla={idConfig}>Personalizar loja</TituloGrupo>
-            <ConteudoAnimado id={idConfig} aberto={configAberto}>
-              <SidebarGroupContent className="flex flex-col gap-2">
-                <div className="relative group-data-[collapsible=icon]:hidden">
-                  <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <SidebarInput
-                    value={busca}
-                    onChange={(evento) => setBusca(evento.target.value)}
-                    placeholder="Buscar configuração"
-                    aria-label="Buscar configuração"
-                    className="pl-8"
-                  />
-                </div>
-                <SidebarMenu>
-                  {termo ? (
-                    encontradas.length > 0 ? (
-                      encontradas.map(({ id, titulo, icone: Icone }) => (
-                        <SidebarMenuItem key={id}>
+        {perfil && podeVerAparencia(perfil) && (
+          <Collapsible open={configAberto} onOpenChange={setConfigAberto} asChild>
+            <SidebarGroup>
+              <TituloGrupo controla={idConfig}>Personalizar loja</TituloGrupo>
+              <ConteudoAnimado id={idConfig} aberto={configAberto}>
+                <SidebarGroupContent className="flex flex-col gap-2">
+                  <div className="relative group-data-[collapsible=icon]:hidden">
+                    <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <SidebarInput
+                      value={busca}
+                      onChange={(evento) => setBusca(evento.target.value)}
+                      placeholder="Buscar configuração"
+                      aria-label="Buscar configuração"
+                      className="pl-8"
+                    />
+                  </div>
+                  <SidebarMenu>
+                    {termo ? (
+                      encontradas.length > 0 ? (
+                        encontradas.map(({ id, titulo, icone: Icone }) => (
+                          <SidebarMenuItem key={id}>
+                            <SidebarMenuButton
+                              asChild
+                              isActive={caminho === `/admin/configuracoes/${id}`}
+                            >
+                              <Link
+                                href={`/admin/configuracoes/${id}`}
+                                onClick={() => setBusca("")}
+                              >
+                                <Icone />
+                                <span>{titulo}</span>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        ))
+                      ) : (
+                        <p className="px-2 py-1.5 text-xs text-muted-foreground">
+                          Nenhuma configuração com “{busca.trim()}”.
+                        </p>
+                      )
+                    ) : (
+                      <>
+                        <SidebarMenuItem>
                           <SidebarMenuButton
                             asChild
-                            isActive={caminho === `/admin/configuracoes/${id}`}
+                            isActive={caminho === "/admin/configuracoes"}
+                            tooltip="Todas as opções"
                           >
-                            <Link href={`/admin/configuracoes/${id}`} onClick={() => setBusca("")}>
-                              <Icone />
-                              <span>{titulo}</span>
+                            <Link href="/admin/configuracoes">
+                              <SettingsIcon />
+                              <span>Todas as opções</span>
                             </Link>
                           </SidebarMenuButton>
                         </SidebarMenuItem>
-                      ))
-                    ) : (
-                      <p className="px-2 py-1.5 text-xs text-muted-foreground">
-                        Nenhuma configuração com “{busca.trim()}”.
-                      </p>
-                    )
-                  ) : (
-                    <>
-                      <SidebarMenuItem>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={caminho === "/admin/configuracoes"}
-                          tooltip="Todas as opções"
-                        >
-                          <Link href="/admin/configuracoes">
-                            <SettingsIcon />
-                            <span>Todas as opções</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                      {GRUPOS.map((grupo) => (
-                        <ItemGrupo key={grupo} grupo={grupo} caminho={caminho} />
-                      ))}
-                    </>
-                  )}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </ConteudoAnimado>
-          </SidebarGroup>
-        </Collapsible>
+                        {GRUPOS.map((grupo) => (
+                          <ItemGrupo key={grupo} grupo={grupo} caminho={caminho} />
+                        ))}
+                      </>
+                    )}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              </ConteudoAnimado>
+            </SidebarGroup>
+          </Collapsible>
+        )}
       </SidebarContent>
 
       <SidebarFooter>

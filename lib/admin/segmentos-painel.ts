@@ -31,6 +31,9 @@ import {
   WineIcon,
 } from "lucide-react"
 
+import type { PerfilAcesso } from "./dados/tipos"
+import { podeVerModulo } from "./regras/equipe"
+
 export type SegmentoPainelId =
   | "adega"
   | "acougue"
@@ -318,12 +321,21 @@ export function tituloDoModulo(id: ModuloId, segmento: SegmentoPainelId): string
   return TITULOS[segmento]?.[id] ?? buscarModulo(id)?.titulo ?? id
 }
 
-/** Menu do segmento: só os grupos que têm algum módulo dele, com os nomes do segmento. */
-export function menuDo(segmento: SegmentoPainelId): { grupo: GrupoMenu; itens: InfoModulo[] }[] {
+/**
+ * Menu do segmento: só os grupos que têm algum módulo dele que o perfil pode ver,
+ * com os nomes do segmento.
+ */
+export function menuDo(
+  segmento: SegmentoPainelId,
+  perfil: PerfilAcesso = "dono",
+): { grupo: GrupoMenu; itens: InfoModulo[] }[] {
   return GRUPOS_MENU.map((grupo) => ({
     grupo,
     itens: MODULOS_PAINEL.filter(
-      (modulo) => modulo.grupo === grupo && temModulo(segmento, modulo.id),
+      (modulo) =>
+        modulo.grupo === grupo &&
+        temModulo(segmento, modulo.id) &&
+        podeVerModulo(perfil, modulo.id),
     ).map((modulo) => ({ ...modulo, titulo: tituloDoModulo(modulo.id, segmento) })),
   })).filter((grupo) => grupo.itens.length > 0)
 }
