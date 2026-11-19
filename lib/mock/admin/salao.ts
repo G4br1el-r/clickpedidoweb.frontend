@@ -1,3 +1,4 @@
+import { CONFIG_SALAO_PADRAO } from "@/lib/admin/dados/migracao"
 import type { CatalogoLoja } from "@/lib/admin/dados/tipos"
 import { clientesDemo } from "@/lib/mock/admin/clientes"
 
@@ -2155,6 +2156,7 @@ export const catalogoSalao: CatalogoLoja = {
     },
   ],
   mesas: [],
+  salao: { ...CONFIG_SALAO_PADRAO, areas: [], garcons: [] },
   motoboys: [],
   bairros: [],
   clientes: clientesDemo,

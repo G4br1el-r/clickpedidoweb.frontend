@@ -1,4 +1,5 @@
 import { addDays, format, subDays, subHours, subMinutes } from "date-fns"
+import { CONFIG_SALAO_PADRAO } from "@/lib/admin/dados/migracao"
 import type {
   CatalogoLoja,
   DadosMedicamento,
@@ -1300,6 +1301,7 @@ export const catalogoFarmacia: CatalogoLoja = {
   })),
   produtos,
   mesas: [],
+  salao: { ...CONFIG_SALAO_PADRAO, areas: [], garcons: [] },
   motoboys: [
     { id: "moto-1", nome: "Rodrigo Alves", telefone: "12991230011", ativo: true },
     { id: "moto-2", nome: "Felipe Nunes", telefone: "12992340022", ativo: true },
