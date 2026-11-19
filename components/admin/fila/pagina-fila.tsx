@@ -201,6 +201,7 @@ function Coluna({
   limiteAceiteMin,
   tempos,
   historico,
+  nomeLoja,
   acoes,
   comTitulo,
 }: {
@@ -212,6 +213,7 @@ function Coluna({
   limiteAceiteMin: number
   tempos: TemposDaLoja
   historico: Record<number, HistoricoCliente> | undefined
+  nomeLoja: string
   acoes: AcoesDoCartao
   comTitulo: boolean
 }) {
@@ -247,6 +249,7 @@ function Coluna({
               limiteAceiteMin={limiteAceiteMin}
               tempos={tempos}
               seloCliente={historico?.[pedido.id] ? seloDoCliente(historico[pedido.id]) : null}
+              nomeLoja={nomeLoja}
               aoAceitar={() => acoes.aceitar(pedido)}
               aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
               aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
@@ -544,6 +547,7 @@ export function PaginaFila({
               limiteAceiteMin={limiteAceiteMin}
               tempos={tempos}
               historico={historico}
+              nomeLoja={loja?.nome ?? ""}
               acoes={acoes}
               comTitulo
             />
@@ -573,6 +577,7 @@ export function PaginaFila({
                 limiteAceiteMin={limiteAceiteMin}
                 tempos={tempos}
                 historico={historico}
+                nomeLoja={loja?.nome ?? ""}
                 acoes={acoes}
                 comTitulo={false}
               />

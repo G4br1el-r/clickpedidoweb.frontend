@@ -8,6 +8,7 @@ import {
   CalendarIcon,
   ClockIcon,
   MapPinIcon,
+  MessageCircleIcon,
   PanelRightOpenIcon,
   PrinterIcon,
   ScaleIcon,
@@ -20,6 +21,7 @@ import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import type { MotivoEscolhido, Motoboy, Pedido } from "@/lib/admin/dados/tipos"
 import { esperaDoAceite } from "@/lib/admin/regras/aceite"
 import { resumoDosItens, textoCobranca, type Urgencia, urgencia } from "@/lib/admin/regras/fila"
+import { linkWhatsApp, mensagemParaCliente } from "@/lib/admin/regras/mensagens"
 import { textoRetirada } from "@/lib/admin/regras/numero"
 import { itensParaPesar } from "@/lib/admin/regras/pesagem"
 import { type TemposDaLoja, textoDoPrazo } from "@/lib/admin/regras/prazo"
@@ -95,6 +97,7 @@ export function CartaoFila({
   limiteAceiteMin,
   tempos,
   seloCliente = null,
+  nomeLoja = "",
   aoAceitar,
   aoRecusar,
   aoCancelar,
@@ -112,6 +115,8 @@ export function CartaoFila({
   tempos: TemposDaLoja
   /** "1º pedido" ou "Cliente frequente", pelo que o cliente já pediu. */
   seloCliente?: string | null
+  /** Nome da loja, para a mensagem ao cliente. */
+  nomeLoja?: string
   aoAceitar: () => void
   aoRecusar: (escolhido: MotivoEscolhido) => void
   aoCancelar: (escolhido: MotivoEscolhido) => void
@@ -300,6 +305,23 @@ export function CartaoFila({
           )}
           {/* Os ícones andam juntos: sem lugar, descem inteiros para a linha de baixo. */}
           <div className="ml-auto flex items-center gap-2">
+            <Button asChild type="button" size="icon-sm" variant="outline">
+              <a
+                href={linkWhatsApp(
+                  pedido.cliente.telefone,
+                  mensagemParaCliente(pedido, {
+                    loja: nomeLoja,
+                    endereco: typeof window === "undefined" ? "" : window.location.origin,
+                  }),
+                )}
+                target="_blank"
+                rel="noreferrer"
+                aria-label={`Avisar #${pedido.numero} no WhatsApp`}
+                title={`Avisar ${pedido.cliente.nome.split(" ")[0]} no WhatsApp`}
+              >
+                <MessageCircleIcon />
+              </a>
+            </Button>
             <Button
               type="button"
               size="icon-sm"

@@ -24,6 +24,7 @@ function renderizar(pedido: Pedido, agora = AGORA, seloCliente: string | null = 
         agora={agora}
         tempos={TEMPOS}
         seloCliente={seloCliente}
+        nomeLoja="Casa da Pizza"
         motoboys={[]}
         novo={false}
         ocupado={false}
@@ -69,5 +70,17 @@ describe("CartaoFila: o cliente", () => {
   test("mostra o selo de cliente novo", () => {
     renderizar(PEDIDO, AGORA, "1º pedido")
     expect(screen.getByText("1º pedido")).toBeInTheDocument()
+  })
+})
+
+describe("CartaoFila: avisar o cliente", () => {
+  test("o WhatsApp abre a conversa do cliente com a mensagem da etapa", () => {
+    renderizar({ ...PEDIDO, numero: 1412, cliente: { nome: "Ana Lima", telefone: "12991230000" } })
+    const link = screen.getByRole("link", { name: "Avisar #1412 no WhatsApp" })
+    const href = link.getAttribute("href") ?? ""
+    expect(href.startsWith("https://wa.me/5512991230000?text=")).toBe(true)
+    const texto = decodeURIComponent(href.split("text=")[1])
+    expect(texto).toContain("Olá, Ana! Seu pedido #1412 na Casa da Pizza")
+    expect(link).toHaveAttribute("target", "_blank")
   })
 })
