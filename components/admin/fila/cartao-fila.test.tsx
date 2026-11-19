@@ -1,4 +1,5 @@
 import { render, screen } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
 import { describe, expect, test } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import type { Pedido } from "@/lib/admin/dados/tipos"
@@ -15,7 +16,12 @@ const PEDIDO: Pedido = {
   criadoEm: new Date(2026, 10, 13, 20, 0).toISOString(),
 }
 
-function renderizar(pedido: Pedido, agora = AGORA, seloCliente: string | null = null) {
+function renderizar(
+  pedido: Pedido,
+  agora = AGORA,
+  seloCliente: string | null = null,
+  compacto = false,
+) {
   const nada = () => {}
   return render(
     <TooltipProvider>
@@ -25,6 +31,7 @@ function renderizar(pedido: Pedido, agora = AGORA, seloCliente: string | null = 
         tempos={TEMPOS}
         seloCliente={seloCliente}
         nomeLoja="Casa da Pizza"
+        compacto={compacto}
         motoboys={[]}
         novo={false}
         ocupado={false}
@@ -82,5 +89,27 @@ describe("CartaoFila: avisar o cliente", () => {
     const texto = decodeURIComponent(href.split("text=")[1])
     expect(texto).toContain("Olá, Ana! Seu pedido #1412 na Casa da Pizza")
     expect(link).toHaveAttribute("target", "_blank")
+  })
+})
+
+describe("CartaoFila: compacto", () => {
+  test("uma linha com número, cliente e prazo; tocar abre o cartão inteiro", async () => {
+    const usuario = userEvent.setup()
+    const pedido = {
+      ...PEDIDO,
+      numero: 1412,
+      cliente: { nome: "Ana Lima", telefone: "12991230000" },
+    }
+    renderizar(pedido, AGORA, null, true)
+    const linha = screen.getByRole("button", { name: /^#1412/ })
+    expect(linha).toHaveAttribute("aria-expanded", "false")
+    expect(linha).toHaveTextContent("Ana Lima")
+    expect(linha).toHaveTextContent("até 21:00 · 30 min")
+    expect(screen.queryByRole("button", { name: "Marcar como pronto" })).not.toBeInTheDocument()
+
+    await usuario.click(linha)
+    expect(screen.getByRole("button", { name: "Marcar como pronto" })).toBeInTheDocument()
+    await usuario.click(screen.getByRole("button", { name: "Recolher #1412" }))
+    expect(screen.queryByRole("button", { name: "Marcar como pronto" })).not.toBeInTheDocument()
   })
 })

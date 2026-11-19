@@ -6,6 +6,7 @@ import {
   BellRingIcon,
   BikeIcon,
   CalendarIcon,
+  ChevronUpIcon,
   ClockIcon,
   MapPinIcon,
   MessageCircleIcon,
@@ -15,6 +16,7 @@ import {
   XIcon,
 } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
+import { useState } from "react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
@@ -98,6 +100,7 @@ export function CartaoFila({
   tempos,
   seloCliente = null,
   nomeLoja = "",
+  compacto = false,
   aoAceitar,
   aoRecusar,
   aoCancelar,
@@ -117,6 +120,8 @@ export function CartaoFila({
   seloCliente?: string | null
   /** Nome da loja, para a mensagem ao cliente. */
   nomeLoja?: string
+  /** Modo compacto deste aparelho: uma linha que abre ao tocar. */
+  compacto?: boolean
   aoAceitar: () => void
   aoRecusar: (escolhido: MotivoEscolhido) => void
   aoCancelar: (escolhido: MotivoEscolhido) => void
@@ -133,6 +138,9 @@ export function CartaoFila({
   const canal = pedido.mesa
     ? `Mesa ${pedido.mesa.numero}`
     : CANAL_CURTO[pedido.tipo as keyof typeof CANAL_CURTO]
+  const [expandido, setExpandido] = useState(false)
+  // Quem espera aceite pede ação: não se recolhe nem no compacto.
+  const recolhido = compacto && !expandido && !espera
 
   return (
     <motion.article
@@ -165,206 +173,242 @@ export function CartaoFila({
             transition={{ duration: 2.4, ease: "easeOut" }}
           />
         )}
-        <CardHeader className="flex flex-row flex-wrap items-center gap-x-2 gap-y-1 px-3">
-          {/* O traço da etapa: troca de cor quando o pedido anda para a coluna seguinte. */}
-          <Traco tom={tomDoStatus(pedido.status)} className="h-3" />
-          <h3 id={`pedido-${pedido.id}`} className="text-base font-semibold tabular-nums">
-            #{pedido.numero}
-          </h3>
-          <span
-            data-canal=""
-            title={rotuloCanal(pedido.tipo)}
-            className="text-[13px] text-muted-foreground"
+        {recolhido ? (
+          <button
+            type="button"
+            aria-expanded={false}
+            onClick={() => setExpandido(true)}
+            className="flex w-full min-w-0 items-center gap-2 px-3 text-left focus-visible:outline-2 focus-visible:outline-ring"
           >
-            {canal}
-          </span>
-          <Badge variant="outline">{rotuloOrigem(pedido.origem)}</Badge>
-          {seloCliente && <Badge variant="secondary">{seloCliente}</Badge>}
-          {aPesar && (
-            <Badge variant="secondary" className="gap-1">
-              <ScaleIcon aria-hidden="true" />A pesar
-            </Badge>
-          )}
-          {novo && (
-            <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">
-              <span aria-hidden="true" className="h-3 w-[3px] rounded-full bg-(--atencao)" />
-              Chegou agora
+            <Traco tom={tomDoStatus(pedido.status)} className="h-3" />
+            <span id={`pedido-${pedido.id}`} className="text-base font-semibold tabular-nums">
+              #{pedido.numero}
             </span>
-          )}
-          <span className="ml-auto text-xs text-muted-foreground">
-            <Tempo pedido={pedido} agora={agora} tempos={tempos} />
-          </span>
-        </CardHeader>
-
-        <CardContent className="flex flex-col gap-2 px-3 text-sm">
-          {espera && (
-            // A loja nunca recusa sozinha: passou do limite, o aviso só fica mais forte.
-            <p
-              className={cn(
-                "flex items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums",
-                espera.passou
-                  ? "bg-(--tom-cancelado)/10 text-destructive dark:text-(--tom-cancelado)"
-                  : "bg-(--atencao)/12 text-foreground",
-              )}
-            >
-              <BellRingIcon className="size-3.5" aria-hidden="true" />
-              Esperando aceite há {espera.minutos} min
-              {espera.passou && <span className="sr-only">, passou do limite</span>}
-            </p>
-          )}
-          <div className="flex flex-col">
-            <span className="font-medium">{pedido.cliente.nome}</span>
-            {pedido.mesa?.garcom && (
-              <span className="text-xs text-muted-foreground">Garçom: {pedido.mesa.garcom}</span>
-            )}
-            {pedido.endereco && (
-              <span className="flex items-start gap-1 text-xs text-muted-foreground">
-                <MapPinIcon className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
-                {pedido.endereco.logradouro}, {pedido.endereco.numero} · {pedido.endereco.bairro}
+            <span className="text-[13px] text-muted-foreground">{canal}</span>
+            <span className="min-w-0 flex-1 truncate text-sm">{pedido.cliente.nome}</span>
+            <span className="text-xs text-muted-foreground">
+              <Tempo pedido={pedido} agora={agora} tempos={tempos} />
+            </span>
+          </button>
+        ) : (
+          <>
+            <CardHeader className="flex flex-row flex-wrap items-center gap-x-2 gap-y-1 px-3">
+              {/* O traço da etapa: troca de cor quando o pedido anda para a coluna seguinte. */}
+              <Traco tom={tomDoStatus(pedido.status)} className="h-3" />
+              <h3 id={`pedido-${pedido.id}`} className="text-base font-semibold tabular-nums">
+                #{pedido.numero}
+              </h3>
+              <span
+                data-canal=""
+                title={rotuloCanal(pedido.tipo)}
+                className="text-[13px] text-muted-foreground"
+              >
+                {canal}
               </span>
-            )}
-          </div>
-          <ul className="flex flex-col gap-1">
-            {pedido.itens.map((item) => (
-              <li key={item.id}>
-                <span className="font-medium tabular-nums">{item.quantidade}×</span> {item.nome}
-                {item.opcoes.length > 0 && (
-                  <span className="block text-xs text-muted-foreground">
-                    {item.opcoes.join(" · ")}
+              <Badge variant="outline">{rotuloOrigem(pedido.origem)}</Badge>
+              {seloCliente && <Badge variant="secondary">{seloCliente}</Badge>}
+              {aPesar && (
+                <Badge variant="secondary" className="gap-1">
+                  <ScaleIcon aria-hidden="true" />A pesar
+                </Badge>
+              )}
+              {novo && (
+                <span className="inline-flex items-center gap-1.5 text-[13px] font-medium">
+                  <span aria-hidden="true" className="h-3 w-[3px] rounded-full bg-(--atencao)" />
+                  Chegou agora
+                </span>
+              )}
+              <span className="ml-auto text-xs text-muted-foreground">
+                <Tempo pedido={pedido} agora={agora} tempos={tempos} />
+              </span>
+              {compacto && expandido && (
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  aria-label={`Recolher #${pedido.numero}`}
+                  aria-expanded={true}
+                  onClick={() => setExpandido(false)}
+                >
+                  <ChevronUpIcon />
+                </Button>
+              )}
+            </CardHeader>
+
+            <CardContent className="flex flex-col gap-2 px-3 text-sm">
+              {espera && (
+                // A loja nunca recusa sozinha: passou do limite, o aviso só fica mais forte.
+                <p
+                  className={cn(
+                    "flex items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums",
+                    espera.passou
+                      ? "bg-(--tom-cancelado)/10 text-destructive dark:text-(--tom-cancelado)"
+                      : "bg-(--atencao)/12 text-foreground",
+                  )}
+                >
+                  <BellRingIcon className="size-3.5" aria-hidden="true" />
+                  Esperando aceite há {espera.minutos} min
+                  {espera.passou && <span className="sr-only">, passou do limite</span>}
+                </p>
+              )}
+              <div className="flex flex-col">
+                <span className="font-medium">{pedido.cliente.nome}</span>
+                {pedido.mesa?.garcom && (
+                  <span className="text-xs text-muted-foreground">
+                    Garçom: {pedido.mesa.garcom}
                   </span>
                 )}
-                {item.observacao && (
-                  <span className="block text-xs italic">“{item.observacao}”</span>
+                {pedido.endereco && (
+                  <span className="flex items-start gap-1 text-xs text-muted-foreground">
+                    <MapPinIcon className="mt-0.5 size-3 shrink-0" aria-hidden="true" />
+                    {pedido.endereco.logradouro}, {pedido.endereco.numero} ·{" "}
+                    {pedido.endereco.bairro}
+                  </span>
                 )}
-              </li>
-            ))}
-          </ul>
-          {pedido.observacao && (
-            <p className="rounded-md bg-foreground/[0.05] px-2 py-1.5 text-xs">
-              Obs.: {pedido.observacao}
-            </p>
-          )}
-          {pedido.dataRetirada && (
-            <p className="flex items-center gap-1 text-xs font-medium">
-              <CalendarIcon className="size-3.5" aria-hidden="true" />
-              {textoRetirada(pedido.dataRetirada)}
-            </p>
-          )}
-          <p className="text-xs text-muted-foreground tabular-nums">{resumoDosItens(pedido)}</p>
-          <p className="text-xs text-muted-foreground">{textoCobranca(pedido)}</p>
-          {pedido.impressoEm && (
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
-              <PrinterIcon className="size-3.5" aria-hidden="true" />
-              Impresso às {format(new Date(pedido.impressoEm), "HH:mm")}
-            </p>
-          )}
-          {motoboy && (
-            <p className="flex items-center gap-1 text-xs text-muted-foreground">
-              <BikeIcon className="size-3.5" aria-hidden="true" />
-              {motoboy.nome}
-            </p>
-          )}
-        </CardContent>
+              </div>
+              <ul className="flex flex-col gap-1">
+                {pedido.itens.map((item) => (
+                  <li key={item.id}>
+                    <span className="font-medium tabular-nums">{item.quantidade}×</span> {item.nome}
+                    {item.opcoes.length > 0 && (
+                      <span className="block text-xs text-muted-foreground">
+                        {item.opcoes.join(" · ")}
+                      </span>
+                    )}
+                    {item.observacao && (
+                      <span className="block text-xs italic">“{item.observacao}”</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              {pedido.observacao && (
+                <p className="rounded-md bg-foreground/[0.05] px-2 py-1.5 text-xs">
+                  Obs.: {pedido.observacao}
+                </p>
+              )}
+              {pedido.dataRetirada && (
+                <p className="flex items-center gap-1 text-xs font-medium">
+                  <CalendarIcon className="size-3.5" aria-hidden="true" />
+                  {textoRetirada(pedido.dataRetirada)}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground tabular-nums">{resumoDosItens(pedido)}</p>
+              <p className="text-xs text-muted-foreground">{textoCobranca(pedido)}</p>
+              {pedido.impressoEm && (
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <PrinterIcon className="size-3.5" aria-hidden="true" />
+                  Impresso às {format(new Date(pedido.impressoEm), "HH:mm")}
+                </p>
+              )}
+              {motoboy && (
+                <p className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <BikeIcon className="size-3.5" aria-hidden="true" />
+                  {motoboy.nome}
+                </p>
+              )}
+            </CardContent>
 
-        <CardFooter className="flex-wrap gap-2 border-border/70 bg-transparent px-3 pt-3">
-          {espera ? (
-            <>
-              <Button
-                type="button"
-                size="sm"
-                className="min-w-[min(100%,7rem)] flex-1"
-                disabled={ocupado}
-                onClick={aoAceitar}
-              >
-                Aceitar
-              </Button>
-              <ConfirmarComMotivo
-                gatilho={
-                  <Button type="button" size="sm" variant="outline" disabled={ocupado}>
-                    Recusar
-                  </Button>
-                }
-                titulo={`Recusar o pedido #${pedido.numero}?`}
-                descricao="O cliente fica sabendo do motivo. Se já pagou, o pedido fica marcado para devolver."
-                confirmar="Sim, recusar"
-                aoConfirmar={aoRecusar}
-              />
-            </>
-          ) : acao ? (
-            <Button
-              type="button"
-              size="sm"
-              className="min-w-[min(100%,7rem)] flex-1"
-              disabled={ocupado}
-              onClick={aoAvancar}
-            >
-              {acao}
-            </Button>
-          ) : (
-            <span className="flex-1 text-xs text-muted-foreground">Fecha em Mesas</span>
-          )}
-          {/* Os ícones andam juntos: sem lugar, descem inteiros para a linha de baixo. */}
-          <div className="ml-auto flex items-center gap-2">
-            <Button asChild type="button" size="icon-sm" variant="outline">
-              <a
-                href={linkWhatsApp(
-                  pedido.cliente.telefone,
-                  mensagemParaCliente(pedido, {
-                    loja: nomeLoja,
-                    endereco: typeof window === "undefined" ? "" : window.location.origin,
-                  }),
-                )}
-                target="_blank"
-                rel="noreferrer"
-                aria-label={`Avisar #${pedido.numero} no WhatsApp`}
-                title={`Avisar ${pedido.cliente.nome.split(" ")[0]} no WhatsApp`}
-              >
-                <MessageCircleIcon />
-              </a>
-            </Button>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="outline"
-              aria-label={`${pedido.impressoEm ? "Reimprimir" : "Imprimir"} cupom de #${pedido.numero}`}
-              onClick={aoImprimir}
-            >
-              <PrinterIcon />
-            </Button>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="outline"
-              aria-label="Detalhes"
-              title={`Detalhes de #${pedido.numero}`}
-              onClick={aoAbrir}
-            >
-              <PanelRightOpenIcon />
-            </Button>
-            {/* Quem espera aceite se recusa; o resto se cancela, sempre com motivo. */}
-            {!espera && (
-              <ConfirmarComMotivo
-                gatilho={
+            <CardFooter className="flex-wrap gap-2 border-border/70 bg-transparent px-3 pt-3">
+              {espera ? (
+                <>
                   <Button
                     type="button"
-                    size="icon-sm"
-                    variant="ghost"
-                    className="text-muted-foreground hover:text-destructive"
-                    aria-label={`Cancelar pedido #${pedido.numero}`}
-                    title={`Cancelar #${pedido.numero}`}
+                    size="sm"
+                    className="min-w-[min(100%,7rem)] flex-1"
                     disabled={ocupado}
+                    onClick={aoAceitar}
                   >
-                    <XIcon />
+                    Aceitar
                   </Button>
-                }
-                titulo={`Cancelar o pedido #${pedido.numero}?`}
-                descricao="O pedido sai da fila e da cozinha. Se já estava pago, fica marcado para devolver ao cliente."
-                confirmar="Sim, cancelar"
-                aoConfirmar={aoCancelar}
-              />
-            )}
-          </div>
-        </CardFooter>
+                  <ConfirmarComMotivo
+                    gatilho={
+                      <Button type="button" size="sm" variant="outline" disabled={ocupado}>
+                        Recusar
+                      </Button>
+                    }
+                    titulo={`Recusar o pedido #${pedido.numero}?`}
+                    descricao="O cliente fica sabendo do motivo. Se já pagou, o pedido fica marcado para devolver."
+                    confirmar="Sim, recusar"
+                    aoConfirmar={aoRecusar}
+                  />
+                </>
+              ) : acao ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="min-w-[min(100%,7rem)] flex-1"
+                  disabled={ocupado}
+                  onClick={aoAvancar}
+                >
+                  {acao}
+                </Button>
+              ) : (
+                <span className="flex-1 text-xs text-muted-foreground">Fecha em Mesas</span>
+              )}
+              {/* Os ícones andam juntos: sem lugar, descem inteiros para a linha de baixo. */}
+              <div className="ml-auto flex items-center gap-2">
+                <Button asChild type="button" size="icon-sm" variant="outline">
+                  <a
+                    href={linkWhatsApp(
+                      pedido.cliente.telefone,
+                      mensagemParaCliente(pedido, {
+                        loja: nomeLoja,
+                        endereco: typeof window === "undefined" ? "" : window.location.origin,
+                      }),
+                    )}
+                    target="_blank"
+                    rel="noreferrer"
+                    aria-label={`Avisar #${pedido.numero} no WhatsApp`}
+                    title={`Avisar ${pedido.cliente.nome.split(" ")[0]} no WhatsApp`}
+                  >
+                    <MessageCircleIcon />
+                  </a>
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="outline"
+                  aria-label={`${pedido.impressoEm ? "Reimprimir" : "Imprimir"} cupom de #${pedido.numero}`}
+                  onClick={aoImprimir}
+                >
+                  <PrinterIcon />
+                </Button>
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="outline"
+                  aria-label="Detalhes"
+                  title={`Detalhes de #${pedido.numero}`}
+                  onClick={aoAbrir}
+                >
+                  <PanelRightOpenIcon />
+                </Button>
+                {/* Quem espera aceite se recusa; o resto se cancela, sempre com motivo. */}
+                {!espera && (
+                  <ConfirmarComMotivo
+                    gatilho={
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        className="text-muted-foreground hover:text-destructive"
+                        aria-label={`Cancelar pedido #${pedido.numero}`}
+                        title={`Cancelar #${pedido.numero}`}
+                        disabled={ocupado}
+                      >
+                        <XIcon />
+                      </Button>
+                    }
+                    titulo={`Cancelar o pedido #${pedido.numero}?`}
+                    descricao="O pedido sai da fila e da cozinha. Se já estava pago, fica marcado para devolver ao cliente."
+                    confirmar="Sim, cancelar"
+                    aoConfirmar={aoCancelar}
+                  />
+                )}
+              </div>
+            </CardFooter>
+          </>
+        )}
       </Card>
     </motion.article>
   )

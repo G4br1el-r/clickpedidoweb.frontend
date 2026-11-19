@@ -151,7 +151,5 @@ export function finalizadosHoje(concluidosHoje: Pedido[], criadosHoje: Pedido[])
   for (const pedido of [...concluidosHoje, ...criadosHoje]) {
     if (pedido.status === "concluido" || pedido.status === "cancelado") porId.set(pedido.id, pedido)
   }
-  return [...porId.values()].sort(
-    (a, b) => Date.parse(b.atualizadoEm) - Date.parse(a.atualizadoEm),
-  )
+  return [...porId.values()].sort((a, b) => Date.parse(b.atualizadoEm) - Date.parse(a.atualizadoEm))
 }

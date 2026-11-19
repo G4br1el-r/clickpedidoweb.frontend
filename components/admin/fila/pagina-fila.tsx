@@ -208,6 +208,7 @@ function Coluna({
   tempos,
   historico,
   nomeLoja,
+  compacto,
   acoes,
   comTitulo,
 }: {
@@ -220,6 +221,7 @@ function Coluna({
   tempos: TemposDaLoja
   historico: Record<number, HistoricoCliente> | undefined
   nomeLoja: string
+  compacto: boolean
   acoes: AcoesDoCartao
   comTitulo: boolean
 }) {
@@ -256,6 +258,7 @@ function Coluna({
               tempos={tempos}
               seloCliente={historico?.[pedido.id] ? seloDoCliente(historico[pedido.id]) : null}
               nomeLoja={nomeLoja}
+              compacto={compacto}
               aoAceitar={() => acoes.aceitar(pedido)}
               aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
               aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
@@ -594,6 +597,7 @@ export function PaginaFila({
               tempos={tempos}
               historico={historico}
               nomeLoja={loja?.nome ?? ""}
+              compacto={preferencias.compacto}
               acoes={acoes}
               comTitulo
             />
@@ -624,6 +628,7 @@ export function PaginaFila({
                 tempos={tempos}
                 historico={historico}
                 nomeLoja={loja?.nome ?? ""}
+                compacto={preferencias.compacto}
                 acoes={acoes}
                 comTitulo={false}
               />

@@ -21,7 +21,12 @@ export function proximoStatus(tipo: TipoPedido, status: StatusPedido): StatusPed
   }
 }
 
-const EM_ANDAMENTO: readonly StatusPedido[] = ["recebido", "em-preparo", "pronto", "saiu-para-entrega"]
+const EM_ANDAMENTO: readonly StatusPedido[] = [
+  "recebido",
+  "em-preparo",
+  "pronto",
+  "saiu-para-entrega",
+]
 
 /**
  * A etapa de antes: a que avança para esta. Serve para desfazer, arrastar de volta e reabrir.

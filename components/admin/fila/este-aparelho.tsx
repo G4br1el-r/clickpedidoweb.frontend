@@ -189,6 +189,13 @@ export function EsteAparelho({ loja }: { loja: ConfigLoja | undefined }) {
             aoMudar={(ligada) => ligar("telaAcesa", ligada)}
             recusa={recusas.telaAcesa}
           />
+          <Linha
+            id="compacto"
+            rotulo="Modo compacto"
+            detalhe="Cada pedido numa linha, que abre ao tocar."
+            marcada={preferencias.compacto}
+            aoMudar={(ligada) => ligar("compacto", ligada)}
+          />
         </Grupo>
         <Grupo titulo="Demonstração">
           <Linha

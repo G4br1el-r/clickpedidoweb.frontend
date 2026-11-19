@@ -7,7 +7,7 @@ import { useLoja } from "./dados/consultas"
 import type { SomAlerta } from "./dados/tipos"
 
 /** Avisos que se ligam e desligam no menu "Este aparelho". */
-export type ChaveDoAparelho = "notificar" | "piscarAba" | "vibrar" | "telaAcesa"
+export type ChaveDoAparelho = "notificar" | "piscarAba" | "vibrar" | "telaAcesa" | "compacto"
 
 type Preferencias = {
   somLigado: boolean
@@ -23,6 +23,8 @@ type Preferencias = {
   vibrar: boolean
   /** A tela não apaga enquanto a fila está aberta. */
   telaAcesa: boolean
+  /** Cada pedido numa linha, que abre ao tocar. */
+  compacto: boolean
   ligarSom: (ligado: boolean) => void
   escolherSom: (tipo: SomAlerta | null) => void
   ligarSimulacao: (ligada: boolean) => void
@@ -40,6 +42,7 @@ export const usePreferenciasFila = create<Preferencias>()(
       piscarAba: true,
       vibrar: false,
       telaAcesa: false,
+      compacto: false,
       ligarSom: (somLigado) => set({ somLigado }),
       escolherSom: (tipoSom) => set({ tipoSom }),
       ligarSimulacao: (simular) => set({ simular }),
@@ -49,7 +52,7 @@ export const usePreferenciasFila = create<Preferencias>()(
       name: "clickpedido-admin-fila",
       version: 1,
       skipHydration: true,
-      partialize: ({ somLigado, tipoSom, simular, notificar, piscarAba, vibrar, telaAcesa }) => ({
+      partialize: ({
         somLigado,
         tipoSom,
         simular,
@@ -57,6 +60,16 @@ export const usePreferenciasFila = create<Preferencias>()(
         piscarAba,
         vibrar,
         telaAcesa,
+        compacto,
+      }) => ({
+        somLigado,
+        tipoSom,
+        simular,
+        notificar,
+        piscarAba,
+        vibrar,
+        telaAcesa,
+        compacto,
       }),
     },
   ),

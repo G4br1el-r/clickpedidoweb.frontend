@@ -640,6 +640,23 @@ describe("PaginaFila", () => {
     )
   })
 
+  test("Modo compacto, neste aparelho: cada pedido vira uma linha que abre ao tocar", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+    const menu = await abrirEsteAparelho(usuario)
+    await usuario.click(menu.getByRole("switch", { name: "Modo compacto" }))
+    await usuario.keyboard("{Escape}")
+
+    expect(usePreferenciasFila.getState().compacto).toBe(true)
+    const preparo = await coluna("Em preparo")
+    await waitFor(() =>
+      expect(preparo.queryAllByRole("button", { expanded: false }).length).toBeGreaterThan(0),
+    )
+    expect(preparo.queryByRole("button", { name: "Marcar como pronto" })).not.toBeInTheDocument()
+  })
+
   test("Este aparelho reúne o som, os avisos e a demonstração", async () => {
     renderizar()
     const menu = await abrirEsteAparelho()
