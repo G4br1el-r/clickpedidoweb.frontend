@@ -784,6 +784,36 @@ test("fila: pedido do site espera aceite; aceitar e recusar com motivo", async (
   // Sem axe aqui: com o relógio controlado as animações param no meio (cartão transparente).
 })
 
+test("fila: aceitar numa aba tira o aceite pendente da outra aba", async ({ page, context }, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a fila usa abas")
+  const relogio = new Date("2026-11-13T20:30:00-03:00")
+  await page.clock.install({ time: relogio })
+  await page.goto("/admin/fila")
+  const novos = page.getByRole("region", { name: /^Novos, / })
+  await expect(novos).toBeVisible({ timeout: 15_000 })
+  await page.clock.fastForward(61_000)
+  const esperando = novos.getByRole("article").filter({ hasText: "Esperando aceite" }).first()
+  await expect(esperando).toBeVisible({ timeout: 10_000 })
+  const numero = (await esperando.getByRole("heading").textContent()) ?? ""
+
+  // Outra aba do mesmo navegador, aberta depois: vê o pedido esperando.
+  const outraAba = await context.newPage()
+  await outraAba.clock.install({ time: relogio })
+  await outraAba.goto("/admin/fila")
+  const naOutra = outraAba
+    .getByRole("region", { name: /^Novos, / })
+    .getByRole("article")
+    .filter({ has: outraAba.getByRole("heading", { name: numero, exact: true }) })
+  await expect(naOutra).toContainText("Esperando aceite", { timeout: 15_000 })
+
+  await esperando.getByRole("button", { name: "Aceitar" }).click()
+  // A outra aba fica sabendo na hora, sem recarregar.
+  await expect(naOutra.getByRole("button", { name: "Iniciar preparo" })).toBeVisible({
+    timeout: 4_000,
+  })
+  await expect(naOutra).not.toContainText("Esperando aceite")
+})
+
 test("fila: pedidos de dias anteriores saem do quadro e se resolvem de uma vez", async ({
   page,
 }) => {
