@@ -814,6 +814,36 @@ test("fila: pausar, acrescentar ao prazo e filtrar os atrasados pela régua", as
   await expect(atrasados).toHaveAttribute("aria-pressed", "false")
 })
 
+test("fila: buscar pelo número e reabrir um pedido pelos Finalizados hoje", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/fila")
+  const cartoes = page.getByRole("article")
+  await expect(cartoes.first()).toBeVisible({ timeout: 15_000 })
+  const numero = (await cartoes.first().getByRole("heading").textContent()) ?? ""
+
+  // No celular, a busca e a gaveta ficam no Mais.
+  const mais = page.getByRole("button", { name: "Mais" })
+  if (await mais.isVisible()) await mais.click()
+  // As ferramentas cabem na tela: a página não rola de lado.
+  // (No celular emulado, o que passa da tela alarga a página: compara com a tela do teste.)
+  const largura = await page.evaluate(() => document.documentElement.scrollWidth)
+  expect(largura).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0)
+  await page.getByRole("searchbox", { name: "Buscar pedido" }).fill(numero)
+  await expect(page.getByRole("heading", { name: numero, exact: true })).toBeVisible()
+  await expect(page.getByRole("article").filter({ visible: true })).toHaveCount(1)
+  await page.getByRole("searchbox", { name: "Buscar pedido" }).fill("")
+
+  await page.getByRole("button", { name: /^Finalizados hoje/ }).click()
+  const gaveta = page.getByRole("dialog", { name: "Finalizados hoje" })
+  const reabrir = gaveta.getByRole("button", { name: /^Reabrir #/ }).first()
+  await expect(reabrir).toBeVisible()
+  await esperarAnimacoes(page)
+  await verificarAcessibilidade(page)
+  const reaberto = ((await reabrir.getAttribute("aria-label")) ?? "").replace("Reabrir ", "")
+  await reabrir.click()
+  await expect(page.getByText(`${reaberto} reaberto`)).toBeVisible()
+})
+
 test("fila: arrastar o cartão para a coluna seguinte avança o pedido", async ({ page }, info) => {
   test.skip(
     (info.project.use.viewport?.width ?? 0) < 1024,
