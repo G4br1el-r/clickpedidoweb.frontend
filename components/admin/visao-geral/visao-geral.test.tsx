@@ -1,13 +1,13 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter, type OnUrlUpdateFunction } from "nuqs/adapters/testing"
 import type { ComponentProps, ReactNode } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { reiniciarServidores } from "@/lib/admin/dados/consultas"
+import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { useMetas } from "@/lib/admin/metas"
 import { resumir } from "@/lib/admin/regras/dashboard/resumo"
 import {
@@ -287,6 +287,22 @@ describe("VisaoGeral", () => {
       await screen.findByRole("region", { name: "Agora na loja" }, { timeout: 8000 }),
     )
     expect(bloco.getByText("Mesas ocupadas")).toBeInTheDocument()
+  })
+
+  test("o Resumo se atualiza sozinho a cada 30 segundos", async () => {
+    // Só o relógio e os intervalos são falsos: as esperas da Testing Library seguem de verdade.
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] })
+    vi.setSystemTime(AGORA_DE_TESTE)
+    render(<VisaoGeral />, { wrapper: Provedores })
+    await screen.findByRole("region", { name: "Pedidos recentes" }, { timeout: 8000 })
+
+    const novo = await servidorDo("pizzaria").pedidos.simular()
+    const primeiraLinha = () => regiao("Pedidos recentes").getAllByRole("row")[1]
+    expect(primeiraLinha()).not.toHaveTextContent(`#${novo.numero}`)
+
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    await waitFor(() => expect(primeiraLinha()).toHaveTextContent(`#${novo.numero}`))
   })
 
   test("a aba vem do endereço, e trocar de aba muda o endereço", async () => {

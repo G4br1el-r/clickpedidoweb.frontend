@@ -28,6 +28,9 @@ import { CabecalhoPagina } from "../cabecalho-pagina"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
 import { AbaFinanceiro, AbaResumo, AbaVendas } from "./painel-visao-geral"
 
+/** De quanto em quanto tempo o Resumo confere os pedidos. */
+const ATUALIZAR_RESUMO_A_CADA = 30_000
+
 /** Esqueleto no formato final da tela: blocos de hoje, do período, gráfico e listas. */
 function EsqueletoVisaoGeral() {
   return (
@@ -60,7 +63,11 @@ export function VisaoGeral() {
 
   // Uma busca só cobre o período, o anterior (para comparar) e hoje.
   const filtro = agora && periodo ? periodoDaBusca(periodo, agora) : undefined
-  const { data: pedidos } = usePedidos(filtro, { ativo: Boolean(filtro) })
+  // No Resumo, hoje e os alertas se atualizam sozinhos; as abas de análise, não.
+  const { data: pedidos } = usePedidos(filtro, {
+    ativo: Boolean(filtro),
+    atualizarACada: aba === "resumo" ? ATUALIZAR_RESUMO_A_CADA : undefined,
+  })
 
   const resumo = useMemo(
     () => (pedidos && periodo && agora ? resumir(pedidos, periodo, agora) : null),
