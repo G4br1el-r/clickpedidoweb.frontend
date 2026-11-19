@@ -186,6 +186,30 @@ describe("gerarPedidos", () => {
     }
   })
 
+  test("o pedido de hoje em andamento traz as etapas por que já passou na linha do tempo", () => {
+    const pedidos = gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "lanchonete",
+      de: new Date(2026, 10, 13),
+      agora: AGORA,
+    })
+    const etapas = (pedido: Pedido) =>
+      (pedido.historico ?? []).map((evento) => (evento.tipo === "etapa" ? evento.status : ""))
+    const saiu = pedidos.find((pedido) => pedido.status === "saiu-para-entrega") as Pedido
+    expect(etapas(saiu)).toEqual(["em-preparo", "pronto", "saiu-para-entrega"])
+    const pronto = pedidos.find(
+      (pedido) => pedido.tipo === "retirada" && pedido.status === "pronto",
+    ) as Pedido
+    expect(etapas(pronto)).toEqual(["em-preparo", "pronto"])
+    // Em ordem, depois da chegada e antes de agora.
+    const horas = (saiu.historico ?? []).map((evento) => Date.parse(evento.em))
+    expect(horas).toEqual([...horas].sort((a, b) => a - b))
+    expect(horas[0]).toBeGreaterThan(Date.parse(saiu.criadoEm))
+    expect(horas.at(-1)).toBeLessThanOrEqual(AGORA.getTime())
+    const recebido = pedidos.find((pedido) => pedido.status === "recebido") as Pedido
+    expect(recebido.historico ?? []).toEqual([])
+  })
+
   test("na lanchonete o número do pedido recomeça no mês; nas outras é o id", () => {
     const agora = new Date(2026, 10, 2, 20, 30)
     const lanchonete = gerarPedidos({

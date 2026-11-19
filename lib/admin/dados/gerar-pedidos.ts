@@ -7,6 +7,7 @@ import { calcularPesagem } from "../regras/pesagem"
 import { SEGMENTOS_PAINEL, type SegmentoPainelId, temModulo, temRecurso } from "../segmentos-painel"
 import type {
   CatalogoLoja,
+  EventoPedido,
   FormaPagamento,
   ItemPedido,
   Mesa,
@@ -192,16 +193,34 @@ function montarItem(
   }
 }
 
+/** Em que minuto, depois da chegada, o pedido de comida gerado entra em cada etapa. */
+const MINUTO_DA_ETAPA = { "em-preparo": 8, pronto: 25, "saiu-para-entrega": 40 } as const
+
 /** Status de um pedido de comida pela idade, em minutos, quando ainda é de hoje. */
 function statusPorIdade(tipo: TipoPedido, idade: number, online: boolean): StatusPedido {
   if (online && idade < 3) return "aguardando-pagamento"
-  if (idade < 8) return "recebido"
-  if (idade < 25) return "em-preparo"
+  if (idade < MINUTO_DA_ETAPA["em-preparo"]) return "recebido"
+  if (idade < MINUTO_DA_ETAPA.pronto) return "em-preparo"
   // A mesa fica aberta até fechar a conta.
   if (tipo === "mesa") return idade < 120 ? "pronto" : "concluido"
-  if (idade < 40) return "pronto"
+  if (idade < MINUTO_DA_ETAPA["saiu-para-entrega"]) return "pronto"
   if (tipo === "entrega" && idade < 75) return "saiu-para-entrega"
   return "concluido"
+}
+
+/**
+ * A linha do tempo do pedido de hoje que ainda está na fila: as etapas por que passou, nos
+ * minutos de `statusPorIdade`. Dá os tempos médios da fila desde a abertura.
+ */
+function etapasJaPassadas(status: StatusPedido, criado: Date): EventoPedido[] {
+  const etapas = Object.entries(MINUTO_DA_ETAPA) as [keyof typeof MINUTO_DA_ETAPA, number][]
+  const ate = etapas.findIndex(([etapa]) => etapa === status)
+  if (ate < 0) return []
+  return etapas.slice(0, ate + 1).map(([etapa, minuto]) => ({
+    tipo: "etapa",
+    status: etapa,
+    em: addMinutes(criado, minuto).toISOString(),
+  }))
 }
 
 function formaDePagamento(
@@ -355,6 +374,7 @@ export function gerarPedidos({
       // Status e momento do atendimento (salão) ou pela idade do pedido.
       let status: StatusPedido
       let agendamento: Pedido["agendamento"]
+      let historico: EventoPedido[] = []
       if (salao) {
         const duracaoMin = duracaoDos(itens, produtos)
         // Um horário livre de um dia aberto, de hoje a uma semana, depois de quando foi pedido.
@@ -382,6 +402,7 @@ export function gerarPedidos({
         const idade = (agora.getTime() - criado.getTime()) / 60_000
         status = origem === "pdv" ? "concluido" : statusPorIdade(tipo, idade, online)
         if (status === "concluido" && !vivo && sorte.chance(8)) status = "cancelado"
+        historico = etapasJaPassadas(status, criado)
       } else {
         status = sorte.chance(8) ? "cancelado" : "concluido"
       }
@@ -449,6 +470,7 @@ export function gerarPedidos({
         ...(encerrado ? { impressoEm: addMinutes(criado, 1).toISOString() } : {}),
         enviarParaCozinha: true,
         ...(agendamento ? { agendamento } : {}),
+        ...(historico.length > 0 ? { historico } : {}),
       }
       // Açougue: o cliente escolhe o dia de buscar, de hoje a dois dias depois.
       if (temRecurso(segmento, "dataRetirada") && tipo === "retirada") {
