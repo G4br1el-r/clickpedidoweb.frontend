@@ -44,6 +44,19 @@ function pedido(
   }
 }
 
+/** Um pedido concluído no Pix com um item, para montar casos de teste na hora. */
+export function pedidoDeTeste(
+  id: number,
+  criadoEm: Date,
+  total: number,
+  mudancas: Partial<Pedido> = {},
+): Pedido {
+  return {
+    ...pedido(id, criadoEm, "retirada", "concluido", "pix", total, [item("Coca", 1, total)]),
+    ...mudancas,
+  }
+}
+
 const calabresa = item("Calabresa", 1, 40)
 export const PEDIDOS_DE_TESTE: Pedido[] = [
   pedido(8, new Date(2026, 10, 10, 20), "retirada", "concluido", "dinheiro", 60, [
