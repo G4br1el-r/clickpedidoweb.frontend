@@ -157,7 +157,10 @@ export function CartaoFila({
         layout: { duration: 0.25, ease: [0.23, 1, 0.32, 1] },
       }}
       aria-labelledby={`pedido-${pedido.id}`}
-      className="relative"
+      // No computador, as setas trazem o foco ao cartão (atalhos da fila).
+      tabIndex={-1}
+      data-pedido-id={pedido.id}
+      className="relative rounded-xl focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       <Card
         // Shift+clique (mouse) marca o pedido para as ações em lote, sem entrar no modo.
@@ -341,7 +344,13 @@ export function CartaoFila({
                   </Button>
                   <ConfirmarComMotivo
                     gatilho={
-                      <Button type="button" size="sm" variant="outline" disabled={ocupado}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        disabled={ocupado}
+                        data-acao="recusar"
+                      >
                         Recusar
                       </Button>
                     }

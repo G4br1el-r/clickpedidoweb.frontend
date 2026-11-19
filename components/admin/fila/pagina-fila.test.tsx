@@ -220,6 +220,37 @@ describe("PaginaFila", () => {
     ).toBeInTheDocument()
   })
 
+  test("teclado: as setas andam pelos cartões, Enter avança e P imprime o cartão em foco", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const [primeiro] = (await coluna("Novos")).getAllByRole("article")
+    const numero = within(primeiro).getByRole("heading").textContent ?? ""
+
+    await usuario.keyboard("{ArrowDown}")
+    expect(primeiro).toHaveFocus()
+    await usuario.keyboard("p")
+    expect(imprimir).toHaveBeenCalledTimes(1)
+    await usuario.keyboard("{Enter}")
+    expect(
+      await (await coluna("Em preparo")).findByRole("heading", { name: numero }),
+    ).toBeInTheDocument()
+  })
+
+  test("teclado: / vai para a busca e ? abre a folha de atalhos", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+    await usuario.keyboard("/")
+    expect(screen.getByRole("searchbox", { name: "Buscar pedido" })).toHaveFocus()
+    await usuario.keyboard("{Escape}")
+    screen.getByRole("searchbox", { name: "Buscar pedido" }).blur()
+    await usuario.keyboard("?")
+    const ajuda = within(await screen.findByRole("dialog", { name: "Atalhos da fila" }))
+    expect(ajuda.getByText("Avançar o pedido em foco")).toBeInTheDocument()
+  })
+
   test("no celular, as colunas viram abas com a contagem", async () => {
     renderizar()
     const aba = await screen.findByRole("tab", { name: /Novos/ }, { timeout: 8000 })

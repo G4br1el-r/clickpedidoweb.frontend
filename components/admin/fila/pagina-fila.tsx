@@ -56,7 +56,7 @@ import {
   metricasDaFila,
 } from "@/lib/admin/regras/metricas-fila"
 import type { TemposDaLoja } from "@/lib/admin/regras/prazo"
-import { rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
+import { proximoStatus, rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
 import { liberarSom, somBloqueado, tocarAlerta } from "@/lib/admin/som"
@@ -67,6 +67,7 @@ import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
 import { Traco } from "../traco"
+import { AjudaAtalhos } from "./ajuda-atalhos"
 import { AjustePrazo } from "./ajuste-prazo"
 import { AvisoDiasAnteriores } from "./aviso-dias-anteriores"
 import { avisarChegada } from "./avisos-do-aparelho"
@@ -78,6 +79,7 @@ import { FerramentasFila, PARAMETROS_FILA } from "./ferramentas-fila"
 import { GavetaFinalizados } from "./gaveta-finalizados"
 import { MetricasFila } from "./metricas-fila"
 import { PausaPedidos } from "./pausa-pedidos"
+import { useAtalhosDaFila } from "./use-atalhos-da-fila"
 import { useTelaAcesa } from "./use-tela-acesa"
 import { useTituloDaAba } from "./use-titulo-da-aba"
 
@@ -323,6 +325,7 @@ export function PaginaFila({
   const voltar = useVoltarPedido()
   const reabrir = useReabrirPedido()
   const [finalizadosAberto, setFinalizadosAberto] = useState(false)
+  const [ajudaAberta, setAjudaAberta] = useState(false)
   // Seleção para ações em lote: o modo mostra as caixas; Shift+clique marca sem o modo.
   const [selecionando, setSelecionando] = useState(false)
   const [marcados, setMarcados] = useState<ReadonlySet<number>>(new Set())
@@ -444,6 +447,20 @@ export function PaginaFila({
         )
       : null
   const finalizados = finalizadosHoje(concluidos, criadosHoje)
+  // Atalhos de teclado: só no computador, onde as colunas ficam lado a lado.
+  useAtalhosDaFila({
+    ativo: telaGrande,
+    colunas: colunas?.map((coluna) => coluna.pedidos.map((pedido) => pedido.id)) ?? [],
+    pedidos: fila ?? [],
+    acoes: {
+      avancar: (pedido) => {
+        if (proximoStatus(pedido.tipo, pedido.status)) acoes.avancar(pedido)
+      },
+      aceitar: acoes.aceitar,
+      imprimir: acoes.imprimir,
+      ajuda: () => setAjudaAberta(true),
+    },
+  })
   // Só conta o que ainda está na fila: o que saiu (outra aba, cancelado) sai da seleção.
   const selecionados = (fila ?? []).filter((pedido) => marcados.has(pedido.id))
   const limparSelecao = () => {
@@ -707,6 +724,7 @@ export function PaginaFila({
           }
         />
       )}
+      <AjudaAtalhos aberta={ajudaAberta} aoMudar={setAjudaAberta} />
       <GavetaFinalizados
         pedidos={finalizados}
         aberta={finalizadosAberto}
