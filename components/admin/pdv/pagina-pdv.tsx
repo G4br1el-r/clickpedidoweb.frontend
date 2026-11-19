@@ -27,6 +27,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -37,6 +38,7 @@ import {
 } from "@/components/ui/table"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useFinalizarVenda, useLoja, useUltimasVendas } from "@/lib/admin/dados/consultas"
+import { useCaixaAtual } from "@/lib/admin/dados/consultas-caixa"
 import type { Pedido, Produto } from "@/lib/admin/dados/tipos"
 import {
   adicionarItem,
@@ -50,6 +52,7 @@ import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { BlocoSecao } from "../bloco-secao"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { AberturaCaixa } from "./caixa/abertura-caixa"
 import {
   type AvisoCaixa,
   CAIXA_VAZIA,
@@ -209,7 +212,32 @@ function ItemAvulso({ aoAdicionar }: { aoAdicionar: (item: Omit<ItemCaixa, "chav
 }
 
 /** PDV: vender no balcão com o catálogo de um lado e a caixa do outro. */
+/** O PDV troca de tela conforme o caixa: fechado, abre; aberto, vende. */
 export function PaginaPdv() {
+  const { data: turno, isPending } = useCaixaAtual()
+  if (isPending) {
+    return (
+      <div
+        role="status"
+        aria-label="Carregando o caixa"
+        className="flex flex-1 flex-col gap-4 p-4 md:p-6 lg:px-8"
+      >
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-64 w-full rounded-xl" />
+      </div>
+    )
+  }
+  if (!turno) {
+    return (
+      <div className="flex flex-1 flex-col p-4 md:p-6 lg:px-8">
+        <AberturaCaixa />
+      </div>
+    )
+  }
+  return <TelaDeVenda />
+}
+
+function TelaDeVenda() {
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const telaGrande = useTelaGrande()
   const { data: ultimas = [] } = useUltimasVendas()
