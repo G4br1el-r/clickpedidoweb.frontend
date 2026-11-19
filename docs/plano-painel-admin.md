@@ -547,3 +547,22 @@ Situação: pronta em 13/11/2026.
 - **Também mudou:** a pedido dele, pizzaria e farmácia deixaram de ter cor própria no painel; todos os segmentos usam a mesma cor neutra (saiu o `lib/admin/tema-segmento.ts` e a faixa colorida da barra lateral).
 - **Testes e cobertura:** `tsc` e Biome limpos nos arquivos do painel; 757 testes no Vitest; os mínimos de cobertura subiram para geral 68/61/67/69 e `lib/**` 96/94/97/97. O E2E de estoque (contagem, venda no PDV que zera e esgota, cancelamento que devolve, com acessibilidade) passa; as fotos do Estoque (claro, escuro, celular e computador) foram revisadas.
 - **Pendente de outra sessão:** quem está mexendo no bloco "Personalizar loja" da barra lateral precisa revisar e atualizar as fotos do painel no computador, e o Biome acusa formatação em `components/produto/info-remedio*.tsx` e `produto-sheet.tsx`.
+
+## Fase 13: dashboard completo
+
+**Desenho** em [dashboard-completo.md](dashboard-completo.md), fechado em 19/11/2026. A visão geral da Fase 3 vira um painel com abas na URL (Resumo, Vendas, Produtos, Clientes, Operação, Entrega, Financeiro e uma aba própria do segmento), faixa de alertas, metas do mês, comparação com a semana passada, clique para Pedidos filtrada, CSV e impressão.
+
+- **Fora da tela:** o pedido passa a guardar o horário de cada status, o produto ganha custo (com cópia na venda), o cancelamento ganha motivo, as Configurações ganham a taxa de cada forma de pagamento e o gerador de demonstração sobe para a versão 3.
+- **Etapas,** cada uma num PR: 1. Resumo; 2. Vendas; 3. Base de dados; 4. Produtos e Financeiro; 5. Operação e Clientes; 6. Entrega e abas do segmento; 7. CSV e impressão.
+
+Situação: planejada em 19/11/2026; etapa 1 (Resumo) pronta em 19/11/2026.
+
+- **Etapa 1:**
+  - abas Resumo, Vendas e Financeiro no endereço (`?aba=`), dentro do painel de cada aba para leitores de tela;
+  - Resumo com a faixa Precisa de atenção, Hoje comparado com o mesmo dia da semana passada, a meta do mês (definir, mudar e apagar; meta de hoje e projeção), o bloco Agora na loja do segmento, o período resumido e os 5 mais vendidos;
+  - o Resumo confere os pedidos a cada 30 s;
+  - regras novas em `lib/admin/regras/dashboard/` (abas, nomes, semana passada, metas, alertas, destaques do segmento, contagens e a busca), e as metas em `lib/admin/metas.ts`.
+- **Diferente do desenho:**
+  - Vendas e Financeiro já nascem nesta etapa, só com o que saiu do Resumo (canais e o dia a dia; formas de pagamento); as etapas 2 e 4 completam;
+  - a barra de abas ainda não fica presa no topo nem rola de lado no celular: com 3 abas, ela cabe; entra quando houver mais abas.
+- **Também mudou:** as fotos do Playwright escondem o selo de avisos do Next no modo dev (`tests/sem-avisos-do-next.css`), que aparecia mesmo com `devIndicators: false`.

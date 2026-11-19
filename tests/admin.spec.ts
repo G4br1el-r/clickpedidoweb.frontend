@@ -8,6 +8,7 @@ test.beforeEach(async ({ page }) => {
       localStorage.removeItem("clickpedido-admin")
       localStorage.removeItem("clickpedido-admin-segmento")
       localStorage.removeItem("clickpedido-admin-farmacia")
+      localStorage.removeItem("clickpedido-admin-metas")
       sessionStorage.setItem("admin-limpo", "1")
     }
   })
@@ -77,6 +78,35 @@ test("a visão geral troca o período pelo atalho e alterna o gráfico", async (
   await expect(page.getByRole("region", { name: "Pedidos por dia" })).toBeVisible()
   await expect(page.locator(".recharts-bar-rectangle").first()).toBeVisible()
   await verificarAcessibilidade(page)
+})
+
+test("visão geral: as abas ficam no endereço, a meta se define e o alerta leva ao estoque", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin")
+  await expect(page.getByRole("region", { name: "Hoje" })).toBeVisible({ timeout: 15_000 })
+  const abas = page.getByRole("tablist", { name: "Abas da visão geral" })
+
+  await abas.getByRole("tab", { name: "Vendas" }).click()
+  await expect(page).toHaveURL(/aba=vendas/)
+  await expect(page.getByRole("region", { name: "Canais de venda" })).toBeVisible()
+  await abas.getByRole("tab", { name: "Financeiro" }).click()
+  await expect(page).toHaveURL(/aba=financeiro/)
+  await expect(page.getByRole("region", { name: "Formas de pagamento" })).toBeVisible()
+  await abas.getByRole("tab", { name: "Resumo" }).click()
+  await expect(page).not.toHaveURL(/aba=/)
+
+  const meta = page.getByRole("region", { name: "Meta do mês" })
+  await meta.getByRole("button", { name: "Definir meta" }).click()
+  await meta.getByRole("textbox", { name: "Faturamento do mês" }).fill("60000")
+  await meta.getByRole("button", { name: "Salvar meta" }).click()
+  await expect(meta.getByText("Vendido no mês")).toBeVisible()
+  await verificarAcessibilidade(page)
+
+  const faixa = page.getByRole("region", { name: "Precisa de atenção" })
+  await faixa.getByRole("link", { name: "Ver estoque" }).first().click()
+  await expect(page).toHaveURL(/\/admin\/estoque$/)
 })
 
 test("do gráfico aos pedidos do dia: filtrar, abrir e avançar", async ({ page }) => {

@@ -1,5 +1,5 @@
 import type { FormaPagamento, Pedido, StatusPedido, TipoPedido } from "../dados/tipos"
-import { ehValido } from "./dashboard"
+import { ehValido } from "./dashboard/comum"
 
 export type FiltrosLista = {
   busca?: string
