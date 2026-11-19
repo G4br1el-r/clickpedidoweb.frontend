@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { PEDIDOS_DE_TESTE } from "../regras/pedidos-de-teste"
+import { mesasSeCruzam } from "../regras/salao"
 import { catalogoDeTeste } from "./catalogo-de-teste"
 import { type BaseLojaV2, CONFIG_SALAO_PADRAO, migrarDaVersao2 } from "./migracao"
 import type { Pedido } from "./tipos"
@@ -23,6 +24,19 @@ function baseV2(): BaseLojaV2 {
     })),
     pedidos: [mesaDe(7, "Paula"), mesaDe(2, "Bia"), mesaDe(1, "Paula")],
     movimentosEstoque: [],
+  }
+}
+
+/** Base antiga só com mesas livres, para testar o espaço do mapa. */
+function baseV2ComMesas(quantidade: number): BaseLojaV2 {
+  return {
+    ...baseV2(),
+    mesas: Array.from({ length: quantidade }, (_, indice) => ({
+      id: `mesa-${indice + 1}`,
+      numero: indice + 1,
+      nome: `Mesa ${indice + 1}`,
+      status: "livre" as const,
+    })),
   }
 }
 
@@ -81,6 +95,32 @@ describe("migrarDaVersao2", () => {
     expect(migrarDaVersao2(base).salao.garcons).toEqual([
       { id: "garcom-maria-jose", nome: "Maria José", ativo: true },
     ])
+  })
+
+  test("o mesmo garçom escrito de jeitos diferentes vira um só, com a primeira grafia", () => {
+    const base = baseV2()
+    base.pedidos = [mesaDe(7, "Bia"), mesaDe(2, "bia "), mesaDe(1, "Bía")]
+    expect(migrarDaVersao2(base).salao.garcons).toEqual([
+      { id: "garcom-bia", nome: "Bia", ativo: true },
+    ])
+  })
+
+  test("com mais de 24 mesas, a 25ª cai no primeiro lugar livre do mapa, sem cruzar outra", () => {
+    const { mesas, salao } = migrarDaVersao2(baseV2ComMesas(25))
+    expect(salao.areas).toEqual([{ id: "area-salao", nome: "Salão", ordem: 1 }])
+    expect(mesas[24]).toMatchObject({ areaId: "area-salao", posicao: { x: 2, y: 0 } })
+    for (const [i, a] of mesas.entries())
+      for (const b of mesas.slice(i + 1)) expect(mesasSeCruzam(a, b)).toBe(false)
+  })
+
+  test("quando o Salão enche, a mesa seguinte vai para o Salão 2", () => {
+    const { mesas, salao } = migrarDaVersao2(baseV2ComMesas(97))
+    expect(salao.areas).toEqual([
+      { id: "area-salao", nome: "Salão", ordem: 1 },
+      { id: "area-salao-2", nome: "Salão 2", ordem: 2 },
+    ])
+    expect(mesas[95]?.areaId).toBe("area-salao")
+    expect(mesas[96]).toMatchObject({ areaId: "area-salao-2", posicao: { x: 0, y: 0 } })
   })
 
   test("a mesa ocupada continua com a mesma comanda", () => {

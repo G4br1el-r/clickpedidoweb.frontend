@@ -1,5 +1,6 @@
 import { normalizar } from "../regras/filtro-pedidos"
-import type { BaseLoja, ConfigSalao, Garcom, Mesa } from "./tipos"
+import { primeiraPosicaoLivre } from "../regras/salao"
+import type { AreaSalao, BaseLoja, ConfigSalao, Garcom, Mesa, PosicaoMesa } from "./tipos"
 
 /** Base como era na versão 2: mesas sem área, lugares e posição, e sem configuração do salão. */
 export type BaseLojaV2 = Omit<BaseLoja, "salao" | "reservas" | "espera" | "chamados" | "mesas"> & {
@@ -24,40 +25,59 @@ export const CONFIG_SALAO_PADRAO: ConfigSalao = {
 
 const MESAS_POR_FILEIRA = 6
 const CELULAS_POR_MESA = 4
+/** Mesas que mantêm a posição em fileiras; as seguintes procuram lugar livre no mapa. */
+const MESAS_NA_GRADE_ANTIGA = 24
 
+const idDe = (nome: string) => `garcom-${normalizar(nome).trim().replace(/\s+/g, "-")}`
+
+/** Um garçom por nome normalizado, com a primeira grafia que aparece nas comandas. */
 function garconsDasComandas(pedidos: BaseLojaV2["pedidos"]): Garcom[] {
-  const nomes = new Set<string>()
+  const nomes = new Map<string, string>()
   for (const pedido of pedidos) {
     const nome = pedido.mesa?.garcom?.trim()
-    if (nome) nomes.add(nome)
+    if (nome && !nomes.has(idDe(nome))) nomes.set(idDe(nome), nome)
   }
   return [...nomes]
-    .sort((a, b) => a.localeCompare(b, "pt-BR"))
-    .map((nome) => ({
-      id: `garcom-${normalizar(nome).trim().replace(/\s+/g, "-")}`,
-      nome,
-      ativo: true,
-    }))
+    .map(([id, nome]) => ({ id, nome, ativo: true }))
+    .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"))
 }
+
+/** Área do Salão de número `n`: a primeira é "Salão"; as outras, "Salão 2", "Salão 3"… */
+const areaDoSalao = (n: number): AreaSalao =>
+  n === 1
+    ? { id: "area-salao", nome: "Salão", ordem: 1 }
+    : { id: `area-salao-${n}`, nome: `Salão ${n}`, ordem: n }
 
 /** Versão 2 → 3: toda mesa vai para a área Salão e o salão ganha a configuração padrão. */
 export function migrarDaVersao2(base: BaseLojaV2): BaseLoja {
-  const mesas: Mesa[] = base.mesas.map((mesa, indice) => ({
-    ...mesa,
-    areaId: "area-salao",
-    lugares: 4,
-    forma: "quadrada",
-    posicao: {
-      x: (indice % MESAS_POR_FILEIRA) * CELULAS_POR_MESA,
-      y: Math.floor(indice / MESAS_POR_FILEIRA) * CELULAS_POR_MESA,
-    },
-  }))
+  const areas: AreaSalao[] = [areaDoSalao(1)]
+  const mesas: Mesa[] = []
+  for (const [indice, antiga] of base.mesas.entries()) {
+    const nova = { forma: "quadrada", lugares: 4 } as const
+    let areaId = (areas.at(-1) as AreaSalao).id
+    let posicao: PosicaoMesa | null
+    if (indice < MESAS_NA_GRADE_ANTIGA) {
+      posicao = {
+        x: (indice % MESAS_POR_FILEIRA) * CELULAS_POR_MESA,
+        y: Math.floor(indice / MESAS_POR_FILEIRA) * CELULAS_POR_MESA,
+      }
+    } else {
+      posicao = primeiraPosicaoLivre(mesas, areaId, nova)
+      if (!posicao) {
+        const proxima = areaDoSalao(areas.length + 1)
+        areas.push(proxima)
+        areaId = proxima.id
+        posicao = { x: 0, y: 0 }
+      }
+    }
+    mesas.push({ ...antiga, areaId, ...nova, posicao })
+  }
   return {
     ...base,
     mesas,
     salao: {
       ...CONFIG_SALAO_PADRAO,
-      areas: [{ id: "area-salao", nome: "Salão", ordem: 1 }],
+      areas,
       garcons: garconsDasComandas(base.pedidos),
     },
     reservas: [],
