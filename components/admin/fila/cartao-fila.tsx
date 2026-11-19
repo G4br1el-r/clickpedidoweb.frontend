@@ -239,13 +239,13 @@ export function CartaoFila({
           )}
         </CardContent>
 
-        <CardFooter className="gap-2 border-border/70 bg-transparent px-3 pt-3">
+        <CardFooter className="flex-wrap gap-2 border-border/70 bg-transparent px-3 pt-3">
           {espera ? (
             <>
               <Button
                 type="button"
                 size="sm"
-                className="min-w-0 flex-1"
+                className="min-w-[min(100%,7rem)] flex-1"
                 disabled={ocupado}
                 onClick={aoAceitar}
               >
@@ -267,7 +267,7 @@ export function CartaoFila({
             <Button
               type="button"
               size="sm"
-              className="min-w-0 flex-1"
+              className="min-w-[min(100%,7rem)] flex-1"
               disabled={ocupado}
               onClick={aoAvancar}
             >

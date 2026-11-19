@@ -726,6 +726,27 @@ test("o painel fala a mesma família da vitrine, título e texto", async ({ page
   expect(fontes.texto).toMatch(/Geist/)
 })
 
+test("fila: os botões de cada cartão ficam dentro do cartão, em qualquer tela", async ({
+  page,
+}) => {
+  await page.goto("/admin/fila")
+  const cartoes = page.getByRole("article")
+  await expect(cartoes.first()).toBeVisible({ timeout: 15_000 })
+  await esperarAnimacoes(page)
+  for (const cartao of await cartoes.all()) {
+    if (!(await cartao.isVisible())) continue
+    const borda = await cartao.boundingBox()
+    if (!borda) continue
+    for (const botao of await cartao.getByRole("button").all()) {
+      const caixa = await botao.boundingBox()
+      if (!caixa) continue
+      const nome = await botao.getAttribute("aria-label")
+      expect(caixa.x, nome ?? "botão").toBeGreaterThanOrEqual(borda.x)
+      expect(caixa.x + caixa.width, nome ?? "botão").toBeLessThanOrEqual(borda.x + borda.width)
+    }
+  }
+})
+
 test("fila: pedido do site espera aceite; aceitar e recusar com motivo", async ({ page }, info) => {
   test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a fila usa abas")
   // Relógio controlado: a simulação manda um pedido do site por minuto.
