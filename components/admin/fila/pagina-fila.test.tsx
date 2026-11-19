@@ -77,6 +77,14 @@ function renderizar(intervaloSimulacao = 60_000) {
   )
 }
 
+/** Abre o menu com as preferências deste aparelho (som, avisos, demonstração). */
+async function abrirEsteAparelho(usuario = userEvent.setup()) {
+  await usuario.click(
+    await screen.findByRole("button", { name: "Este aparelho" }, { timeout: 8000 }),
+  )
+  return within(await screen.findByRole("dialog", { name: "Este aparelho" }))
+}
+
 const coluna = async (nome: string) =>
   within(await screen.findByRole("region", { name: new RegExp(`^${nome}`) }, { timeout: 8000 }))
 
@@ -356,9 +364,26 @@ describe("PaginaFila", () => {
     await api.salvarLoja({ ...(await api.loja()), som: "suave" })
     renderizar()
     await coluna("Novos")
-    expect(screen.getByRole("combobox", { name: "Tipo do alerta" })).toHaveTextContent(
+    const menu = await abrirEsteAparelho()
+    expect(menu.getByRole("combobox", { name: "Tipo do alerta" })).toHaveTextContent(
       "Padrão da loja (Suave)",
     )
+  })
+
+  test("Este aparelho reúne o som, os avisos e a demonstração", async () => {
+    renderizar()
+    const menu = await abrirEsteAparelho()
+    for (const nome of [
+      "Alerta sonoro",
+      "Notificação do sistema",
+      "Título da aba piscando",
+      "Vibrar",
+      "Tela sempre acesa",
+      "Simular pedidos chegando",
+    ]) {
+      expect(menu.getByRole("switch", { name: nome })).toBeInTheDocument()
+    }
+    expect(menu.getByRole("button", { name: "Testar" })).toBeInTheDocument()
   })
 
   test("Detalhes abre o painel do pedido", async () => {
@@ -465,9 +490,10 @@ describe("PaginaFila: aceite manual", () => {
     await servidor.salvarLoja({ ...(await servidor.loja()), som: "sirene" })
     renderizar()
 
+    const menu = await abrirEsteAparelho()
     await waitFor(
       () =>
-        expect(screen.getByRole("combobox", { name: "Tipo do alerta" })).toHaveTextContent(
+        expect(menu.getByRole("combobox", { name: "Tipo do alerta" })).toHaveTextContent(
           "Padrão da loja (Sirene)",
         ),
       { timeout: 8000 },

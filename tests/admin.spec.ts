@@ -757,8 +757,10 @@ test("fila: pedido do site espera aceite; aceitar e recusar com motivo", async (
   await page.goto("/admin/fila")
   const novos = page.getByRole("region", { name: /^Novos, / })
   await expect(novos).toBeVisible({ timeout: 15_000 })
-  // A simulação já vem ligada de fábrica.
+  // A simulação já vem ligada de fábrica, no menu deste aparelho.
+  await page.getByRole("button", { name: "Este aparelho" }).click()
   await expect(page.getByRole("switch", { name: "Simular pedidos chegando" })).toBeChecked()
+  await page.keyboard.press("Escape")
 
   await page.clock.fastForward(61_000)
   const esperando = novos.getByRole("article").filter({ hasText: "Esperando aceite" }).first()

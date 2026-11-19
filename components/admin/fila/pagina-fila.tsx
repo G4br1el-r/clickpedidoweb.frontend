@@ -2,7 +2,7 @@
 
 import NumberFlow from "@number-flow/react"
 import { startOfDay } from "date-fns"
-import { BellRingIcon, InboxIcon, VolumeXIcon } from "lucide-react"
+import { InboxIcon, VolumeXIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
 import { parseAsStringLiteral, useQueryState } from "nuqs"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
@@ -10,14 +10,6 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -65,10 +57,11 @@ import { AjustePrazo } from "./ajuste-prazo"
 import { AvisoDiasAnteriores } from "./aviso-dias-anteriores"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
+import { EsteAparelho } from "./este-aparelho"
 import { MetricasFila } from "./metricas-fila"
 import { PausaPedidos } from "./pausa-pedidos"
 
-const SONS: { valor: SomAlerta; rotulo: string }[] = [
+const _SONS: { valor: SomAlerta; rotulo: string }[] = [
   { valor: "suave", rotulo: "Suave" },
   { valor: "alto", rotulo: "Alto" },
   { valor: "muito-alto", rotulo: "Muito alto" },
@@ -409,57 +402,8 @@ export function PaginaFila({
         )}
         {loja && agora && <PausaPedidos loja={loja} agora={agora} comEntrega={temEntrega} />}
         {loja && <AjustePrazo loja={loja} comEntrega={temEntrega} />}
-        <div className="flex flex-wrap items-center gap-2">
-          <Chave
-            id="alerta-sonoro"
-            rotulo="Alerta sonoro"
-            marcada={preferencias.somLigado}
-            aoMudar={(ligado) => {
-              preferencias.ligarSom(ligado)
-              // O toque na chave libera o som no navegador.
-              if (ligado) tocarAlerta(somDoAparelho)
-            }}
-          />
-          <Select
-            value={preferencias.tipoSom ?? "padrao"}
-            onValueChange={(tipo) =>
-              preferencias.escolherSom(tipo === "padrao" ? null : (tipo as SomAlerta))
-            }
-          >
-            <SelectTrigger size="sm" aria-label="Tipo do alerta" className="w-52">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectGroup>
-                {/* Sem escolha neste aparelho, vale o som das configurações da loja. */}
-                <SelectItem value="padrao">
-                  Padrão da loja ({SONS.find((som) => som.valor === loja?.som)?.rotulo ?? "Alto"})
-                </SelectItem>
-                {SONS.map(({ valor, rotulo }) => (
-                  <SelectItem key={valor} value={valor}>
-                    {rotulo}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => tocarAlerta(somDoAparelho)}
-          >
-            <BellRingIcon data-icon="inline-start" />
-            Testar
-          </Button>
-        </div>
         <div className="sm:ml-auto">
-          <Chave
-            id="simular-pedidos"
-            rotulo="Simular pedidos chegando"
-            marcada={preferencias.simular}
-            aoMudar={preferencias.ligarSimulacao}
-          />
+          <EsteAparelho loja={loja} />
         </div>
       </div>
 
