@@ -28,6 +28,7 @@ import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
+import { type BaseLojaV2, migrarDaVersao2 } from "./migracao"
 import type {
   Bairro,
   BaseLoja,
@@ -44,8 +45,8 @@ import type {
   TipoMovimento,
 } from "./tipos"
 
-/** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 2
+/** Sobe quando o formato guardado muda: a 2 é migrada; qualquer outra é descartada e gerada de novo. */
+const VERSAO = 3
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -315,6 +316,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       // O controle começa hoje: o saldo inicial já desconta os pedidos em andamento.
       pedidos: pedidos.map(marcarEmAndamento),
       movimentosEstoque: estoque.movimentos,
+      reservas: [],
+      espera: [],
+      chamados: [],
     })
     await salvar(base)
     return base
@@ -340,9 +344,20 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const completa = abrirMesas({
       ...base,
       pedidos: [...anteriores, ...novos.map(marcarEmAndamento)],
+      reservas: base.reservas ?? [],
+      espera: base.espera ?? [],
+      chamados: base.chamados ?? [],
     })
     await salvar(completa)
     return completa
+  }
+
+  /** Versão 2 → 3: guarda a base migrada já, com o `geradoEm` de antes, e completa os dias que faltam. */
+  async function migrar(guardado: Guardado): Promise<BaseLoja> {
+    const base = migrarDaVersao2(guardado.base as unknown as BaseLojaV2)
+    const migrado: Guardado = { versao: VERSAO, geradoEm: guardado.geradoEm, base }
+    await set(chave, migrado)
+    return completar(migrado)
   }
 
   /** Guarda a leitura em andamento; se ela falhar, a próxima chamada tenta de novo. */
@@ -361,7 +376,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       lembrar(
         (async () => {
           const guardado = await get<Guardado>(chave)
-          return guardado?.versao === VERSAO ? completar(guardado) : doZero()
+          if (guardado?.versao === VERSAO) return completar(guardado)
+          if (guardado?.versao === 2) return migrar(guardado)
+          return doZero()
         })(),
       )
     )

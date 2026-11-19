@@ -1,8 +1,9 @@
 import "fake-indexeddb/auto"
-import { clear } from "idb-keyval"
+import { clear, get, set } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { catalogoDeTeste } from "./catalogo-de-teste"
 import { carregarCatalogo } from "./catalogos"
+import type { BaseLojaV2 } from "./migracao"
 import {
   criarServidor,
   type NovoAgendamento,
@@ -10,7 +11,7 @@ import {
   type Servidor,
   type VendaPdv,
 } from "./servidor"
-import type { Pedido, StatusPedido } from "./tipos"
+import type { Mesa, Pedido, StatusPedido } from "./tipos"
 
 /** Sexta, 13/11/2026, 20:30 em São Paulo. */
 const AGORA = new Date(2026, 10, 13, 20, 30)
@@ -1343,5 +1344,45 @@ describe("servidor de demonstração", () => {
 
     await api.restaurar()
     expect((await api.pedidos.buscar(novo.id))?.status).toBe("recebido")
+  })
+})
+
+describe("migração", () => {
+  const CHAVE = "clickpedido-admin-dados:lanchonete"
+
+  /** Base como o servidor da versão 2 a guardava: sem salão, reservas, espera, chamados e campos novos das mesas. */
+  async function baseDaVersao2(): Promise<BaseLojaV2> {
+    await servidor().pedidos.listar()
+    const { base } = (await get(CHAVE)) as { base: Record<string, unknown> & { mesas: Mesa[] } }
+    const { salao, reservas, espera, chamados, ...resto } = base
+    return {
+      ...resto,
+      mesas: base.mesas.map(
+        ({ id, numero, nome, status, pedidoAtivoId, clienteNome, ocupadaEm }) => ({
+          id,
+          numero,
+          nome,
+          status,
+          pedidoAtivoId,
+          clienteNome,
+          ocupadaEm,
+        }),
+      ),
+    } as unknown as BaseLojaV2
+  }
+
+  test("base da versão 2 é migrada: mesmos pedidos, mesa ocupada com a mesma comanda", async () => {
+    const antiga = await baseDaVersao2()
+    await set(CHAVE, { versao: 2, geradoEm: AGORA.toISOString(), base: antiga })
+    const api = servidor()
+    const mesas = await api.mesas.listar()
+    expect(mesas.every((mesa) => mesa.areaId === "area-salao")).toBe(true)
+    const ocupada = mesas.find((mesa) => mesa.status === "ocupada")
+    expect(ocupada?.pedidoAtivoId).toBe(
+      antiga.mesas.find((mesa) => mesa.status === "ocupada")?.pedidoAtivoId,
+    )
+    const guardado = (await get(CHAVE)) as { versao: number; base: { pedidos: unknown[] } }
+    expect(guardado.base.pedidos).toHaveLength(antiga.pedidos.length)
+    expect(guardado.versao).toBe(3)
   })
 })
