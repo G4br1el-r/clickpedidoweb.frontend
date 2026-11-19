@@ -5,6 +5,7 @@ import {
   rotuloAcao,
   rotuloStatus,
   rotuloStatusComum,
+  statusAnterior,
   tomDoStatus,
 } from "./status"
 
@@ -114,5 +115,22 @@ describe("etapasDoCaminho", () => {
     expect(etapasDoCaminho("retirada")).toEqual(["recebido", "em-preparo", "pronto", "concluido"])
     expect(etapasDoCaminho("mesa")).toEqual(["recebido", "em-preparo", "pronto", "concluido"])
     expect(etapasDoCaminho("atendimento")).toEqual(["recebido", "em-preparo", "concluido"])
+  })
+})
+
+describe("statusAnterior", () => {
+  test("a etapa de antes, para desfazer ou arrastar de volta", () => {
+    expect(statusAnterior("entrega", "em-preparo")).toBe("recebido")
+    expect(statusAnterior("entrega", "pronto")).toBe("em-preparo")
+    expect(statusAnterior("entrega", "saiu-para-entrega")).toBe("pronto")
+    expect(statusAnterior("entrega", "concluido")).toBe("saiu-para-entrega")
+    expect(statusAnterior("retirada", "concluido")).toBe("pronto")
+    expect(statusAnterior("atendimento", "concluido")).toBe("em-preparo")
+  })
+
+  test("o começo e o que saiu da operação não voltam", () => {
+    expect(statusAnterior("entrega", "recebido")).toBeNull()
+    expect(statusAnterior("entrega", "cancelado")).toBeNull()
+    expect(statusAnterior("mesa", "concluido")).toBeNull()
   })
 })

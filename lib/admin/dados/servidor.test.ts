@@ -376,6 +376,46 @@ describe("servidor de demonstração", () => {
     expect((await api.pedidos.listar())[0].id).toBe(novo.id)
   })
 
+  describe("voltar uma etapa", () => {
+    test("desfaz o avanço e entra na linha do tempo; só a partir da etapa que a tela viu", async () => {
+      const api = servidor()
+      const [novo] = (await api.pedidos.listar({ status: ["recebido"] })).filter(
+        (pedido) => !pedido.esperaAceite,
+      )
+      await api.pedidos.avancar(novo.id, "recebido")
+
+      const voltou = await api.pedidos.voltar(novo.id, "em-preparo")
+      expect(voltou.status).toBe("recebido")
+      expect(voltou.historico?.at(-1)).toEqual({
+        tipo: "etapa",
+        status: "recebido",
+        em: AGORA.toISOString(),
+      })
+      await expect(api.pedidos.voltar(novo.id, "em-preparo")).rejects.toThrow(
+        "Este pedido já mudou de etapa. Atualize a tela.",
+      )
+      await expect(api.pedidos.voltar(novo.id, "recebido")).rejects.toThrow(
+        "Este pedido não tem etapa anterior.",
+      )
+    })
+
+    test("voltar de concluído desfaz a cobrança feita na entrega", async () => {
+      const api = servidor()
+      const naRua = (await api.pedidos.listar({ status: ["saiu-para-entrega"] })).find(
+        (pedido) => pedido.situacaoPagamento === "na-entrega",
+      )
+      if (!naRua) throw new Error("A demonstração devia ter uma entrega na rua a cobrar")
+      expect((await api.pedidos.avancar(naRua.id, "saiu-para-entrega")).situacaoPagamento).toBe(
+        "pago",
+      )
+
+      const reaberto = await api.pedidos.voltar(naRua.id, "concluido")
+      expect(reaberto.status).toBe("saiu-para-entrega")
+      expect(reaberto.situacaoPagamento).toBe("na-entrega")
+      expect(reaberto.pagoEm).toBeUndefined()
+    })
+  })
+
   describe("prazo prometido", () => {
     test("o acréscimo da hora fica guardado; só +10, +15, +30 ou nenhum", async () => {
       const api = servidor()

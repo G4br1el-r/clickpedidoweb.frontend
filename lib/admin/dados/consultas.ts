@@ -2,7 +2,7 @@
 
 import { type QueryKey, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { useEffect } from "react"
-import { proximoStatus } from "../regras/status"
+import { proximoStatus, statusAnterior } from "../regras/status"
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { carregarCatalogo } from "./catalogos"
@@ -122,6 +122,17 @@ export function useAvancarPedido() {
     (pedido, { de }) => {
       const proximo = pedido.status === de && proximoStatus(pedido.tipo, pedido.status)
       return proximo ? { ...pedido, status: proximo } : pedido
+    },
+  )
+}
+
+/** Volta uma etapa: desfazer o avanço, arrastar de volta ou reabrir. */
+export function useVoltarPedido() {
+  return useMutacaoDePedido<MudancaDeEtapa>(
+    (servidor, { id, de }) => servidor.pedidos.voltar(id, de),
+    (pedido, { de }) => {
+      const anterior = pedido.status === de && statusAnterior(pedido.tipo, pedido.status)
+      return anterior ? { ...pedido, status: anterior } : pedido
     },
   )
 }

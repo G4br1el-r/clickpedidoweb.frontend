@@ -27,6 +27,7 @@ import {
   usePedidos,
   useRecusarPedido,
   useSimularPedido,
+  useVoltarPedido,
 } from "@/lib/admin/dados/consultas"
 import type { MotivoEscolhido, Pedido, SomAlerta, TipoPedido } from "@/lib/admin/dados/tipos"
 import {
@@ -83,6 +84,8 @@ const _SONS: { valor: SomAlerta; rotulo: string }[] = [
 
 /** Quanto tempo o "Chegou agora" fica no cartão. */
 const DESTAQUE_MS = 10_000
+/** Quanto tempo o "Desfazer" fica no aviso depois de avançar. */
+const DESFAZER_MS = 6_000
 
 /** O que a fila mostra quando uma métrica filtra as colunas. */
 const ROTULO_DO_FILTRO: Record<FiltroDaFila, string> = {
@@ -298,6 +301,7 @@ export function PaginaFila({
   const filtrando =
     Boolean(filtro || ferramentas.busca) || ferramentas.canal.length > 0 || ferramentas.naoPagos
   const avancar = useAvancarPedido()
+  const voltar = useVoltarPedido()
   const aceitar = useAceitarPedido()
   const recusar = useRecusarPedido()
   const cancelar = useCancelarPedido()
@@ -360,9 +364,27 @@ export function PaginaFila({
         { id: pedido.id, de: pedido.status },
         {
           ...avisoDeErro,
+          // 6 s para desfazer: o toque errado no pico volta o pedido para a coluna de antes.
           onSuccess: (atualizado) =>
             toast.success(
               `#${atualizado.numero}: ${rotuloStatus(atualizado.tipo, atualizado.status)}`,
+              {
+                duration: DESFAZER_MS,
+                action: {
+                  label: "Desfazer",
+                  onClick: () =>
+                    voltar.mutate(
+                      { id: atualizado.id, de: atualizado.status },
+                      {
+                        ...avisoDeErro,
+                        onSuccess: (voltou) =>
+                          toast(
+                            `#${voltou.numero} de volta: ${rotuloStatus(voltou.tipo, voltou.status)}`,
+                          ),
+                      },
+                    ),
+                },
+              },
             ),
         },
       ),

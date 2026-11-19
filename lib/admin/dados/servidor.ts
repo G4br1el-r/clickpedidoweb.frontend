@@ -28,7 +28,7 @@ import {
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
 import { prazoNaChegada } from "../regras/prazo"
-import { proximoStatus } from "../regras/status"
+import { proximoStatus, statusAnterior } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
@@ -189,6 +189,15 @@ const comandaDa = (base: BaseLoja, mesaId: string) =>
 function recalcular(pedido: Pedido): Pedido {
   const subtotal = reais(pedido.itens.reduce((soma, item) => soma + item.total, 0))
   return { ...pedido, subtotal, total: reais(subtotal - pedido.desconto) }
+}
+
+/** O pagamento foi registrado no mesmo momento da conclusão (cobrado na entrega ou no balcão). */
+function foiPagoAoConcluir(pedido: Pedido): boolean {
+  const concluiu = pedido.historico
+    ?.filter((evento) => evento.tipo === "etapa" && evento.status === "concluido")
+    .at(-1)
+  if (!concluiu || !pedido.pagoEm || pedido.situacaoPagamento !== "pago") return false
+  return Math.abs(Date.parse(pedido.pagoEm) - Date.parse(concluiu.em)) < 2_000
 }
 
 /** A ação partiu da etapa que a tela mostrava; se outra aba mudou o pedido, recusa. */
@@ -728,6 +737,21 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
               ? { situacaoPagamento: "pago" as const, pagoEm: new Date().toISOString() }
               : {}),
           }
+        })
+      },
+
+      /** Volta uma etapa: desfazer, arrastar de volta ou reabrir. `de` é a etapa que a tela viu. */
+      voltar(id: number, de: StatusPedido) {
+        return alterar(id, (pedido) => {
+          conferirEtapa(pedido, de)
+          const anterior = statusAnterior(pedido.tipo, pedido.status)
+          if (!anterior) throw new Error("Este pedido não tem etapa anterior.")
+          // Concluir marcou como pago o que se cobrava na entrega ou no balcão: voltar desfaz.
+          if (de === "concluido" && foiPagoAoConcluir(pedido)) {
+            const { pagoEm: _pagoEm, ...semPagamento } = pedido
+            return { ...semPagamento, status: anterior, situacaoPagamento: "na-entrega" as const }
+          }
+          return { ...pedido, status: anterior }
         })
       },
 

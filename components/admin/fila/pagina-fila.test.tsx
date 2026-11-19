@@ -6,6 +6,7 @@ import { clear } from "idb-keyval"
 import { NuqsTestingAdapter } from "nuqs/adapters/testing"
 import { type ReactNode, useState } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
@@ -26,7 +27,10 @@ function Provedores({ children }: { children: ReactNode }) {
   return (
     <NuqsTestingAdapter hasMemory onUrlUpdate={urlMudou}>
       <QueryClientProvider client={cliente}>
-        <TooltipProvider>{children}</TooltipProvider>
+        <TooltipProvider>
+          {children}
+          <Toaster />
+        </TooltipProvider>
       </QueryClientProvider>
     </NuqsTestingAdapter>
   )
@@ -145,6 +149,28 @@ describe("PaginaFila", () => {
     expect(
       await (await coluna("Em preparo")).findByRole("heading", { name: numero }),
     ).toBeInTheDocument()
+  })
+
+  test("avançar dá 6 s para desfazer: o cartão volta para a coluna de antes", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const cartao = (await coluna("Novos"))
+      .getAllByRole("article")
+      .find((item) => within(item).queryByRole("button", { name: "Iniciar preparo" }))
+    if (!cartao) throw new Error("Devia haver um pedido novo pronto para começar")
+    const numero = within(cartao).getByRole("heading").textContent ?? ""
+
+    await usuario.click(within(cartao).getByRole("button", { name: "Iniciar preparo" }))
+    await (await coluna("Em preparo")).findByRole("heading", { name: numero })
+    await usuario.click(await screen.findByRole("button", { name: "Desfazer" }))
+
+    expect(
+      await (await coluna("Novos")).findByRole("heading", { name: numero }),
+    ).toBeInTheDocument()
+    expect((await servidorDo("pizzaria").pedidos.buscar(Number(numero.slice(1))))?.status).toBe(
+      "recebido",
+    )
   })
 
   test("no celular, as colunas viram abas com a contagem", async () => {

@@ -21,6 +21,21 @@ export function proximoStatus(tipo: TipoPedido, status: StatusPedido): StatusPed
   }
 }
 
+const EM_ANDAMENTO: readonly StatusPedido[] = ["recebido", "em-preparo", "pronto", "saiu-para-entrega"]
+
+/**
+ * A etapa de antes: a que avança para esta. Serve para desfazer, arrastar de volta e reabrir.
+ * Novo é o começo; cancelado e a conta fechada da mesa não voltam pela fila.
+ */
+export function statusAnterior(tipo: TipoPedido, status: StatusPedido): StatusPedido | null {
+  const caminho = etapasDoCaminho(tipo)
+  return (
+    EM_ANDAMENTO.find(
+      (anterior) => caminho.includes(anterior) && proximoStatus(tipo, anterior) === status,
+    ) ?? null
+  )
+}
+
 const ROTULO_COMUM: Record<StatusPedido, string> = {
   "aguardando-pagamento": "Aguardando pagamento",
   recebido: "Novo",
