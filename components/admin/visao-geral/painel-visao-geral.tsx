@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
+import { nomesDo } from "@/lib/admin/regras/dashboard/nomes"
 import type { Resumo } from "@/lib/admin/regras/dashboard/resumo"
 import { diasNoPeriodo, type Periodo } from "@/lib/admin/regras/periodo"
 import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
@@ -43,13 +44,6 @@ const porcentagem = new Intl.NumberFormat("pt-BR", {
   signDisplay: "exceptZero",
 })
 const inteiro = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 })
-
-/** No salão, o pedido é um atendimento. */
-function nomes(segmento: SegmentoPainelId) {
-  return segmento === "salao"
-    ? { Pedidos: "Atendimentos", pedido: "atendimento", pedidos: "atendimentos" }
-    : { Pedidos: "Pedidos", pedido: "pedido", pedidos: "pedidos" }
-}
 
 /** Número animado para quem vê; o valor formatado para leitores de tela e buscas. */
 function Numero({ valor, moeda = false }: { valor: number; moeda?: boolean }) {
@@ -167,7 +161,7 @@ export function PainelVisaoGeral({
 }) {
   const [medida, setMedida] = useState<MedidaDoGrafico>("faturamento")
   const [tabelaAberta, setTabelaAberta] = useState(false)
-  const n = nomes(segmento)
+  const n = nomesDo(segmento)
   const dias = diasNoPeriodo(periodo)
   const { hoje, periodo: kpi } = resumo
   const anteriores = dias === 1 ? "o dia anterior" : `os ${dias} dias anteriores`
