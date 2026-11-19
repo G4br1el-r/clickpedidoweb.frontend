@@ -32,10 +32,11 @@ export function TrocarUsuario() {
         size="sm"
         title="Trocar usuário (Ctrl+U)"
         onClick={() => setAberta(true)}
-        className="max-w-48 gap-1.5"
+        className="max-w-48 gap-1.5 max-sm:size-8 max-sm:px-0"
       >
         <UserRoundIcon data-icon="inline-start" />
-        <span className="truncate">
+        {/* No celular, só o ícone: o topo não cabe o nome (o leitor de tela continua lendo). */}
+        <span className="truncate max-sm:sr-only">
           {membro.nome} · {TITULO_PERFIL[membro.perfil]}
         </span>
       </Button>

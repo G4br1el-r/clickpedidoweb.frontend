@@ -103,6 +103,8 @@ function Abertura({
     abrir.mutate(
       { operadorId: pessoa.id, pin, fundo },
       {
+        // A abertura é longa (no celular, o botão fica no fim): a venda começa do topo.
+        onSuccess: () => window.scrollTo({ top: 0 }),
         onError: (falha) => {
           setErro(falha.message)
           setPin("")

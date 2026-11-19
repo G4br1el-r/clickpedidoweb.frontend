@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { esperarAnimacoes } from "./apoio"
+import { abrirCaixa, esperarAnimacoes } from "./apoio"
 
 /** Sexta, 13/11/2026, 20:30: os pedidos de demonstração saem sempre iguais. */
 const AGORA = new Date("2026-11-13T20:30:00-03:00")
@@ -75,9 +75,41 @@ for (const tema of ["light", "dark"] as const) {
     await expect(page).toHaveScreenshot(`painel-fila-${tema}.png`, { fullPage: true })
   })
 
-  test(`painel: PDV (${tema})`, async ({ page }) => {
+  test(`painel: PDV, abertura do caixa (${tema})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
     await page.goto("/admin/pdv")
+    await expect(page.getByRole("region", { name: "Abrir o caixa" })).toBeVisible({
+      timeout: 15_000,
+    })
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-pdv-abertura-${tema}.png`, { fullPage: true })
+  })
+
+  test(`painel: PDV, fechamento do caixa (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await abrirCaixa(page)
+    await page.goto("/admin/pdv?tela=fechar")
+    await expect(
+      page.getByRole("table", { name: "Conferência por forma de pagamento" }),
+    ).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-pdv-fechamento-${tema}.png`, { fullPage: true })
+  })
+
+  test(`painel: equipe (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/equipe")
+    await expect(page.getByRole("table", { name: "Equipe" })).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-equipe-${tema}.png`, { fullPage: true })
+  })
+
+  test(`painel: PDV (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await abrirCaixa(page)
     await expect(page.getByRole("button", { name: /^Adicionar / }).first()).toBeVisible({
       timeout: 15_000,
     })
@@ -89,7 +121,7 @@ for (const tema of ["light", "dark"] as const) {
   test(`painel: PDV com itens na caixa (${tema})`, async ({ page }, info) => {
     test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a caixa abre pela barra")
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
-    await page.goto("/admin/pdv")
+    await abrirCaixa(page)
     // Um produto sem opções (preço do cardápio, só leitura) e um avulso (preço digitado).
     await page
       .getByRole("button", { name: /^Adicionar .*\d$/ })

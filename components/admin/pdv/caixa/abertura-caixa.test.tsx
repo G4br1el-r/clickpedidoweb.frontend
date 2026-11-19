@@ -109,6 +109,16 @@ describe("AberturaCaixa", () => {
     expect(useUsuarioSalvo.getState().porSegmento.pizzaria).toBe("eq-marina")
   })
 
+  test("ao abrir, a venda começa do topo da página", async () => {
+    const rolar = vi.spyOn(window, "scrollTo").mockImplementation(() => {})
+    const usuario = await abrir()
+    await usuario.click(abertura().getByRole("radio", { name: "Marina S. Caixa" }))
+    await usuario.type(abertura().getByLabelText("PIN de Marina S."), "1111{Enter}")
+    await screen.findByRole("searchbox", { name: "Buscar no cardápio" }, { timeout: 8000 })
+    expect(rolar).toHaveBeenCalledWith({ top: 0 })
+    rolar.mockRestore()
+  })
+
   test("PIN errado mostra o erro", async () => {
     const usuario = await abrir()
     await usuario.click(abertura().getByRole("radio", { name: "João P. Caixa" }))

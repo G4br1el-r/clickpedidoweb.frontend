@@ -106,6 +106,8 @@ function Fechamento({
       {
         onSuccess: () => {
           toast.success("Caixa fechado.")
+          // A contagem é longa: a abertura do próximo turno começa do topo.
+          window.scrollTo({ top: 0 })
           aoFechado()
         },
         onError: (falha) => toast.error(falha.message),

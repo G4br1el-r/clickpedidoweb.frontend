@@ -75,6 +75,19 @@ describe("FechamentoCaixa", () => {
     })
   })
 
+  test("ao fechar, a abertura começa do topo da página", async () => {
+    const rolar = vi.spyOn(window, "scrollTo").mockImplementation(() => {})
+    const usuario = await abrirPdv("Fechar o caixa", "?tela=fechar")
+    await waitFor(() => expect(linha("Dinheiro")).toHaveTextContent("R$ 130,00"))
+    await usuario.type(contagem().getByLabelText("R$ 100"), "1")
+    await usuario.type(contagem().getByLabelText("R$ 20"), "1")
+    await usuario.type(contagem().getByLabelText("R$ 10"), "1")
+    await usuario.click(screen.getByRole("button", { name: "Fechar caixa" }))
+    await screen.findByRole("heading", { level: 1, name: "Abrir o caixa" }, { timeout: 8000 })
+    expect(rolar).toHaveBeenCalledWith({ top: 0 })
+    rolar.mockRestore()
+  })
+
   test("Voltar leva de volta à venda", async () => {
     const usuario = await abrirPdv("Fechar o caixa", "?tela=fechar")
     await usuario.click(screen.getByRole("button", { name: "Voltar à venda" }))

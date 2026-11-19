@@ -193,3 +193,19 @@ export async function abrirSacola(page: Page): Promise<Locator> {
   await page.waitForTimeout(450)
   return painel
 }
+
+/**
+ * Abre o caixa do PDV (sem caixa aberto não se vende): escolhe a pessoa, digita o PIN e
+ * espera o painel do turno.
+ */
+export async function abrirCaixa(page: Page, { pessoa = "Marina S.", pin = "1111" } = {}) {
+  await page.goto("/admin/pdv")
+  const abertura = page.getByRole("region", { name: "Abrir o caixa" })
+  await expect(abertura).toBeVisible({ timeout: 15_000 })
+  await abertura.getByRole("radio", { name: new RegExp(`^${pessoa}`) }).click()
+  await abertura.getByLabel(`PIN de ${pessoa}`).fill(pin)
+  await abertura.getByRole("button", { name: /Abrir caixa/ }).click()
+  await expect(page.getByRole("region", { name: "Turno do caixa" })).toBeVisible({
+    timeout: 15_000,
+  })
+}
