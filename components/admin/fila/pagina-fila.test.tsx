@@ -248,6 +248,22 @@ describe("PaginaFila", () => {
     Reflect.deleteProperty(navigator, "vibrate")
   })
 
+  test("com a aba escondida, o título pisca com os pedidos esperando; ao voltar, para", async () => {
+    telaGrande()
+    document.title = "Fila de pedidos"
+    abaEscondida(true)
+    usePreferenciasFila.setState({ piscarAba: true, simular: true })
+    renderizar(300)
+
+    await waitFor(() => expect(document.title).toMatch(/^🔔 \d+ novos?$/), { timeout: 8000 })
+
+    abaEscondida(false)
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"))
+    })
+    await waitFor(() => expect(document.title).toBe("Fila de pedidos"))
+  })
+
   test("com a aba à vista, não manda notificação", async () => {
     telaGrande()
     const avisos = vi.fn()

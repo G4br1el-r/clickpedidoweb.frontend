@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { textoDaNotificacao } from "./aparelho"
+import { textoDaAba, textoDaNotificacao } from "./aparelho"
 import { PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
 
 describe("textoDaNotificacao", () => {
@@ -16,5 +16,14 @@ describe("textoDaNotificacao", () => {
       // O Intl separa "R$" do valor com espaço não separável.
       corpo: "Entrega · Ana Lima · R$ 72,00",
     })
+  })
+})
+
+describe("textoDaAba", () => {
+  test("pisca entre a contagem e o título; sem pedido esperando, só o título", () => {
+    expect(textoDaAba("Fila de pedidos", 2, true)).toBe("🔔 2 novos")
+    expect(textoDaAba("Fila de pedidos", 1, true)).toBe("🔔 1 novo")
+    expect(textoDaAba("Fila de pedidos", 2, false)).toBe("Fila de pedidos")
+    expect(textoDaAba("Fila de pedidos", 0, true)).toBe("Fila de pedidos")
   })
 })
