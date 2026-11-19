@@ -1,4 +1,4 @@
-import { addDays, endOfDay, isSameDay, startOfDay, subDays } from "date-fns"
+import { addDays, addMinutes, endOfDay, isSameDay, startOfDay, subDays } from "date-fns"
 import { del, get, set } from "idb-keyval"
 import { expediente, horariosLivres, INTERVALO_MIN } from "../regras/agenda"
 import {
@@ -315,7 +315,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       agora,
     })
     const estoque = semearEstoque({ catalogo, segmento, agora })
-    const base = abrirMesas({
+    const aberta = abrirMesas({
       ...catalogo,
       produtos: estoque.produtos,
       // O controle começa hoje: o saldo inicial já desconta os pedidos em andamento.
@@ -325,6 +325,15 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       espera: [],
       chamados: [],
     })
+    // A demonstração abre com uma mesa livre sendo limpa há 3 min.
+    const base = {
+      ...aberta,
+      mesas: aberta.mesas.map((mesa) =>
+        mesa.id === "mesa-9" && mesa.status === "livre"
+          ? { ...mesa, limpezaDesde: addMinutes(agora, -3).toISOString() }
+          : mesa,
+      ),
+    }
     await salvar(base)
     return base
   }

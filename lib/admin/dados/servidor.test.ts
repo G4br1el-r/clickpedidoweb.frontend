@@ -183,6 +183,64 @@ describe("servidor de demonstração", () => {
     }
   })
 
+  describe("demonstração com o salão cheio", () => {
+    const antes = (min: number) => new Date(AGORA.getTime() - min * 60_000).toISOString()
+
+    async function salaoCheio() {
+      const api = criarServidor({
+        segmento: "acougue",
+        carregarCatalogo: () => carregarCatalogo("acougue"),
+        espera: 0,
+      })
+      const mesas = await api.mesas.listar()
+      const base = await api.base()
+      return { mesas, base }
+    }
+
+    test("abre com 8 mesas ocupadas, cada uma com pessoas entre 1 e os lugares", async () => {
+      const { mesas, base } = await salaoCheio()
+      const ocupadas = mesas.filter((mesa) => mesa.status === "ocupada")
+      expect(ocupadas).toHaveLength(8)
+      for (const mesa of ocupadas) {
+        const comanda = base.pedidos.find((pedido) => pedido.id === mesa.pedidoAtivoId)
+        expect(comanda?.mesa?.pessoas).toBeGreaterThanOrEqual(1)
+        expect(comanda?.mesa?.pessoas).toBeLessThanOrEqual(mesa.lugares)
+      }
+    })
+
+    test("a comanda aberta há mais tempo já pediu a conta, 5 min atrás", async () => {
+      const { mesas, base } = await salaoCheio()
+      const comandas = mesas
+        .filter((mesa) => mesa.status === "ocupada")
+        .map((mesa) => base.pedidos.find((pedido) => pedido.id === mesa.pedidoAtivoId) as Pedido)
+      const maisAntiga = comandas.reduce((a, b) => (a.criadoEm < b.criadoEm ? a : b))
+      expect(maisAntiga.contaPedidaEm).toBe(antes(5))
+      expect(comandas.filter((comanda) => comanda.contaPedidaEm)).toHaveLength(1)
+    })
+
+    test("uma comanda está pronta para servir há 4 min", async () => {
+      const { base } = await salaoCheio()
+      const paraServir = base.pedidos.filter((pedido) => pedido.servirDesde)
+      expect(paraServir).toHaveLength(1)
+      expect(paraServir[0].servirDesde).toBe(antes(4))
+    })
+
+    test("a mesa 9 está em limpeza há 3 min; a 20 continua bloqueada e nunca recebe comanda", async () => {
+      const { mesas, base } = await salaoCheio()
+      const mesa9 = mesas.find((mesa) => mesa.id === "mesa-9")
+      expect(mesa9?.status).toBe("livre")
+      expect(mesa9?.limpezaDesde).toBe(antes(3))
+      const mesa20 = mesas.find((mesa) => mesa.id === "mesa-20")
+      expect(mesa20?.bloqueio).toEqual({ motivo: "Em manutenção" })
+      expect(mesa20?.status).toBe("livre")
+      expect(
+        base.pedidos.filter(
+          (pedido) => pedido.mesa?.id === "mesa-20" && EM_ANDAMENTO.includes(pedido.status),
+        ),
+      ).toEqual([])
+    })
+  })
+
   test("ao reabrir em outro dia, completa os dias e encerra o que ficou aberto", async () => {
     await servidor().pedidos.listar()
 
