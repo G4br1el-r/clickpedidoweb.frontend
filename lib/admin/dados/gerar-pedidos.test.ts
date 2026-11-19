@@ -210,6 +210,25 @@ describe("gerarPedidos", () => {
     expect(recebido.historico ?? []).toEqual([])
   })
 
+  test("a demonstração tem fregueses fiéis, clientes ocasionais e clientes novos", () => {
+    const pedidos = gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "lanchonete",
+      de: new Date(2026, 9, 15),
+      agora: AGORA,
+    })
+    const porTelefone = new Map<string, number>()
+    for (const pedido of pedidos) {
+      porTelefone.set(pedido.cliente.telefone, (porTelefone.get(pedido.cliente.telefone) ?? 0) + 1)
+    }
+    const quantos = [...porTelefone.values()]
+    // Uns poucos voltam toda hora; muita gente pede uma vez só.
+    const fieis = quantos.filter((total) => total >= 10).length
+    expect(fieis).toBeGreaterThanOrEqual(3)
+    expect(fieis).toBeLessThanOrEqual(10)
+    expect(quantos.filter((total) => total === 1).length).toBeGreaterThan(30)
+  })
+
   test("na lanchonete o número do pedido recomeça no mês; nas outras é o id", () => {
     const agora = new Date(2026, 10, 2, 20, 30)
     const lanchonete = gerarPedidos({

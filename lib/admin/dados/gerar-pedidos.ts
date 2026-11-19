@@ -78,6 +78,57 @@ const RUAS = [
 ]
 const GARCONS = ["Lucas", "Paula", "Rafa", "Bia"]
 
+/** Nomes de quem pede pela primeira vez: cada pedido desses é um cliente novo. */
+const PRIMEIROS_NOMES = [
+  "Larissa",
+  "Diego",
+  "Renata",
+  "Fábio",
+  "Juliana",
+  "Marcelo",
+  "Patrícia",
+  "Rodrigo",
+  "Tatiane",
+  "Vinícius",
+  "Aline",
+  "Gustavo",
+]
+const SOBRENOMES = [
+  "Moreira",
+  "Teixeira",
+  "Barbosa",
+  "Nogueira",
+  "Pires",
+  "Cardoso",
+  "Ramos",
+  "Freitas",
+  "Lopes",
+  "Moura",
+  "Batista",
+  "Correia",
+]
+
+/** Quantos fregueses fiéis a loja tem: os primeiros da lista de clientes. */
+const FIEIS = 8
+
+/**
+ * Quem fez o pedido: uns poucos fregueses fiéis (mais da metade dos pedidos), alguns clientes
+ * ocasionais e, no resto, gente que pede pela primeira vez. Parte do cliente já sorteado e do
+ * id, sem sortear de novo: o resto do pedido (itens, valores, horários) não muda.
+ */
+function clienteDoPedido(clientes: CatalogoLoja["clientes"], sorteado: number, id: number) {
+  const fieis = Math.min(FIEIS, clientes.length)
+  const faixa = (id * 37 + sorteado * 11) % 100
+  if (faixa < 55) return clientes[sorteado % fieis]
+  if (faixa < 75 && clientes.length > fieis) {
+    return clientes[fieis + ((sorteado + id) % (clientes.length - fieis))]
+  }
+  return {
+    nome: `${PRIMEIROS_NOMES[id % PRIMEIROS_NOMES.length]} ${SOBRENOMES[(id * 7) % SOBRENOMES.length]}`,
+    telefone: `1298${String(id % 10_000_000).padStart(7, "0")}`,
+  }
+}
+
 /**
  * Movimento de agora: a demonstração sempre abre com pedidos em todas as etapas
  * (aguardando pagamento, novo, em preparo, pronto, a caminho e mesa aberta).
@@ -345,7 +396,11 @@ export function gerarPedidos({
           : !vivo && tipo !== "entrega" && temPdv && sorte.chance(35)
             ? "pdv"
             : "site"
-      const cliente = sorte.um(catalogo.clientes)
+      const cliente = clienteDoPedido(
+        catalogo.clientes,
+        sorte.inteiro(0, catalogo.clientes.length - 1),
+        id,
+      )
 
       const itens = Array.from({ length: sorte.inteiro(1, salao ? 2 : 3) }, (_, indice) =>
         montarItem(sorte, sorte.um(produtos), `${id}-${indice + 1}`, segmento, origem !== "site"),
@@ -571,7 +626,7 @@ export function gerarPedidoAgora({
     origem: "site",
     tipo,
     status: "recebido",
-    cliente: sorte.um(catalogo.clientes),
+    cliente: clienteDoPedido(catalogo.clientes, sorte.inteiro(0, catalogo.clientes.length - 1), id),
     ...(bairro
       ? {
           endereco: {
