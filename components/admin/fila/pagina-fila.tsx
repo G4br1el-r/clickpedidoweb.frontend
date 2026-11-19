@@ -97,7 +97,7 @@ function Chave({
  * O navegador segura o som até a pessoa tocar na página. Com o alerta ligado, a fila pede
  * esse toque: sem ele, o alarme do pedido novo não sai. Qualquer toque na página também libera.
  */
-function AvisoSomBloqueado({ somLigado, agora }: { somLigado: boolean; agora: Date | null }) {
+function AvisoSomBloqueado({ somLigado }: { somLigado: boolean }) {
   const [bloqueado, setBloqueado] = useState(false)
   useEffect(() => {
     if (!somLigado) return
@@ -105,8 +105,7 @@ function AvisoSomBloqueado({ somLigado, agora }: { somLigado: boolean; agora: Da
     conferir()
     window.addEventListener("pointerdown", conferir)
     return () => window.removeEventListener("pointerdown", conferir)
-    // O relógio da fila confere de novo de tempos em tempos.
-  }, [somLigado, agora])
+  }, [somLigado])
 
   if (!somLigado || !bloqueado) return null
   return (
@@ -355,7 +354,7 @@ export function PaginaFila({
         }
       />
 
-      <AvisoSomBloqueado somLigado={preferencias.somLigado} agora={agora} />
+      <AvisoSomBloqueado somLigado={preferencias.somLigado} />
       {fila && agora && <AvisoDiasAnteriores pedidos={pedidosDeDiasAnteriores(fila, agora)} />}
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-y border-border/70 py-3">
