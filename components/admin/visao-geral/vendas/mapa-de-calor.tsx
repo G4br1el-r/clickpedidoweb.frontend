@@ -32,7 +32,7 @@ export function MapaDeCalor({
   return (
     <table
       aria-label={`${pedidos[0].toUpperCase()}${pedidos.slice(1)} por dia da semana e hora`}
-      className="w-full table-fixed border-separate border-spacing-0.5 text-xs"
+      className="w-full max-w-3xl table-fixed border-separate border-spacing-0.5 text-xs"
     >
       <thead>
         <tr>

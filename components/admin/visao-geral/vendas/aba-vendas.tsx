@@ -144,7 +144,7 @@ export function AbaVendas({
             rotulo={`Itens por ${n.pedido}`}
             detalhe={comparar((numeros) => numeros.itensPorPedido)}
           >
-            {decimal.format(regua.atual.itensPorPedido)}
+            <Numero valor={regua.atual.itensPorPedido} />
           </Indicador>
         </Regua>
 

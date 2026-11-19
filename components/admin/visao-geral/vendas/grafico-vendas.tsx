@@ -61,9 +61,11 @@ export default function GraficoDeVendas({
 
   return (
     <ChartContainer config={configuracao} className="aspect-auto h-64 w-full">
-      <BarChart data={dados} margin={{ top: 8, left: 4, right: 4 }} barGap={-14} accessibilityLayer>
+      <BarChart data={dados} margin={{ top: 8, left: 4, right: 4 }} accessibilityLayer>
         <CartesianGrid vertical={false} />
         <XAxis dataKey="rotulo" tickLine={false} axisLine={false} tickMargin={8} minTickGap={12} />
+        {/* Eixo escondido só para o anterior: as duas barras ficam no mesmo lugar, uma atrás da outra. */}
+        <XAxis xAxisId="anterior" dataKey="rotulo" hide />
         <YAxis
           tickLine={false}
           axisLine={false}
@@ -84,9 +86,10 @@ export default function GraficoDeVendas({
             />
           }
         />
-        {/* O anterior vem primeiro para ficar atrás; a barra do período cobre o meio dele. */}
+        {/* O anterior vem primeiro para ficar atrás; a barra do período, mais fina, fica na frente. */}
         <Bar
           dataKey="anterior"
+          xAxisId="anterior"
           className="barras-anterior"
           fill="var(--color-anterior)"
           radius={[4, 4, 0, 0]}
