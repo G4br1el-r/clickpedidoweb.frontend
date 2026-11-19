@@ -1,4 +1,4 @@
-import type { FormaPagamento, Pedido, StatusPedido, TipoPedido } from "../dados/tipos"
+import type { FormaPagamento, OrigemPedido, Pedido, StatusPedido, TipoPedido } from "../dados/tipos"
 import { ehValido } from "./dashboard/comum"
 
 export type FiltrosLista = {
@@ -6,6 +6,7 @@ export type FiltrosLista = {
   status?: StatusPedido[]
   tipos?: TipoPedido[]
   pagamentos?: FormaPagamento[]
+  origens?: OrigemPedido[]
 }
 
 /** Minúsculas e sem acento: "João" acha "joao". */
@@ -30,16 +31,17 @@ function combinaBusca(pedido: Pedido, busca: string) {
 
 const aceita = <T>(lista: T[] | undefined, valor: T) => !lista?.length || lista.includes(valor)
 
-/** Busca (número, cliente, telefone ou item) combinada com os filtros de status, canal e pagamento. */
+/** Busca (número, cliente, telefone ou item) combinada com os filtros de status, canal, pagamento e origem. */
 export function filtrarPedidos(
   pedidos: Pedido[],
-  { busca = "", status, tipos, pagamentos }: FiltrosLista,
+  { busca = "", status, tipos, pagamentos, origens }: FiltrosLista,
 ) {
   return pedidos.filter(
     (pedido) =>
       aceita(status, pedido.status) &&
       aceita(tipos, pedido.tipo) &&
       aceita(pagamentos, pedido.pagamento) &&
+      aceita(origens, pedido.origem) &&
       combinaBusca(pedido, busca),
   )
 }
