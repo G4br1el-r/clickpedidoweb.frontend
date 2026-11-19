@@ -77,6 +77,11 @@ function renderizar(intervaloSimulacao = 60_000) {
   )
 }
 
+/** Aba do navegador escondida (outra aba na frente) ou à vista. */
+function abaEscondida(escondida: boolean) {
+  Object.defineProperty(document, "hidden", { configurable: true, get: () => escondida })
+}
+
 /** Abre o menu com as preferências deste aparelho (som, avisos, demonstração). */
 async function abrirEsteAparelho(usuario = userEvent.setup()) {
   await usuario.click(
@@ -101,6 +106,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  abaEscondida(false)
 })
 
 describe("PaginaFila", () => {
@@ -184,6 +190,72 @@ describe("PaginaFila", () => {
 
     expect(await screen.findByText("Chegou agora", {}, { timeout: 8000 })).toBeInTheDocument()
     expect(tocadas).toHaveBeenCalled()
+  })
+
+  test("com a aba escondida, o pedido novo vira notificação do sistema", async () => {
+    telaGrande()
+    const avisos: { titulo: string; corpo?: string }[] = []
+    vi.stubGlobal(
+      "Notification",
+      class {
+        static permission = "granted"
+        constructor(titulo: string, opcoes?: { body?: string }) {
+          avisos.push({ titulo, ...(opcoes?.body ? { corpo: opcoes.body } : {}) })
+        }
+      },
+    )
+    abaEscondida(true)
+    usePreferenciasFila.setState({ notificar: true, simular: true })
+    renderizar(300)
+
+    await waitFor(() => expect(avisos.length).toBeGreaterThan(0), { timeout: 8000 })
+    expect(avisos[0].titulo).toMatch(/^Pedido novo #\d+$/)
+    expect(avisos[0].corpo).toBeTruthy()
+  })
+
+  test("ligar a notificação pede licença ao navegador; negada, a chave fica desligada", async () => {
+    const usuario = userEvent.setup()
+    let resposta: NotificationPermission = "denied"
+    vi.stubGlobal(
+      "Notification",
+      class {
+        static permission: NotificationPermission = "default"
+        static requestPermission = vi.fn(async () => resposta)
+      },
+    )
+    renderizar()
+    const menu = await abrirEsteAparelho(usuario)
+    const chave = menu.getByRole("switch", { name: "Notificação do sistema" })
+
+    await usuario.click(chave)
+    expect(
+      await screen.findByText(
+        "O navegador bloqueou as notificações. Libere nas configurações do site.",
+      ),
+    ).toBeInTheDocument()
+    expect(chave).toHaveAttribute("aria-checked", "false")
+
+    resposta = "granted"
+    await usuario.click(chave)
+    await waitFor(() => expect(chave).toHaveAttribute("aria-checked", "true"))
+  })
+
+  test("com a aba à vista, não manda notificação", async () => {
+    telaGrande()
+    const avisos = vi.fn()
+    vi.stubGlobal(
+      "Notification",
+      class {
+        static permission = "granted"
+        constructor() {
+          avisos()
+        }
+      },
+    )
+    usePreferenciasFila.setState({ notificar: true, simular: true })
+    renderizar(300)
+    expect(await screen.findByText("Chegou agora", {}, { timeout: 8000 })).toBeInTheDocument()
+    expect(avisos).not.toHaveBeenCalled()
   })
 
   test("sair da fila com um destaque na tela desliga o relógio do destaque", async () => {

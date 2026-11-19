@@ -1,7 +1,7 @@
 "use client"
 
 import { BellOffIcon, BellRingIcon } from "lucide-react"
-import type { ReactNode } from "react"
+import { type ReactNode, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
@@ -21,6 +21,7 @@ import {
   useSomDoAparelho,
 } from "@/lib/admin/preferencias-fila"
 import { tocarAlerta } from "@/lib/admin/som"
+import { pedirLicenca } from "./avisos-do-aparelho"
 
 const SONS: { valor: SomAlerta; rotulo: string }[] = [
   { valor: "suave", rotulo: "Suave" },
@@ -35,12 +36,15 @@ function Linha({
   detalhe,
   marcada,
   aoMudar,
+  recusa,
 }: {
   id: string
   rotulo: string
   detalhe: string
   marcada: boolean
   aoMudar: (marcada: boolean) => void
+  /** Por que o navegador não deixou ligar. */
+  recusa?: string | undefined
 }) {
   return (
     <div className="flex items-start justify-between gap-4 py-2">
@@ -51,6 +55,11 @@ function Linha({
         <span id={`${id}-detalhe`} className="text-xs text-muted-foreground">
           {detalhe}
         </span>
+        {recusa && (
+          <span role="status" className="text-xs text-destructive">
+            {recusa}
+          </span>
+        )}
       </div>
       <Switch
         id={id}
@@ -78,19 +87,15 @@ function Grupo({ titulo, children }: { titulo: string; children: ReactNode }) {
  * O que vale só para este aparelho (caixa, cozinha, celular do dono): som, avisos, tela
  * acesa e a demonstração. Fica guardado neste navegador.
  */
-export function EsteAparelho({
-  loja,
-  pedirLicenca,
-}: {
-  loja: ConfigLoja | undefined
-  /** Avisos que dependem do navegador pedem licença ao ligar; sem licença, ficam desligados. */
-  pedirLicenca?: (chave: ChaveDoAparelho) => Promise<boolean>
-}) {
+export function EsteAparelho({ loja }: { loja: ConfigLoja | undefined }) {
   const preferencias = usePreferenciasFila()
   const som = useSomDoAparelho()
+  const [recusas, setRecusas] = useState<Partial<Record<ChaveDoAparelho, string>>>({})
+  // Avisos que dependem do navegador pedem licença ao ligar; sem licença, ficam desligados.
   const ligar = async (chave: ChaveDoAparelho, ligada: boolean) => {
-    if (ligada && pedirLicenca && !(await pedirLicenca(chave))) return
-    preferencias.ligar(chave, ligada)
+    const recusa = ligada ? await pedirLicenca(chave) : null
+    setRecusas((atuais) => ({ ...atuais, [chave]: recusa ?? undefined }))
+    if (!recusa) preferencias.ligar(chave, ligada)
   }
 
   return (
@@ -156,6 +161,7 @@ export function EsteAparelho({
             detalhe="Avisa do pedido novo mesmo com a aba escondida."
             marcada={preferencias.notificar}
             aoMudar={(ligada) => ligar("notificar", ligada)}
+            recusa={recusas.notificar}
           />
           <Linha
             id="piscar-aba"
@@ -163,6 +169,7 @@ export function EsteAparelho({
             detalhe="O nome da aba mostra quantos pedidos esperam."
             marcada={preferencias.piscarAba}
             aoMudar={(ligada) => ligar("piscarAba", ligada)}
+            recusa={recusas.piscarAba}
           />
           <Linha
             id="vibrar"
@@ -170,6 +177,7 @@ export function EsteAparelho({
             detalhe="No celular, vibra quando chega pedido."
             marcada={preferencias.vibrar}
             aoMudar={(ligada) => ligar("vibrar", ligada)}
+            recusa={recusas.vibrar}
           />
         </Grupo>
         <Grupo titulo="Tela">
@@ -179,6 +187,7 @@ export function EsteAparelho({
             detalhe="A tela não apaga enquanto a fila está aberta."
             marcada={preferencias.telaAcesa}
             aoMudar={(ligada) => ligar("telaAcesa", ligada)}
+            recusa={recusas.telaAcesa}
           />
         </Grupo>
         <Grupo titulo="Demonstração">

@@ -55,6 +55,7 @@ import { usePedidoAberto } from "../pedidos/estado-lista"
 import { Traco } from "../traco"
 import { AjustePrazo } from "./ajuste-prazo"
 import { AvisoDiasAnteriores } from "./aviso-dias-anteriores"
+import { avisarChegada } from "./avisos-do-aparelho"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
 import { EsteAparelho } from "./este-aparelho"
@@ -277,6 +278,7 @@ export function PaginaFila({
   // Impressão automática: cada pedido novo entra uma vez na fila da impressora.
   const enviadosParaImprimir = useRef(new Set<number>())
   const novos = useChegadas(fila, (chegaram) => {
+    avisarChegada(chegaram, usePreferenciasFila.getState())
     if (!loja?.impressaoAutomatica) return
     for (const pedido of chegaram) {
       if (pedido.impressoEm || enviadosParaImprimir.current.has(pedido.id)) continue
