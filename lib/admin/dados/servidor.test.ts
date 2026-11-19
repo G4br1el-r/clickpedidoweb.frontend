@@ -358,6 +358,27 @@ describe("servidor de demonstração", () => {
     expect((await api.pedidos.listar())[0].id).toBe(novo.id)
   })
 
+  describe("prazo prometido", () => {
+    test("o acréscimo da hora fica guardado; só +10, +15, +30 ou nenhum", async () => {
+      const api = servidor()
+      expect((await api.definirAcrescimo(15)).acrescimoPrazoMin).toBe(15)
+      expect((await servidor().loja()).acrescimoPrazoMin).toBe(15)
+      expect((await api.definirAcrescimo(0)).acrescimoPrazoMin).toBe(0)
+      await expect(api.definirAcrescimo(7)).rejects.toThrow("Escolha +10, +15 ou +30 min.")
+    })
+
+    test("o pedido que chega grava o prazo do canal com o acréscimo", async () => {
+      const api = servidor()
+      const antes = await api.pedidos.simular()
+      await api.definirAcrescimo(15)
+      const depois = await api.pedidos.simular()
+      // Lanchonete de teste: entrega em 40 min, retirada em 20.
+      const esperado = { entrega: 40, retirada: 20 } as Record<string, number>
+      expect(antes.prazoMin).toBe(esperado[antes.tipo])
+      expect(depois.prazoMin).toBe(esperado[depois.tipo] + 15)
+    })
+  })
+
   describe("aceite manual", () => {
     test("com o aceite manual ligado, o pedido do site chega esperando aceite", async () => {
       const api = servidor()

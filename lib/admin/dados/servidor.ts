@@ -25,6 +25,7 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
+import { prazoNaChegada } from "../regras/prazo"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearEstoque } from "./estoque-demo"
@@ -45,6 +46,7 @@ import type {
   Produto,
   StatusPedido,
   TipoMovimento,
+  TipoPedido,
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
@@ -126,6 +128,15 @@ export type OpcoesServidor = {
 
 /** Gerador de ids novos com prefixo: prod-1a2b3c4d. */
 const novoId = (prefixo: string) => () => `${prefixo}-${crypto.randomUUID().slice(0, 8)}`
+
+/** Acréscimos que a barra da fila oferece; 0 volta ao prazo normal. */
+const ACRESCIMOS = [0, 10, 15, 30]
+
+/** O prazo prometido na chegada fica no pedido: mudar o acréscimo depois não o altera. */
+function prazoGravado(loja: ConfigLoja, tipo: TipoPedido): Pick<Pedido, "prazoMin"> {
+  const prazoMin = prazoNaChegada(loja, tipo)
+  return prazoMin === undefined ? {} : { prazoMin }
+}
 
 const EM_ANDAMENTO: StatusPedido[] = ["recebido", "em-preparo", "pronto", "saiu-para-entrega"]
 
@@ -641,6 +652,12 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       return mudarLoja({ aceitaEntrega })
     },
 
+    /** Cozinha cheia: minutos a mais no prazo dos pedidos que chegarem daqui em diante. */
+    async definirAcrescimo(minutos: number): Promise<ConfigLoja> {
+      if (!ACRESCIMOS.includes(minutos)) throw new Error("Escolha +10, +15 ou +30 min.")
+      return mudarLoja({ acrescimoPrazoMin: minutos })
+    },
+
     pedidos: {
       async listar({ de, ate, status, concluidosEm }: FiltroPedidos = {}): Promise<Pedido[]> {
         const inicio = de ? startOfDay(de).getTime() : -Infinity
@@ -789,6 +806,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const chegou: Pedido = {
           ...(novo.status === "aguardando-pagamento" ? novo : { ...novo, estoqueBaixado: true }),
           ...(base.loja.aceiteManual && novo.origem === "site" ? { esperaAceite: true } : {}),
+          ...prazoGravado(base.loja, novo.tipo),
         }
         const comEstoque = aplicarEstoque(base, undefined, chegou)
         await substituir({ ...comEstoque, pedidos: [...comEstoque.pedidos, chegou] })

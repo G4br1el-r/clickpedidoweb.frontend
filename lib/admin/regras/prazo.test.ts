@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import type { Pedido, TipoPedido } from "../dados/tipos"
 import { AGORA_DE_TESTE as AGORA, PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
-import { minutosDoTexto, prazoDoPedido, textoDoPrazo } from "./prazo"
+import { minutosDoTexto, prazoDoPedido, prazoNaChegada, textoDoPrazo } from "./prazo"
 
 const LOJA = { tempoEntrega: "40–60 min", tempoRetirada: "20 min" }
 
@@ -80,5 +80,17 @@ describe("textoDoPrazo", () => {
     expect(textoDoPrazo(pedido("retirada", { dataRetirada: "2026-11-14" }), LOJA, AGORA)).toBe(
       undefined,
     )
+  })
+})
+
+describe("prazoNaChegada", () => {
+  test("o pedido novo leva o tempo do canal mais o acréscimo da hora", () => {
+    expect(prazoNaChegada({ ...LOJA, acrescimoPrazoMin: 15 }, "entrega")).toBe(75)
+    expect(prazoNaChegada({ ...LOJA, acrescimoPrazoMin: 15 }, "retirada")).toBe(35)
+    expect(prazoNaChegada(LOJA, "mesa")).toBe(20)
+  })
+
+  test("salão não tem prazo em minutos", () => {
+    expect(prazoNaChegada({ ...LOJA, acrescimoPrazoMin: 10 }, "atendimento")).toBeUndefined()
   })
 })

@@ -282,6 +282,22 @@ describe("PaginaFila", () => {
     expect(screen.queryByText("Pelo horário")).not.toBeInTheDocument()
   })
 
+  test("acréscimo no prazo: +15 min soma ao prazo dos pedidos novos; tocar de novo tira", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    // Pizzaria: entrega em 35–50 min, retirada em 20–30 min.
+    expect(await screen.findByText("Entrega 50 min · Retirada 30 min", {}, { timeout: 8000 }))
+    const mais15 = screen.getByRole("radio", { name: "+15 min" })
+
+    await usuario.click(mais15)
+    expect(await screen.findByText("Entrega 65 min · Retirada 45 min")).toBeInTheDocument()
+    expect(mais15).toHaveAttribute("aria-checked", "true")
+    expect((await servidorDo("pizzaria").loja()).acrescimoPrazoMin).toBe(15)
+
+    await usuario.click(mais15)
+    expect(await screen.findByText("Entrega 50 min · Retirada 30 min")).toBeInTheDocument()
+  })
+
   test("o aparelho que não escolheu o som usa o som da loja", async () => {
     telaGrande()
     const api = servidorDo("pizzaria")

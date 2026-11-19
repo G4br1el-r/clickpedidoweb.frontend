@@ -59,6 +59,7 @@ import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
 import { Traco } from "../traco"
+import { AjustePrazo } from "./ajuste-prazo"
 import { AvisoDiasAnteriores } from "./aviso-dias-anteriores"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
@@ -385,6 +386,7 @@ export function PaginaFila({
             }
           />
         )}
+        {loja && <AjustePrazo loja={loja} comEntrega={temEntrega} />}
         <div className="flex flex-wrap items-center gap-2">
           <Chave
             id="alerta-sonoro"

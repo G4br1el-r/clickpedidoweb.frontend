@@ -365,6 +365,8 @@ export type ConfigLoja = {
   aceiteManual: boolean
   /** Depois de quantos minutos sem aceite o cartão fica vermelho. A loja nunca recusa sozinha. */
   limiteAceiteMin: number
+  /** Cozinha cheia: minutos a mais no prazo dos pedidos novos (+10, +15 ou +30). */
+  acrescimoPrazoMin?: number
   /** Salão: vídeo do banner da loja (YouTube, Shorts ou Reels). */
   videoBanner?: string
   vitrines: {

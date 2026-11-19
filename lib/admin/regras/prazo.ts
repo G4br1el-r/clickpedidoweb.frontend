@@ -1,5 +1,5 @@
 import { format } from "date-fns"
-import type { ConfigLoja, Pedido } from "../dados/tipos"
+import type { ConfigLoja, Pedido, TipoPedido } from "../dados/tipos"
 
 /**
  * Minutos que a loja promete, lidos do texto que ela já mostra ao cliente
@@ -22,13 +22,27 @@ export type TemposDaLoja = Pick<ConfigLoja, "tempoEntrega" | "tempoRetirada">
  * retirada). Salão e retirada marcada para um dia seguem a hora marcada, não um prazo.
  */
 export function prazoDoPedido(pedido: Pedido, loja: TemposDaLoja): Date | undefined {
-  if (pedido.agendamento || pedido.dataRetirada || pedido.tipo === "atendimento") return undefined
-  const minutos =
-    pedido.prazoMin ??
-    (pedido.tipo === "entrega"
-      ? (minutosDoTexto(loja.tempoEntrega) ?? PADRAO.entrega)
-      : (minutosDoTexto(loja.tempoRetirada) ?? PADRAO.retirada))
+  if (pedido.agendamento || pedido.dataRetirada) return undefined
+  const minutos = pedido.prazoMin ?? minutosDoCanal(loja, pedido.tipo)
+  if (minutos === undefined) return undefined
   return new Date(Date.parse(pedido.criadoEm) + minutos * 60_000)
+}
+
+/** Minutos que o canal promete hoje, sem acréscimo. O salão segue a hora marcada. */
+function minutosDoCanal(loja: TemposDaLoja, tipo: TipoPedido): number | undefined {
+  if (tipo === "atendimento") return undefined
+  return tipo === "entrega"
+    ? (minutosDoTexto(loja.tempoEntrega) ?? PADRAO.entrega)
+    : (minutosDoTexto(loja.tempoRetirada) ?? PADRAO.retirada)
+}
+
+/** O prazo que o pedido novo grava ao chegar: o do canal mais o acréscimo da hora. */
+export function prazoNaChegada(
+  loja: TemposDaLoja & Pick<ConfigLoja, "acrescimoPrazoMin">,
+  tipo: TipoPedido,
+): number | undefined {
+  const minutos = minutosDoCanal(loja, tipo)
+  return minutos === undefined ? undefined : minutos + (loja.acrescimoPrazoMin ?? 0)
 }
 
 const VERBO: Record<Pedido["tipo"], string> = {
