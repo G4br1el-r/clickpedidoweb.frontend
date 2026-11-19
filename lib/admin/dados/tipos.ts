@@ -22,7 +22,13 @@ export type FormaPagamento =
   | "cartao-na-entrega"
   | "pagar-apos-pesagem"
 
-export type SituacaoPagamento = "pendente" | "pago" | "na-entrega" | "cancelado"
+/** "estorno-pendente": estava pago e o pedido foi cancelado; a loja deve devolver. */
+export type SituacaoPagamento =
+  | "pendente"
+  | "pago"
+  | "na-entrega"
+  | "cancelado"
+  | "estorno-pendente"
 
 /** Por onde o pedido entrou. "painel": agendamento marcado pela própria loja. */
 export type OrigemPedido = "site" | "pdv" | "garcom" | "painel"
@@ -66,10 +72,22 @@ export type EnderecoEntrega = {
   referencia?: string
 }
 
+/** Por que a loja recusou ou cancelou o pedido. "outro" vem com texto. */
+export type MotivoCancelamento =
+  | "sem-estoque"
+  | "fora-da-area"
+  | "loja-cheia"
+  | "cliente-pediu"
+  | "cliente-nao-veio"
+  | "endereco-invalido"
+  | "receita-invalida"
+  | "fraude"
+  | "outro"
+
 /** Uma linha da linha do tempo do pedido. A chegada não entra: é o `criadoEm`. */
 export type EventoPedido =
   | { tipo: "etapa"; status: StatusPedido; em: string }
-  | { tipo: "pago" | "impresso"; em: string }
+  | { tipo: "pago" | "impresso" | "aceito"; em: string }
 
 export type Pedido = {
   id: number
@@ -109,7 +127,22 @@ export type Pedido = {
   estoqueBaixado?: boolean
   /** O que aconteceu depois da chegada, do mais antigo para o mais novo. */
   historico?: EventoPedido[]
+  /** Chegou pelo site com o aceite manual ligado: espera a loja aceitar ou recusar. */
+  esperaAceite?: boolean
+  /** Recusado no aceite ou cancelado depois: por quê e quando. */
+  cancelamento?: Cancelamento
 }
+
+export type Cancelamento = {
+  tipo: "recusa" | "cancelamento"
+  motivo: MotivoCancelamento
+  /** Texto do "Outro motivo". */
+  detalhe?: string
+  em: string
+}
+
+/** O que a pessoa escolhe ao recusar ou cancelar. */
+export type MotivoEscolhido = { motivo: MotivoCancelamento; detalhe?: string }
 
 export type Categoria = {
   id: string
@@ -326,6 +359,10 @@ export type ConfigLoja = {
   impressaoAutomatica: boolean
   cortarPapel: boolean
   som: SomAlerta
+  /** Pedido do site espera a loja aceitar ou recusar na fila. */
+  aceiteManual: boolean
+  /** Depois de quantos minutos sem aceite o cartão fica vermelho. A loja nunca recusa sozinha. */
+  limiteAceiteMin: number
   /** Salão: vídeo do banner da loja (YouTube, Shorts ou Reels). */
   videoBanner?: string
   vitrines: {

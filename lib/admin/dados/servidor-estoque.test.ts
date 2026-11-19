@@ -155,7 +155,7 @@ describe("estoque: vendas", () => {
     const api = servidor()
     const venda = await api.pdv.finalizar(refriNoPdv(2, false))
     expect((await saldo(api, "refri"))?.estoque?.quantidade).toBe(3)
-    await api.pedidos.cancelar(venda.id, "recebido")
+    await api.pedidos.cancelar(venda.id, "recebido", { motivo: "cliente-pediu" })
     expect((await saldo(api, "refri"))?.estoque?.quantidade).toBe(5)
     expect((await api.estoque.movimentos("refri"))[0]).toMatchObject({
       tipo: "devolucao",

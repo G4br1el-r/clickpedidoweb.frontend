@@ -82,6 +82,8 @@ export const esquemaLoja = z
     impressaoAutomatica: z.boolean(),
     cortarPapel: z.boolean(),
     som: z.enum(["suave", "alto", "muito-alto"]),
+    aceiteManual: z.boolean(),
+    limiteAceiteMin: z.number(),
     vitrines: z.object({ destaques: vitrine, ofertas: vitrine }),
     videoBanner: esquemaLinkDeVideo.optional(),
   })

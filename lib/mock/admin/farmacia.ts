@@ -1287,6 +1287,8 @@ export const catalogoFarmacia: CatalogoLoja = {
     impressaoAutomatica: false,
     cortarPapel: true,
     som: "suave",
+    aceiteManual: true,
+    limiteAceiteMin: 5,
     vitrines: {
       destaques: { titulo: "Mais vendidos", ativo: true },
       ofertas: { titulo: "Ofertas da semana", ativo: true },

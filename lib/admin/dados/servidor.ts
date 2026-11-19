@@ -32,11 +32,13 @@ import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
 import type {
   Bairro,
   BaseLoja,
+  Cancelamento,
   CatalogoLoja,
   Categoria,
   ConfigLoja,
   ItemPedido,
   Mesa,
+  MotivoEscolhido,
   Motoboy,
   MovimentoEstoque,
   Pedido,
@@ -46,7 +48,7 @@ import type {
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 2
+const VERSAO = 3
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -268,6 +270,26 @@ function aplicarEstoque(
     })
   }
   return atual
+}
+
+/** O pedido recusado ou cancelado: guarda o motivo, devolve o estoque e o pago vira estorno. */
+function cancelado(pedido: Pedido, tipo: Cancelamento["tipo"], escolhido: MotivoEscolhido): Pedido {
+  const detalhe = escolhido.detalhe?.trim()
+  if (escolhido.motivo === "outro" && !detalhe) throw new Error("Escreva o motivo.")
+  return {
+    ...pedido,
+    status: "cancelado",
+    esperaAceite: false,
+    situacaoPagamento: pedido.situacaoPagamento === "pago" ? "estorno-pendente" : "cancelado",
+    // O que saiu do estoque volta (o alterar leva a diferença).
+    estoqueBaixado: false,
+    cancelamento: {
+      tipo,
+      motivo: escolhido.motivo,
+      ...(escolhido.motivo === "outro" ? { detalhe } : {}),
+      em: new Date().toISOString(),
+    },
+  }
 }
 
 /** Pedido de um dia que já passou não fica aberto: entrega e comanda viram concluídas. */
@@ -654,6 +676,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       avancar(id: number, de: StatusPedido) {
         return alterar(id, (pedido) => {
           conferirEtapa(pedido, de)
+          if (pedido.esperaAceite) throw new Error("Aceite o pedido antes de começar.")
           const proximo = proximoStatus(pedido.tipo, pedido.status)
           if (!proximo) throw new Error("Este pedido não tem próxima etapa")
           const pagoAgora = proximo === "concluido" && pedido.situacaoPagamento === "na-entrega"
@@ -667,18 +690,30 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         })
       },
 
-      cancelar(id: number, de: StatusPedido) {
+      aceitar(id: number) {
+        return alterar(id, (pedido) => {
+          if (!pedido.esperaAceite || pedido.status !== "recebido") {
+            throw new Error("Este pedido não espera aceite.")
+          }
+          return { ...pedido, esperaAceite: false }
+        })
+      },
+
+      recusar(id: number, escolhido: MotivoEscolhido) {
+        return alterar(id, (pedido) => {
+          if (!pedido.esperaAceite || pedido.status !== "recebido") {
+            throw new Error("Este pedido não espera aceite.")
+          }
+          return cancelado(pedido, "recusa", escolhido)
+        })
+      },
+
+      cancelar(id: number, de: StatusPedido, escolhido: MotivoEscolhido) {
         return alterar(id, (pedido) => {
           conferirEtapa(pedido, de)
           if (pedido.status === "concluido")
             throw new Error("Pedido concluído não pode ser cancelado")
-          return {
-            ...pedido,
-            status: "cancelado",
-            situacaoPagamento: pedido.situacaoPagamento === "pago" ? "pago" : "cancelado",
-            // O que saiu do estoque volta (o alterar leva a diferença).
-            estoqueBaixado: false,
-          }
+          return cancelado(pedido, "cancelamento", escolhido)
         })
       },
 
@@ -719,8 +754,10 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           token: crypto.randomUUID(),
         }
         // Recebido, o estoque sai na hora; aguardando pagamento online, só quando pagar.
-        const chegou: Pedido =
-          novo.status === "aguardando-pagamento" ? novo : { ...novo, estoqueBaixado: true }
+        const chegou: Pedido = {
+          ...(novo.status === "aguardando-pagamento" ? novo : { ...novo, estoqueBaixado: true }),
+          ...(base.loja.aceiteManual && novo.origem === "site" ? { esperaAceite: true } : {}),
+        }
         const comEstoque = aplicarEstoque(base, undefined, chegou)
         await substituir({ ...comEstoque, pedidos: [...comEstoque.pedidos, chegou] })
         return responder(chegou)

@@ -141,7 +141,9 @@ describe("servidor de demonstração", () => {
 
     const mensagem = "Este pedido já mudou de etapa. Atualize a tela."
     await expect(api.pedidos.avancar(novo.id, "recebido")).rejects.toThrow(mensagem)
-    await expect(api.pedidos.cancelar(novo.id, "recebido")).rejects.toThrow(mensagem)
+    await expect(
+      api.pedidos.cancelar(novo.id, "recebido", { motivo: "cliente-pediu" }),
+    ).rejects.toThrow(mensagem)
     expect((await api.pedidos.buscar(novo.id))?.status).toBe("em-preparo")
   })
 
@@ -172,15 +174,44 @@ describe("servidor de demonstração", () => {
     const pago = await api.pedidos.marcarPago(novo.id)
     expect(pago.situacaoPagamento).toBe("pago")
 
-    const cancelado = await api.pedidos.cancelar(novo.id, "recebido")
+    const cancelado = await api.pedidos.cancelar(novo.id, "recebido", { motivo: "cliente-pediu" })
     expect(cancelado.status).toBe("cancelado")
-    // Já estava pago: o dinheiro não some do registro.
-    expect(cancelado.situacaoPagamento).toBe("pago")
+    // Já estava pago: a loja deve devolver o dinheiro ao cliente.
+    expect(cancelado.situacaoPagamento).toBe("estorno-pendente")
+    expect(cancelado.cancelamento).toEqual({
+      tipo: "cancelamento",
+      motivo: "cliente-pediu",
+      em: AGORA.toISOString(),
+    })
 
     const [concluido] = await api.pedidos.listar({ status: ["concluido"] })
-    await expect(api.pedidos.cancelar(concluido.id, "concluido")).rejects.toThrow(
-      "Pedido concluído não pode ser cancelado",
-    )
+    await expect(
+      api.pedidos.cancelar(concluido.id, "concluido", { motivo: "cliente-pediu" }),
+    ).rejects.toThrow("Pedido concluído não pode ser cancelado")
+  })
+
+  test("cancelar sem pagamento não deixa nada a devolver", async () => {
+    const api = servidor()
+    const pedidos = await api.pedidos.listar({ status: ["recebido", "em-preparo"] })
+    const aPagar = pedidos.find((pedido) => pedido.situacaoPagamento === "na-entrega")
+    if (!aPagar) throw new Error("A demonstração devia ter um pedido a pagar na entrega")
+
+    const cancelado = await api.pedidos.cancelar(aPagar.id, aPagar.status, { motivo: "fraude" })
+    expect(cancelado.situacaoPagamento).toBe("cancelado")
+  })
+
+  test("motivo 'outro' precisa do texto", async () => {
+    const api = servidor()
+    const [novo] = await api.pedidos.listar({ status: ["recebido"] })
+
+    await expect(
+      api.pedidos.cancelar(novo.id, "recebido", { motivo: "outro", detalhe: "  " }),
+    ).rejects.toThrow("Escreva o motivo.")
+    const cancelado = await api.pedidos.cancelar(novo.id, "recebido", {
+      motivo: "outro",
+      detalhe: "  Acabou o gás  ",
+    })
+    expect(cancelado.cancelamento).toMatchObject({ motivo: "outro", detalhe: "Acabou o gás" })
   })
 
   test("mesas com comanda aberta aparecem ocupadas", async () => {
@@ -294,6 +325,58 @@ describe("servidor de demonstração", () => {
     expect(novo.id).toBe(ultimo.id + 1)
     expect(novo.status).toBe("recebido")
     expect((await api.pedidos.listar())[0].id).toBe(novo.id)
+  })
+
+  describe("aceite manual", () => {
+    test("com o aceite manual ligado, o pedido do site chega esperando aceite", async () => {
+      const api = servidor()
+      await api.salvarLoja({ ...(await api.loja()), aceiteManual: true })
+
+      const novo = await api.pedidos.simular()
+      expect(novo.esperaAceite).toBe(true)
+    })
+
+    test("com o aceite manual desligado, chega já aceito", async () => {
+      const api = servidor()
+      await api.salvarLoja({ ...(await api.loja()), aceiteManual: false })
+
+      const novo = await api.pedidos.simular()
+      expect(novo.esperaAceite).toBeFalsy()
+    })
+
+    test("enquanto espera aceite não avança; aceitar libera e entra na linha do tempo", async () => {
+      const api = servidor()
+      await api.salvarLoja({ ...(await api.loja()), aceiteManual: true })
+      const novo = await api.pedidos.simular()
+
+      await expect(api.pedidos.avancar(novo.id, "recebido")).rejects.toThrow(
+        "Aceite o pedido antes de começar.",
+      )
+      const aceito = await api.pedidos.aceitar(novo.id)
+      expect(aceito.esperaAceite).toBe(false)
+      expect(aceito.status).toBe("recebido")
+      expect(aceito.historico).toEqual([{ tipo: "aceito", em: AGORA.toISOString() }])
+      expect((await api.pedidos.avancar(novo.id, "recebido")).status).toBe("em-preparo")
+      await expect(api.pedidos.aceitar(novo.id)).rejects.toThrow("Este pedido não espera aceite.")
+    })
+
+    test("recusar cancela com o motivo, como recusa, e só vale para quem espera aceite", async () => {
+      const api = servidor()
+      await api.salvarLoja({ ...(await api.loja()), aceiteManual: true })
+      const novo = await api.pedidos.simular()
+
+      const recusado = await api.pedidos.recusar(novo.id, { motivo: "fora-da-area" })
+      expect(recusado.status).toBe("cancelado")
+      expect(recusado.esperaAceite).toBe(false)
+      expect(recusado.cancelamento).toEqual({
+        tipo: "recusa",
+        motivo: "fora-da-area",
+        em: AGORA.toISOString(),
+      })
+      await expect(api.pedidos.recusar(novo.id, { motivo: "fora-da-area" })).rejects.toThrow(
+        "Este pedido não espera aceite.",
+      )
+    })
   })
 
   describe("PDV", () => {
@@ -782,7 +865,7 @@ describe("servidor de demonstração", () => {
     test("açougue: pedido encerrado não muda de valor na pesagem", async () => {
       const api = acougue()
       const cancelado = await aPesar(api)
-      await api.pedidos.cancelar(cancelado.id, cancelado.status)
+      await api.pedidos.cancelar(cancelado.id, cancelado.status, { motivo: "cliente-pediu" })
       await expect(
         api.pedidos.registrarPesagem(cancelado.id, pesosPedidos(cancelado)),
       ).rejects.toThrow("Pedido encerrado não muda de valor.")
@@ -1353,7 +1436,7 @@ describe("servidor de demonstração", () => {
   test("restaurar volta aos dados de demonstração", async () => {
     const api = servidor()
     const [novo] = await api.pedidos.listar({ status: ["recebido"] })
-    await api.pedidos.cancelar(novo.id, "recebido")
+    await api.pedidos.cancelar(novo.id, "recebido", { motivo: "cliente-pediu" })
 
     await api.restaurar()
     expect((await api.pedidos.buscar(novo.id))?.status).toBe("recebido")

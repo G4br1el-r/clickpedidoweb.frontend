@@ -107,7 +107,9 @@ describe("consultas do painel", () => {
       ).toBe("pago"),
     )
 
-    await act(() => result.current.cancelar.mutateAsync({ id, de: "recebido" }))
+    await act(() =>
+      result.current.cancelar.mutateAsync({ id, de: "recebido", motivo: "cliente-pediu" }),
+    )
     await waitFor(() =>
       expect(result.current.pedidos.data?.find((pedido) => pedido.id === id)?.status).toBe(
         "cancelado",

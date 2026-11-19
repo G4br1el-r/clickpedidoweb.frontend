@@ -4,7 +4,7 @@ Base: a [Fase 5 do plano do painel](plano-painel-admin.md#fase-5-fila-de-pedidos
 
 ## Princípios
 
-- **Central de despacho.** Tudo que se faz *durante* o pedido acontece na fila, sem trocar de tela: aceitar, recusar, cancelar, cobrar, despachar, avisar o cliente e imprimir. Editar itens, fechar a conta da mesa e o histórico continuam em Pedidos e Mesas. A Cozinha continua sendo a tela da TV.
+- **Central de despacho.** Tudo que se faz _durante_ o pedido acontece na fila, sem trocar de tela: aceitar, recusar, cancelar, cobrar, despachar, avisar o cliente e imprimir. Editar itens, fechar a conta da mesa e o histórico continuam em Pedidos e Mesas. A Cozinha continua sendo a tela da TV.
 - **Desktop, tablet e celular com o mesmo peso.** Toque e mouse em tudo; atalhos de teclado são um extra do desktop.
 - **Servidor falso.** Tudo novo entra no servidor de demonstração (IndexedDB) pela interface `Servidor`, com as regras em `lib/admin/regras/` como funções puras. O que é de fora (WhatsApp, notificação ao cliente, impressora, tempo real) é simulado, para trocar pelo back-end depois sem mexer na tela.
 - **Os 6 segmentos,** cada um com o que é dele (fase 6). A pizzaria é a referência do desenho.
@@ -74,7 +74,7 @@ Base: a [Fase 5 do plano do painel](plano-painel-admin.md#fase-5-fila-de-pedidos
   1. **Estado da loja**, sempre visível: Aberta/Pausada (com contagem), Entrega, prazo atual com +min e impressora;
   2. **Métricas**;
   3. **Ferramentas:** busca, filtros, compacto, "Este aparelho", tela cheia e painel de chamada.
-  No celular, a faixa 1 fica fixa e as outras recolhem.
+     No celular, a faixa 1 fica fixa e as outras recolhem.
 - **Prazo prometido:** tempo estimado por canal em Configurações (ex.: entrega 40–50 min, retirada 20 min). O cartão mostra "entregar até 20:15" com contagem regressiva. A urgência passa a ser pelo prazo: âmbar a 10 min do fim, vermelho quando passou. Ajuste rápido **+10/+15/+30 min** na barra, que vale para os pedidos novos.
 - **Pausar pedidos** por 15/30/60 min, só da entrega ou da loja toda, voltando sozinho. A vitrine diz "loja ocupada, volte às 20:30".
 - **Métricas ao vivo, clicáveis** (cada uma aplica o filtro): em andamento, atrasados, esperando aceite, tempo médio de preparo hoje, tempo médio até a entrega hoje, pedidos na última hora, concluídos e cancelados hoje. Sem faturamento.

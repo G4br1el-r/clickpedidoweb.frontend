@@ -136,7 +136,8 @@ describe("PaginaMotoboys", () => {
     const naRua = (await api().pedidos.listar({})).filter(
       (pedido) => pedido.motoboyId && !["concluido", "cancelado"].includes(pedido.status),
     )
-    for (const pedido of naRua) await api().pedidos.cancelar(pedido.id, pedido.status)
+    for (const pedido of naRua)
+      await api().pedidos.cancelar(pedido.id, pedido.status, { motivo: "cliente-pediu" })
     for (const motoboy of await api().motoboys.listar()) await api().motoboys.excluir(motoboy.id)
     const usuario = userEvent.setup()
     render(

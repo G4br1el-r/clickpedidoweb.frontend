@@ -127,20 +127,40 @@ describe("DetalhesPedido", () => {
     expect(await detalhes.findByRole("button", { name: "Saiu para entrega" })).toBeInTheDocument()
   })
 
-  test("cancelar pede confirmação antes", async () => {
+  test("cancelar pede o motivo e confirmação antes", async () => {
     const usuario = userEvent.setup()
     const pedido = await umPedido((p) => p.status === "recebido")
     renderizar(pedido.id)
     const detalhes = await painel(pedido)
 
     await usuario.click(detalhes.getByRole("button", { name: "Cancelar pedido" }))
-    const confirmacao = screen.getByRole("alertdialog", {
-      name: `Cancelar o pedido #${pedido.numero}?`,
-    })
-    await usuario.click(within(confirmacao).getByRole("button", { name: "Sim, cancelar" }))
+    const confirmacao = within(
+      screen.getByRole("alertdialog", { name: `Cancelar o pedido #${pedido.numero}?` }),
+    )
+    const confirmar = confirmacao.getByRole("button", { name: "Sim, cancelar" })
+    expect(confirmar).toBeDisabled()
+    await usuario.click(confirmacao.getByRole("radio", { name: "Cliente pediu para cancelar" }))
+    await usuario.click(confirmar)
 
-    expect(await detalhes.findByText("Cancelado")).toBeInTheDocument()
+    expect(await detalhes.findByText("Cancelado: Cliente pediu para cancelar")).toBeInTheDocument()
     expect(detalhes.queryByRole("button", { name: "Cancelar pedido" })).not.toBeInTheDocument()
+  })
+
+  test("motivo 'Outro' pede o texto antes de confirmar", async () => {
+    const usuario = userEvent.setup()
+    const pedido = await umPedido((p) => p.status === "recebido")
+    renderizar(pedido.id)
+    const detalhes = await painel(pedido)
+
+    await usuario.click(detalhes.getByRole("button", { name: "Cancelar pedido" }))
+    const confirmacao = within(screen.getByRole("alertdialog"))
+    await usuario.click(confirmacao.getByRole("radio", { name: "Outro motivo" }))
+    const confirmar = confirmacao.getByRole("button", { name: "Sim, cancelar" })
+    expect(confirmar).toBeDisabled()
+    await usuario.type(confirmacao.getByRole("textbox", { name: "Qual o motivo?" }), "Acabou o gás")
+    await usuario.click(confirmar)
+
+    expect(await detalhes.findByText("Cancelado: Acabou o gás")).toBeInTheDocument()
   })
 
   test("marcar como pago some depois de pago", async () => {

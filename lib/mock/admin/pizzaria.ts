@@ -80,6 +80,8 @@ export const catalogoPizzaria: CatalogoLoja = {
     impressaoAutomatica: false,
     cortarPapel: true,
     som: "alto",
+    aceiteManual: true,
+    limiteAceiteMin: 5,
     vitrines: {
       destaques: { titulo: "Mais pedidas", ativo: true },
       ofertas: { titulo: "Ofertas", ativo: true },

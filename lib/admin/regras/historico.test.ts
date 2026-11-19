@@ -31,6 +31,18 @@ describe("eventosDaMudanca", () => {
     ])
   })
 
+  test("aceitar vira evento de aceito; recusar não conta como aceito", () => {
+    const esperando: Pedido = { ...recebido, esperaAceite: true }
+
+    expect(eventosDaMudanca(esperando, { ...esperando, esperaAceite: false }, EM)).toEqual([
+      { tipo: "aceito", em: EM },
+    ])
+    const recusado: Pedido = { ...esperando, esperaAceite: false, status: "cancelado" }
+    expect(eventosDaMudanca(esperando, recusado, EM)).toEqual([
+      { tipo: "etapa", status: "cancelado", em: EM },
+    ])
+  })
+
   test("sem mudança que importe, não há evento", () => {
     expect(eventosDaMudanca(recebido, { ...recebido, motoboyId: "m1" }, EM)).toEqual([])
   })
@@ -60,6 +72,35 @@ describe("linhaDoTempo", () => {
       { texto: "Pagamento recebido", em: "2026-11-13T23:30:00.000Z" },
       { texto: "Retirado", em: "2026-11-13T23:30:00.000Z" },
     ])
+  })
+
+  test("o aceite aparece como pedido aceito", () => {
+    const aceito: Pedido = { ...recebido, historico: [{ tipo: "aceito", em: EM }] }
+    expect(linhaDoTempo(aceito)[1]).toEqual({ texto: "Pedido aceito", em: EM })
+  })
+
+  test("recusa e cancelamento aparecem com o motivo", () => {
+    const evento = { tipo: "etapa", status: "cancelado", em: EM } as const
+    const recusado: Pedido = {
+      ...recebido,
+      status: "cancelado",
+      historico: [evento],
+      cancelamento: { tipo: "recusa", motivo: "fora-da-area", em: EM },
+    }
+    expect(linhaDoTempo(recusado)[1].texto).toBe("Recusado: Fora da área de entrega")
+
+    const outro: Pedido = {
+      ...recusado,
+      cancelamento: { tipo: "cancelamento", motivo: "outro", detalhe: "Acabou o gás", em: EM },
+    }
+    expect(linhaDoTempo(outro)[1].texto).toBe("Cancelado: Acabou o gás")
+
+    const noSalao: Pedido = {
+      ...recusado,
+      tipo: "atendimento",
+      cancelamento: { tipo: "recusa", motivo: "loja-cheia", em: EM },
+    }
+    expect(linhaDoTempo(noSalao)[1].texto).toBe("Recusado: Agenda cheia")
   })
 
   test("pedido antigo, sem eventos, mostra só a chegada", () => {

@@ -5,17 +5,6 @@ import { ptBR } from "date-fns/locale"
 import { BikeIcon, MapPinIcon, MessageCircleIcon, PhoneIcon, PrinterIcon } from "lucide-react"
 import type { ReactNode } from "react"
 import { toast } from "sonner"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import {
@@ -47,6 +36,7 @@ import {
   usePedido,
 } from "@/lib/admin/dados/consultas"
 import type { Pedido } from "@/lib/admin/dados/tipos"
+import { linhaDoTempo } from "@/lib/admin/regras/historico"
 import {
   enderecoEmTexto,
   formatarTelefone,
@@ -57,7 +47,6 @@ import {
 } from "@/lib/admin/regras/mensagens"
 import { faltaPesar } from "@/lib/admin/regras/pesagem"
 import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
-import { linhaDoTempo } from "@/lib/admin/regras/historico"
 import { etapasDoCaminho, rotuloAcao, rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
@@ -66,6 +55,7 @@ import { descricaoDoTroco } from "@/lib/pedido"
 import { cn } from "@/lib/utils"
 import { AcoesAgendamento } from "../agendamentos/acoes-agendamento"
 import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
+import { ConfirmarComMotivo } from "./confirmar-com-motivo"
 import { usePedidoAberto } from "./estado-lista"
 import { PesagemPedido } from "./pesagem-pedido"
 import { rotuloSituacao, SeloStatus } from "./selos"
@@ -370,8 +360,8 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
 
         <Bloco titulo="Linha do tempo">
           <ol aria-label="Linha do tempo" className="flex flex-col gap-1.5 text-sm">
-            {linhaDoTempo(pedido).map((linha, indice) => (
-              <li key={`${linha.em}-${indice}`} className="flex gap-3">
+            {linhaDoTempo(pedido).map((linha) => (
+              <li key={`${linha.em}-${linha.texto}`} className="flex gap-3">
                 <span className="w-10 shrink-0 text-muted-foreground tabular-nums">
                   {format(new Date(linha.em), "HH:mm")}
                 </span>
@@ -422,31 +412,19 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
             </Button>
           ))}
         {!encerrado && (
-          <AlertDialog>
-            <AlertDialogTrigger asChild>
+          <ConfirmarComMotivo
+            gatilho={
               <Button type="button" variant="ghost" className="text-destructive">
                 Cancelar pedido
               </Button>
-            </AlertDialogTrigger>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Cancelar o pedido #{pedido.numero}?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  O pedido sai da fila e da cozinha. Se já estava pago, o pagamento continua
-                  registrado.
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Voltar</AlertDialogCancel>
-                <AlertDialogAction
-                  variant="destructive"
-                  onClick={() => cancelar.mutate({ id: pedido.id, de: pedido.status }, aviso)}
-                >
-                  Sim, cancelar
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+            }
+            titulo={`Cancelar o pedido #${pedido.numero}?`}
+            descricao="O pedido sai da fila e da cozinha. Se já estava pago, fica marcado para devolver ao cliente."
+            confirmar="Sim, cancelar"
+            aoConfirmar={(escolhido) =>
+              cancelar.mutate({ id: pedido.id, de: pedido.status, ...escolhido }, aviso)
+            }
+          />
         )}
       </SheetFooter>
     </>

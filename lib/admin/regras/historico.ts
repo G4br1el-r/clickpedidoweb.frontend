@@ -1,9 +1,13 @@
 import type { EventoPedido, Pedido } from "../dados/tipos"
+import { textoDoMotivo } from "./aceite"
 import { rotuloStatus } from "./status"
 
 /** O que mudou de um jeito para o outro do pedido, como linhas da linha do tempo. */
 export function eventosDaMudanca(antes: Pedido, depois: Pedido, em: string): EventoPedido[] {
   const eventos: EventoPedido[] = []
+  const aceito =
+    antes.esperaAceite && depois.esperaAceite === false && depois.status !== "cancelado"
+  if (aceito) eventos.push({ tipo: "aceito", em })
   if (depois.status !== antes.status) eventos.push({ tipo: "etapa", status: depois.status, em })
   if (depois.situacaoPagamento === "pago" && antes.situacaoPagamento !== "pago") {
     eventos.push({ tipo: "pago", em })
@@ -19,11 +23,17 @@ export type LinhaDoTempo = { texto: string; em: string }
 function textoDoEvento(evento: EventoPedido, pedido: Pedido): string {
   switch (evento.tipo) {
     case "etapa":
+      if (evento.status === "cancelado" && pedido.cancelamento) {
+        const como = pedido.cancelamento.tipo === "recusa" ? "Recusado" : "Cancelado"
+        return `${como}: ${textoDoMotivo(pedido.cancelamento, pedido.tipo)}`
+      }
       return rotuloStatus(pedido.tipo, evento.status)
     case "pago":
       return "Pagamento recebido"
     case "impresso":
       return "Cupom impresso"
+    case "aceito":
+      return "Pedido aceito"
   }
 }
 
