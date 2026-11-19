@@ -26,7 +26,8 @@ import { temModulo } from "@/lib/admin/segmentos-painel"
 import { lotesDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
-import { AbaFinanceiro, AbaResumo, AbaVendas } from "./painel-visao-geral"
+import { AbaFinanceiro, AbaResumo } from "./painel-visao-geral"
+import { AbaVendas } from "./vendas/aba-vendas"
 
 /** De quanto em quanto tempo o Resumo confere os pedidos. */
 const ATUALIZAR_RESUMO_A_CADA = 30_000
@@ -170,7 +171,7 @@ export function VisaoGeral() {
         <TabsContent value={aba}>
           {resumo && periodo ? (
             aba === "vendas" ? (
-              <AbaVendas resumo={resumo} segmento={segmento} />
+              <AbaVendas pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
             ) : aba === "financeiro" ? (
               <AbaFinanceiro resumo={resumo} />
             ) : (

@@ -1,5 +1,5 @@
 import { addDays, startOfDay } from "date-fns"
-import type { OrigemPedido, Pedido } from "../../dados/tipos"
+import type { OrigemPedido, Pedido, TipoPedido } from "../../dados/tipos"
 import { diasNoPeriodo, type Periodo, periodoAnterior } from "../periodo"
 import { ehValido, fatias, noPeriodo, reais, soma, ticket } from "./comum"
 
@@ -155,5 +155,12 @@ export function mediaPorHora(pedidos: Pedido[], periodo: Periodo) {
 export function origensDasVendas(pedidos: Pedido[], periodo: Periodo) {
   return fatias(noPeriodo(pedidos, periodo).filter(ehValido), (pedido) => pedido.origem).map(
     ({ valor, ...resto }): { origem: OrigemPedido } & typeof resto => ({ origem: valor, ...resto }),
+  )
+}
+
+/** Por qual canal as vendas válidas do período saíram (entrega, retirada, mesa, atendimento). */
+export function canaisDasVendas(pedidos: Pedido[], periodo: Periodo) {
+  return fatias(noPeriodo(pedidos, periodo).filter(ehValido), (pedido) => pedido.tipo).map(
+    ({ valor, ...resto }): { tipo: TipoPedido } & typeof resto => ({ tipo: valor, ...resto }),
   )
 }

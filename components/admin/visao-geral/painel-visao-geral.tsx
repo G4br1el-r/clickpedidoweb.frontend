@@ -2,11 +2,9 @@
 
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { ChevronDownIcon } from "lucide-react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useState } from "react"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -29,7 +27,7 @@ import {
   textosDaSemanaPassada,
 } from "@/lib/admin/regras/dashboard/semana-passada"
 import { diasNoPeriodo, type Periodo } from "@/lib/admin/regras/periodo"
-import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
+import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
 import { emReais, plural } from "@/lib/formato"
 import { BlocoSecao } from "../bloco-secao"
@@ -299,69 +297,6 @@ export function AbaResumo({
           </Table>
         </BlocoSecao>
       </div>
-    </div>
-  )
-}
-
-/** Vendas: por onde o dinheiro entra e o dia a dia do período. Cresce na etapa 2. */
-export function AbaVendas({ resumo, segmento }: { resumo: Resumo; segmento: SegmentoPainelId }) {
-  const [tabelaAberta, setTabelaAberta] = useState(false)
-  const n = nomesDo(segmento)
-  return (
-    <div className="flex flex-col gap-10">
-      <BlocoSecao titulo="Canais de venda" descricao="No período">
-        <ListaDeFatias
-          vazio="Nenhuma venda no período."
-          itens={resumo.canais.map((fatia) => ({
-            ...fatia,
-            chave: fatia.tipo,
-            nome: rotuloCanal(fatia.tipo),
-          }))}
-        />
-      </BlocoSecao>
-
-      <Collapsible open={tabelaAberta} onOpenChange={setTabelaAberta}>
-        <div className="border-y border-border/70">
-          <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between py-4 text-left text-[15px] font-semibold tracking-[-0.01em] outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            Dia a dia do período, em tabela
-            <ChevronDownIcon
-              aria-hidden="true"
-              className="size-4 text-muted-foreground transition-transform duration-200 ease-saida data-[state=open]:rotate-180"
-              data-state={tabelaAberta ? "open" : "closed"}
-            />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="pb-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Dia</TableHead>
-                    <TableHead className="text-right">{n.Pedidos}</TableHead>
-                    <TableHead className="text-right">Faturamento</TableHead>
-                    <TableHead className="hidden text-right sm:table-cell">Ticket médio</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {resumo.serie.toReversed().map((dia) => (
-                    <TableRow key={dia.data.toISOString()}>
-                      <TableCell className="capitalize">
-                        {format(dia.data, "EEE, dd/MM", { locale: ptBR })}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{dia.pedidos}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {emReais(dia.faturamento)}
-                      </TableCell>
-                      <TableCell className="hidden text-right tabular-nums sm:table-cell">
-                        {emReais(dia.pedidos ? dia.faturamento / dia.pedidos : 0)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CollapsibleContent>
-        </div>
-      </Collapsible>
     </div>
   )
 }

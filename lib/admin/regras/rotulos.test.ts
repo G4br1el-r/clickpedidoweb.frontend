@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { rotuloCanal, rotuloPagamento } from "./rotulos"
+import { rotuloCanal, rotuloOrigem, rotuloPagamento } from "./rotulos"
 
 describe("rótulos", () => {
   test("canais de venda", () => {
@@ -15,5 +15,12 @@ describe("rótulos", () => {
     expect(rotuloPagamento("dinheiro")).toBe("Dinheiro")
     expect(rotuloPagamento("cartao-na-entrega")).toBe("Cartão na maquininha")
     expect(rotuloPagamento("pagar-apos-pesagem")).toBe("Após a pesagem")
+  })
+
+  test("origens dos pedidos", () => {
+    expect(rotuloOrigem("site")).toBe("Site")
+    expect(rotuloOrigem("pdv")).toBe("PDV do balcão")
+    expect(rotuloOrigem("garcom")).toBe("Garçom")
+    expect(rotuloOrigem("painel")).toBe("Painel da loja")
   })
 })

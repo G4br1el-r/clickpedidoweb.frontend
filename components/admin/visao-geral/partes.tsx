@@ -1,6 +1,7 @@
 "use client"
 
 import { TrendingDownIcon, TrendingUpIcon } from "lucide-react"
+import Link from "next/link"
 import { type ReactNode, useId } from "react"
 import { Progress } from "@/components/ui/progress"
 import { emReais, plural } from "@/lib/formato"
@@ -40,7 +41,15 @@ export function ListaDeFatias({
   itens,
   vazio,
 }: {
-  itens: { chave: string; nome: string; pedidos: number; total: number; percentual: number }[]
+  itens: {
+    chave: string
+    nome: string
+    pedidos: number
+    total: number
+    percentual: number
+    /** Leva para os pedidos daquela fatia. */
+    href?: string
+  }[]
   vazio: string
 }) {
   if (itens.length === 0) return <p className="text-sm text-muted-foreground">{vazio}</p>
@@ -51,7 +60,16 @@ export function ListaDeFatias({
           <div className="flex items-start gap-3 text-sm">
             {/* No celular, a contagem desce para baixo do nome. */}
             <span className="flex min-w-0 flex-1 flex-col gap-x-2 sm:flex-row sm:items-baseline">
-              <span className="truncate font-medium">{item.nome}</span>
+              {item.href ? (
+                <Link
+                  href={item.href}
+                  className="truncate font-medium underline-offset-4 hover:underline"
+                >
+                  {item.nome}
+                </Link>
+              ) : (
+                <span className="truncate font-medium">{item.nome}</span>
+              )}
               <span className="text-xs text-muted-foreground sm:text-sm">
                 {plural(item.pedidos, "pedido", "pedidos")}
               </span>

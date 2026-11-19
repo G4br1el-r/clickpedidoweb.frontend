@@ -5,6 +5,7 @@ import {
   pedidoDeTeste,
 } from "../pedidos-de-teste"
 import {
+  canaisDasVendas,
   mapaDeCalor,
   mediaPorHora,
   origensDasVendas,
@@ -136,6 +137,18 @@ describe("origensDasVendas", () => {
     ).toEqual([
       { origem: "pdv", pedidos: 1, total: 30, percentual: 60 },
       { origem: "site", pedidos: 2, total: 20, percentual: 40 },
+    ])
+  })
+})
+
+describe("canaisDasVendas", () => {
+  test("vendas válidas do período por canal, da maior para a menor", () => {
+    expect(
+      canaisDasVendas(PEDIDOS, PERIODO).map(({ tipo, pedidos, total }) => [tipo, pedidos, total]),
+    ).toEqual([
+      ["entrega", 2, 70],
+      ["mesa", 1, 70],
+      ["retirada", 1, 30],
     ])
   })
 })
