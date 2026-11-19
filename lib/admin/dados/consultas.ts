@@ -217,7 +217,12 @@ export function useFinalizarVenda() {
   const segmento = useSegmento()
   const cliente = useQueryClient()
   return useMutation({
-    mutationFn: (venda: VendaPdv) => servidorDo(segmento).pdv.finalizar(venda),
+    // Por enquanto vende no nome de quem abriu o caixa; o usuário do painel entra depois.
+    mutationFn: async (venda: Omit<VendaPdv, "operadorId">) => {
+      const servidor = servidorDo(segmento)
+      const turno = await servidor.caixa.atual()
+      return servidor.pdv.finalizar({ ...venda, operadorId: turno?.abertoPor ?? "" })
+    },
     onSuccess: () => cliente.invalidateQueries({ queryKey: chaves.tudo(segmento) }),
   })
 }

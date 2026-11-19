@@ -30,7 +30,8 @@ describe.each(SEGMENTOS_PAINEL.map((segmento) => segmento.id))("catálogo de %s"
       de: new Date(2026, 10, 7),
       agora: new Date(2026, 10, 13, 18, 0),
     })
-    expect(pedidos.length).toBeGreaterThan(20)
+    // Sem as vendas do PDV de hoje (o caixa abre fechado), o salão fica com 19 na semana.
+    expect(pedidos.length).toBeGreaterThan(15)
     for (const pedido of pedidos) {
       expect(pedido.itens.length).toBeGreaterThan(0)
       expect(pedido.total).toBeGreaterThanOrEqual(0)

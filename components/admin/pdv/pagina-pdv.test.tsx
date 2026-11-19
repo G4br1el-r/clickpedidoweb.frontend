@@ -100,7 +100,13 @@ beforeEach(async () => {
   await clear()
   reiniciarServidores()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
+  await abrirCaixa()
 })
+
+/** Sem caixa aberto não se vende: Marina abre o caixa pelo servidor. */
+function abrirCaixa() {
+  return servidorDo("pizzaria").caixa.abrir({ operadorId: "eq-marina", pin: "1111", fundo: 100 })
+}
 
 afterEach(() => {
   vi.useRealTimers()

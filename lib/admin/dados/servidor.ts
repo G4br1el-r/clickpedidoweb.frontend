@@ -2,13 +2,27 @@ import { addDays, endOfDay, isSameDay, startOfDay, subDays } from "date-fns"
 import { del, get, set } from "idb-keyval"
 import { expediente, horariosLivres, INTERVALO_MIN } from "../regras/agenda"
 import {
+  conferir,
+  errosDoFechamento,
+  errosDoFundo,
+  errosDoMovimentoCaixa,
+  podeOperarTurno,
+  type ResumoTurno,
+  resumoDoTurno,
+} from "../regras/caixa"
+import {
   copiarProduto,
   reordenar,
   replicarOpcoes,
   sincronizarOpcoes,
   soltarOpcoesDe,
 } from "../regras/cardapio"
-import { errosDoMembro } from "../regras/equipe"
+import {
+  type AcaoSensivel,
+  errosDoMembro,
+  podeAutorizar,
+  precisaAutorizacao,
+} from "../regras/equipe"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
@@ -32,6 +46,7 @@ import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
 import { gerarTurnos } from "./gerar-turnos"
 import type {
+  Autorizacao,
   Bairro,
   BaseLoja,
   CatalogoLoja,
@@ -46,6 +61,7 @@ import type {
   Produto,
   StatusPedido,
   TipoMovimento,
+  TurnoCaixa,
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
@@ -56,6 +72,8 @@ type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
 
 /** Venda montada na caixa do PDV. Os itens vão como no Garçom: o preço sai do servidor. */
 export type VendaPdv = {
+  /** Quem está no caixa (id da equipe). */
+  operadorId: string
   itens: ItemLancado[]
   pagamento: PagamentoMesa
   desconto: Desconto
@@ -129,15 +147,65 @@ export type OpcoesServidor = {
 const novoId = (prefixo: string) => () => `${prefixo}-${crypto.randomUUID().slice(0, 8)}`
 
 const novoMembro = novoId("eq")
+const novoTurno = novoId("turno")
+const novoMovimentoCaixa = novoId("mov")
 
-/** A pessoa pelo id, se o PIN confere e ela está ativa. */
-function membroComPin(base: BaseLoja, id: string, pin: string): MembroEquipe {
+/** A pessoa ativa pelo id. */
+function membroAtivo(base: BaseLoja, id: string): MembroEquipe {
   const membro = base.equipe.find((item) => item.id === id)
   if (!membro) throw new Error("Pessoa não encontrada.")
   if (!membro.ativo) throw new Error("Esta pessoa está desativada.")
+  return membro
+}
+
+/** A pessoa pelo id, se o PIN confere e ela está ativa. */
+function membroComPin(base: BaseLoja, id: string, pin: string): MembroEquipe {
+  const membro = membroAtivo(base, id)
   if (membro.pin !== pin) throw new Error("PIN errado.")
   return membro
 }
+
+const nomeDe = (base: BaseLoja, id: string) =>
+  base.equipe.find((membro) => membro.id === id)?.nome ?? "outra pessoa"
+
+/** O turno aberto da loja (um caixa por loja). */
+const turnoAberto = (base: BaseLoja) => base.turnos.findLast((turno) => !turno.fechadoEm)
+
+/** O turno aberto e quem vai mexer nele: quem abriu, um gerente ou o dono. */
+function turnoDe(base: BaseLoja, operadorId: string, semTurno: string) {
+  const turno = turnoAberto(base)
+  if (!turno) throw new Error(semTurno)
+  const membro = membroAtivo(base, operadorId)
+  if (!podeOperarTurno(membro, turno)) {
+    throw new Error(`Este caixa está aberto por ${nomeDe(base, turno.abertoPor)}.`)
+  }
+  return { turno, membro }
+}
+
+/**
+ * Confere o PIN de um gerente ou do dono quando quem opera é Caixa. Devolve quem
+ * autorizou, ou nada quando a ação não precisa de autorização.
+ */
+function autorizar(
+  base: BaseLoja,
+  operador: MembroEquipe,
+  acao: AcaoSensivel,
+  autorizacao?: Autorizacao,
+): string | undefined {
+  if (!precisaAutorizacao(operador.perfil, acao)) return undefined
+  const quem = base.equipe.find((membro) => membro.id === autorizacao?.membroId)
+  if (!autorizacao || !quem || !podeAutorizar(quem)) {
+    throw new Error("Precisa do PIN de um gerente.")
+  }
+  if (quem.pin !== autorizacao.pin) throw new Error("PIN do gerente errado.")
+  return quem.id
+}
+
+/** Troca um turno da base pelo id. */
+const comTurno = (base: BaseLoja, turno: TurnoCaixa): BaseLoja => ({
+  ...base,
+  turnos: base.turnos.map((item) => (item.id === turno.id ? turno : item)),
+})
 
 const EM_ANDAMENTO: StatusPedido[] = ["recebido", "em-preparo", "pronto", "saiu-para-entrega"]
 
@@ -944,6 +1012,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (lancados.length === 0) throw new Error("Inclua pelo menos um item.")
 
         const base = await carregar()
+        const { turno } = turnoDe(base, venda.operadorId, "Abra o caixa antes de vender.")
         const itens = lancados.map((lancado) => {
           const { produtoId, nome, precoUnitario, opcoes, produtosDasOpcoes } = precificar(
             base,
@@ -1014,6 +1083,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           enviarParaCozinha: !venda.concluida,
           // A venda fechada no balcão já tira do estoque.
           estoqueBaixado: true,
+          turnoId: turno.id,
+          operadorId: venda.operadorId,
         }
         const comEstoque = aplicarEstoque(base, undefined, pedido, { conferir: true })
         await substituir({ ...comEstoque, pedidos: [...comEstoque.pedidos, pedido] })
@@ -1558,6 +1629,136 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       async entrar(id: string, pin: string): Promise<MembroEquipe> {
         const membro = membroComPin(await carregar(), id, pin)
         return responder(membro)
+      },
+    },
+
+    caixa: {
+      /** O turno aberto, ou `null` com o caixa fechado. */
+      async atual(): Promise<TurnoCaixa | null> {
+        return responder(turnoAberto(await carregar()) ?? null)
+      },
+
+      async resumo(turnoId: string): Promise<ResumoTurno> {
+        const base = await carregar()
+        const turno = base.turnos.find((item) => item.id === turnoId)
+        if (!turno) throw new Error("Caixa não encontrado.")
+        return responder(resumoDoTurno(turno, base.pedidos))
+      },
+
+      /** Abre o caixa no nome de quem deu o PIN, com o fundo de troco. */
+      async abrir(d: { operadorId: string; pin: string; fundo: number }): Promise<TurnoCaixa> {
+        const base = await carregar()
+        const aberto = turnoAberto(base)
+        if (aberto) throw new Error(`O caixa já está aberto por ${nomeDe(base, aberto.abertoPor)}.`)
+        const membro = membroComPin(base, d.operadorId, d.pin)
+        const erro = errosDoFundo(d.fundo)
+        if (erro) throw new Error(erro)
+        const turno: TurnoCaixa = {
+          id: novoTurno(),
+          abertoPor: membro.id,
+          abertoEm: new Date().toISOString(),
+          fundo: reais(d.fundo),
+          movimentos: [],
+        }
+        await substituir({ ...base, turnos: [...base.turnos, turno] })
+        return responder(turno)
+      },
+
+      /** Sangria ou suprimento. A sangria do Caixa pede o PIN de um gerente. */
+      async movimentar(d: {
+        operadorId: string
+        tipo: "sangria" | "suprimento"
+        valor: number
+        motivo: string
+        autorizacao?: Autorizacao
+      }): Promise<TurnoCaixa> {
+        const base = await carregar()
+        const { turno, membro } = turnoDe(base, d.operadorId, "O caixa está fechado.")
+        const { dinheiroNaGaveta } = resumoDoTurno(turno, base.pedidos)
+        const erro = errosDoMovimentoCaixa(d, dinheiroNaGaveta)
+        if (erro) throw new Error(erro)
+        const autorizadoPor =
+          d.tipo === "sangria" ? autorizar(base, membro, "sangria", d.autorizacao) : undefined
+        const movido: TurnoCaixa = {
+          ...turno,
+          movimentos: [
+            ...turno.movimentos,
+            {
+              id: novoMovimentoCaixa(),
+              tipo: d.tipo,
+              valor: reais(d.valor),
+              motivo: d.motivo.trim().slice(0, 140),
+              feitoPor: membro.id,
+              ...(autorizadoPor ? { autorizadoPor } : {}),
+              criadoEm: new Date().toISOString(),
+            },
+          ],
+        }
+        await substituir(comTurno(base, movido))
+        return responder(movido)
+      },
+
+      /** Fecha com a conferência: o dinheiro contado; Pix e cartão chegam conciliados. */
+      async fechar(d: {
+        operadorId: string
+        contadoDinheiro: number
+        justificativa?: string
+      }): Promise<TurnoCaixa> {
+        const base = await carregar()
+        const { turno, membro } = turnoDe(base, d.operadorId, "O caixa já está fechado.")
+        const justificativa = d.justificativa?.trim().slice(0, 280)
+        const conferencia = conferir(
+          resumoDoTurno(turno, base.pedidos),
+          d.contadoDinheiro,
+          justificativa || undefined,
+        )
+        const erro = errosDoFechamento(conferencia)
+        if (erro) throw new Error(erro)
+        const fechado: TurnoCaixa = {
+          ...turno,
+          fechadoPor: membro.id,
+          fechadoEm: new Date().toISOString(),
+          conferencia,
+        }
+        await substituir(comTurno(base, fechado))
+        return responder(fechado)
+      },
+
+      /** Reabre o último caixa fechado. Quando quem pede é Caixa, com o PIN de um gerente. */
+      async reabrir(d: {
+        operadorId: string
+        turnoId: string
+        autorizacao?: Autorizacao
+      }): Promise<TurnoCaixa> {
+        const base = await carregar()
+        const aberto = turnoAberto(base)
+        if (aberto) throw new Error(`O caixa já está aberto por ${nomeDe(base, aberto.abertoPor)}.`)
+        const ultimo = base.turnos.at(-1)
+        if (!ultimo || ultimo.id !== d.turnoId) {
+          throw new Error("Só o último caixa pode ser reaberto.")
+        }
+        const membro = membroAtivo(base, d.operadorId)
+        const autorizadoPor = autorizar(base, membro, "reabrir-caixa", d.autorizacao) ?? membro.id
+        const { fechadoPor: _por, fechadoEm: _em, conferencia: _conferencia, ...resto } = ultimo
+        const reaberto: TurnoCaixa = {
+          ...resto,
+          reaberturas: [
+            ...(ultimo.reaberturas ?? []),
+            { em: new Date().toISOString(), autorizadoPor },
+          ],
+        }
+        await substituir(comTurno(base, reaberto))
+        return responder(reaberto)
+      },
+
+      /** Todos os turnos, do mais novo para o mais antigo, com o resumo de cada um. */
+      async historico(): Promise<{ turno: TurnoCaixa; resumo: ResumoTurno }[]> {
+        const base = await carregar()
+        return responder(
+          base.turnos
+            .toReversed()
+            .map((turno) => ({ turno, resumo: resumoDoTurno(turno, base.pedidos) })),
+        )
       },
     },
 
