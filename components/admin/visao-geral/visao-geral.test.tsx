@@ -147,6 +147,18 @@ describe("abas do painel", () => {
     )
   })
 
+  test("no Resumo, os mais vendidos param nos 5 primeiros", () => {
+    const oito = Array.from({ length: 8 }, (_, indice) => ({
+      nome: `Produto ${indice + 1}`,
+      quantidade: 10 - indice,
+      total: 100,
+    }))
+    renderizarResumo({ resumo: { ...RESUMO, maisVendidos: { periodo: oito, hoje: oito } } })
+    const lista = regiao("Mais vendidos").getAllByRole("listitem")
+    expect(lista).toHaveLength(5)
+    expect(lista.at(-1)).toHaveTextContent("Produto 5")
+  })
+
   test("sem destaques do segmento, o bloco não aparece", () => {
     renderizarResumo({ destaques: [] })
     expect(screen.queryByRole("region", { name: "Agora na loja" })).not.toBeInTheDocument()

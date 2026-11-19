@@ -335,10 +335,10 @@ export function AbaResumo({
             }
           >
             <TabsContent value="periodo">
-              <ListaMaisVendidos produtos={resumo.maisVendidos.periodo} />
+              <ListaMaisVendidos produtos={resumo.maisVendidos.periodo.slice(0, 5)} />
             </TabsContent>
             <TabsContent value="hoje">
-              <ListaMaisVendidos produtos={resumo.maisVendidos.hoje} />
+              <ListaMaisVendidos produtos={resumo.maisVendidos.hoje.slice(0, 5)} />
             </TabsContent>
           </BlocoSecao>
         </Tabs>
