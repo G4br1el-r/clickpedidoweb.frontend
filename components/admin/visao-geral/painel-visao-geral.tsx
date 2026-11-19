@@ -2,10 +2,10 @@
 
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { ChevronDownIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react"
+import { ChevronDownIcon } from "lucide-react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
-import { type ReactNode, useId, useState } from "react"
+import { useState } from "react"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -32,7 +32,6 @@ import { diasNoPeriodo, type Periodo } from "@/lib/admin/regras/periodo"
 import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
 import { emReais, plural } from "@/lib/formato"
-import { cn } from "@/lib/utils"
 import { BlocoSecao } from "../bloco-secao"
 import { SeloStatus } from "../pedidos/selos"
 import { AoVivo, Indicador, Regua } from "../regua"
@@ -40,78 +39,13 @@ import { BlocoMeta } from "./bloco-meta"
 import { FaixaAtencao } from "./faixa-atencao"
 import type { MedidaDoGrafico } from "./grafico-por-dia"
 import { inteiro, Numero } from "./numero"
+import { ListaDeFatias, Secao, Variacao } from "./partes"
 
 // Recharts pesa: o gráfico chega depois, só no navegador, com o esqueleto no lugar.
 const GraficoPorDia = dynamic(() => import("./grafico-por-dia"), {
   ssr: false,
   loading: () => <Skeleton className="h-64 w-full rounded-lg" />,
 })
-
-const porcentagem = new Intl.NumberFormat("pt-BR", {
-  style: "percent",
-  maximumFractionDigits: 1,
-  signDisplay: "exceptZero",
-})
-
-/** Seção com título que vira região para leitores de tela. */
-function Secao({
-  titulo,
-  descricao,
-  children,
-}: {
-  titulo: string
-  descricao?: ReactNode
-  children: ReactNode
-}) {
-  const id = useId()
-  return (
-    <section aria-labelledby={id} className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <h2 id={id} className="text-[15px] font-semibold tracking-[-0.01em]">
-          {titulo}
-        </h2>
-        {descricao && <p className="text-[13px] text-muted-foreground">{descricao}</p>}
-      </div>
-      {children}
-    </section>
-  )
-}
-
-function ListaDeFatias({
-  itens,
-  vazio,
-}: {
-  itens: { chave: string; nome: string; pedidos: number; total: number; percentual: number }[]
-  vazio: string
-}) {
-  if (itens.length === 0) return <p className="text-sm text-muted-foreground">{vazio}</p>
-  return (
-    <ul className="barras-do-grafico flex flex-col gap-3">
-      {itens.map((item) => (
-        <li key={item.chave} className="flex flex-col gap-1.5">
-          <div className="flex items-start gap-3 text-sm">
-            {/* No celular, a contagem desce para baixo do nome. */}
-            <span className="flex min-w-0 flex-1 flex-col gap-x-2 sm:flex-row sm:items-baseline">
-              <span className="truncate font-medium">{item.nome}</span>
-              <span className="text-xs text-muted-foreground sm:text-sm">
-                {plural(item.pedidos, "pedido", "pedidos")}
-              </span>
-            </span>
-            <span className="shrink-0 tabular-nums">{emReais(item.total)}</span>
-            <span className="w-9 shrink-0 text-right text-muted-foreground tabular-nums">
-              {Math.round(item.percentual)}%
-            </span>
-          </div>
-          <Progress
-            className="h-1.5"
-            value={item.percentual}
-            aria-label={`${item.nome}: ${Math.round(item.percentual)}%`}
-          />
-        </li>
-      ))}
-    </ul>
-  )
-}
 
 function ListaMaisVendidos({ produtos }: { produtos: Resumo["maisVendidos"]["periodo"] }) {
   if (produtos.length === 0)
@@ -139,22 +73,6 @@ function ListaMaisVendidos({ produtos }: { produtos: Resumo["maisVendidos"]["per
         </li>
       ))}
     </ul>
-  )
-}
-
-/** Variação em %, verde para cima e vermelha para baixo, com a seta e o "sobre o quê". */
-function Variacao({ valor, texto }: { valor: number; texto: string }) {
-  const Seta = valor >= 0 ? TrendingUpIcon : TrendingDownIcon
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1",
-        valor >= 0 ? "text-(--tom-pronto)" : "text-(--tom-cancelado)",
-      )}
-    >
-      <Seta className="size-3.5" aria-hidden="true" />
-      {porcentagem.format(valor / 100)} {texto}
-    </span>
   )
 }
 
