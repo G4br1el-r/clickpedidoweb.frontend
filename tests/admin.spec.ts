@@ -132,6 +132,36 @@ test("aba Vendas: da origem aos pedidos filtrados, com a etiqueta para tirar o f
   await expect(page).not.toHaveURL(/origem=/)
 })
 
+test("abas Produtos e Financeiro: do produto e da forma de pagamento aos pedidos", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin?aba=produtos")
+  const ranking = page.getByRole("region", { name: "Mais vendidos" })
+  await expect(ranking).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole("region", { name: "Curva ABC" })).toBeVisible()
+  await verificarAcessibilidade(page)
+
+  const primeiro = ranking.getByRole("link").first()
+  const nome = (await primeiro.textContent()) ?? ""
+  await primeiro.click()
+  await expect(page).toHaveURL(/\/admin\/pedidos\?busca=.+&de=2026-11-07&ate=2026-11-13/)
+  await expect(page.getByRole("searchbox")).toHaveValue(nome)
+  await expect(page.getByRole("table")).toBeVisible()
+
+  await page.goto("/admin?aba=financeiro")
+  await expect(page.getByRole("region", { name: "Do bruto ao líquido" })).toBeVisible({
+    timeout: 15_000,
+  })
+  await expect(page.getByRole("region", { name: "Taxas por forma" })).toBeVisible()
+  await verificarAcessibilidade(page)
+  await page
+    .getByRole("region", { name: "Formas de pagamento" })
+    .getByRole("link", { name: "Dinheiro" })
+    .click()
+  await expect(page).toHaveURL(/\/admin\/pedidos\?pagamento=dinheiro&de=2026-11-07&ate=2026-11-13/)
+})
+
 test("do gráfico aos pedidos do dia: filtrar, abrir e avançar", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
   await page.goto("/admin")

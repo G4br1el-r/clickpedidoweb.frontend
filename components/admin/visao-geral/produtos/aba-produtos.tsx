@@ -53,6 +53,8 @@ function Ranking({ vendas, noPeriodo }: { vendas: ProdutoVendido[]; noPeriodo: s
     medida === "faturamento" ? produto.faturamento : (produto.kg ?? produto.quantidade)
   const total = vendas.reduce((soma, produto) => soma + valor(produto), 0)
   const primeiros = vendas.toSorted((a, b) => valor(b) - valor(a)).slice(0, 10)
+  // Com muitos produtos, cada parte é pequena: a barra se mede pelo primeiro colocado.
+  const maior = primeiros[0] ? valor(primeiros[0]) : 0
   return (
     <BlocoSecao
       titulo="Mais vendidos"
@@ -83,6 +85,7 @@ function Ranking({ vendas, noPeriodo }: { vendas: ProdutoVendido[]; noPeriodo: s
           pedidos: produto.pedidos,
           total: produto.faturamento,
           percentual: total ? (valor(produto) / total) * 100 : 0,
+          barra: maior ? (valor(produto) / maior) * 100 : 0,
           detalhe: saiu(produto),
           href: `/admin/pedidos?busca=${encodeURIComponent(produto.nome)}&${noPeriodo}`,
         }))}
@@ -316,12 +319,15 @@ export function AbaProdutos({
         >
           <ul className="flex flex-col divide-y divide-border/70 border-y border-border/70">
             {cobertura.slice(0, 8).map((item) => (
-              <li key={item.id} className="flex items-baseline gap-3 py-2.5 text-sm">
-                <span className="min-w-0 flex-1 truncate font-medium">{item.nome}</span>
-                <span className="shrink-0 text-muted-foreground tabular-nums">
-                  {emQuantidade(item.saldo, item.unidade)}
+              <li key={item.id} className="flex items-start gap-3 py-2.5 text-sm">
+                {/* No celular, o saldo desce para baixo do nome, para o nome caber inteiro. */}
+                <span className="flex min-w-0 flex-1 flex-col gap-x-3 sm:flex-row sm:items-baseline">
+                  <span className="font-medium">{item.nome}</span>
+                  <span className="text-xs text-muted-foreground tabular-nums sm:ml-auto sm:text-sm">
+                    {emQuantidade(item.saldo, item.unidade)}
+                  </span>
                 </span>
-                <span className="w-40 shrink-0 text-right tabular-nums">
+                <span className="shrink-0 text-right tabular-nums sm:w-40">
                   {item.saldo <= 0
                     ? "Zerado"
                     : item.dias === null

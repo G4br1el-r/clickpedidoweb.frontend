@@ -160,6 +160,15 @@ describe("AbaProdutos", () => {
       "/admin/pedidos?busca=Calabresa&de=2026-11-12&ate=2026-11-13",
     )
 
+    // A barra se mede pelo primeiro colocado: a Coca (R$ 60) enche 75% da da Calabresa (R$ 80).
+    const barras = ranking
+      .getAllByRole("listitem")
+      .map(
+        (item) =>
+          item.querySelector<HTMLElement>("[data-slot=progress-indicator]")?.style.transform,
+      )
+    expect(barras).toEqual(["translateX(0%)", "translateX(-25%)", "translateX(-75%)"])
+
     fireEvent.click(ranking.getByRole("radio", { name: "Qtd." }))
     expect(nomes()).toEqual(["Coca", "Calabresa", "Guaraná"])
     expect(ranking.getAllByRole("listitem")[0]).toHaveTextContent("4 un.")

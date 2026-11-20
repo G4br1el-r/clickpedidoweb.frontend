@@ -58,11 +58,15 @@ for (const tema of ["light", "dark"] as const) {
     await expect(page).toHaveScreenshot(`painel-visao-geral-${tema}.png`, { fullPage: true })
   })
 
-  for (const aba of ["vendas", "financeiro"] as const) {
+  for (const aba of ["vendas", "produtos", "financeiro"] as const) {
     test(`painel: visão geral, aba ${aba} (${tema})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
       await page.goto(`/admin?aba=${aba}`)
-      const bloco = aba === "vendas" ? "Canais de venda" : "Formas de pagamento"
+      const bloco = {
+        vendas: "Canais de venda",
+        produtos: "Mais vendidos",
+        financeiro: "Formas de pagamento",
+      }[aba]
       await expect(page.getByRole("region", { name: bloco })).toBeVisible({ timeout: 15_000 })
       await page.waitForLoadState("networkidle")
       await esperarAnimacoes(page)

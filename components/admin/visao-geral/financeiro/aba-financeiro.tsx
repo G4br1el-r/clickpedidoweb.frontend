@@ -128,12 +128,13 @@ export function AbaFinanceiro({
           ) : (
             <ul className="flex flex-col divide-y divide-border/70 border-y border-border/70">
               {estimadas.formas.map((forma) => (
-                <li key={forma.forma} className="flex items-baseline gap-3 py-2.5 text-sm">
-                  <span className="min-w-0 flex-1 truncate font-medium">
-                    {rotuloTaxa(forma.forma)}
-                  </span>
-                  <span className="shrink-0 text-muted-foreground tabular-nums">
-                    {`${decimal.format(forma.taxa ?? 0)}% de ${emReais(forma.vendido)}`}
+                <li key={forma.forma} className="flex items-start gap-3 py-2.5 text-sm">
+                  {/* No celular, a % desce para baixo do nome, para o nome caber inteiro. */}
+                  <span className="flex min-w-0 flex-1 flex-col gap-x-3 sm:flex-row sm:items-baseline">
+                    <span className="font-medium">{rotuloTaxa(forma.forma)}</span>
+                    <span className="text-xs text-muted-foreground tabular-nums sm:ml-auto sm:text-sm">
+                      {`${decimal.format(forma.taxa ?? 0)}% de ${emReais(forma.vendido)}`}
+                    </span>
                   </span>
                   <span className="w-24 shrink-0 text-right tabular-nums">
                     {emReais(forma.valor)}

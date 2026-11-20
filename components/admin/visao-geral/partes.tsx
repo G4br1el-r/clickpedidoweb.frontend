@@ -51,6 +51,8 @@ export function ListaDeFatias({
     href?: string
     /** Troca a contagem de pedidos por outro texto (ex.: "4 un."). */
     detalhe?: string
+    /** Quanto a barra enche, de 0 a 100, quando não é a própria parte (ex.: num ranking). */
+    barra?: number
   }[]
   vazio: string
 }) {
@@ -83,7 +85,7 @@ export function ListaDeFatias({
           </div>
           <Progress
             className="h-1.5"
-            value={item.percentual}
+            value={item.barra ?? item.percentual}
             aria-label={`${item.nome}: ${Math.round(item.percentual)}%`}
           />
         </li>
