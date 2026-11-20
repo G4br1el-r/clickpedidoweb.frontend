@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto"
 import { clear } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { receitaDoPedido } from "../regras/farmacia"
 import { catalogoDeTeste } from "./catalogo-de-teste"
 import { carregarCatalogo } from "./catalogos"
 import {
@@ -496,6 +497,67 @@ describe("servidor de demonstração", () => {
         expect(pedido.situacaoPagamento).toBe("pago")
       }
       expect(await api.pedidos.motoboyVoltou("moto-1")).toEqual([])
+    })
+  })
+
+  describe("farmácia: controlado só no balcão", () => {
+    const farmacia = () =>
+      criarServidor({
+        segmento: "farmacia",
+        carregarCatalogo: () => carregarCatalogo("farmacia"),
+        espera: 0,
+      })
+
+    /** A entrega da demonstração que leva controlado (Metilfenidato, lista A3). */
+    async function entregaComControlado(api: Servidor) {
+      const abertos = await api.pedidos.listar({ status: ["recebido", "em-preparo", "pronto"] })
+      const pedido = abertos.find(
+        (item) =>
+          item.tipo === "entrega" && item.itens.some((i) => i.nome.startsWith("Metilfenidato")),
+      )
+      if (!pedido) throw new Error("A demonstração da farmácia devia ter entrega com controlado")
+      return pedido
+    }
+
+    test("demonstração: o pedido do site mais novo que pede receita chega esperando o aceite", async () => {
+      const api = farmacia()
+      const produtos = await api.produtos.listar()
+      const esperando = (await api.pedidos.listar()).filter((pedido) => pedido.esperaAceite)
+      expect(esperando).toHaveLength(1)
+      expect(esperando[0]).toMatchObject({ origem: "site", status: "recebido" })
+      expect(receitaDoPedido(esperando[0], produtos)).not.toBeNull()
+    })
+
+    test("a entrega com controlado não sai; trocada para retirada, perde a taxa e o endereço", async () => {
+      const api = farmacia()
+      let pedido = await entregaComControlado(api)
+      while (pedido.status !== "pronto")
+        pedido = await api.pedidos.avancar(pedido.id, pedido.status)
+      await expect(api.pedidos.avancar(pedido.id, "pronto")).rejects.toThrow(
+        "Controlado não sai para entrega: troque para retirada.",
+      )
+
+      const retirada = await api.pedidos.trocarParaRetirada(pedido.id)
+      expect(retirada).toMatchObject({ tipo: "retirada", taxaEntrega: 0 })
+      expect(retirada.endereco).toBeUndefined()
+      expect(retirada.total).toBeCloseTo(pedido.total - pedido.taxaEntrega)
+      await expect(api.pedidos.trocarParaRetirada(pedido.id)).rejects.toThrow(
+        "Só a entrega que ainda não saiu vira retirada.",
+      )
+    })
+
+    test("na retirada, o controlado só sai com a receita retida", async () => {
+      const api = farmacia()
+      let pedido = await entregaComControlado(api)
+      pedido = await api.pedidos.trocarParaRetirada(pedido.id)
+      while (pedido.status !== "pronto")
+        pedido = await api.pedidos.avancar(pedido.id, pedido.status)
+      await expect(api.pedidos.avancar(pedido.id, "pronto")).rejects.toThrow(
+        "Registre a receita retida antes de entregar o controlado.",
+      )
+      const entregue = await api.pedidos.entregarComReceitaRetida(pedido.id, "pronto")
+      expect(entregue.status).toBe("concluido")
+      expect(entregue.receitaRetidaEm).toBe(AGORA.toISOString())
     })
   })
 

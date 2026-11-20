@@ -13,6 +13,7 @@ import { type HistoricoCliente, historicoDoCliente } from "../regras/clientes"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
+import { controladosDoPedido } from "../regras/farmacia"
 import { normalizar } from "../regras/filtro-pedidos"
 import { eventosDaMudanca } from "../regras/historico"
 import { proximoNumero } from "../regras/numero"
@@ -57,7 +58,7 @@ import type {
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 4
+const VERSAO = 5
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -196,13 +197,29 @@ function recalcular(pedido: Pedido): Pedido {
 }
 
 /** O pedido na etapa seguinte; concluir cobra o que se pagava na entrega ou no balcão. */
-function avancado(pedido: Pedido, de: StatusPedido): Pedido {
+/**
+ * `produtos`: o cardápio, para a farmácia saber o que é controlado (não sai para entrega
+ * e só sai do balcão com a receita retida).
+ */
+function avancado(pedido: Pedido, de: StatusPedido, produtos: Produto[]): Pedido {
   conferirEtapa(pedido, de)
   if (pedido.esperaAceite) throw new Error("Aceite o pedido antes de começar.")
   const proximo = proximoStatus(pedido.tipo, pedido.status)
   if (!proximo) throw new Error("Este pedido não tem próxima etapa")
   if (proximo === "pronto" && pesagemPendente(pedido)) {
     throw new Error("Pese o pedido antes de marcar pronto.")
+  }
+  const controlado = controladosDoPedido(pedido, produtos).length > 0
+  if (controlado && proximo === "saiu-para-entrega") {
+    throw new Error("Controlado não sai para entrega: troque para retirada.")
+  }
+  if (
+    controlado &&
+    proximo === "concluido" &&
+    pedido.tipo === "retirada" &&
+    !pedido.receitaRetidaEm
+  ) {
+    throw new Error("Registre a receita retida antes de entregar o controlado.")
   }
   const pagoAgora = proximo === "concluido" && pedido.situacaoPagamento === "na-entrega"
   return {
@@ -771,7 +788,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       /** `de`: a etapa que a tela mostrava. Outra aba pode ter mudado o pedido antes. */
       /** `por`: a Cozinha, quando é ela que muda a etapa (a fila avisa). */
       avancar(id: number, de: StatusPedido, por?: QuemMudou) {
-        return alterar(id, (pedido) => avancado(pedido, de), undefined, por)
+        return alterar(id, (pedido, base) => avancado(pedido, de, base.produtos), undefined, por)
       },
 
       /**
@@ -783,7 +800,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         let pulados = 0
         for (const { id, de } of itens) {
           try {
-            avancados.push(await alterar(id, (pedido) => avancado(pedido, de)))
+            avancados.push(await alterar(id, (pedido, base) => avancado(pedido, de, base.produtos)))
           } catch {
             pulados += 1
           }
@@ -969,6 +986,33 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return responder(chegou)
       },
 
+      /**
+       * Farmácia: a entrega com controlado vira retirada no balcão. Sai a taxa de entrega
+       * e o endereço; o resto do pedido fica igual.
+       */
+      trocarParaRetirada(id: number) {
+        return alterar(id, (pedido) => {
+          const naLoja = ["recebido", "em-preparo", "pronto"].includes(pedido.status)
+          if (pedido.tipo !== "entrega" || !naLoja) {
+            throw new Error("Só a entrega que ainda não saiu vira retirada.")
+          }
+          const { endereco: _endereco, motoboyId: _motoboy, ...semEntrega } = pedido
+          return {
+            ...semEntrega,
+            tipo: "retirada" as const,
+            taxaEntrega: 0,
+            total: Math.round((pedido.total - pedido.taxaEntrega) * 100) / 100,
+          }
+        })
+      },
+
+      /** Farmácia: o cliente retirou o controlado e a receita ficou retida no balcão. */
+      entregarComReceitaRetida(id: number, de: StatusPedido) {
+        return alterar(id, (pedido, base) =>
+          avancado({ ...pedido, receitaRetidaEm: new Date().toISOString() }, de, base.produtos),
+        )
+      },
+
       /** Açougue: o peso da balança (em gramas, por item) refaz os valores do pedido. */
       registrarPesagem(id: number, pesos: Record<string, number>) {
         return alterar(
@@ -1013,9 +1057,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         for (const id of ids) {
           try {
             despachados.push(
-              await alterar(id, (pedido) => {
+              await alterar(id, (pedido, base) => {
                 if (pedido.tipo !== "entrega") throw new Error("Só entrega se despacha.")
-                return { ...avancado(pedido, "pronto"), motoboyId }
+                return { ...avancado(pedido, "pronto", base.produtos), motoboyId }
               }),
             )
           } catch {
@@ -1033,7 +1077,11 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         )
         const entregues: Pedido[] = []
         for (const pedido of naRua) {
-          entregues.push(await alterar(pedido.id, (atual) => avancado(atual, "saiu-para-entrega")))
+          entregues.push(
+            await alterar(pedido.id, (atual, base) =>
+              avancado(atual, "saiu-para-entrega", base.produtos),
+            ),
+          )
         }
         return entregues
       },

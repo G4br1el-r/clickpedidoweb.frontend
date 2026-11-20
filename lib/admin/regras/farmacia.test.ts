@@ -1,13 +1,23 @@
 import { describe, expect, test } from "vitest"
-import type { DadosMedicamento, Lote, MovimentoControlado, Produto, Receita } from "../dados/tipos"
+import type {
+  DadosMedicamento,
+  Lote,
+  MovimentoControlado,
+  Pedido,
+  Produto,
+  Receita,
+} from "../dados/tipos"
 import {
   conferirReceita,
+  controladosDoPedido,
+  receitaDoPedido,
   receitaExigida,
   saidasDaReceita,
   saldosControlados,
   situacaoDaReceita,
   situacaoDoLote,
 } from "./farmacia"
+import { PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
 
 const medicamento = (dados: Partial<DadosMedicamento>): DadosMedicamento => ({
   tarja: "vermelha",
@@ -266,6 +276,44 @@ describe("saidasDaReceita", () => {
         paciente: "Bruno Carvalho",
         prescritor: "CRM 98314/SP",
       },
+    ])
+  })
+})
+
+describe("receita e controlado no pedido", () => {
+  const produto = (id: string, dados: Partial<DadosMedicamento> | null): Produto =>
+    ({ id, nome: id, ...(dados ? { medicamento: medicamento(dados) } : {}) }) as Produto
+  const PRODUTOS = [
+    produto("dipirona", { tarja: "sem-tarja" }),
+    produto("losartana", { tarja: "vermelha" }),
+    produto("amoxicilina", { tarja: "vermelha-retencao", lista: "antimicrobiano" }),
+    produto("metilfenidato", { tarja: "preta", lista: "A3" }),
+    produto("shampoo", null),
+  ]
+  const com = (...ids: string[]): Pedido => ({
+    ...PEDIDOS_DE_TESTE[2],
+    itens: ids.map((id) => ({
+      id,
+      produtoId: id,
+      nome: id,
+      quantidade: 1,
+      precoUnitario: 10,
+      opcoes: [],
+      total: 10,
+    })),
+  })
+
+  test("pede receita quando algum item pede; vale o receituário mais exigente", () => {
+    expect(receitaDoPedido(com("dipirona", "shampoo"), PRODUTOS)).toBeNull()
+    expect(receitaDoPedido(com("losartana", "shampoo"), PRODUTOS)).toBe("simples")
+    expect(receitaDoPedido(com("losartana", "amoxicilina"), PRODUTOS)).toBe("antimicrobiano")
+    expect(receitaDoPedido(com("amoxicilina", "metilfenidato"), PRODUTOS)).toBe("notificacao-a")
+  })
+
+  test("controlado é o da Portaria 344 (listas A, B e C); antimicrobiano não é", () => {
+    expect(controladosDoPedido(com("amoxicilina", "losartana"), PRODUTOS)).toEqual([])
+    expect(controladosDoPedido(com("metilfenidato", "dipirona"), PRODUTOS)).toEqual([
+      "metilfenidato",
     ])
   })
 })

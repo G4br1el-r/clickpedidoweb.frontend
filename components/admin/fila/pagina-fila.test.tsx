@@ -11,6 +11,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import type { Pedido } from "@/lib/admin/dados/tipos"
+import { useFarmacia } from "@/lib/admin/farmacia-estado"
 import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { PaginaFila } from "./pagina-fila"
@@ -1319,5 +1320,74 @@ describe("PaginaFila no açougue", () => {
       faixa.getByRole("button", { name: new RegExp(`^#${amanha.numero} `) }),
     ).toBeInTheDocument()
     expect(screen.queryByRole("article", { name: `#${amanha.numero}` })).not.toBeInTheDocument()
+  })
+})
+
+describe("PaginaFila na farmácia", () => {
+  beforeEach(() => {
+    useSegmentoAtual.setState({ segmento: "farmacia" })
+    useFarmacia.setState(useFarmacia.getInitialState(), true)
+  })
+
+  const cartao = async (numero: number) =>
+    within(await screen.findByRole("article", { name: `#${numero}` }, { timeout: 8000 }))
+
+  test("o aceite espera a receita: conferida e aprovada ali mesmo, o pedido pode ser aceito", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    const [esperando] = (await servidorDo("farmacia").pedidos.listar()).filter(
+      (pedido) => pedido.esperaAceite,
+    )
+    renderizar()
+
+    const doPedido = await cartao(esperando.numero)
+    expect(doPedido.getByText("Receita")).toBeInTheDocument()
+    expect(doPedido.queryByRole("button", { name: "Aceitar" })).not.toBeInTheDocument()
+    await usuario.click(doPedido.getByRole("button", { name: "Conferir receita" }))
+
+    const janela = within(
+      await screen.findByRole("dialog", { name: `Receita do pedido #${esperando.numero}` }),
+    )
+    const retida = janela.queryByRole("checkbox", { name: "Via da receita retida na farmácia" })
+    if (retida) await usuario.click(retida)
+    await usuario.click(janela.getByRole("button", { name: "Aprovar" }))
+    await usuario.keyboard("{Escape}")
+    expect(await doPedido.findByRole("button", { name: "Aceitar" })).toBeInTheDocument()
+  })
+
+  test("controlado: a entrega vira retirada e só sai do balcão com a receita retida", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    const api = servidorDo("farmacia")
+    const entrega = (await api.pedidos.listar({ status: ["em-preparo"] })).find(
+      (pedido) =>
+        pedido.tipo === "entrega" &&
+        pedido.itens.some((item) => item.nome.startsWith("Metilfenidato")),
+    )
+    if (!entrega) throw new Error("A demonstração da farmácia devia ter entrega com controlado")
+    renderizar()
+
+    const doPedido = await cartao(entrega.numero)
+    expect(doPedido.getByText("Controlado: precisa virar retirada")).toBeInTheDocument()
+    await usuario.click(doPedido.getByRole("button", { name: "Trocar para retirada" }))
+    expect(
+      await screen.findByText(`#${entrega.numero} virou retirada. O cliente foi avisado.`),
+    ).toBeInTheDocument()
+    expect(await doPedido.findByText("Controlado: só sai com a receita retida")).toBeInTheDocument()
+
+    await usuario.click(doPedido.getByRole("button", { name: "Marcar como pronto" }))
+    // Pronto, o cartão muda de coluna (o antigo ainda sai animando): procura em Prontos.
+    const prontos = await coluna("Prontos")
+    const pronto = within(
+      await prontos.findByRole("article", { name: `#${entrega.numero}` }, { timeout: 4000 }),
+    )
+    await usuario.click(pronto.getByRole("button", { name: "Cliente retirou" }))
+    const pergunta = within(
+      await screen.findByRole("alertdialog", { name: "A receita ficou retida?" }),
+    )
+    await usuario.click(pergunta.getByRole("button", { name: "Retida, entregar" }))
+    await waitFor(async () =>
+      expect((await api.pedidos.buscar(entrega.id))?.receitaRetidaEm).toBeDefined(),
+    )
   })
 })

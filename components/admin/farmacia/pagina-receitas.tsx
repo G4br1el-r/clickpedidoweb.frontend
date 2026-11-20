@@ -27,16 +27,22 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAgora } from "@/hooks/use-agora"
+import { usePedidos } from "@/lib/admin/dados/consultas"
 import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import type { Produto, Receita } from "@/lib/admin/dados/tipos"
 import { type DecisaoReceita, useFarmacia } from "@/lib/admin/farmacia-estado"
 import {
   conferirReceita,
   INFO_RECEITA,
+  receitaDoPedido,
   saidasDaReceita,
   situacaoDaReceita,
 } from "@/lib/admin/regras/farmacia"
-import { farmaceuticaResponsavel, receitasDemo } from "@/lib/mock/admin/farmacia"
+import {
+  farmaceuticaResponsavel,
+  receitaDoPedidoDemo,
+  receitasDemo,
+} from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { Traco } from "../traco"
 import { SeloReceita, SeloTarja } from "./selos"
@@ -115,7 +121,8 @@ function JanelaRecusar({ receita, aoFechar }: { receita: Receita; aoFechar: () =
   )
 }
 
-function CartaoReceita({
+/** A conferência de uma receita: o módulo Receitas e a fila (antes do aceite) usam o mesmo. */
+export function CartaoReceita({
   receita,
   produtos,
   agora,
@@ -322,7 +329,15 @@ export function PaginaReceitas() {
   const decisoes = useFarmacia((estado) => estado.decisoes)
   const [aba, setAba] = useState<Aba>("aguardando")
 
-  const receitas = agora ? receitasDemo(agora) : []
+  const { data: pedidos = [] } = usePedidos()
+  // As receitas que chegaram com pedidos do site: a que espera o aceite e as já conferidas.
+  const dosPedidos = pedidos.flatMap((pedido) => {
+    const tipo = produtos ? receitaDoPedido(pedido, produtos) : null
+    if (!tipo || !produtos) return []
+    const receita = receitaDoPedidoDemo(pedido, produtos, tipo)
+    return pedido.esperaAceite || decisoes[receita.id] ? [receita] : []
+  })
+  const receitas = agora ? [...dosPedidos, ...receitasDemo(agora)] : []
   const grupos: Record<Aba, Receita[]> = {
     aguardando: receitas.filter((receita) => !decisoes[receita.id]),
     aprovadas: receitas.filter((receita) => decisoes[receita.id]?.situacao === "aprovada"),

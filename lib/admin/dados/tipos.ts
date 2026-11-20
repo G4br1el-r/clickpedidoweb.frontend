@@ -90,7 +90,10 @@ export type QuemMudou = "cozinha"
 
 export type EventoPedido =
   | { tipo: "etapa"; status: StatusPedido; em: string; por?: QuemMudou }
-  | { tipo: "pago" | "impresso" | "aceito" | "servido"; em: string }
+  | {
+      tipo: "pago" | "impresso" | "aceito" | "servido" | "virou-retirada" | "receita-retida"
+      em: string
+    }
   /** Mensagem que a loja mandou ao cliente (simulada): o texto que teria saído. */
   | { tipo: "aviso"; em: string; texto: string }
 
@@ -128,6 +131,8 @@ export type Pedido = {
   dataRetirada?: string
   /** Açougue: resultado da pesagem. */
   pesagem?: { totalEstimado: number; diferenca: number; pesadoEm: string }
+  /** Farmácia: quando a receita do controlado ficou retida no balcão, na retirada. */
+  receitaRetidaEm?: string
   /** O estoque já saiu por este pedido (para devolver no cancelamento uma vez só). */
   estoqueBaixado?: boolean
   /** O que aconteceu depois da chegada, do mais antigo para o mais novo. */
@@ -387,7 +392,9 @@ export type ConfigLoja = {
   /** Avisos automáticos ao cliente (simulados): ligado e os textos de cada etapa. */
   avisosCliente?: {
     ligado: boolean
-    textos?: Partial<Record<"aceito" | "saiu" | "pronto" | "recusado" | "pesado", string>>
+    textos?: Partial<
+      Record<"aceito" | "saiu" | "pronto" | "recusado" | "pesado" | "retirada", string>
+    >
   }
   /** Salão: vídeo do banner da loja (YouTube, Shorts ou Reels). */
   videoBanner?: string

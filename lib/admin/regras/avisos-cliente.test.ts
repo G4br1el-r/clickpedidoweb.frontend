@@ -77,3 +77,16 @@ describe("aviso da pesagem", () => {
     ).toBe("Olá, Ana! Seu pedido #1412 foi pesado e o total ficou R$ 84,50.")
   })
 })
+
+describe("aviso da farmácia", () => {
+  test("a entrega que vira retirada (controlado) avisa o cliente para buscar no balcão", () => {
+    const entrega = { ...PEDIDO, tipo: "entrega" as const }
+    const retirada = { ...PEDIDO, tipo: "retirada" as const }
+    expect(avisoDaMudanca(entrega, retirada)).toBe("retirada")
+    expect(
+      textoDoAviso(AVISOS_DE_FABRICA.retirada, retirada, { loja: "Farmácia Vida", endereco: "" }),
+    ).toBe(
+      "Olá, Ana! Seu pedido #1412 tem remédio controlado, que só sai no balcão com a receita retida. Ele fica para retirar na Farmácia Vida.",
+    )
+  })
+})

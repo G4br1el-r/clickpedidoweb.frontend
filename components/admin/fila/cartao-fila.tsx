@@ -9,12 +9,14 @@ import {
   ChefHatIcon,
   ChevronUpIcon,
   ClockIcon,
+  FileTextIcon,
   IdCardIcon,
   MapPinIcon,
   MessageCircleIcon,
   PanelRightOpenIcon,
   PrinterIcon,
   ScaleIcon,
+  ShieldAlertIcon,
   XIcon,
 } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
@@ -115,6 +117,10 @@ export function CartaoFila({
   aoAvancar,
   aoServir,
   aoPesar,
+  receita,
+  controlado = false,
+  aoConferirReceita,
+  aoTrocarParaRetirada,
   aoAbrir,
   aoImprimir,
 }: {
@@ -148,6 +154,12 @@ export function CartaoFila({
   aoServir?: () => void
   /** Açougue: abre a pesagem ali mesmo. Enquanto falta pesar, é a ação do cartão. */
   aoPesar?: () => void
+  /** Farmácia: o pedido pede receita; o aceite espera o farmacêutico aprovar. */
+  receita?: "pendente" | "aprovada" | "recusada"
+  /** Farmácia: leva controlado (Portaria 344), que não sai para entrega. */
+  controlado?: boolean
+  aoConferirReceita?: () => void
+  aoTrocarParaRetirada?: () => void
   aoAbrir: () => void
   aoImprimir: () => void
 }) {
@@ -160,6 +172,24 @@ export function CartaoFila({
   const aPesar = pesagemPendente(pedido)
   // Em preparo, falta só a balança: "Marcar como pronto" espera a pesagem.
   const pesarAgora = aPesar && pedido.status === "em-preparo" && aoPesar
+  // Farmácia: a entrega com controlado precisa virar retirada antes de qualquer etapa.
+  const viraRetirada =
+    controlado &&
+    pedido.tipo === "entrega" &&
+    ["recebido", "em-preparo", "pronto"].includes(pedido.status) &&
+    aoTrocarParaRetirada
+  const conferirReceita = receita !== undefined && receita !== "aprovada" && aoConferirReceita
+  const botaoTrocar = (
+    <Button
+      type="button"
+      size="sm"
+      className="min-w-[min(100%,7rem)] flex-1"
+      disabled={ocupado}
+      onClick={aoTrocarParaRetirada}
+    >
+      Trocar para retirada
+    </Button>
+  )
   const canal = pedido.mesa
     ? `Mesa ${pedido.mesa.numero}`
     : CANAL_CURTO[pedido.tipo as keyof typeof CANAL_CURTO]
@@ -255,6 +285,12 @@ export function CartaoFila({
                   Na cozinha
                 </Badge>
               )}
+              {receita && (
+                <Badge variant="outline" className="gap-1">
+                  <FileTextIcon aria-hidden="true" />
+                  Receita
+                </Badge>
+              )}
               {aPesar && (
                 <Badge variant="secondary" className="gap-1">
                   <ScaleIcon aria-hidden="true" />A pesar
@@ -284,6 +320,18 @@ export function CartaoFila({
             </CardHeader>
 
             <CardContent className="flex flex-col gap-2 px-3 text-sm">
+              {controlado && pedido.tipo === "entrega" && (
+                <p className="flex items-center gap-1.5 text-[13px] font-medium">
+                  <ShieldAlertIcon className="size-4" aria-hidden="true" />
+                  Controlado: precisa virar retirada
+                </p>
+              )}
+              {controlado && pedido.tipo === "retirada" && (
+                <p className="flex items-center gap-1.5 text-[13px] font-medium">
+                  <ShieldAlertIcon className="size-4" aria-hidden="true" />
+                  Controlado: só sai com a receita retida
+                </p>
+              )}
               {maioridade && (
                 <p className="flex items-center gap-1.5 text-[13px] font-medium">
                   <IdCardIcon className="size-4" aria-hidden="true" />
@@ -369,15 +417,30 @@ export function CartaoFila({
             <CardFooter className="flex-wrap gap-2 border-border/70 bg-transparent px-3 pt-3">
               {espera ? (
                 <>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="min-w-[min(100%,7rem)] flex-1"
-                    disabled={ocupado}
-                    onClick={aoAceitar}
-                  >
-                    Aceitar
-                  </Button>
+                  {viraRetirada ? (
+                    botaoTrocar
+                  ) : conferirReceita ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="min-w-[min(100%,7rem)] flex-1"
+                      disabled={ocupado}
+                      onClick={aoConferirReceita}
+                    >
+                      <FileTextIcon data-icon="inline-start" />
+                      Conferir receita
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="min-w-[min(100%,7rem)] flex-1"
+                      disabled={ocupado}
+                      onClick={aoAceitar}
+                    >
+                      Aceitar
+                    </Button>
+                  )}
                   <ConfirmarComMotivo
                     gatilho={
                       <Button
@@ -396,6 +459,8 @@ export function CartaoFila({
                     aoConfirmar={aoRecusar}
                   />
                 </>
+              ) : viraRetirada ? (
+                botaoTrocar
               ) : pesarAgora ? (
                 <Button
                   type="button"

@@ -274,11 +274,23 @@ describe("PaginaLoja: recursos de cada loja", () => {
     )
   })
 
-  test("pizzaria: sem o aviso da pesagem", async () => {
+  test("pizzaria: sem o aviso da pesagem nem o do controlado", async () => {
+    await abrir()
+    const fila = secao("Fila e pedidos")
+    expect(fila.queryByRole("textbox", { name: "Total mudou na pesagem" })).not.toBeInTheDocument()
+    expect(
+      fila.queryByRole("textbox", { name: "Controlado vira retirada" }),
+    ).not.toBeInTheDocument()
+  })
+
+  test("farmácia: o aviso de quando o controlado vira retirada", async () => {
+    useSegmentoAtual.setState({ segmento: "farmacia" })
     await abrir()
     expect(
-      secao("Fila e pedidos").queryByRole("textbox", { name: "Total mudou na pesagem" }),
-    ).not.toBeInTheDocument()
+      secao("Fila e pedidos").getByRole("textbox", { name: "Controlado vira retirada" }),
+    ).toHaveValue(
+      "Olá, {nome}! Seu pedido #{numero} tem remédio controlado, que só sai no balcão com a receita retida. Ele fica para retirar na {loja}.",
+    )
   })
 
   test("salão: vídeo do banner só com link do YouTube, Shorts ou Reels; sem vitrines", async () => {

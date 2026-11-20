@@ -49,6 +49,7 @@ import {
   useCancelarPedido,
   useDefinirEntrega,
   useDespachar,
+  useEntregarComReceitaRetida,
   useFila,
   useHistoricoDosClientes,
   useLoja,
@@ -60,6 +61,7 @@ import {
   useServirMesa,
   useSimularCancelamento,
   useSimularPedido,
+  useTrocarParaRetirada,
   useVoltarPedido,
 } from "@/lib/admin/dados/consultas"
 import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
@@ -70,6 +72,7 @@ import type {
   StatusPedido,
   TipoPedido,
 } from "@/lib/admin/dados/tipos"
+import { useFarmacia } from "@/lib/admin/farmacia-estado"
 import {
   usePreferenciasCarregadas,
   usePreferenciasFila,
@@ -79,6 +82,7 @@ import { alarmeTocando } from "@/lib/admin/regras/aceite"
 import { type HistoricoCliente, seloDoCliente } from "@/lib/admin/regras/clientes"
 import { estaNaCozinha } from "@/lib/admin/regras/cozinha"
 import { entregasParaAgrupar, situacaoDosMotoboys } from "@/lib/admin/regras/despacho"
+import { controladosDoPedido, receitaDoPedido } from "@/lib/admin/regras/farmacia"
 import {
   type ColunaFila,
   colunasDaFila,
@@ -107,8 +111,10 @@ import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
 import { liberarSom, somBloqueado, tocarAlerta } from "@/lib/admin/som"
 import { plural } from "@/lib/formato"
+import { receitaDoPedidoDemo } from "@/lib/mock/admin/farmacia"
 import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { CartaoReceita } from "../farmacia/pagina-receitas"
 import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
@@ -265,6 +271,11 @@ type AcoesDoCartao = {
   servir: (pedido: Pedido) => void
   /** Açougue: abre a balança do pedido ali mesmo. */
   pesar: (pedido: Pedido) => void
+  /** Farmácia: a receita do pedido (sem receita, `undefined`) e se leva controlado. */
+  receitaDe: (pedido: Pedido) => "pendente" | "aprovada" | "recusada" | undefined
+  controlado: (pedido: Pedido) => boolean
+  conferirReceita: (pedido: Pedido) => void
+  trocarParaRetirada: (pedido: Pedido) => void
   abrir: (pedido: Pedido) => void
   imprimir: (pedido: Pedido) => void
   /** A loja tem motoboys: a entrega pronta se despacha. */
@@ -360,6 +371,10 @@ function Coluna({
                 aoAvancar={() => acoes.avancar(pedido)}
                 aoServir={() => acoes.servir(pedido)}
                 aoPesar={() => acoes.pesar(pedido)}
+                receita={acoes.receitaDe(pedido)}
+                controlado={acoes.controlado(pedido)}
+                aoConferirReceita={() => acoes.conferirReceita(pedido)}
+                aoTrocarParaRetirada={() => acoes.trocarParaRetirada(pedido)}
                 aoAbrir={() => acoes.abrir(pedido)}
                 aoImprimir={() => acoes.imprimir(pedido)}
               />
@@ -478,20 +493,39 @@ export function PaginaFila({
   const [conferindo, setConferindo] = useState<Pedido | null>(null)
   // Açougue: a balança aberta pelo cartão. Guarda o id: o pedido vem da fila, já pesado.
   const [pesando, setPesando] = useState<number | null>(null)
+  // Farmácia: a receita aberta para conferir (pelo id do pedido) e a retirada do controlado.
+  const decisoes = useFarmacia((estado) => estado.decisoes)
+  const [conferindoReceita, setConferindoReceita] = useState<number | null>(null)
+  const [retendo, setRetendo] = useState<Pedido | null>(null)
+  const trocar = useTrocarParaRetirada()
+  const entregarRetida = useEntregarComReceitaRetida()
+  const receitaDe = (pedido: Pedido) => {
+    const tipo = receitaDoPedido(pedido, produtos)
+    if (!tipo) return undefined
+    return decisoes[`rec-pedido-${pedido.id}`]?.situacao ?? "pendente"
+  }
+  const controlado = (pedido: Pedido) => controladosDoPedido(pedido, produtos).length > 0
   // Adega: os produtos alcoólicos do cardápio dizem que pedido pede documento.
   const { data: produtos = [] } = useProdutos()
   const comAlcool = (pedido: Pedido) => pedidoComAlcool(pedido, produtos)
   const despachar = useDespachar()
   const motoboyVoltou = useMotoboyVoltou()
   const acoes: AcoesDoCartao = {
-    aceitar: (pedido) =>
+    aceitar: (pedido) => {
+      // Farmácia: o pedido com receita só entra depois de o farmacêutico aprovar.
+      const receita = receitaDe(pedido)
+      if (receita && receita !== "aprovada") {
+        toast.error(`Confira a receita de #${pedido.numero} antes de aceitar.`)
+        return
+      }
       aceitar.mutate(pedido.id, {
         ...avisoDeErro,
         onSuccess: (aceito) => {
           toast.success(`#${aceito.numero} aceito.`)
           mostrarAviso(aceito)
         },
-      }),
+      })
+    },
     recusar: (pedido, escolhido) =>
       recusar.mutate(
         { id: pedido.id, ...escolhido },
@@ -519,6 +553,11 @@ export function PaginaFila({
         setConferindo(pedido)
         return
       }
+      // Farmácia: o controlado só sai do balcão com a receita retida.
+      if (pedido.tipo === "retirada" && pedido.status === "pronto" && controlado(pedido)) {
+        setRetendo(pedido)
+        return
+      }
       avancarDeVez(pedido)
     },
     abrir: (pedido) => abrirPedido(pedido.id),
@@ -526,6 +565,17 @@ export function PaginaFila({
     despacha,
     comAlcool,
     pesar: (pedido) => setPesando(pedido.id),
+    receitaDe,
+    controlado,
+    conferirReceita: (pedido) => setConferindoReceita(pedido.id),
+    trocarParaRetirada: (pedido) =>
+      trocar.mutate(pedido.id, {
+        ...avisoDeErro,
+        onSuccess: (trocado) => {
+          toast.success(`#${trocado.numero} virou retirada. O cliente foi avisado.`)
+          mostrarAviso(trocado)
+        },
+      }),
     servir: (pedido) =>
       servir.mutate(pedido.id, {
         ...avisoDeErro,
@@ -967,6 +1017,68 @@ export function PaginaFila({
           }
         />
       )}
+      <Dialog
+        open={conferindoReceita !== null}
+        onOpenChange={(aberta) => !aberta && setConferindoReceita(null)}
+      >
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+          {fila
+            ?.filter((pedido) => pedido.id === conferindoReceita)
+            .map((pedido) => {
+              const tipo = receitaDoPedido(pedido, produtos)
+              if (!tipo || !agora) return null
+              const receita = receitaDoPedidoDemo(pedido, produtos, tipo)
+              return (
+                <div key={pedido.id} className="flex flex-col gap-4">
+                  <DialogHeader>
+                    <DialogTitle>Receita do pedido #{pedido.numero}</DialogTitle>
+                    <DialogDescription>
+                      Aprovada, o pedido pode ser aceito. Recusada, recuse o pedido com o motivo.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <CartaoReceita
+                    receita={receita}
+                    produtos={produtos}
+                    agora={agora}
+                    decisao={decisoes[receita.id]}
+                  />
+                </div>
+              )
+            })}
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={retendo !== null} onOpenChange={(aberto) => !aberto && setRetendo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>A receita ficou retida?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O pedido #{retendo?.numero} leva controlado (
+              {retendo ? controladosDoPedido(retendo, produtos).join(", ") : ""}): só sai do balcão
+              com a via da receita retida na farmácia.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (retendo) {
+                  entregarRetida.mutate(
+                    { id: retendo.id, de: retendo.status },
+                    {
+                      ...avisoDeErro,
+                      onSuccess: (entregue) =>
+                        toast.success(`#${entregue.numero} entregue. Receita retida registrada.`),
+                    },
+                  )
+                }
+                setRetendo(null)
+              }}
+            >
+              Retida, entregar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <Dialog open={pesando !== null} onOpenChange={(aberta) => !aberta && setPesando(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>

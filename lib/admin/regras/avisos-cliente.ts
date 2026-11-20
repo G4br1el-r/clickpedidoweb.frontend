@@ -3,7 +3,7 @@ import { textoDoMotivo } from "./aceite"
 import { reaisEmTexto } from "./mensagens"
 
 /** As etapas em que a loja avisa o cliente sozinha. */
-export const ETAPAS_DO_AVISO = ["aceito", "saiu", "pronto", "recusado", "pesado"] as const
+export const ETAPAS_DO_AVISO = ["aceito", "saiu", "pronto", "recusado", "pesado", "retirada"] as const
 export type EtapaDoAviso = (typeof ETAPAS_DO_AVISO)[number]
 
 /** Os textos de fábrica; a loja edita em Configurações → Fila e pedidos. */
@@ -14,6 +14,8 @@ export const AVISOS_DE_FABRICA: Record<EtapaDoAviso, string> = {
   pronto: "Olá, {nome}! Seu pedido #{numero} está pronto para retirar na {loja}.",
   recusado: "Olá, {nome}. Não conseguimos aceitar seu pedido #{numero}: {motivo}. Desculpe!",
   pesado: "Olá, {nome}! Seu pedido #{numero} foi pesado e o total ficou {total}.",
+  retirada:
+    "Olá, {nome}! Seu pedido #{numero} tem remédio controlado, que só sai no balcão com a receita retida. Ele fica para retirar na {loja}.",
 }
 
 /** O que a loja configurou, com os textos de fábrica no que faltar. Sem configuração, liga. */
@@ -30,6 +32,8 @@ export function avisoDaMudanca(antes: Pedido, depois: Pedido): EtapaDoAviso | nu
     return depois.cancelamento?.tipo === "recusa" ? "recusado" : null
   }
   if (antes.esperaAceite && depois.esperaAceite === false) return "aceito"
+  // Farmácia: o controlado não sai para entrega.
+  if (antes.tipo === "entrega" && depois.tipo === "retirada") return "retirada"
   // Açougue: a balança mudou o total.
   if (depois.pesagem && depois.pesagem.pesadoEm !== antes.pesagem?.pesadoEm) {
     return depois.total === antes.total ? null : "pesado"

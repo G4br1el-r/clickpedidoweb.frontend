@@ -7,7 +7,7 @@ import { type ReactNode, useState } from "react"
 import { beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
-import { reiniciarServidores } from "@/lib/admin/dados/consultas"
+import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { useFarmacia } from "@/lib/admin/farmacia-estado"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { PaginaReceitas } from "./pagina-receitas"
@@ -56,7 +56,7 @@ describe("PaginaReceitas", () => {
     expect(screen.getByRole("heading", { level: 1, name: "Receitas" })).toBeInTheDocument()
     expect(screen.getByText(/Dra\. Camila Rocha/)).toBeInTheDocument()
     expect(screen.getByText(/CRF-SP 45\.812/)).toBeInTheDocument()
-    expect(screen.getByRole("tab", { name: /Aguardando 7/ })).toHaveAttribute(
+    expect(screen.getByRole("tab", { name: /Aguardando 8/ })).toHaveAttribute(
       "aria-selected",
       "true",
     )
@@ -119,5 +119,16 @@ describe("PaginaReceitas", () => {
     ).toHaveAttribute("data-tom", "cancelado")
     await usuario.click(camila.getByRole("button", { name: "Desfazer" }))
     expect(useFarmacia.getState().decisoes["rec-1003"]).toBeUndefined()
+  })
+
+  test("a receita do pedido do site que espera o aceite também chega aqui, com o número do pedido", async () => {
+    const [esperando] = (await servidorDo("farmacia").pedidos.listar()).filter(
+      (pedido) => pedido.esperaAceite,
+    )
+    await abrir()
+    const receita = await screen.findByRole("article", {
+      name: new RegExp(esperando.cliente.nome),
+    })
+    expect(within(receita).getByText(`· Pedido #${esperando.numero}`)).toBeInTheDocument()
   })
 })

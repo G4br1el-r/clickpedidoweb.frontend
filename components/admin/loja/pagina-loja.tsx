@@ -581,6 +581,7 @@ const ROTULO_DO_AVISO: Record<EtapaDoAviso, string> = {
   pronto: "Pronto para retirar",
   recusado: "Pedido recusado",
   pesado: "Total mudou na pesagem",
+  retirada: "Controlado vira retirada",
 }
 
 /**
@@ -591,14 +592,19 @@ function AvisosAoCliente({
   controle,
   erros,
   pesa,
+  controla,
 }: {
   controle: Controle
   erros: ErrosDoFormulario
   /** Açougue: o aviso de quando a balança muda o total. */
   pesa: boolean
+  /** Farmácia: o aviso de quando o controlado vira retirada. */
+  controla: boolean
 }) {
   const idChave = useId()
-  const etapas = ETAPAS_DO_AVISO.filter((etapa) => etapa !== "pesado" || pesa)
+  const etapas = ETAPAS_DO_AVISO.filter(
+    (etapa) => (etapa !== "pesado" || pesa) && (etapa !== "retirada" || controla),
+  )
   const ligado = useWatch({ control: controle, name: "avisosCliente.ligado" })
   return (
     <div className="flex flex-col gap-4">
@@ -1129,6 +1135,7 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
           controle={controle}
           erros={erros}
           pesa={temRecurso(segmento, "vendaPorPeso")}
+          controla={temRecurso(segmento, "medicamentos")}
         />
       </Secao>
 
