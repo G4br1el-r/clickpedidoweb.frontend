@@ -27,7 +27,6 @@ import {
   textosDaSemanaPassada,
 } from "@/lib/admin/regras/dashboard/semana-passada"
 import { diasNoPeriodo, type Periodo } from "@/lib/admin/regras/periodo"
-import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
 import { emReais, plural } from "@/lib/formato"
 import { BlocoSecao } from "../bloco-secao"
@@ -37,7 +36,7 @@ import { BlocoMeta } from "./bloco-meta"
 import { FaixaAtencao } from "./faixa-atencao"
 import type { MedidaDoGrafico } from "./grafico-por-dia"
 import { inteiro, Numero } from "./numero"
-import { ListaDeFatias, Secao, Variacao } from "./partes"
+import { Secao, Variacao } from "./partes"
 
 // Recharts pesa: o gráfico chega depois, só no navegador, com o esqueleto no lugar.
 const GraficoPorDia = dynamic(() => import("./grafico-por-dia"), {
@@ -297,24 +296,6 @@ export function AbaResumo({
           </Table>
         </BlocoSecao>
       </div>
-    </div>
-  )
-}
-
-/** Financeiro: como a loja recebe. Cresce na etapa 4. */
-export function AbaFinanceiro({ resumo }: { resumo: Resumo }) {
-  return (
-    <div className="flex flex-col gap-10">
-      <BlocoSecao titulo="Formas de pagamento" descricao="No período">
-        <ListaDeFatias
-          vazio="Nenhuma venda no período."
-          itens={resumo.pagamentos.map((fatia) => ({
-            ...fatia,
-            chave: fatia.forma,
-            nome: rotuloPagamento(fatia.forma),
-          }))}
-        />
-      </BlocoSecao>
     </div>
   )
 }

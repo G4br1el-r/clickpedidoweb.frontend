@@ -26,7 +26,8 @@ import { temModulo } from "@/lib/admin/segmentos-painel"
 import { lotesDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
-import { AbaFinanceiro, AbaResumo } from "./painel-visao-geral"
+import { AbaFinanceiro } from "./financeiro/aba-financeiro"
+import { AbaResumo } from "./painel-visao-geral"
 import { AbaProdutos } from "./produtos/aba-produtos"
 import { AbaVendas } from "./vendas/aba-vendas"
 
@@ -198,7 +199,11 @@ export function VisaoGeral() {
                 <EsqueletoVisaoGeral />
               )
             ) : aba === "financeiro" ? (
-              <AbaFinanceiro resumo={resumo} />
+              <AbaFinanceiro
+                pedidos={pedidos ?? []}
+                periodo={periodo}
+                taxas={loja?.taxasPagamento}
+              />
             ) : (
               <AbaResumo
                 resumo={resumo}

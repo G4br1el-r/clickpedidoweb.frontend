@@ -1,6 +1,12 @@
 import { describe, expect, test } from "vitest"
-import { PERIODO_DE_TESTE as PERIODO, pedidoDeTeste } from "../pedidos-de-teste"
-import { aReceber, descontosDoPdv, reguaFinanceira, taxasEstimadas } from "./financeiro"
+import { PEDIDOS_DE_TESTE, PERIODO_DE_TESTE as PERIODO, pedidoDeTeste } from "../pedidos-de-teste"
+import {
+  aReceber,
+  descontosDoPdv,
+  formasDePagamento,
+  reguaFinanceira,
+  taxasEstimadas,
+} from "./financeiro"
 
 const NO_PERIODO = new Date(2026, 10, 13, 19)
 
@@ -95,6 +101,24 @@ describe("taxasEstimadas", () => {
       "pixOnline",
       "cartaoOnline",
       "maquininha",
+    ])
+  })
+})
+
+describe("formasDePagamento", () => {
+  test("cada forma com os pedidos válidos, o total e a parte, da que mais vendeu à que menos vendeu", () => {
+    // Do total de R$ 170: dinheiro R$ 100, Pix R$ 50 e maquininha R$ 20.
+    expect(
+      formasDePagamento(PEDIDOS_DE_TESTE, PERIODO).map((fatia) => [
+        fatia.forma,
+        fatia.pedidos,
+        fatia.total,
+        Math.round(fatia.percentual * 100) / 100,
+      ]),
+    ).toEqual([
+      ["dinheiro", 2, 100, 58.82],
+      ["pix", 1, 50, 29.41],
+      ["cartao-na-entrega", 1, 20, 11.76],
     ])
   })
 })

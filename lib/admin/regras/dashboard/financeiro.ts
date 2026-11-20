@@ -1,6 +1,6 @@
 import type { Pedido, TaxasPagamento } from "../../dados/tipos"
 import type { Periodo } from "../periodo"
-import { ehValido, noPeriodo, reais } from "./comum"
+import { ehValido, fatias, noPeriodo, reais } from "./comum"
 
 const somar = (pedidos: Pedido[], valor: (pedido: Pedido) => number) =>
   reais(pedidos.reduce((total, pedido) => total + valor(pedido), 0))
@@ -82,4 +82,11 @@ export function taxasEstimadas(
     liquidoDepois: reais(somar(validos, (pedido) => pedido.total) - total),
     semTaxa: formas.filter((forma) => forma.taxa === undefined).map((forma) => forma.forma),
   }
+}
+
+/** Formas de pagamento das vendas válidas do período, da que mais vendeu à que menos vendeu. */
+export function formasDePagamento(pedidos: Pedido[], periodo: Periodo) {
+  return fatias(noPeriodo(pedidos, periodo).filter(ehValido), (pedido) => pedido.pagamento).map(
+    ({ valor, ...fatia }) => ({ forma: valor, ...fatia }),
+  )
 }

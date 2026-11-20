@@ -17,7 +17,7 @@ import {
 } from "@/lib/admin/regras/pedidos-de-teste"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { FiltroPeriodo } from "./filtro-periodo"
-import { AbaFinanceiro, AbaResumo } from "./painel-visao-geral"
+import { AbaResumo } from "./painel-visao-geral"
 import { VisaoGeral } from "./visao-geral"
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
@@ -196,13 +196,6 @@ describe("abas do painel", () => {
     expect(regiao("Pedidos recentes").getAllByRole("row")[1]).toHaveTextContent("#6")
     expect(screen.queryByRole("region", { name: "Formas de pagamento" })).not.toBeInTheDocument()
     expect(screen.queryByRole("region", { name: "Canais de venda" })).not.toBeInTheDocument()
-  })
-
-  test("Financeiro mostra as formas de pagamento", () => {
-    render(<AbaFinanceiro resumo={RESUMO} />, { wrapper: Provedores })
-    expect(regiao("Formas de pagamento").getAllByRole("listitem")[0]).toHaveTextContent(
-      "Dinheiro2 pedidosR$ 100,0059%",
-    )
   })
 
   test("no salão, os pedidos são atendimentos", () => {
