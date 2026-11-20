@@ -1,4 +1,5 @@
 import type { SomAlerta } from "./dados/tipos"
+import type { ChaveDoAlerta } from "./regras/alertas-fila"
 
 type Nota = {
   frequencia: number
@@ -78,11 +79,36 @@ export async function liberarSom() {
  * O navegador só libera o som depois de um toque da pessoa: o botão de ligar faz isso.
  */
 export function tocarAlerta(tipo: SomAlerta) {
+  tocar(ALERTAS[tipo])
+}
+
+/** Duas notas suaves (0,2) de cada alerta secundário: dá para reconhecer qual é sem olhar. */
+const AVISOS: Record<ChaveDoAlerta, Alerta> = {
+  parado: { volume: 0.2, notas: duasNotas(660, 660) },
+  atraso: { volume: 0.2, notas: duasNotas(988, 784) },
+  pago: { volume: 0.2, notas: duasNotas(784, 1175) },
+  cancelou: { volume: 0.2, notas: duasNotas(523, 392) },
+}
+
+function duasNotas(primeira: number, segunda: number): Nota[] {
+  return [primeira, segunda].map((frequencia, indice) => ({
+    frequencia,
+    inicio: indice * 0.2,
+    duracao: 0.18,
+    onda: "sine",
+  }))
+}
+
+/** O som suave de um alerta secundário (pronto parado, atraso, pago, cliente cancelou). */
+export function tocarAviso(chave: ChaveDoAlerta) {
+  tocar(AVISOS[chave])
+}
+
+function tocar({ volume: pico, notas }: Alerta) {
   const contexto = contextoDeAudio()
   if (!contexto) return
   if (contexto.state === "suspended") void contexto.resume()
   const agora = contexto.currentTime
-  const { volume: pico, notas } = ALERTAS[tipo]
 
   for (const nota of notas) {
     const oscilador = contexto.createOscillator()

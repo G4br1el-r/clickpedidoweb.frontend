@@ -143,6 +143,8 @@ export type Cancelamento = {
   /** Texto do "Outro motivo". */
   detalhe?: string
   em: string
+  /** Quem cancelou foi o cliente (pelo site), e não a loja. */
+  porCliente?: boolean
 }
 
 /** O que a pessoa escolhe ao recusar ou cancelar. */
