@@ -20,6 +20,7 @@ import {
   usePreferenciasFila,
   useSomDoAparelho,
 } from "@/lib/admin/preferencias-fila"
+import type { OndeImprime } from "@/lib/admin/regras/impressora"
 import { tocarAlerta } from "@/lib/admin/som"
 import { pedirLicenca } from "./avisos-do-aparelho"
 
@@ -238,6 +239,34 @@ export function EsteAparelho({ loja }: { loja: ConfigLoja | undefined }) {
             marcada={preferencias.alertas.cancelou}
             aoMudar={(ligado) => preferencias.ligarAlerta("cancelou", ligado)}
           />
+        </Grupo>
+        <Grupo titulo="Impressora">
+          <div className="flex flex-col gap-2 py-2">
+            <Select
+              value={preferencias.impressora}
+              onValueChange={(onde) => preferencias.escolherImpressora(onde as OndeImprime)}
+            >
+              <SelectTrigger size="sm" aria-label="Onde este aparelho imprime" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="navegador">Pelo navegador</SelectItem>
+                  <SelectItem value="agente">Agente de impressão</SelectItem>
+                  <SelectItem value="nenhuma">Sem impressora</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          {preferencias.impressora === "agente" && (
+            <Linha
+              id="agente-ligado"
+              rotulo="Agente ligado"
+              detalhe="Simulação: desligue para ver como a fila avisa da impressora fora do ar."
+              marcada={preferencias.agenteLigado}
+              aoMudar={preferencias.ligarAgente}
+            />
+          )}
         </Grupo>
         <Grupo titulo="Tela">
           <Linha

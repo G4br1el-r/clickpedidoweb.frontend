@@ -6,6 +6,7 @@ import { persist } from "zustand/middleware"
 import { useLoja } from "./dados/consultas"
 import type { SomAlerta } from "./dados/tipos"
 import type { ChaveDoAlerta } from "./regras/alertas-fila"
+import type { OndeImprime } from "./regras/impressora"
 
 /** Avisos que se ligam e desligam no menu "Este aparelho". */
 export type ChaveDoAparelho = "notificar" | "piscarAba" | "vibrar" | "telaAcesa" | "compacto"
@@ -30,6 +31,12 @@ type Preferencias = {
   alertas: Record<ChaveDoAlerta, boolean>
   /** Pronto parado há mais destes minutos avisa. */
   paradoMin: number
+  /** Onde este aparelho imprime. */
+  impressora: OndeImprime
+  /** Agente de impressão ligado (simulado até o back-end). */
+  agenteLigado: boolean
+  escolherImpressora: (onde: OndeImprime) => void
+  ligarAgente: (ligado: boolean) => void
   ligarAlerta: (chave: ChaveDoAlerta, ligado: boolean) => void
   definirParadoMin: (minutos: number) => void
   ligarSom: (ligado: boolean) => void
@@ -52,6 +59,10 @@ export const usePreferenciasFila = create<Preferencias>()(
       compacto: false,
       alertas: { parado: true, atraso: true, pago: true, cancelou: true, cozinha: true },
       paradoMin: 10,
+      impressora: "navegador",
+      agenteLigado: true,
+      escolherImpressora: (impressora) => set({ impressora }),
+      ligarAgente: (agenteLigado) => set({ agenteLigado }),
       ligarAlerta: (chave, ligado) =>
         set((estado) => ({ alertas: { ...estado.alertas, [chave]: ligado } })),
       definirParadoMin: (paradoMin) => set({ paradoMin }),
@@ -80,6 +91,8 @@ export const usePreferenciasFila = create<Preferencias>()(
         compacto,
         alertas,
         paradoMin,
+        impressora,
+        agenteLigado,
       }) => ({
         somLigado,
         tipoSom,
@@ -91,6 +104,8 @@ export const usePreferenciasFila = create<Preferencias>()(
         compacto,
         alertas,
         paradoMin,
+        impressora,
+        agenteLigado,
       }),
     },
   ),

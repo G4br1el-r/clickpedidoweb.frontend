@@ -115,6 +115,7 @@ import { EsteAparelho } from "./este-aparelho"
 import { FerramentasFila, PARAMETROS_FILA } from "./ferramentas-fila"
 import { GavetaBairros } from "./gaveta-bairros"
 import { GavetaFinalizados } from "./gaveta-finalizados"
+import { IndicadorImpressora } from "./indicador-impressora"
 import { JanelaDespacho } from "./janela-despacho"
 import { MetricasFila } from "./metricas-fila"
 import { PainelMotoboys } from "./painel-motoboys"
@@ -419,7 +420,7 @@ export function PaginaFila({
     for (const pedido of chegaram) {
       if (pedido.impressoEm || enviadosParaImprimir.current.has(pedido.id)) continue
       enviadosParaImprimir.current.add(pedido.id)
-      impressao.imprimir(pedido)
+      impressao.imprimir(pedido, { automatica: true })
     }
   })
 
@@ -702,6 +703,7 @@ export function PaginaFila({
               }
             />
           )}
+          <IndicadorImpressora />
           {/* No celular, o Mais fica na linha da pausa, sem ocupar uma linha só para ele. */}
           <div className="flex items-center gap-2 max-md:w-full">
             {loja && agora && <PausaPedidos loja={loja} agora={agora} comEntrega={temEntrega} />}

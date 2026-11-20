@@ -1,10 +1,13 @@
 "use client"
 
 import { useEffect, useEffectEvent, useState } from "react"
+import { toast } from "sonner"
 import { useLoja } from "@/lib/admin/dados/consultas"
 import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import { useMarcarImpresso } from "@/lib/admin/dados/consultas-entrega"
 import type { Pedido } from "@/lib/admin/dados/tipos"
+import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
+import { situacaoDaImpressora, textoDaImpressora } from "@/lib/admin/regras/impressora"
 import { pedidoComAlcool } from "@/lib/admin/regras/maioridade"
 import { type ViaDoCupom, viasDoPedido } from "@/lib/admin/regras/vias"
 import { Cupom, useImpressora } from "./cupom"
@@ -36,7 +39,17 @@ export function useImpressaoDePedidos() {
   }, [atual])
 
   return {
-    imprimir: (pedido: Pedido) => {
+    /** `automatica`: a fila imprimiu sozinha o pedido que chegou (o aviso de falha diz isso). */
+    imprimir: (pedido: Pedido, { automatica = false }: { automatica?: boolean } = {}) => {
+      const situacao = situacaoDaImpressora(usePreferenciasFila.getState())
+      if (situacao !== "online") {
+        toast.error(
+          automatica
+            ? `A impressão automática falhou: #${pedido.numero} ficou sem cupom. ${textoDaImpressora(situacao)}.`
+            : `${textoDaImpressora(situacao)}: o cupom de #${pedido.numero} não saiu.`,
+        )
+        return
+      }
       const vias = viasDoPedido(loja ?? {}, pedido.tipo)
       // Canal sem via escolhida: sai a do cliente, para o pedido nunca ficar sem cupom.
       const escolhidas: ViaDoCupom[] = vias.length > 0 ? vias : ["cliente"]

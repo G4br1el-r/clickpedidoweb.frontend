@@ -652,7 +652,9 @@ describe("PaginaFila", () => {
     renderizar()
     const novos = await coluna("Novos")
     const tipo = (canal: string) =>
-      novos.getAllByRole("article").find((cartao) => within(cartao).queryByText(canal)) as HTMLElement
+      novos
+        .getAllByRole("article")
+        .find((cartao) => within(cartao).queryByText(canal)) as HTMLElement
     const imprimirDo = (cartao: HTMLElement) =>
       within(cartao).getByRole("button", { name: /^Imprimir cupom de #/ })
 
@@ -661,6 +663,38 @@ describe("PaginaFila", () => {
     imprimir.mockClear()
     await usuario.click(imprimirDo(tipo("Mesa 3")))
     await waitFor(() => expect(imprimir).toHaveBeenCalledTimes(1))
+  })
+
+  test("impressora offline: a barra mostra, o cupom não sai e a fila avisa", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    usePreferenciasFila.setState({ impressora: "agente", agenteLigado: false })
+    renderizar()
+    const [cartao] = (await coluna("Novos")).getAllByRole("article")
+    const numero = within(cartao).getByRole("heading").textContent ?? ""
+    expect(screen.getByText("Impressora offline")).toBeInTheDocument()
+
+    await usuario.click(within(cartao).getByRole("button", { name: `Imprimir cupom de ${numero}` }))
+    expect(
+      await screen.findByText(`Impressora offline: o cupom de ${numero} não saiu.`),
+    ).toBeInTheDocument()
+    expect(imprimir).not.toHaveBeenCalled()
+  })
+
+  test("impressão automática com a impressora offline: avisa que o pedido ficou sem cupom", async () => {
+    telaGrande()
+    const api = servidorDo("pizzaria")
+    await api.salvarLoja({ ...(await api.loja()), impressaoAutomatica: true })
+    usePreferenciasFila.setState({ simular: true, impressora: "agente", agenteLigado: false })
+    renderizar(300)
+    expect(
+      await screen.findByText(
+        /^A impressão automática falhou: #\d+ ficou sem cupom\./,
+        {},
+        { timeout: 8000 },
+      ),
+    ).toBeInTheDocument()
+    expect(imprimir).not.toHaveBeenCalled()
   })
 
   test("os detalhes do pedido também imprimem o cupom", async () => {
