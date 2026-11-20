@@ -48,6 +48,29 @@ describe("filtrarPedidos", () => {
     const doPdv = { ...PEDIDOS_DE_TESTE[0], id: 50, origem: "pdv" as const }
     expect(ids(filtrarPedidos([...PEDIDOS, doPdv], { origens: ["pdv"] }))).toEqual([50])
   })
+
+  test("filtra pelo cliente: o telefone, com ou sem máscara e o 55", () => {
+    const daAna = {
+      ...PEDIDOS_DE_TESTE[0],
+      id: 60,
+      cliente: { nome: "Ana", telefone: "+55 (12) 99123-4567" },
+    }
+    expect(ids(filtrarPedidos([...PEDIDOS, daAna], { clientes: ["12991234567"] }))).toEqual([60])
+  })
+
+  test("filtra pelo motivo do cancelamento; sem motivo, é Não informado", () => {
+    const comMotivo = {
+      ...PEDIDOS_DE_TESTE[0],
+      id: 70,
+      status: "cancelado" as const,
+      motivoCancelamento: "demora" as const,
+    }
+    expect(ids(filtrarPedidos([...PEDIDOS, comMotivo], { motivos: ["demora"] }))).toEqual([70])
+    // O pedido 3 dos pedidos de teste foi cancelado sem motivo.
+    expect(ids(filtrarPedidos([...PEDIDOS, comMotivo], { motivos: ["nao-informado"] }))).toEqual([
+      3,
+    ])
+  })
 })
 
 describe("totaisDaLista", () => {

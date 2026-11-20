@@ -116,4 +116,28 @@ describe("ListaPedidos", () => {
     )
     expect(numeros()).toHaveLength(9)
   })
+
+  test("o cliente e o motivo vêm do endereço, como etiquetas que tiram o filtro", async () => {
+    const usuario = userEvent.setup()
+    const daAna = {
+      ...PEDIDOS_DE_TESTE[0],
+      id: 60,
+      numero: 60,
+      cliente: { nome: "Ana", telefone: "12991234567" },
+    }
+    const { unmount } = renderizar([...PEDIDOS_DE_TESTE, daAna], undefined, "?cliente=12991234567")
+    expect(numeros()).toEqual(["#60"])
+    await usuario.click(
+      screen.getByRole("button", { name: "Tirar o filtro Cliente: (12) 99123-4567" }),
+    )
+    expect(numeros()).toHaveLength(9)
+    unmount()
+
+    // O pedido 3 foi cancelado sem motivo.
+    renderizar(PEDIDOS_DE_TESTE, undefined, "?motivo=nao-informado")
+    expect(numeros()).toEqual(["#3"])
+    expect(
+      screen.getByRole("button", { name: "Tirar o filtro Motivo: Não informado" }),
+    ).toBeInTheDocument()
+  })
 })

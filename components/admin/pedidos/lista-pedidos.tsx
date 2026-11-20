@@ -47,7 +47,12 @@ import {
 import type { Pedido } from "@/lib/admin/dados/tipos"
 import { contarPor, filtrarPedidos, totaisDaLista } from "@/lib/admin/regras/filtro-pedidos"
 import { formatarTelefone } from "@/lib/admin/regras/mensagens"
-import { rotuloCanal, rotuloOrigem, rotuloPagamento } from "@/lib/admin/regras/rotulos"
+import {
+  rotuloCanal,
+  rotuloMotivo,
+  rotuloOrigem,
+  rotuloPagamento,
+} from "@/lib/admin/regras/rotulos"
 import { rotuloStatusComum } from "@/lib/admin/regras/status"
 import { emReais, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
@@ -180,13 +185,48 @@ export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
         tipos: estado.canal,
         pagamentos: estado.pagamento,
         origens: estado.origem,
+        clientes: estado.cliente,
+        motivos: estado.motivo,
       }),
-    [pedidos, estado.busca, estado.status, estado.canal, estado.pagamento, estado.origem],
+    [
+      pedidos,
+      estado.busca,
+      estado.status,
+      estado.canal,
+      estado.pagamento,
+      estado.origem,
+      estado.cliente,
+      estado.motivo,
+    ],
   )
   const totais = totaisDaLista(filtrados)
   const temFiltro =
     estado.busca !== "" ||
-    estado.status.length + estado.canal.length + estado.pagamento.length + estado.origem.length > 0
+    estado.status.length +
+      estado.canal.length +
+      estado.pagamento.length +
+      estado.origem.length +
+      estado.cliente.length +
+      estado.motivo.length >
+      0
+  // Filtros que só chegam pelo endereço (das abas da visão geral): uma etiqueta para tirar cada um.
+  const etiquetas = [
+    ...estado.origem.map((origem) => ({
+      chave: `origem:${origem}`,
+      texto: `Origem: ${rotuloOrigem(origem)}`,
+      tirar: () => ({ origem: estado.origem.filter((outra) => outra !== origem) }),
+    })),
+    ...estado.cliente.map((telefone) => ({
+      chave: `cliente:${telefone}`,
+      texto: `Cliente: ${formatarTelefone(telefone)}`,
+      tirar: () => ({ cliente: estado.cliente.filter((outro) => outro !== telefone) }),
+    })),
+    ...estado.motivo.map((motivo) => ({
+      chave: `motivo:${motivo}`,
+      texto: `Motivo: ${rotuloMotivo(motivo === "nao-informado" ? undefined : motivo)}`,
+      tirar: () => ({ motivo: estado.motivo.filter((outro) => outro !== motivo) }),
+    })),
+  ]
 
   const paginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA))
   const ordenacao: SortingState = [{ id: estado.ordem, desc: estado.crescente !== "sim" }]
@@ -224,6 +264,8 @@ export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
       canal: null,
       pagamento: null,
       origem: null,
+      cliente: null,
+      motivo: null,
       pagina: null,
     })
 
@@ -267,21 +309,16 @@ export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
               setEstado({ pagamento: valores as typeof estado.pagamento, pagina: null })
             }
           />
-          {estado.origem.map((origem) => (
+          {etiquetas.map((etiqueta) => (
             <Button
-              key={origem}
+              key={etiqueta.chave}
               type="button"
               variant="outline"
               size="sm"
-              aria-label={`Tirar o filtro Origem: ${rotuloOrigem(origem)}`}
-              onClick={() =>
-                setEstado({
-                  origem: estado.origem.filter((outra) => outra !== origem),
-                  pagina: null,
-                })
-              }
+              aria-label={`Tirar o filtro ${etiqueta.texto}`}
+              onClick={() => setEstado({ ...etiqueta.tirar(), pagina: null })}
             >
-              Origem: {rotuloOrigem(origem)}
+              {etiqueta.texto}
               <XIcon data-icon="inline-end" />
             </Button>
           ))}
