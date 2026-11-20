@@ -87,7 +87,7 @@ afterEach(() => {
 describe("PaginaCozinha", () => {
   test("a fazer, preparando e prontos; iniciar e marcar pronto movem o ticket", async () => {
     telaGrande()
-    const { produto } = await comandaNaMesa(50)
+    const { produto, comanda } = await comandaNaMesa(50)
     const usuario = userEvent.setup()
     renderizar()
 
@@ -114,6 +114,12 @@ describe("PaginaCozinha", () => {
     // Da cozinha não se conclui nem se recebe a mesa: a conta fecha em Mesas.
     expect(pronto.queryByRole("button")).not.toBeInTheDocument()
     expect(pronto.getByText("Servir na mesa")).toBeInTheDocument()
+    // A fila fica sabendo que foi a Cozinha que marcou pronto.
+    expect((await api().pedidos.buscar(comanda.id))?.historico?.at(-1)).toMatchObject({
+      tipo: "etapa",
+      status: "pronto",
+      por: "cozinha",
+    })
   })
 
   test("rodada nova mostra só os itens novos; o que já foi servido fica à parte", async () => {

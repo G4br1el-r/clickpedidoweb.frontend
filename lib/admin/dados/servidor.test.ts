@@ -428,6 +428,18 @@ describe("servidor de demonstração", () => {
     expect(rodada.servidoEm).toBeUndefined()
   })
 
+  test("avançar pela Cozinha marca no evento da etapa que foi a Cozinha", async () => {
+    const api = servidor()
+    const [preparo] = await api.pedidos.listar({ status: ["em-preparo"] })
+    const pronto = await api.pedidos.avancar(preparo.id, "em-preparo", "cozinha")
+    expect(pronto.historico?.at(-1)).toEqual({
+      tipo: "etapa",
+      status: "pronto",
+      em: AGORA.toISOString(),
+      por: "cozinha",
+    })
+  })
+
   test("um pedido simulado chega como novo, com o número seguinte", async () => {
     const api = servidor()
     const [ultimo] = await api.pedidos.listar()

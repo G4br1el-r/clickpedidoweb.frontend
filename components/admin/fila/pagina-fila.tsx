@@ -68,6 +68,7 @@ import {
 } from "@/lib/admin/preferencias-fila"
 import { alarmeTocando } from "@/lib/admin/regras/aceite"
 import { type HistoricoCliente, seloDoCliente } from "@/lib/admin/regras/clientes"
+import { estaNaCozinha } from "@/lib/admin/regras/cozinha"
 import { entregasParaAgrupar, situacaoDosMotoboys } from "@/lib/admin/regras/despacho"
 import {
   type ColunaFila,
@@ -340,6 +341,7 @@ function Coluna({
                 aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
                 despacha={acoes.despacha && pedido.tipo === "entrega" && pedido.status === "pronto"}
                 maioridade={acoes.comAlcool(pedido)}
+                naCozinha={estaNaCozinha(pedido)}
                 aoAvancar={() => acoes.avancar(pedido)}
                 aoServir={() => acoes.servir(pedido)}
                 aoAbrir={() => acoes.abrir(pedido)}

@@ -2,7 +2,7 @@ import type { Pedido } from "../dados/tipos"
 import { prazoDoPedido, type TemposDaLoja } from "./prazo"
 
 /** Os alertas secundários da fila; cada um tem chave e som próprios no Este aparelho. */
-export const CHAVES_DOS_ALERTAS = ["parado", "atraso", "pago", "cancelou"] as const
+export const CHAVES_DOS_ALERTAS = ["parado", "atraso", "pago", "cancelou", "cozinha"] as const
 export type ChaveDoAlerta = (typeof CHAVES_DOS_ALERTAS)[number]
 
 export type AlertaDaFila = {
@@ -95,6 +95,22 @@ export function alertasDaFila({
         chave: "pago",
         pedido,
         texto: `${numero}: pagamento online confirmado`,
+      })
+    }
+    const prontoPelaCozinha = pedido.historico
+      ?.filter((evento) => evento.tipo === "etapa" && evento.status === "pronto")
+      .at(-1)
+    if (
+      pedido.status === "pronto" &&
+      prontoPelaCozinha?.tipo === "etapa" &&
+      prontoPelaCozinha.por === "cozinha" &&
+      prontoPelaCozinha.em >= desde
+    ) {
+      alertas.push({
+        id: `cozinha-${pedido.id}`,
+        chave: "cozinha",
+        pedido,
+        texto: `${numero} ficou pronto na Cozinha`,
       })
     }
     const cancelamento = pedido.cancelamento

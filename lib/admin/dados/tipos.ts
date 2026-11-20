@@ -85,8 +85,11 @@ export type MotivoCancelamento =
   | "outro"
 
 /** Uma linha da linha do tempo do pedido. A chegada não entra: é o `criadoEm`. */
+/** Outra tela que mudou a etapa (a fila é o padrão). */
+export type QuemMudou = "cozinha"
+
 export type EventoPedido =
-  | { tipo: "etapa"; status: StatusPedido; em: string }
+  | { tipo: "etapa"; status: StatusPedido; em: string; por?: QuemMudou }
   | { tipo: "pago" | "impresso" | "aceito" | "servido"; em: string }
   /** Mensagem que a loja mandou ao cliente (simulada): o texto que teria saído. */
   | { tipo: "aviso"; em: string; texto: string }

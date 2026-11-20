@@ -50,7 +50,7 @@ export const usePreferenciasFila = create<Preferencias>()(
       vibrar: false,
       telaAcesa: false,
       compacto: false,
-      alertas: { parado: true, atraso: true, pago: true, cancelou: true },
+      alertas: { parado: true, atraso: true, pago: true, cancelou: true, cozinha: true },
       paradoMin: 10,
       ligarAlerta: (chave, ligado) =>
         set((estado) => ({ alertas: { ...estado.alertas, [chave]: ligado } })),
@@ -64,6 +64,11 @@ export const usePreferenciasFila = create<Preferencias>()(
       name: "clickpedido-admin-fila",
       version: 1,
       skipHydration: true,
+      // Os alertas salvos misturam com os de fábrica: alerta novo vem ligado.
+      merge: (salvo, atual) => {
+        const guardado = (salvo ?? {}) as Partial<Preferencias>
+        return { ...atual, ...guardado, alertas: { ...atual.alertas, ...guardado.alertas } }
+      },
       partialize: ({
         somLigado,
         tipoSom,

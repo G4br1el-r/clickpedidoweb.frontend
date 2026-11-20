@@ -332,7 +332,7 @@ describe("PaginaFila", () => {
   test("alerta secundário desligado no Este aparelho não avisa", async () => {
     telaGrande()
     usePreferenciasFila.setState({
-      alertas: { parado: false, atraso: false, pago: true, cancelou: true },
+      alertas: { parado: false, atraso: false, pago: true, cancelou: true, cozinha: true },
     })
     renderizar()
     await coluna("Prontos")

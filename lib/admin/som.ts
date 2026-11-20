@@ -88,6 +88,7 @@ const AVISOS: Record<ChaveDoAlerta, Alerta> = {
   atraso: { volume: 0.2, notas: duasNotas(988, 784) },
   pago: { volume: 0.2, notas: duasNotas(784, 1175) },
   cancelou: { volume: 0.2, notas: duasNotas(523, 392) },
+  cozinha: { volume: 0.2, notas: duasNotas(880, 1047) },
 }
 
 function duasNotas(primeira: number, segunda: number): Nota[] {

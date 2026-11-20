@@ -6,6 +6,7 @@ import {
   BellRingIcon,
   BikeIcon,
   CalendarIcon,
+  ChefHatIcon,
   ChevronUpIcon,
   ClockIcon,
   IdCardIcon,
@@ -107,6 +108,7 @@ export function CartaoFila({
   selecao,
   despacha = false,
   maioridade = false,
+  naCozinha = false,
   aoAceitar,
   aoRecusar,
   aoCancelar,
@@ -135,6 +137,8 @@ export function CartaoFila({
   despacha?: boolean
   /** Adega: o pedido tem bebida alcoólica e só sai com documento (+18). */
   maioridade?: boolean
+  /** O pedido está na tela da Cozinha (a fazer ou preparando). */
+  naCozinha?: boolean
   aoAceitar: () => void
   aoRecusar: (escolhido: MotivoEscolhido) => void
   aoCancelar: (escolhido: MotivoEscolhido) => void
@@ -240,6 +244,12 @@ export function CartaoFila({
                 {canal}
               </span>
               <Badge variant="outline">{rotuloOrigem(pedido.origem)}</Badge>
+              {naCozinha && (
+                <Badge variant="outline" className="gap-1">
+                  <ChefHatIcon aria-hidden="true" />
+                  Na cozinha
+                </Badge>
+              )}
               {aPesar && (
                 <Badge variant="secondary" className="gap-1">
                   <ScaleIcon aria-hidden="true" />A pesar

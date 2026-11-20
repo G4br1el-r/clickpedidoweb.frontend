@@ -73,7 +73,9 @@ for (const tema of ["light", "dark"] as const) {
       localStorage.setItem(
         "clickpedido-admin-fila",
         JSON.stringify({
-          state: { alertas: { parado: false, atraso: false, pago: false, cancelou: false } },
+          state: {
+            alertas: { parado: false, atraso: false, pago: false, cancelou: false, cozinha: false },
+          },
           version: 1,
         }),
       ),

@@ -36,4 +36,22 @@ describe("usePreferenciasFila", () => {
       simular: false,
     })
   })
+
+  test("alerta novo vem ligado mesmo para quem já tinha os alertas salvos", async () => {
+    localStorage.setItem(
+      "clickpedido-admin-fila",
+      JSON.stringify({
+        state: { alertas: { parado: false, atraso: true, pago: true, cancelou: true } },
+        version: 1,
+      }),
+    )
+    await usePreferenciasFila.persist.rehydrate()
+    expect(usePreferenciasFila.getState().alertas).toEqual({
+      parado: false,
+      atraso: true,
+      pago: true,
+      cancelou: true,
+      cozinha: true,
+    })
+  })
 })

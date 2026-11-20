@@ -18,6 +18,7 @@ const VARIOS: Record<ChaveDoAlerta, string> = {
   atraso: "pedidos perto de atrasar",
   pago: "pagamentos online confirmados",
   cancelou: "pedidos cancelados pelo cliente",
+  cozinha: "pedidos prontos na Cozinha",
 }
 
 /**

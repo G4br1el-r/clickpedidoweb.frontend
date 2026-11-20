@@ -49,6 +49,7 @@ import type {
   PausaPedidos,
   Pedido,
   Produto,
+  QuemMudou,
   StatusPedido,
   TipoMovimento,
   TipoPedido,
@@ -453,6 +454,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     id: number,
     mudar: (pedido: Pedido, base: BaseLoja) => Pedido,
     estoque?: { conferir?: boolean; tipo?: TipoMovimento },
+    /** Quem mudou a etapa, quando não foi a fila (a Cozinha): fica no evento. */
+    por?: QuemMudou,
   ): Promise<Pedido> {
     const base = await carregar()
     const indice = base.pedidos.findIndex((pedido) => pedido.id === id)
@@ -462,7 +465,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const mudado = mudar(antes, base)
     // Toda ação passa por aqui: a linha do tempo se escreve sozinha.
     const eventos = [
-      ...eventosDaMudanca(antes, mudado, agora),
+      ...eventosDaMudanca(antes, mudado, agora).map((evento) =>
+        por && evento.tipo === "etapa" ? { ...evento, por } : evento,
+      ),
       ...avisoAoCliente(base, antes, mudado, agora),
     ]
     const novo = {
@@ -760,8 +765,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       },
 
       /** `de`: a etapa que a tela mostrava. Outra aba pode ter mudado o pedido antes. */
-      avancar(id: number, de: StatusPedido) {
-        return alterar(id, (pedido) => avancado(pedido, de))
+      /** `por`: a Cozinha, quando é ela que muda a etapa (a fila avisa). */
+      avancar(id: number, de: StatusPedido, por?: QuemMudou) {
+        return alterar(id, (pedido) => avancado(pedido, de), undefined, por)
       },
 
       /**

@@ -152,5 +152,6 @@ describe("tocarAviso", () => {
     expect(tocadas("atraso").frequencias).toEqual([988, 784])
     expect(tocadas("pago").frequencias).toEqual([784, 1175])
     expect(tocadas("cancelou").frequencias).toEqual([523, 392])
+    expect(tocadas("cozinha").frequencias).toEqual([880, 1047])
   })
 })

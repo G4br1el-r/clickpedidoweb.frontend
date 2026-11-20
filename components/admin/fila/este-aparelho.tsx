@@ -225,6 +225,13 @@ export function EsteAparelho({ loja }: { loja: ConfigLoja | undefined }) {
             aoMudar={(ligado) => preferencias.ligarAlerta("pago", ligado)}
           />
           <Linha
+            id="alerta-cozinha"
+            rotulo="Pronto na Cozinha"
+            detalhe="Quando a Cozinha marca um pedido pronto."
+            marcada={preferencias.alertas.cozinha}
+            aoMudar={(ligado) => preferencias.ligarAlerta("cozinha", ligado)}
+          />
+          <Linha
             id="alerta-cancelou"
             rotulo="Cliente cancelou"
             detalhe="Quando o cliente cancela pelo site."
