@@ -68,6 +68,16 @@ for (const tema of ["light", "dark"] as const) {
 
   test(`painel: fila (${tema})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    // Sem os alertas secundários: o aviso deles vem e vai com o tempo e mexeria na imagem.
+    await page.addInitScript(() =>
+      localStorage.setItem(
+        "clickpedido-admin-fila",
+        JSON.stringify({
+          state: { alertas: { parado: false, atraso: false, pago: false, cancelou: false } },
+          version: 1,
+        }),
+      ),
+    )
     await page.goto("/admin/fila")
     await expect(page.locator("article").first()).toBeVisible({ timeout: 15_000 })
     await page.waitForLoadState("networkidle")
