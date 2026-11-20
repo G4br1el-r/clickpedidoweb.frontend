@@ -14,7 +14,8 @@
       "!test-results",
       "!playwright-report",
       "!.impeccable",
-      "!DESIGN.md"
+      "!DESIGN.md",
+      "!.superpowers"
     ]
   },
   "formatter": { "enabled": true, "indentStyle": "space", "indentWidth": 2, "lineWidth": 100 },

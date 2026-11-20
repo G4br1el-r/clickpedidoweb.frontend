@@ -827,13 +827,13 @@ Antes de mudar o visual, conferir que `painel-mesas-*` está atualizado com a Fa
 - **Esquema do salão:** o couvert passa a aceitar só centavos inteiros ("Informe o couvert em reais e centavos."). A taxa aceita até 2 casas.
 - **Menu ⋯:** o botão fica sempre visível, ao lado do cartão (não dentro dele), e por isso serve também no celular. Não há toque longo. Os itens por estado são:
 
-  | Estado                             | Itens                                         |
-  | ---------------------------------- | --------------------------------------------- |
-  | livre, reservada                   | Abrir comanda, Editar, Bloquear, Excluir      |
-  | limpeza                            | Marcar limpa, Editar, Bloquear, Excluir       |
-  | ocupada, na cozinha, servir, conta | Abrir comanda, Editar                         |
-  | bloqueada                          | Desbloquear, Editar, Excluir                  |
-  | juntada                            | Abrir comanda (abre a principal, na Fase 5)   |
+  | Estado                             | Itens                                       |
+  | ---------------------------------- | ------------------------------------------- |
+  | livre, reservada                   | Abrir comanda, Editar, Bloquear, Excluir    |
+  | limpeza                            | Marcar limpa, Editar, Bloquear, Excluir     |
+  | ocupada, na cozinha, servir, conta | Abrir comanda, Editar                       |
+  | bloqueada                          | Desbloquear, Editar, Excluir                |
+  | juntada                            | Abrir comanda (abre a principal, na Fase 5) |
 
 - **Atalhos:** a lógica é pura (`lerTecla`). Os dígitos acumulam até 3 e aparecem num aviso discreto ("Mesa 12 ↵"), que some depois de 2 s sem tecla.
   - Enter abre a mesa. Número que não existe avisa "Não existe a mesa 12.".
@@ -876,19 +876,31 @@ export function indicadoresSalao(entrada: {
 // lib/admin/regras/filtro-mesas.ts
 export type FiltroEstadoMesa = EstadoMesa // "ocupada" junta as ocupadas
 export type FiltrosMesas = {
-  busca: string; area: string | null; estado: FiltroEstadoMesa | null
-  garcom: string | null; atencao: boolean
+  busca: string
+  area: string | null
+  estado: FiltroEstadoMesa | null
+  garcom: string | null
+  atencao: boolean
 }
 export type OrdemMesas = "numero" | "tempo"
 export type MesaNaGrade = {
-  mesa: Mesa; comanda?: Pedido
-  estado: ReturnType<typeof estadoDaMesa>; alertas: AlertaMesa[]
+  mesa: Mesa
+  comanda?: Pedido
+  estado: ReturnType<typeof estadoDaMesa>
+  alertas: AlertaMesa[]
 }
-export function filtrarMesas(linhas: MesaNaGrade[], filtros: FiltrosMesas, ordem: OrdemMesas): MesaNaGrade[]
+export function filtrarMesas(
+  linhas: MesaNaGrade[],
+  filtros: FiltrosMesas,
+  ordem: OrdemMesas,
+): MesaNaGrade[]
 
 // lib/admin/regras/atalhos-mesas.ts
 export type AcaoAtalho =
-  | { tipo: "nenhuma" } | { tipo: "buscar" } | { tipo: "nova-mesa" } | { tipo: "ajuda" }
+  | { tipo: "nenhuma" }
+  | { tipo: "buscar" }
+  | { tipo: "nova-mesa" }
+  | { tipo: "ajuda" }
   | { tipo: "abrir-mesa"; numero: number }
 export function lerTecla(
   digitado: string,
