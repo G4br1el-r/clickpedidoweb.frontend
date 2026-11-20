@@ -936,6 +936,45 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return alterar(id, (pedido) => ({ ...pedido, impressoEm: new Date().toISOString() }))
       },
 
+      /**
+       * Despachar: as entregas prontas saem com o motoboy (uma rota, se forem várias). O que
+       * não é entrega pronta fica de fora.
+       */
+      async despachar(ids: number[], motoboyId: string) {
+        const { motoboys } = await carregar()
+        if (!motoboys.some((item) => item.id === motoboyId && item.ativo)) {
+          throw new Error("Motoboy não encontrado ou inativo")
+        }
+        const despachados: Pedido[] = []
+        let pulados = 0
+        for (const id of ids) {
+          try {
+            despachados.push(
+              await alterar(id, (pedido) => {
+                if (pedido.tipo !== "entrega") throw new Error("Só entrega se despacha.")
+                return { ...avancado(pedido, "pronto"), motoboyId }
+              }),
+            )
+          } catch {
+            pulados += 1
+          }
+        }
+        return { despachados, pulados }
+      },
+
+      /** O motoboy voltou: o que ele levava foi entregue (e cobrado); fica disponível de novo. */
+      async motoboyVoltou(motoboyId: string): Promise<Pedido[]> {
+        const { pedidos } = await carregar()
+        const naRua = pedidos.filter(
+          (pedido) => pedido.motoboyId === motoboyId && pedido.status === "saiu-para-entrega",
+        )
+        const entregues: Pedido[] = []
+        for (const pedido of naRua) {
+          entregues.push(await alterar(pedido.id, (atual) => avancado(atual, "saiu-para-entrega")))
+        }
+        return entregues
+      },
+
       atribuirMotoboy(id: number, motoboyId: string) {
         return alterar(id, (pedido, base) => {
           if (pedido.tipo !== "entrega") throw new Error("Só pedido de entrega tem motoboy")

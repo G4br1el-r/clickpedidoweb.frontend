@@ -399,6 +399,55 @@ describe("servidor de demonstração", () => {
     expect((await api.pedidos.listar())[0].id).toBe(novo.id)
   })
 
+  describe("despacho", () => {
+    /** Entregas prontas: as que já estão e as em preparo que ficam prontas agora. */
+    async function entregasProntas(api: Servidor, quantas: number) {
+      const abertas = await api.pedidos.listar({ status: ["em-preparo", "pronto"] })
+      const entregas = abertas.filter((pedido) => pedido.tipo === "entrega").slice(0, quantas)
+      for (const pedido of entregas) {
+        if (pedido.status === "em-preparo") await api.pedidos.avancar(pedido.id, "em-preparo")
+      }
+      if (entregas.length < quantas) throw new Error("A demonstração devia ter entregas abertas")
+      return entregas.map((pedido) => pedido.id)
+    }
+
+    test("despachar leva as entregas prontas com o motoboy, numa rota só; o resto fica", async () => {
+      const api = servidor()
+      const [primeira, segunda] = await entregasProntas(api, 2)
+      const [retirada] = (await api.pedidos.listar({ status: ["recebido"] })).filter(
+        (pedido) => pedido.tipo === "retirada",
+      )
+
+      const { despachados, pulados } = await api.pedidos.despachar(
+        [primeira, segunda, retirada.id],
+        "moto-1",
+      )
+      expect(despachados.map((pedido) => [pedido.id, pedido.status, pedido.motoboyId])).toEqual([
+        [primeira, "saiu-para-entrega", "moto-1"],
+        [segunda, "saiu-para-entrega", "moto-1"],
+      ])
+      expect(pulados).toBe(1)
+      await expect(api.pedidos.despachar([primeira], "moto-9")).rejects.toThrow(
+        "Motoboy não encontrado ou inativo",
+      )
+    })
+
+    test("motoboy voltou: as entregas dele ficam entregues (e cobradas)", async () => {
+      const api = servidor()
+      const ids = await entregasProntas(api, 2)
+      await api.pedidos.despachar(ids, "moto-1")
+
+      const entregues = await api.pedidos.motoboyVoltou("moto-1")
+      // Tudo o que ele levava, inclusive o que já estava na rua antes.
+      expect(entregues.map((pedido) => pedido.id)).toEqual(expect.arrayContaining(ids))
+      for (const pedido of entregues) {
+        expect(pedido.status).toBe("concluido")
+        expect(pedido.situacaoPagamento).toBe("pago")
+      }
+      expect(await api.pedidos.motoboyVoltou("moto-1")).toEqual([])
+    })
+  })
+
   describe("voltar uma etapa", () => {
     test("desfaz o avanço e entra na linha do tempo; só a partir da etapa que a tela viu", async () => {
       const api = servidor()
