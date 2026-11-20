@@ -1,12 +1,19 @@
 "use client"
 
 import NumberFlow from "@number-flow/react"
-import { ChefHatIcon, MaximizeIcon } from "lucide-react"
+import { ChefHatIcon, ClipboardListIcon, MaximizeIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
 import { parseAsStringLiteral, useQueryState } from "nuqs"
 import { useRef, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import {
+  Drawer,
+  DrawerContent,
+  DrawerDescription,
+  DrawerHeader,
+  DrawerTitle,
+} from "@/components/ui/drawer"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
 import {
@@ -58,15 +65,20 @@ import {
   type TicketCozinha as Ticket,
 } from "@/lib/admin/regras/cozinha"
 import { type VisaoDePraca, viasDoTicket } from "@/lib/admin/regras/pracas"
+import { esgotados, resumoDeProducao } from "@/lib/admin/regras/producao"
 import { tomDoStatus } from "@/lib/admin/regras/status"
 import { tocarAlerta } from "@/lib/admin/som"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { useFilaDeVias } from "../impressao/via-cozinha"
 import { Traco } from "../traco"
 import { AjustesCozinha } from "./ajustes-cozinha"
+import { AtalhosCozinha } from "./atalhos-cozinha"
+import { ESCALA_DO_QUADRO, ExibicaoCozinha } from "./exibicao-cozinha"
 import { MaisTarde } from "./mais-tarde"
+import { ResumoProducao } from "./resumo-producao"
 import { nomeDoTicket, TicketCozinha } from "./ticket-cozinha"
 import { TracoDePraca } from "./traco-de-praca"
+import { useAtalhosDaCozinha } from "./use-atalhos-da-cozinha"
 import { useSonsDaCozinha } from "./use-sons-da-cozinha"
 import { useViasDaCozinha } from "./use-vias-da-cozinha"
 
@@ -109,6 +121,8 @@ function Coluna({
   aoReimprimir,
   esgotaveis,
   aoEsgotar,
+  destacados,
+  compacto,
   comTitulo,
 }: {
   coluna: ColunaCozinha
@@ -128,6 +142,9 @@ function Coluna({
   aoReimprimir: (ticket: Ticket) => void
   esgotaveis: (ticket: Ticket) => Produto[]
   aoEsgotar: (produto: { id: string; nome: string }) => void
+  /** Com um produto tocado no resumo: os tickets dele. Os outros ficam apagados. */
+  destacados: Set<string> | null
+  compacto: boolean
   comTitulo: boolean
 }) {
   return (
@@ -169,6 +186,8 @@ function Coluna({
               aoReimprimir={() => aoReimprimir(ticket)}
               esgotaveis={esgotaveis(ticket)}
               aoEsgotar={aoEsgotar}
+              apagado={destacados ? !destacados.has(ticket.id) : false}
+              compacto={compacto}
             />
           ))}
         </AnimatePresence>
@@ -226,10 +245,56 @@ export function PaginaCozinha({
   const ligarSom = usePreferenciasFila((estado) => estado.ligarSom)
   const tipoSom = useSomDoAparelho()
   const quadro = useRef<HTMLDivElement>(null)
+  const tamanho = usePreferenciasFila((estado) => estado.tamanho)
+  const compacto = usePreferenciasFila((estado) => estado.compacto)
+  const [resumoAberto, setResumoAberto] = useState(false)
+  const [ajudaAberta, setAjudaAberta] = useState(false)
+  // A última ação com Desfazer ainda na tela: o Z do teclado desfaz.
+  const ultimoDesfazer = useRef<{ id: string | number; desfazer: () => void } | null>(null)
+  const [destaque, setDestaque] = useState<string | null>(null)
 
   const colunas = pedidos && agora ? colunasDaCozinha(pedidos, filtro, agora, tempos, visao) : null
   const maisTarde =
     pedidos && agora ? maisTardeNaCozinha(pedidos, filtro, agora, tempos, visao) : []
+  const producao = colunas ? resumoDeProducao(colunas) : []
+  const doQuadro = (id: string) =>
+    colunas?.flatMap((coluna) => coluna.tickets).find((ticket) => ticket.id === id)
+  useAtalhosDaCozinha({
+    ligado: telaGrande && aba === "quadro",
+    grade: (colunas ?? []).map((coluna) => coluna.tickets.map((ticket) => ticket.id)),
+    aoAvancar: (id) => {
+      const ticket = doQuadro(id)
+      if (!ticket || ticket.status === "pronto" || ticket.pedido.status === "cancelado") return null
+      // Na praça, o ticket em preparo fica pronto só na parte dela.
+      if (pracaAtual && ticket.status === "em-preparo") {
+        aoProntoNaPraca(ticket)
+        return "pronto"
+      }
+      aoAvancar(ticket)
+      return ticket.status === "recebido" ? "em-preparo" : "pronto"
+    },
+    aoPriorizar: (id) => {
+      const ticket = doQuadro(id)
+      if (ticket) aoPriorizar(ticket, !ticket.pedido.prioridade)
+    },
+    aoAjuda: () => setAjudaAberta(true),
+    aoDesfazer: () => {
+      const ultimo = ultimoDesfazer.current
+      if (!ultimo) return
+      ultimoDesfazer.current = null
+      toast.dismiss(ultimo.id)
+      ultimo.desfazer()
+    },
+    aoRiscar: (id, posicao) => {
+      const ticket = doQuadro(id)
+      const item = ticket?.itens[posicao - 1]
+      if (ticket && item && ticket.pedido.status !== "cancelado") {
+        aoRiscar(ticket, item, !item.feitoEm)
+      }
+    },
+  })
+  const linhaDestacada = producao.find((linha) => linha.chave === destaque)
+  const destacados = linhaDestacada ? new Set(linhaDestacada.tickets) : null
   useViasDaCozinha({
     pedidos,
     agora,
@@ -250,12 +315,30 @@ export function PaginaCozinha({
       }),
     )
   const aoErrar = (erro: Error) => toast.error(erro.message)
+  /**
+   * Aviso com Desfazer. Enquanto ele está na tela, o Z do teclado faz o mesmo que o botão.
+   */
+  const comDesfazer = (mensagem: string, desfazer: () => void) => {
+    const esquecer = () => {
+      if (ultimoDesfazer.current?.id === id) ultimoDesfazer.current = null
+    }
+    const id = toast(mensagem, {
+      duration: 6_000,
+      action: {
+        label: "Desfazer",
+        onClick: () => {
+          esquecer()
+          desfazer()
+        },
+      },
+      onDismiss: esquecer,
+      onAutoClose: esquecer,
+    })
+    ultimoDesfazer.current = { id, desfazer }
+  }
   /** O avanço e a volta avisam para onde o ticket foi, com Desfazer para o toque errado. */
   const avisar = (ticket: Ticket, para: StatusTicket, desfazer: () => void) =>
-    toast(`${nomeDoTicket(ticket)} foi para ${NOME_DA_COLUNA[para]}.`, {
-      duration: 6_000,
-      action: { label: "Desfazer", onClick: desfazer },
-    })
+    comDesfazer(`${nomeDoTicket(ticket)} foi para ${NOME_DA_COLUNA[para]}.`, desfazer)
   const aoAvancar = (ticket: Ticket) => {
     const mudanca = { id: ticket.pedido.id, rodada: ticket.rodada, de: ticket.status }
     const para: StatusTicket = ticket.status === "recebido" ? "em-preparo" : "pronto"
@@ -307,19 +390,32 @@ export function PaginaCozinha({
       {
         onError: aoErrar,
         onSuccess: () =>
-          toast(`${produto.nome} acabou e saiu do cardápio.`, {
-            duration: 6_000,
-            action: {
-              label: "Desfazer",
-              onClick: () =>
-                alternarProduto.mutate(
-                  { id: produto.id, campo: "disponivel" },
-                  { onError: aoErrar },
-                ),
-            },
-          }),
+          comDesfazer(`${produto.nome} acabou e saiu do cardápio.`, () =>
+            alternarProduto.mutate({ id: produto.id, campo: "disponivel" }, { onError: aoErrar }),
+          ),
       },
     )
+  /** Voltou: o produto esgotado volta ao cardápio. */
+  const aoVoltarAoCardapio = (produto: { id: string; nome: string }) =>
+    alternarProduto.mutate(
+      { id: produto.id, campo: "disponivel" },
+      { onError: aoErrar, onSuccess: () => toast(`${produto.nome} voltou ao cardápio.`) },
+    )
+  const resumo = (
+    <ResumoProducao
+      linhas={producao}
+      produtos={produtos ?? []}
+      esgotados={esgotados(produtos ?? [])}
+      destaque={destaque}
+      aoDestacar={(chave) => {
+        setDestaque(chave)
+        // No celular, a gaveta cobre o quadro: fecha para mostrar o destaque.
+        if (!telaGrande) setResumoAberto(false)
+      }}
+      aoAcabar={aoEsgotar}
+      aoVoltar={aoVoltarAoCardapio}
+    />
+  )
   const emAndamento =
     avancar.isPending && avancar.variables
       ? `${avancar.variables.id}:${avancar.variables.rodada}`
@@ -368,6 +464,7 @@ export function PaginaCozinha({
         </TabsList>
 
         {vias.elemento}
+        <AtalhosCozinha aberta={ajudaAberta} aoMudar={setAjudaAberta} />
         <TabsContent value="ajustes">
           <AjustesCozinha />
         </TabsContent>
@@ -409,6 +506,20 @@ export function PaginaCozinha({
                 </SelectContent>
               </Select>
             )}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              aria-expanded={resumoAberto}
+              onClick={() => setResumoAberto((aberto) => !aberto)}
+            >
+              <ClipboardListIcon data-icon="inline-start" />
+              Em produção
+              <span className="tabular-nums text-muted-foreground">
+                {producao.reduce((soma, linha) => soma + linha.quantidade, 0)}
+              </span>
+            </Button>
+            <ExibicaoCozinha />
             <div className="flex items-center gap-2">
               <Switch
                 id="cozinha-alerta"
@@ -432,98 +543,132 @@ export function PaginaCozinha({
             aoIniciar={aoAvancar}
           />
 
-          {!colunas || !agora ? (
-            // Esqueleto no formato do quadro: as pistas com o título e dois tickets.
+          <div className="flex items-start gap-6">
+            {/* O tamanho muda só a escala do quadro. */}
             <div
-              role="status"
-              aria-label="Carregando a cozinha"
-              className="grid gap-3 md:grid-cols-3"
+              data-tamanho={tamanho}
+              style={{ zoom: ESCALA_DO_QUADRO[tamanho] ?? 1 }}
+              className="min-w-0 flex-1"
             >
-              {[0, 1, 2].map((indice) => (
-                <div key={indice} className="flex flex-col gap-2.5 max-md:not-first:hidden">
-                  <Skeleton className="mb-1 h-4 w-24" />
-                  <Skeleton className="h-48 rounded-xl" />
-                  <Skeleton className="h-36 rounded-xl" />
+              {!colunas || !agora ? (
+                // Esqueleto no formato do quadro: as pistas com o título e dois tickets.
+                <div
+                  role="status"
+                  aria-label="Carregando a cozinha"
+                  className="grid gap-3 md:grid-cols-3"
+                >
+                  {[0, 1, 2].map((indice) => (
+                    <div key={indice} className="flex flex-col gap-2.5 max-md:not-first:hidden">
+                      <Skeleton className="mb-1 h-4 w-24" />
+                      <Skeleton className="h-48 rounded-xl" />
+                      <Skeleton className="h-36 rounded-xl" />
+                    </div>
+                  ))}
                 </div>
-              ))}
+              ) : colunas.every((coluna) => coluna.tickets.length === 0) ? (
+                <Empty className="border border-dashed">
+                  <EmptyHeader>
+                    <EmptyMedia variant="icon">
+                      <ChefHatIcon />
+                    </EmptyMedia>
+                    <EmptyTitle>Nada para preparar</EmptyTitle>
+                    <EmptyDescription>
+                      Os pedidos e as rodadas novas aparecem aqui sozinhos.
+                    </EmptyDescription>
+                  </EmptyHeader>
+                </Empty>
+              ) : telaGrande ? (
+                <div className="grid grid-cols-3 items-stretch divide-x divide-border/70">
+                  {colunas.map((coluna) => (
+                    <Coluna
+                      key={coluna.id}
+                      coluna={coluna}
+                      agora={agora}
+                      tempos={tempos}
+                      prazos={loja?.prazos}
+                      praca={pracaAtual?.nome}
+                      aoProntoNaPraca={aoProntoNaPraca}
+                      emAndamento={emAndamento}
+                      aoAvancar={aoAvancar}
+                      aoRiscar={aoRiscar}
+                      aoVoltar={aoVoltar}
+                      aoPriorizar={aoPriorizar}
+                      aoCiente={aoCiente}
+                      aoAvisar={aoAvisar}
+                      aoReimprimir={aoReimprimir}
+                      esgotaveis={esgotaveis}
+                      aoEsgotar={aoEsgotar}
+                      destacados={destacados}
+                      compacto={compacto}
+                      comTitulo
+                    />
+                  ))}
+                </div>
+              ) : (
+                <Tabs defaultValue={colunas[0].id}>
+                  <TabsList className="w-full">
+                    {colunas.map((coluna) => (
+                      // Texto da aba inativa mais forte: o padrão não passa no contraste sobre o fundo cinza.
+                      <TabsTrigger
+                        key={coluna.id}
+                        value={coluna.id}
+                        className="gap-1.5 text-foreground/80 dark:text-foreground/80"
+                      >
+                        <Traco tom={tomDoStatus(coluna.status)} />
+                        {coluna.titulo}
+                        <span className="text-xs tabular-nums">{coluna.tickets.length}</span>
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  {colunas.map((coluna) => (
+                    <TabsContent key={coluna.id} value={coluna.id}>
+                      <Coluna
+                        coluna={coluna}
+                        agora={agora}
+                        tempos={tempos}
+                        prazos={loja?.prazos}
+                        praca={pracaAtual?.nome}
+                        aoProntoNaPraca={aoProntoNaPraca}
+                        emAndamento={emAndamento}
+                        aoAvancar={aoAvancar}
+                        aoRiscar={aoRiscar}
+                        aoVoltar={aoVoltar}
+                        aoPriorizar={aoPriorizar}
+                        aoCiente={aoCiente}
+                        aoAvisar={aoAvisar}
+                        aoReimprimir={aoReimprimir}
+                        esgotaveis={esgotaveis}
+                        aoEsgotar={aoEsgotar}
+                        destacados={destacados}
+                        compacto={compacto}
+                        comTitulo={false}
+                      />
+                    </TabsContent>
+                  ))}
+                </Tabs>
+              )}
             </div>
-          ) : colunas.every((coluna) => coluna.tickets.length === 0) ? (
-            <Empty className="border border-dashed">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <ChefHatIcon />
-                </EmptyMedia>
-                <EmptyTitle>Nada para preparar</EmptyTitle>
-                <EmptyDescription>
-                  Os pedidos e as rodadas novas aparecem aqui sozinhos.
-                </EmptyDescription>
-              </EmptyHeader>
-            </Empty>
-          ) : telaGrande ? (
-            <div className="grid grid-cols-3 items-stretch divide-x divide-border/70">
-              {colunas.map((coluna) => (
-                <Coluna
-                  key={coluna.id}
-                  coluna={coluna}
-                  agora={agora}
-                  tempos={tempos}
-                  prazos={loja?.prazos}
-                  praca={pracaAtual?.nome}
-                  aoProntoNaPraca={aoProntoNaPraca}
-                  emAndamento={emAndamento}
-                  aoAvancar={aoAvancar}
-                  aoRiscar={aoRiscar}
-                  aoVoltar={aoVoltar}
-                  aoPriorizar={aoPriorizar}
-                  aoCiente={aoCiente}
-                  aoAvisar={aoAvisar}
-                  aoReimprimir={aoReimprimir}
-                  esgotaveis={esgotaveis}
-                  aoEsgotar={aoEsgotar}
-                  comTitulo
-                />
-              ))}
-            </div>
-          ) : (
-            <Tabs defaultValue={colunas[0].id}>
-              <TabsList className="w-full">
-                {colunas.map((coluna) => (
-                  // Texto da aba inativa mais forte: o padrão não passa no contraste sobre o fundo cinza.
-                  <TabsTrigger
-                    key={coluna.id}
-                    value={coluna.id}
-                    className="gap-1.5 text-foreground/80 dark:text-foreground/80"
-                  >
-                    <Traco tom={tomDoStatus(coluna.status)} />
-                    {coluna.titulo}
-                    <span className="text-xs tabular-nums">{coluna.tickets.length}</span>
-                  </TabsTrigger>
-                ))}
-              </TabsList>
-              {colunas.map((coluna) => (
-                <TabsContent key={coluna.id} value={coluna.id}>
-                  <Coluna
-                    coluna={coluna}
-                    agora={agora}
-                    tempos={tempos}
-                    prazos={loja?.prazos}
-                    praca={pracaAtual?.nome}
-                    aoProntoNaPraca={aoProntoNaPraca}
-                    emAndamento={emAndamento}
-                    aoAvancar={aoAvancar}
-                    aoRiscar={aoRiscar}
-                    aoVoltar={aoVoltar}
-                    aoPriorizar={aoPriorizar}
-                    aoCiente={aoCiente}
-                    aoAvisar={aoAvisar}
-                    aoReimprimir={aoReimprimir}
-                    esgotaveis={esgotaveis}
-                    aoEsgotar={aoEsgotar}
-                    comTitulo={false}
-                  />
-                </TabsContent>
-              ))}
-            </Tabs>
+            {telaGrande && resumoAberto && (
+              <aside
+                aria-label="Resumo de produção"
+                className="sticky top-4 w-72 shrink-0 border-l border-border/70 pl-4"
+              >
+                {resumo}
+              </aside>
+            )}
+          </div>
+          {!telaGrande && (
+            <Drawer open={resumoAberto} onOpenChange={setResumoAberto}>
+              <DrawerContent>
+                <DrawerHeader>
+                  <DrawerTitle>Em produção</DrawerTitle>
+                  <DrawerDescription>
+                    O que falta fazer, somado por produto. Toque num para ver os tickets dele.
+                  </DrawerDescription>
+                </DrawerHeader>
+                <div className="overflow-y-auto px-4 pb-6">{resumo}</div>
+              </DrawerContent>
+            </Drawer>
           )}
         </TabsContent>
       </Tabs>

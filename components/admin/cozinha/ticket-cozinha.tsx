@@ -162,6 +162,8 @@ export function TicketCozinha({
   aoReimprimir,
   esgotaveis,
   aoEsgotar,
+  apagado = false,
+  compacto = false,
 }: {
   ticket: Ticket
   agora: Date
@@ -184,6 +186,10 @@ export function TicketCozinha({
   /** Produtos do ticket que ainda estão no cardápio: a cozinha pode avisar que acabaram. */
   esgotaveis: { id: string; nome: string }[]
   aoEsgotar: (produto: { id: string; nome: string }) => void
+  /** Outro produto está em destaque no resumo de produção: este ticket fica apagado. */
+  apagado?: boolean
+  /** Exibição compacta: sem cliente e garçom, com menos espaço. */
+  compacto?: boolean
 }) {
   const semMovimento = useReducedMotion()
   const { pedido, rodada, itens } = ticket
@@ -207,16 +213,23 @@ export function TicketCozinha({
       // O mesmo id em todas as colunas: ao avançar, o ticket anda até a coluna seguinte.
       layoutId={semMovimento ? undefined : `ticket-cozinha-${ticket.id}`}
       initial={semMovimento ? false : { opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
+      animate={{ opacity: apagado ? 0.35 : 1, y: 0 }}
       transition={{
         default: { duration: 0.25, ease: [0.23, 1, 0.32, 1] },
         layout: { duration: 0.25, ease: [0.23, 1, 0.32, 1] },
       }}
       aria-label={nomeDoTicket(ticket)}
+      // As setas do teclado trazem o foco para o ticket (atalhos do desktop).
+      data-ticket={ticket.id}
+      data-status={ticket.status}
+      tabIndex={-1}
       data-urgencia={nivel}
       data-cancelado={cancelado || undefined}
+      data-apagado={apagado || undefined}
       className={cn(
-        "flex flex-col gap-3 rounded-xl bg-card p-3 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 transition-[box-shadow] duration-200",
+        "flex flex-col rounded-xl bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 transition-[box-shadow] duration-200",
+        compacto ? "gap-2 p-2.5" : "gap-3 p-3",
+        "outline-none focus-visible:ring-2 focus-visible:ring-ring",
         ANEL_URGENCIA[nivel],
         // Prioridade é o que exige o olho agora: o laranja de atenção, só no anel e no ícone.
         pedido.prioridade && !cancelado && "ring-2 ring-(--atencao)/60",
@@ -332,8 +345,12 @@ export function TicketCozinha({
       </header>
 
       <div className="-mt-1.5 flex flex-col text-[13px] text-muted-foreground">
-        <span className="font-medium text-foreground">{pedido.cliente.nome}</span>
-        {pedido.mesa?.garcom && <span>Garçom: {pedido.mesa.garcom}</span>}
+        {!compacto && (
+          <>
+            <span className="font-medium text-foreground">{pedido.cliente.nome}</span>
+            {pedido.mesa?.garcom && <span>Garçom: {pedido.mesa.garcom}</span>}
+          </>
+        )}
         {prometido && (
           <span
             className={cn(

@@ -416,3 +416,14 @@ A fase sai em dois commits, com revisão entre eles: **5a** (praças, expediçã
 3. **Tela (5a):** Ajustes > Praças; campo Praça no produto; seletor de praça; quadro da praça com "Pronto no Forno"; via impressa e "Reimprimir via", com o `react-to-print` simulado.
 4. **Regras e tela (5b):** resumo somado e destaque; esgotados com "Voltou"; tamanho e compacto guardados no aparelho; cada atalho.
 5. **E2E e screenshots:** pizzaria: o Forno marca pronto, depois a Montagem, e o ticket vai para Prontos na expedição; o resumo no desktop e a gaveta no celular; screenshots revisados da Cozinha, dos Ajustes e da via.
+
+**Na implementação (5b)**
+
+- **Resumo:** soma só o que falta: o item já riscado e o pedido cancelado (esperando o ciente) não contam. O avulso soma pelo nome. No empate, a ordem é a do nome.
+- **Gaveta do celular:** tocar num produto fecha a gaveta e destaca os tickets dele (a gaveta cobria o quadro).
+- **Acabou:** só aparece no produto que ainda está à venda. O aviso tem Desfazer. A aba Esgotados também fica no painel do desktop.
+- **Tamanho:** 85%, 100%, 115% e 130%, com `zoom` só na área das colunas. A barra e o resumo não mudam.
+- **Atalhos:**
+  - na praça, o Enter no ticket em preparo faz o "Marcar pronto · Forno";
+  - o Z vale enquanto o aviso com Desfazer está na tela;
+  - os números não riscam item de pedido cancelado, como o clique.

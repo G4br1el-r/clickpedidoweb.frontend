@@ -277,6 +277,54 @@ test("cozinha: os tempos de alerta mudam nos Ajustes e valem no quadro", async (
   await expect(page.locator('article[data-urgencia="atrasado"]').first()).toBeVisible()
 })
 
+test("cozinha: o resumo de produção destaca os tickets e a Exibição muda o quadro", async ({
+  page,
+}, info) => {
+  const celular = (info.project.use.viewport?.width ?? 0) < 1024
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha")
+  await expect(page.locator("article").first()).toBeVisible({ timeout: 15_000 })
+
+  await page.getByRole("button", { name: /^Em produção/ }).click()
+  // No celular, a gaveta de baixo; no computador, o painel ao lado do quadro.
+  const resumo = celular
+    ? page.getByRole("dialog", { name: "Em produção" })
+    : page.getByRole("complementary", { name: "Resumo de produção" })
+  const primeiro = resumo.getByRole("button", { pressed: false }).first()
+  await expect(primeiro).toBeVisible()
+  await verificarAcessibilidade(page)
+  await esperarAnimacoes(page)
+  await expect(resumo).toHaveScreenshot("cozinha-resumo.png")
+
+  await primeiro.click()
+  await expect(page.locator("article[data-apagado]").first()).toBeAttached()
+  if (celular) return
+
+  // Exibição: compacto tira cliente e garçom; o A+ aumenta só o quadro.
+  await page.getByRole("button", { name: "Exibição" }).click()
+  await page.getByRole("switch", { name: "Compacto" }).click()
+  await page.getByRole("button", { name: "Aumentar o quadro" }).click()
+  await expect(page.locator("[data-tamanho]")).toHaveAttribute("data-tamanho", "2")
+  await page.keyboard.press("Escape")
+  // Tira o destaque: o ticket da foto fica aceso.
+  await resumo.getByRole("button", { pressed: true }).click()
+  await expect(page.locator("article[data-apagado]")).toHaveCount(0)
+  await esperarAnimacoes(page)
+  await page.mouse.move(0, 0)
+  await expect(
+    page
+      .getByRole("region", { name: /^A fazer/ })
+      .getByRole("article")
+      .first(),
+  ).toHaveScreenshot("cozinha-ticket-compacto.png")
+
+  // Teclado: a seta traz o foco, ? abre a lista dos atalhos.
+  await page.keyboard.press("ArrowDown")
+  await expect(page.locator("article[data-ticket]:focus")).toHaveCount(1)
+  await page.keyboard.press("?")
+  await expect(page.getByRole("dialog", { name: "Atalhos do teclado" })).toBeVisible()
+})
+
 test("praças: o Forno e a Montagem fazem a sua parte, e a expedição vê pronto", async ({
   page,
 }, info) => {

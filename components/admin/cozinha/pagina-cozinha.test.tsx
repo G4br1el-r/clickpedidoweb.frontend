@@ -899,3 +899,292 @@ describe("PaginaCozinha: vias da cozinha", () => {
     await waitFor(async () => expect((await api().loja()).viaDaCozinha).toBe(true))
   })
 })
+
+describe("PaginaCozinha: resumo de produção", () => {
+  /** Mesa nova com um item avulso para a cozinha: o nome não se repete na demo. */
+  async function mesaComAvulso(numero: number, nome: string, quantidade: number) {
+    const mesa = await api().mesas.criar({ numero })
+    await api().mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [{ avulso: { nome, preco: 20 }, quantidade }],
+    })
+  }
+
+  test("no desktop, o painel soma o que falta e o produto tocado destaca os tickets dele", async () => {
+    telaGrande()
+    await mesaComAvulso(90, "Porção da casa", 2)
+    await mesaComAvulso(91, "Porção da casa", 3)
+    await mesaComAvulso(92, "Caldo verde", 1)
+    const usuario = userEvent.setup()
+    renderizar()
+    await ticket("Mesa 92")
+
+    await usuario.click(screen.getByRole("button", { name: /^Em produção/ }))
+    const painel = within(await screen.findByRole("complementary", { name: "Resumo de produção" }))
+    const porcao = painel.getByRole("button", { name: "5× Porção da casa" })
+    expect(porcao).toHaveAttribute("aria-pressed", "false")
+
+    await usuario.click(porcao)
+    expect(porcao).toHaveAttribute("aria-pressed", "true")
+    expect(await ticket("Mesa 90")).not.toHaveAttribute("data-apagado")
+    expect(await ticket("Mesa 91")).not.toHaveAttribute("data-apagado")
+    expect(await ticket("Mesa 92")).toHaveAttribute("data-apagado")
+
+    // Tocar de novo tira o destaque.
+    await usuario.click(porcao)
+    expect(await ticket("Mesa 92")).not.toHaveAttribute("data-apagado")
+  })
+
+  test("Acabou tira o produto do cardápio; em Esgotados, Voltou devolve", async () => {
+    telaGrande()
+    const { produto } = await comandaNaMesa(93)
+    const usuario = userEvent.setup()
+    renderizar()
+    await ticket("Mesa 93")
+    const disponivel = async () =>
+      (await api().produtos.listar()).find((item) => item.id === produto.id)?.disponivel
+
+    await usuario.click(screen.getByRole("button", { name: /^Em produção/ }))
+    const painel = within(await screen.findByRole("complementary", { name: "Resumo de produção" }))
+    await usuario.click(painel.getByRole("button", { name: `Acabou: ${produto.nome}` }))
+    expect(
+      await screen.findByText(`${produto.nome} acabou e saiu do cardápio.`),
+    ).toBeInTheDocument()
+    await waitFor(async () => expect(await disponivel()).toBe(false))
+    // Esgotado, a linha não oferece mais o Acabou.
+    expect(
+      painel.queryByRole("button", { name: `Acabou: ${produto.nome}` }),
+    ).not.toBeInTheDocument()
+
+    await usuario.click(painel.getByRole("tab", { name: /^Esgotados/ }))
+    await usuario.click(await painel.findByRole("button", { name: `Voltou: ${produto.nome}` }))
+    expect(await screen.findByText(`${produto.nome} voltou ao cardápio.`)).toBeInTheDocument()
+    await waitFor(async () => expect(await disponivel()).toBe(true))
+  })
+
+  test("no celular, a gaveta mostra o resumo; tocar num produto fecha e destaca os tickets dele", async () => {
+    await mesaComAvulso(94, "Porção da casa", 4)
+    await mesaComAvulso(95, "Caldo verde", 1)
+    const usuario = userEvent.setup()
+    renderizar()
+    await ticket("Mesa 94")
+
+    await usuario.click(screen.getByRole("button", { name: /^Em produção/ }))
+    const janela = await screen.findByRole("dialog", { name: "Em produção" })
+    await usuario.click(within(janela).getByRole("button", { name: "4× Porção da casa" }))
+
+    // A gaveta fecha. No jsdom, o vaul a deixa no DOM (e o quadro escondido dos leitores)
+    // esperando o fim de uma animação que não acontece: os tickets são buscados assim mesmo.
+    await waitFor(() => expect(janela).toHaveAttribute("data-state", "closed"))
+    const doQuadro = (nome: string) =>
+      screen.findByRole("article", { name: new RegExp(`^${nome} ·`), hidden: true })
+    expect(await doQuadro("Mesa 94")).not.toHaveAttribute("data-apagado")
+    expect(await doQuadro("Mesa 95")).toHaveAttribute("data-apagado")
+  })
+})
+
+describe("PaginaCozinha: exibição", () => {
+  test("A+ e A− mudam o tamanho do quadro e param nas pontas; fica guardado no aparelho", async () => {
+    telaGrande()
+    await comandaNaMesa(96)
+    const usuario = userEvent.setup()
+    renderizar()
+    await ticket("Mesa 96")
+    const quadro = () => screen.getByRole("region", { name: /^A fazer/ }).closest("[data-tamanho]")
+    expect(quadro()).toHaveAttribute("data-tamanho", "1")
+
+    await usuario.click(screen.getByRole("button", { name: "Exibição" }))
+    const aumentar = await screen.findByRole("button", { name: "Aumentar o quadro" })
+    await usuario.click(aumentar)
+    await usuario.click(aumentar)
+    expect(aumentar).toBeDisabled()
+    expect(quadro()).toHaveAttribute("data-tamanho", "3")
+    expect(usePreferenciasFila.getState().tamanho).toBe(3)
+
+    const diminuir = screen.getByRole("button", { name: "Diminuir o quadro" })
+    for (const _ of [1, 2, 3]) await usuario.click(diminuir)
+    expect(diminuir).toBeDisabled()
+    expect(quadro()).toHaveAttribute("data-tamanho", "0")
+  })
+
+  test("Compacto esconde o cliente e o garçom do ticket", async () => {
+    telaGrande()
+    await comandaNaMesa(97)
+    const usuario = userEvent.setup()
+    renderizar()
+    expect(within(await ticket("Mesa 97")).getByText("Garçom: Rafa")).toBeInTheDocument()
+
+    await usuario.click(screen.getByRole("button", { name: "Exibição" }))
+    await usuario.click(await screen.findByRole("switch", { name: "Compacto" }))
+    expect(within(await ticket("Mesa 97")).queryByText("Garçom: Rafa")).not.toBeInTheDocument()
+    expect(usePreferenciasFila.getState().compacto).toBe(true)
+  })
+})
+
+describe("PaginaCozinha: atalhos do teclado", () => {
+  test("as setas movem o foco entre os tickets", async () => {
+    telaGrande()
+    await comandaNaMesa(98)
+    const usuario = userEvent.setup()
+    renderizar()
+    await ticket("Mesa 98")
+    const aFazer = (await coluna("A fazer")).getAllByRole("article")
+
+    await usuario.keyboard("{ArrowDown}")
+    expect(aFazer[0]).toHaveFocus()
+    await usuario.keyboard("{ArrowDown}")
+    expect(aFazer[1]).toHaveFocus()
+    await usuario.keyboard("{ArrowUp}")
+    expect(aFazer[0]).toHaveFocus()
+    await usuario.keyboard("{ArrowRight}")
+    expect((await coluna("Preparando")).getAllByRole("article")[0]).toHaveFocus()
+  })
+
+  test("Enter avança o ticket em foco, e o foco vai junto", async () => {
+    telaGrande()
+    await comandaNaMesa(99)
+    const usuario = userEvent.setup()
+    renderizar()
+    const alvo = await ticket("Mesa 99")
+    act(() => alvo.focus())
+
+    await usuario.keyboard("{Enter}")
+    const preparando = await coluna("Preparando")
+    const movido = await preparando.findByRole("article", { name: /^Mesa 99 ·/ })
+    await waitFor(() => expect(movido).toHaveFocus())
+  })
+
+  test("na praça, Enter no ticket em preparo marca pronto só a parte dela", async () => {
+    telaGrande()
+    const lista = await api().produtos.listar()
+    const daCategoria = (categoriaId: string) =>
+      lista.find(
+        (produto) =>
+          produto.categoriaId === categoriaId && produto.grupos.length === 0 && produto.disponivel,
+      ) as Produto
+    const mesa = await api().mesas.criar({ numero: 81 })
+    const comanda = await api().mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [
+        { produtoId: daCategoria("cat-calzones").id, escolhas: {}, quantidade: 1 },
+        { produtoId: daCategoria("cat-massas").id, escolhas: {}, quantidade: 1 },
+      ],
+    })
+    await api().cozinha.avancar(comanda.id, 1, "recebido")
+    usePreferenciasFila.setState({ praca: "praca-forno" })
+    const usuario = userEvent.setup()
+    renderizar()
+    const alvo = await (await coluna("Preparando")).findByRole("article", { name: /^Mesa 81 ·/ })
+    act(() => alvo.focus())
+
+    await usuario.keyboard("{Enter}")
+    const pronto = within(
+      await (await coluna("Prontos")).findByRole("article", { name: /^Mesa 81 ·/ }),
+    )
+    expect(pronto.getByText("Aguardando Montagem")).toBeInTheDocument()
+  })
+
+  test("P liga e desliga a prioridade do ticket em foco", async () => {
+    telaGrande()
+    const { comanda } = await comandaNaMesa(83)
+    const usuario = userEvent.setup()
+    renderizar()
+    const alvo = await ticket("Mesa 83")
+    act(() => alvo.focus())
+    const prioridade = async () => (await api().pedidos.buscar(comanda.id))?.prioridade
+
+    await usuario.keyboard("p")
+    await waitFor(async () => expect(await prioridade()).toBe(true))
+    act(() => screen.getByRole("article", { name: /^Mesa 83 ·/ }).focus())
+    await usuario.keyboard("p")
+    await waitFor(async () => expect(await prioridade()).toBe(false))
+  })
+
+  test("os números riscam o item da linha; o número sem item não faz nada", async () => {
+    telaGrande()
+    const { comanda } = await comandaNaMesa(84)
+    const usuario = userEvent.setup()
+    renderizar()
+    const alvo = await ticket("Mesa 84")
+    act(() => alvo.focus())
+    const feito = async () => Boolean((await api().pedidos.buscar(comanda.id))?.itens[0].feitoEm)
+
+    await usuario.keyboard("2")
+    expect(await feito()).toBe(false)
+    await usuario.keyboard("1")
+    await waitFor(async () => expect(await feito()).toBe(true))
+  })
+
+  test("no ticket cancelado, o número fica quieto, como o item travado no clique", async () => {
+    telaGrande()
+    const { comanda } = await comandaNaMesa(85)
+    await api().pedidos.cancelar(comanda.id, "recebido")
+    const usuario = userEvent.setup()
+    renderizar()
+    const alvo = await ticket("Mesa 85")
+    act(() => alvo.focus())
+
+    await usuario.keyboard("1")
+    await esperar(300)
+    expect((await api().pedidos.buscar(comanda.id))?.itens[0].feitoEm).toBeUndefined()
+    // Nem tenta: o servidor recusaria com um aviso de erro.
+    expect(screen.queryByText("Este pedido foi cancelado.")).not.toBeInTheDocument()
+  })
+
+  test("Z desfaz a última ação que tinha Desfazer", async () => {
+    telaGrande()
+    await comandaNaMesa(86)
+    const usuario = userEvent.setup()
+    renderizar()
+    const alvo = await ticket("Mesa 86")
+    const antes = await contagem("A fazer")
+    act(() => alvo.focus())
+
+    await usuario.keyboard("{Enter}")
+    await screen.findByText(/^Mesa 86 · #\d+ foi para Preparando\.$/)
+    await waitFor(async () => expect(await contagem("A fazer")).toBe(antes - 1))
+    // A contagem vem dos dados: o ticket que sai ainda fica um instante na coluna, animando.
+    await usuario.keyboard("z")
+    await waitFor(async () => expect(await contagem("A fazer")).toBe(antes))
+  })
+
+  test("? abre a lista de atalhos", async () => {
+    telaGrande()
+    await comandaNaMesa(87)
+    const usuario = userEvent.setup()
+    renderizar()
+    await ticket("Mesa 87")
+
+    await usuario.keyboard("?")
+    const lista = within(await screen.findByRole("dialog", { name: "Atalhos do teclado" }))
+    for (const atalho of ["Enter", "P", "1 a 9", "Z", "?"]) {
+      expect(lista.getByText(atalho, { selector: "kbd" })).toBeInTheDocument()
+    }
+  })
+
+  test("com o menu do ticket aberto, as setas são do menu", async () => {
+    telaGrande()
+    await comandaNaMesa(88)
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(within(await ticket("Mesa 88")).getByRole("button", { name: "Mais ações" }))
+    await screen.findByRole("menu")
+
+    await usuario.keyboard("{ArrowDown}")
+    expect(document.activeElement?.closest("[role=menu]")).not.toBeNull()
+  })
+
+  test("no celular, as teclas não fazem nada no quadro", async () => {
+    await comandaNaMesa(89)
+    const usuario = userEvent.setup()
+    renderizar()
+    await ticket("Mesa 89")
+
+    await usuario.keyboard("{ArrowDown}")
+    expect(document.activeElement?.closest("[data-ticket]")).toBeNull()
+    await usuario.keyboard("?")
+    expect(screen.queryByRole("dialog", { name: "Atalhos do teclado" })).not.toBeInTheDocument()
+  })
+})
