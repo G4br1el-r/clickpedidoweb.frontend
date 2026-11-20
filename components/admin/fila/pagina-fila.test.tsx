@@ -251,6 +251,47 @@ describe("PaginaFila", () => {
     expect(ajuda.getByText("Avançar o pedido em foco")).toBeInTheDocument()
   })
 
+  test("despachar a entrega pronta com o motoboy sugerido e chamar no WhatsApp", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const prontos = await coluna("Prontos")
+    const despachar = await prontos.findByRole("button", { name: "Despachar" }, { timeout: 8000 })
+    const cartao = despachar.closest("article") as HTMLElement
+    const numero = within(cartao).getByRole("heading").textContent ?? ""
+
+    await usuario.click(despachar)
+    const janela = within(await screen.findByRole("dialog", { name: `Despachar ${numero}` }))
+    const sugerido = janela.getByRole("radio", { checked: true })
+    const nome = sugerido.getAttribute("aria-label") ?? ""
+    await usuario.click(janela.getByRole("button", { name: "Despachar" }))
+
+    const chamar = await janela.findByRole("link", { name: `Chamar ${nome} no WhatsApp` })
+    expect(chamar.getAttribute("href")).toMatch(/^https:\/\/wa\.me\/55\d+\?text=/)
+    await usuario.click(janela.getByRole("button", { name: "Fechar" }))
+    expect(
+      await (await coluna("A caminho")).findByRole("heading", { name: numero }),
+    ).toBeInTheDocument()
+  })
+
+  test("motoboy voltou: as entregas dele saem de A caminho e ele fica disponível", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const caminho = await coluna("A caminho")
+    const motoboys = within(caminho.getByRole("list", { name: "Motoboys" }))
+    const [voltou] = motoboys.getAllByRole("button", { name: /^.+ voltou$/ })
+    const nome = (voltou.getAttribute("aria-label") ?? "").replace(" voltou", "")
+    const antes = caminho.getAllByRole("article").length
+
+    await usuario.click(voltou)
+    await waitFor(() =>
+      expect((caminho.queryAllByRole("article") ?? []).length).toBeLessThan(antes),
+    )
+    const linha = motoboys.getAllByRole("listitem").find((item) => item.textContent?.includes(nome))
+    expect(linha).toHaveTextContent(/disponível/i)
+  })
+
   test("no celular, as colunas viram abas com a contagem", async () => {
     renderizar()
     const aba = await screen.findByRole("tab", { name: /Novos/ }, { timeout: 8000 })

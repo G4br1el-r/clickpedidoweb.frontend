@@ -3,8 +3,8 @@ import type { Pedido } from "../dados/tipos"
 import {
   formatarTelefone,
   linkWhatsApp,
-  mensagemParaCliente,
   mensagemDaRota,
+  mensagemParaCliente,
   mensagemParaMotoboy,
 } from "./mensagens"
 import { PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
@@ -145,7 +145,13 @@ describe("mensagemDaRota", () => {
       ...ENTREGA,
       numero: 13,
       cliente: { nome: "Bruno Lima", telefone: "12991230002" },
-      endereco: { cep: "12630-000", logradouro: "Rua B", numero: "7", bairro: "Centro", cidade: "Lorena" },
+      endereco: {
+        cep: "12630-000",
+        logradouro: "Rua B",
+        numero: "7",
+        bairro: "Centro",
+        cidade: "Lorena",
+      },
       situacaoPagamento: "pago",
       pagamento: "pix",
     }

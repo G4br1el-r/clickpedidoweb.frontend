@@ -103,6 +103,7 @@ export function CartaoFila({
   nomeLoja = "",
   compacto = false,
   selecao,
+  despacha = false,
   aoAceitar,
   aoRecusar,
   aoCancelar,
@@ -126,6 +127,8 @@ export function CartaoFila({
   compacto?: boolean
   /** Seleção para ações em lote: a caixa aparece no modo de seleção; Shift+clique marca. */
   selecao?: { ativa: boolean; marcado: boolean; alternar: () => void }
+  /** Entrega pronta numa loja com motoboys: o botão vira "Despachar". */
+  despacha?: boolean
   aoAceitar: () => void
   aoRecusar: (escolhido: MotivoEscolhido) => void
   aoCancelar: (escolhido: MotivoEscolhido) => void
@@ -135,7 +138,8 @@ export function CartaoFila({
 }) {
   const semMovimento = useReducedMotion()
   const espera = esperaDoAceite(pedido, agora, limiteAceiteMin)
-  const acao = rotuloAcao(pedido.tipo, pedido.status)
+  // Entrega pronta, com motoboys: a próxima etapa é despachar (escolher quem leva).
+  const acao = despacha ? "Despachar" : rotuloAcao(pedido.tipo, pedido.status)
   const motoboy = motoboys.find((item) => item.id === pedido.motoboyId)
   // Açougue: carne no quilo que ainda não passou pela balança.
   const aPesar = !pedido.pesagem && itensParaPesar(pedido).length > 0

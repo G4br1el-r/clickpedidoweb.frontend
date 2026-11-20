@@ -1,6 +1,6 @@
 "use client"
 
-import { ArrowRightIcon, PrinterIcon, XIcon } from "lucide-react"
+import { ArrowRightIcon, BikeIcon, PrinterIcon, XIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { plural } from "@/lib/formato"
 import { Traco } from "../traco"
@@ -15,12 +15,15 @@ export function BarraSelecao({
   aoAvancar,
   aoImprimir,
   aoLimpar,
+  aoDespachar,
 }: {
   quantos: number
   ocupado: boolean
   aoAvancar: () => void
   aoImprimir: () => void
   aoLimpar: () => void
+  /** Há entrega pronta na seleção: despacha todas numa rota. */
+  aoDespachar?: () => void
 }) {
   return (
     <section
@@ -41,6 +44,12 @@ export function BarraSelecao({
             <PrinterIcon data-icon="inline-start" />
             Imprimir
           </Button>
+          {aoDespachar && (
+            <Button type="button" variant="outline" size="sm" onClick={aoDespachar}>
+              <BikeIcon data-icon="inline-start" />
+              Despachar
+            </Button>
+          )}
           <Button type="button" size="sm" disabled={ocupado} onClick={aoAvancar}>
             Avançar
             <ArrowRightIcon data-icon="inline-end" />

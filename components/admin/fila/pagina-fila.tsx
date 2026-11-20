@@ -5,7 +5,7 @@ import { startOfDay } from "date-fns"
 import { ArchiveIcon, ChevronDownIcon, InboxIcon, ListChecksIcon, VolumeXIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
 import { parseAsStringLiteral, useQueryState, useQueryStates } from "nuqs"
-import { useEffect, useEffectEvent, useRef, useState } from "react"
+import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
@@ -22,10 +22,12 @@ import {
   useAvancarPedido,
   useCancelarPedido,
   useDefinirEntrega,
+  useDespachar,
   useFila,
   useHistoricoDosClientes,
   useLoja,
   useMotoboys,
+  useMotoboyVoltou,
   usePedidos,
   useReabrirPedido,
   useRecusarPedido,
@@ -46,6 +48,7 @@ import {
 } from "@/lib/admin/preferencias-fila"
 import { alarmeTocando } from "@/lib/admin/regras/aceite"
 import { type HistoricoCliente, seloDoCliente } from "@/lib/admin/regras/clientes"
+import { entregasParaAgrupar, situacaoDosMotoboys } from "@/lib/admin/regras/despacho"
 import {
   type ColunaFila,
   colunasDaFila,
@@ -89,7 +92,9 @@ import { ChaveDaLoja } from "./chave-da-loja"
 import { EsteAparelho } from "./este-aparelho"
 import { FerramentasFila, PARAMETROS_FILA } from "./ferramentas-fila"
 import { GavetaFinalizados } from "./gaveta-finalizados"
+import { JanelaDespacho } from "./janela-despacho"
 import { MetricasFila } from "./metricas-fila"
+import { PainelMotoboys } from "./painel-motoboys"
 import { PausaPedidos } from "./pausa-pedidos"
 import { useAtalhosDaFila } from "./use-atalhos-da-fila"
 import { useTelaAcesa } from "./use-tela-acesa"
@@ -103,6 +108,10 @@ const _SONS: { valor: SomAlerta; rotulo: string }[] = [
 ]
 
 /** Quanto tempo o "Chegou agora" fica no cartão. */
+/** Entrega pronta, que espera o motoboy. */
+const prontaParaDespachar = (pedido: Pedido) =>
+  pedido.tipo === "entrega" && pedido.status === "pronto" && !pedido.esperaAceite
+
 /** Seleção dos pedidos para as ações em lote. */
 type SelecaoDaFila = { ativa: boolean; ids: ReadonlySet<number>; alternar: (id: number) => void }
 
@@ -216,6 +225,8 @@ type AcoesDoCartao = {
   avancar: (pedido: Pedido) => void
   abrir: (pedido: Pedido) => void
   imprimir: (pedido: Pedido) => void
+  /** A loja tem motoboys: a entrega pronta se despacha. */
+  despacha: boolean
 }
 
 function Coluna({
@@ -232,6 +243,7 @@ function Coluna({
   selecao,
   acoes,
   comTitulo,
+  topo,
 }: {
   coluna: ColunaFila
   agora: Date
@@ -246,6 +258,8 @@ function Coluna({
   selecao: SelecaoDaFila
   acoes: AcoesDoCartao
   comTitulo: boolean
+  /** O que vem antes dos cartões (os motoboys, em A caminho). */
+  topo?: ReactNode
 }) {
   // Com as colunas lado a lado, o cartão se arrasta para a coluna seguinte ou a anterior.
   const soltavel = useColunaSoltavel(coluna.status, comTitulo)
@@ -268,6 +282,7 @@ function Coluna({
           </span>
         </h2>
       )}
+      {topo}
       {coluna.pedidos.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border px-3 py-8 text-center text-[13px] text-muted-foreground">
           Nenhum pedido aqui.
@@ -295,6 +310,7 @@ function Coluna({
                 aoAceitar={() => acoes.aceitar(pedido)}
                 aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
                 aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
+                despacha={acoes.despacha && pedido.tipo === "entrega" && pedido.status === "pronto"}
                 aoAvancar={() => acoes.avancar(pedido)}
                 aoAbrir={() => acoes.abrir(pedido)}
                 aoImprimir={() => acoes.imprimir(pedido)}
@@ -390,6 +406,11 @@ export function PaginaFila({
   }, [preferencias.simular, intervaloSimulacao, simular])
 
   const avisoDeErro = { onError: (erro: Error) => toast.error(erro.message) }
+  // Despacho: com motoboys, a entrega pronta sai pela janela de despacho.
+  const despacha = temModulo(segmento, "motoboys")
+  const [despachando, setDespachando] = useState<Pedido[] | null>(null)
+  const despachar = useDespachar()
+  const motoboyVoltou = useMotoboyVoltou()
   const acoes: AcoesDoCartao = {
     aceitar: (pedido) =>
       aceitar.mutate(pedido.id, {
@@ -406,7 +427,12 @@ export function PaginaFila({
         { id: pedido.id, de: pedido.status, ...escolhido },
         { ...avisoDeErro, onSuccess: (cancelado) => toast(`#${cancelado.numero} cancelado.`) },
       ),
-    avancar: (pedido) =>
+    avancar: (pedido) => {
+      // Entrega pronta com motoboys: avançar é despachar (escolher quem leva).
+      if (despacha && pedido.tipo === "entrega" && pedido.status === "pronto") {
+        setDespachando([pedido])
+        return
+      }
       avancar.mutate(
         { id: pedido.id, de: pedido.status },
         {
@@ -434,9 +460,11 @@ export function PaginaFila({
               },
             ),
         },
-      ),
+      )
+    },
     abrir: (pedido) => abrirPedido(pedido.id),
     imprimir: impressao.imprimir,
+    despacha,
   }
   // O cartão que está sendo mexido fica com os botões travados até o servidor responder.
   const emAndamento = [avancar, aceitar, recusar, cancelar].find((mutacao) => mutacao.isPending)
@@ -466,6 +494,22 @@ export function PaginaFila({
         )
       : null
   const finalizados = finalizadosHoje(concluidos, criadosHoje)
+  // Motoboys: quem está na rua, quem está livre (desde a última entrega de hoje) e quem não veio.
+  const situacoes = situacaoDosMotoboys(motoboys ?? [], [...(fila ?? []), ...concluidos])
+  const painelMotoboys = agora ? (
+    <PainelMotoboys
+      situacoes={situacoes}
+      agora={agora}
+      ocupado={motoboyVoltou.isPending}
+      aoVoltar={(motoboyId) =>
+        motoboyVoltou.mutate(motoboyId, {
+          ...avisoDeErro,
+          onSuccess: (entregues) =>
+            toast(`${plural(entregues.length, "entrega concluída", "entregas concluídas")}.`),
+        })
+      }
+    />
+  ) : null
   // Soltar noutra coluna: a seguinte avança, a anterior volta; pular etapa não move.
   const aoSoltar = (pedido: Pedido, para: StatusPedido) => {
     if (para === pedido.status) return
@@ -697,6 +741,7 @@ export function PaginaFila({
                 selecao={selecao}
                 acoes={acoes}
                 comTitulo
+                topo={coluna.status === "saiu-para-entrega" ? painelMotoboys : undefined}
               />
             ))}
           </div>
@@ -730,6 +775,7 @@ export function PaginaFila({
                 selecao={selecao}
                 acoes={acoes}
                 comTitulo={false}
+                topo={coluna.status === "saiu-para-entrega" ? painelMotoboys : undefined}
               />
             </TabsContent>
           ))}
@@ -741,6 +787,14 @@ export function PaginaFila({
           quantos={selecionados.length}
           ocupado={avancarEmLote.isPending}
           aoLimpar={limparSelecao}
+          {...(despacha && selecionados.some(prontaParaDespachar)
+            ? {
+                aoDespachar: () => {
+                  setDespachando(selecionados.filter(prontaParaDespachar))
+                  limparSelecao()
+                },
+              }
+            : {})}
           aoImprimir={() => {
             for (const pedido of selecionados) impressao.imprimir(pedido)
           }}
@@ -759,6 +813,34 @@ export function PaginaFila({
               },
             )
           }
+        />
+      )}
+      {despachando && (
+        <JanelaDespacho
+          pedidos={despachando}
+          mesmoBairro={[
+            ...new Map(
+              despachando
+                .flatMap((pedido) => entregasParaAgrupar(pedido, fila ?? []))
+                .filter((pedido) => !despachando.some((escolhido) => escolhido.id === pedido.id))
+                .map((pedido) => [pedido.id, pedido]),
+            ).values(),
+          ]}
+          situacoes={situacoes}
+          nomeLoja={loja?.nome ?? ""}
+          ocupado={despachar.isPending}
+          aoDespachar={async (ids, motoboyId) => {
+            try {
+              const { despachados, pulados } = await despachar.mutateAsync({ ids, motoboyId })
+              if (pulados > 0)
+                toast(`${plural(pulados, "pedido ficou", "pedidos ficaram")} de fora.`)
+              return despachados
+            } catch (erro) {
+              toast.error((erro as Error).message)
+              return []
+            }
+          }}
+          aoFechar={() => setDespachando(null)}
         />
       )}
       <AjudaAtalhos aberta={ajudaAberta} aoMudar={setAjudaAberta} />

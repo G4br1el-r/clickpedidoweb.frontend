@@ -12,9 +12,22 @@ const motoboy = (id: string, ativo = true): Motoboy => ({
 const MOTOBOYS = [motoboy("a"), motoboy("b"), motoboy("c"), motoboy("d", false)]
 
 /** Entrega do motoboy, atualizada `minutosAtras` antes de AGORA (20:30). */
-function entrega(id: number, motoboyId: string, status: StatusPedido, minutosAtras: number): Pedido {
+function entrega(
+  id: number,
+  motoboyId: string,
+  status: StatusPedido,
+  minutosAtras: number,
+): Pedido {
   const em = new Date(AGORA.getTime() - minutosAtras * 60_000).toISOString()
-  return { ...PEDIDOS_DE_TESTE[2], id, tipo: "entrega", status, motoboyId, criadoEm: em, atualizadoEm: em }
+  return {
+    ...PEDIDOS_DE_TESTE[2],
+    id,
+    tipo: "entrega",
+    status,
+    motoboyId,
+    criadoEm: em,
+    atualizadoEm: em,
+  }
 }
 
 describe("situacaoDosMotoboys", () => {

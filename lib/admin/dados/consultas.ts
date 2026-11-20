@@ -158,6 +158,27 @@ export function useAvancarEmLote() {
   })
 }
 
+/** Despachar entregas prontas com o motoboy (uma rota, se forem várias). */
+export function useDespachar() {
+  const segmento = useSegmento()
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: ({ ids, motoboyId }: { ids: number[]; motoboyId: string }) =>
+      servidorDo(segmento).pedidos.despachar(ids, motoboyId),
+    onSettled: () => cliente.invalidateQueries({ queryKey: chaves.pedidos(segmento) }),
+  })
+}
+
+/** O motoboy voltou: o que ele levava foi entregue. */
+export function useMotoboyVoltou() {
+  const segmento = useSegmento()
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: (motoboyId: string) => servidorDo(segmento).pedidos.motoboyVoltou(motoboyId),
+    onSettled: () => cliente.invalidateQueries({ queryKey: chaves.pedidos(segmento) }),
+  })
+}
+
 export function useCancelarPedido() {
   return useMutacaoDePedido<MudancaDeEtapa & MotivoEscolhido>(
     (servidor, { id, de, ...escolhido }) => servidor.pedidos.cancelar(id, de, escolhido),
