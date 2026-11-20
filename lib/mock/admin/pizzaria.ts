@@ -71,6 +71,7 @@ export const catalogoPizzaria: CatalogoLoja = {
     tempoRetirada: casaDaPizza.retirada.tempo,
     cidadesAtendidas: ["São José dos Campos"],
     pagamentoOnlineConectado: true,
+    taxasPagamento: { pixOnline: 0.99, cartaoOnline: 4.98, maquininha: 1.99 },
     pagamentos: {
       pix: true,
       "cartao-online": true,

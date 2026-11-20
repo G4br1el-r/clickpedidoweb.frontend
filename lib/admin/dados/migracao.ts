@@ -2,8 +2,8 @@ import { normalizar } from "../regras/filtro-pedidos"
 import { primeiraPosicaoLivre } from "../regras/salao"
 import type { AreaSalao, BaseLoja, ConfigSalao, Garcom, Mesa, PosicaoMesa } from "./tipos"
 
-/** Base como era na versão 2: mesas sem área, lugares e posição, e sem configuração do salão. */
-export type BaseLojaV2 = Omit<BaseLoja, "salao" | "reservas" | "espera" | "chamados" | "mesas"> & {
+/** Base como era na versão 3 (com custos e histórico): mesas sem área, lugares e posição, e sem configuração do salão. */
+export type BaseLojaV3 = Omit<BaseLoja, "salao" | "reservas" | "espera" | "chamados" | "mesas"> & {
   mesas: Pick<
     Mesa,
     "id" | "numero" | "nome" | "status" | "pedidoAtivoId" | "clienteNome" | "ocupadaEm"
@@ -31,7 +31,7 @@ const MESAS_NA_GRADE_ANTIGA = 24
 const idDe = (nome: string) => `garcom-${normalizar(nome).trim().replace(/\s+/g, "-")}`
 
 /** Um garçom por nome normalizado, com a primeira grafia que aparece nas comandas. */
-function garconsDasComandas(pedidos: BaseLojaV2["pedidos"]): Garcom[] {
+function garconsDasComandas(pedidos: BaseLojaV3["pedidos"]): Garcom[] {
   const nomes = new Map<string, string>()
   for (const pedido of pedidos) {
     const nome = pedido.mesa?.garcom?.trim()
@@ -48,8 +48,8 @@ const areaDoSalao = (n: number): AreaSalao =>
     ? { id: "area-salao", nome: "Salão", ordem: 1 }
     : { id: `area-salao-${n}`, nome: `Salão ${n}`, ordem: n }
 
-/** Versão 2 → 3: toda mesa vai para a área Salão e o salão ganha a configuração padrão. */
-export function migrarDaVersao2(base: BaseLojaV2): BaseLoja {
+/** Versão 3 → 4: toda mesa vai para a área Salão e o salão ganha a configuração padrão. */
+export function migrarDaVersao3(base: BaseLojaV3): BaseLoja {
   const areas: AreaSalao[] = [areaDoSalao(1)]
   const mesas: Mesa[] = []
   for (const [indice, antiga] of base.mesas.entries()) {

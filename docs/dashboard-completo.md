@@ -189,7 +189,7 @@ O dashboard precisa de dados que o modelo não guarda. Estas mudanças saem da t
 ### Custo e margem
 
 - Hoje o custo só existe em `estoque.custo`, nos produtos com estoque controlado, e a venda não guarda o custo.
-- O `Produto` ganha um `custo` próprio, independente do estoque, editado no formulário do cardápio. O item vendido guarda **uma cópia do custo na hora da venda**, para a margem do passado não mudar quando o custo mudar.
+- O `Produto` ganha um `custo` próprio, editado no formulário do cardápio, que vale mesmo sem controle de estoque. É o único custo: o que ficava no estoque passou para o produto, e a entrada de compra grava nele. O item vendido guarda **uma cópia do custo na hora da venda**, para a margem do passado não mudar quando o custo mudar.
 - Item sem custo informado aparece como "sem custo" e fica fora da margem, com aviso de quantos são.
 
 ### Motivo do cancelamento
@@ -199,7 +199,7 @@ O dashboard precisa de dados que o modelo não guarda. Estas mudanças saem da t
 
 ### Taxas de pagamento
 
-- A seção de pagamentos das Configurações da loja ganha a **% de cada forma**: crédito, débito e Pix online.
+- As Configurações da loja ganham a seção **Taxas de pagamento**, com a % de cada forma do painel: Pix online, cartão online e cartão na maquininha. O pedido não diz se o cartão foi crédito ou débito, por isso a taxa é por forma. Dinheiro e Pix no balcão não têm taxa.
 - Forma sem taxa informada conta como 0%, e o Financeiro mostra um aviso com link para configurar.
 
 ### Gerador de demonstração

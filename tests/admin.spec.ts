@@ -164,6 +164,35 @@ test("do gráfico aos pedidos do dia: filtrar, abrir e avançar", async ({ page 
   await expect(detalhes).toBeHidden()
 })
 
+test("cancelar com o motivo e guardar as taxas de pagamento da loja", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/pedidos?data=2026-11-13&status=recebido")
+  await page
+    .getByRole("button", { name: /^Abrir o pedido/ })
+    .first()
+    .click({ timeout: 15_000 })
+  const detalhes = page.getByRole("dialog", { name: /^Pedido #/ })
+  await detalhes.getByRole("button", { name: "Cancelar pedido" }).click()
+  const confirmacao = page.getByRole("alertdialog")
+  await confirmacao.getByRole("radio", { name: "Cliente desistiu" }).click()
+  await expect(confirmacao.getByRole("radio", { name: "Cliente desistiu" })).toBeChecked()
+  await verificarAcessibilidade(page)
+  await confirmacao.getByRole("button", { name: "Sim, cancelar" }).click()
+  await expect(detalhes.getByText("Motivo: Cliente desistiu")).toBeVisible()
+
+  await page.goto("/admin/loja")
+  const taxas = page.getByRole("region", { name: "Taxas de pagamento" })
+  await taxas.getByRole("textbox", { name: "Cartão na maquininha" }).fill("3,5")
+  await page.getByRole("button", { name: "Salvar alterações" }).click()
+  await expect(page.getByText("Configurações salvas.")).toBeVisible()
+  await page.reload()
+  await expect(
+    page
+      .getByRole("region", { name: "Taxas de pagamento" })
+      .getByRole("textbox", { name: "Cartão na maquininha" }),
+  ).toHaveValue("3,5 %", { timeout: 15_000 })
+})
+
 test("fila: avançar, tirar da fila e desligar a entrega sem esconder entregas", async ({
   page,
 }, info) => {

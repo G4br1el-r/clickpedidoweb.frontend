@@ -33,13 +33,13 @@ export default defineConfig({
       reporter: ["text", "html"],
       include: ["lib/**/*.{ts,tsx}", "hooks/**/*.{ts,tsx}", "components/**/*.{ts,tsx}"],
       exclude: ["components/ui/**", "lib/mock/**", "**/*.d.ts", "**/*.test.{ts,tsx}"],
-      // Mínimos medidos em 2026-11-13, arredondados para baixo. Só sobem, nunca descem.
+      // Mínimos medidos em 2026-11-19, arredondados para baixo. Só sobem, nunca descem.
       thresholds: {
         statements: 81,
-        branches: 72,
-        functions: 79,
+        branches: 73,
+        functions: 80,
         lines: 82,
-        "lib/**": { statements: 97, branches: 94, functions: 98, lines: 98 },
+        "lib/**": { statements: 98, branches: 94, functions: 98, lines: 98 },
       },
     },
   },

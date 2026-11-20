@@ -1,4 +1,4 @@
-import type { FormaPagamento, OrigemPedido, TipoPedido } from "../dados/tipos"
+import type { FormaPagamento, MotivoCancelamento, OrigemPedido, TipoPedido } from "../dados/tipos"
 
 const CANAIS: Record<TipoPedido, string> = {
   entrega: "Entrega",
@@ -22,6 +22,21 @@ const ORIGENS: Record<OrigemPedido, string> = {
   painel: "Painel da loja",
 }
 
+const MOTIVOS: Record<MotivoCancelamento, string> = {
+  "cliente-desistiu": "Cliente desistiu",
+  "sem-estoque": "Sem estoque",
+  "fora-da-area": "Fora da área de entrega",
+  "pagamento-nao-aprovado": "Pagamento não aprovado",
+  demora: "Demora",
+  "loja-fechou": "Loja fechou",
+  outro: "Outro",
+}
+
+/** Os motivos de cancelamento, na ordem em que a tela mostra. */
+export const MOTIVOS_CANCELAMENTO = Object.keys(MOTIVOS) as MotivoCancelamento[]
+
 export const rotuloCanal = (tipo: TipoPedido) => CANAIS[tipo]
 export const rotuloPagamento = (forma: FormaPagamento) => PAGAMENTOS[forma]
 export const rotuloOrigem = (origem: OrigemPedido) => ORIGENS[origem]
+export const rotuloMotivo = (motivo: MotivoCancelamento | undefined) =>
+  motivo ? MOTIVOS[motivo] : "Não informado"

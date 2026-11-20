@@ -1,5 +1,6 @@
 import "@testing-library/jest-dom/vitest"
 import { cleanup } from "@testing-library/react"
+import { toast } from "sonner"
 import { afterEach, vi } from "vitest"
 
 // jsdom não implementa matchMedia; hooks de tela e animações dependem dele.
@@ -64,6 +65,9 @@ vi.mock("next/font/google", () => {
 afterEach(() => {
   cleanup()
   localStorage.clear()
+  // O sonner guarda os avisos no módulo e reenvia os ativos a cada Toaster novo: sem isto,
+  // o aviso de um teste (com o botão Desfazer dele) aparece no seguinte.
+  toast.dismiss()
 })
 
 // O NumberFlow anima o número com um elemento próprio do navegador, que o jsdom não roda
