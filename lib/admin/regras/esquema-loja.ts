@@ -92,7 +92,12 @@ export const esquemaLoja = z
       .object({
         ligado: z.boolean(),
         textos: z
-          .object({ aceito: texto(500), saiu: texto(500), pronto: texto(500), recusado: texto(500) })
+          .object({
+            aceito: texto(500),
+            saiu: texto(500),
+            pronto: texto(500),
+            recusado: texto(500),
+          })
           .partial()
           .optional(),
       })

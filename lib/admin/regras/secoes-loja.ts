@@ -40,6 +40,7 @@ const SECAO_DO_CAMPO: Partial<Record<keyof ConfigLoja, SecaoLoja>> = {
   cortarPapel: "Impressão",
   aceiteManual: "Fila e pedidos",
   limiteAceiteMin: "Fila e pedidos",
+  avisosCliente: "Fila e pedidos",
   som: "Alerta sonoro",
 }
 

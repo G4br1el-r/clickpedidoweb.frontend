@@ -46,11 +46,12 @@ describe("textoDoAviso", () => {
       cancelamento: { tipo: "recusa", motivo: "outro", detalhe: "Acabou a massa", em: "" },
     }
     expect(
-      textoDoAviso(
-        "Olá, {nome}! #{numero} na {loja}: {motivo}. Veja: {link}",
-        recusado,
-        { loja: "Casa da Pizza", endereco: "https://loja.exemplo" },
-      ),
-    ).toBe("Olá, Ana! #1412 na Casa da Pizza: Acabou a massa. Veja: https://loja.exemplo/pedido/abc")
+      textoDoAviso("Olá, {nome}! #{numero} na {loja}: {motivo}. Veja: {link}", recusado, {
+        loja: "Casa da Pizza",
+        endereco: "https://loja.exemplo",
+      }),
+    ).toBe(
+      "Olá, Ana! #1412 na Casa da Pizza: Acabou a massa. Veja: https://loja.exemplo/pedido/abc",
+    )
   })
 })

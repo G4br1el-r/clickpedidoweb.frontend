@@ -7,7 +7,8 @@ export type EtapaDoAviso = (typeof ETAPAS_DO_AVISO)[number]
 
 /** Os textos de fábrica; a loja edita em Configurações → Fila e pedidos. */
 export const AVISOS_DE_FABRICA: Record<EtapaDoAviso, string> = {
-  aceito: "Olá, {nome}! Seu pedido #{numero} na {loja} foi aceito e já vai para o preparo. Acompanhe: {link}",
+  aceito:
+    "Olá, {nome}! Seu pedido #{numero} na {loja} foi aceito e já vai para o preparo. Acompanhe: {link}",
   saiu: "Olá, {nome}! Seu pedido #{numero} saiu para entrega. Acompanhe: {link}",
   pronto: "Olá, {nome}! Seu pedido #{numero} está pronto para retirar na {loja}.",
   recusado: "Olá, {nome}. Não conseguimos aceitar seu pedido #{numero}: {motivo}. Desculpe!",

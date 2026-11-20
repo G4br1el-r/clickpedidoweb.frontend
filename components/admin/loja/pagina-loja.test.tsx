@@ -185,6 +185,29 @@ describe("PaginaLoja: fila e pedidos", () => {
     await waitFor(async () => expect((await api().loja()).aceiteManual).toBe(false))
   })
 
+  test("avisos ao cliente: editar o texto da saída para entrega e desligar", async () => {
+    const usuario = await abrir()
+    const fila = secao("Fila e pedidos")
+    const avisar = fila.getByRole("switch", { name: "Avisar o cliente no WhatsApp" })
+    expect(avisar).toBeChecked()
+    const saiu = fila.getByRole("textbox", { name: "Saiu para entrega" })
+    expect(saiu).toHaveValue(
+      "Olá, {nome}! Seu pedido #{numero} saiu para entrega. Acompanhe: {link}",
+    )
+
+    await usuario.clear(saiu)
+    await usuario.type(saiu, "Já vai, {{nome}!")
+    await usuario.click(screen.getByRole("button", { name: "Salvar alterações" }))
+    await waitFor(async () =>
+      expect((await api().loja()).avisosCliente?.textos?.saiu).toBe("Já vai, {nome}!"),
+    )
+
+    await usuario.click(avisar)
+    expect(saiu).toBeDisabled()
+    await usuario.click(screen.getByRole("button", { name: "Salvar alterações" }))
+    await waitFor(async () => expect((await api().loja()).avisosCliente?.ligado).toBe(false))
+  })
+
   test("limite fora de 1 a 30 minutos mostra o erro no campo", async () => {
     const usuario = await abrir()
     const limite = secao("Fila e pedidos").getByRole("spinbutton", {
