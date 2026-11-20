@@ -38,6 +38,7 @@ import {
   usePedidos,
   useReabrirPedido,
   useRecusarPedido,
+  useSimularCancelamento,
   useSimularPedido,
   useVoltarPedido,
 } from "@/lib/admin/dados/consultas"
@@ -104,6 +105,7 @@ import { JanelaDespacho } from "./janela-despacho"
 import { MetricasFila } from "./metricas-fila"
 import { PainelMotoboys } from "./painel-motoboys"
 import { PausaPedidos } from "./pausa-pedidos"
+import { useAlertasSecundarios } from "./use-alertas-secundarios"
 import { useAtalhosDaFila } from "./use-atalhos-da-fila"
 import { useTelaAcesa } from "./use-tela-acesa"
 import { useTituloDaAba } from "./use-titulo-da-aba"
@@ -124,6 +126,8 @@ const prontaParaDespachar = (pedido: Pedido) =>
 type SelecaoDaFila = { ativa: boolean; ids: ReadonlySet<number>; alternar: (id: number) => void }
 
 const DESTAQUE_MS = 10_000
+/** Demonstração: de quantos em quantos pedidos simulados um cliente cancela. */
+const CANCELA_A_CADA = 5
 /** Quanto tempo o "Desfazer" fica no aviso depois de avançar. */
 const DESFAZER_MS = 6_000
 
@@ -378,6 +382,7 @@ export function PaginaFila({
   const cancelar = useCancelarPedido()
   const definirEntrega = useDefinirEntrega()
   const simularPedido = useSimularPedido()
+  const simularCancelamento = useSimularCancelamento()
   const [, abrirPedido] = usePedidoAberto()
   const preferencias = usePreferenciasFila()
   const somDoAparelho = useSomDoAparelho()
@@ -406,12 +411,19 @@ export function PaginaFila({
   }, [tocando, preferencias.somLigado, somDoAparelho, intervaloAlarme])
 
   // Demonstração: um pedido novo chega de tempos em tempos.
+  // A cada 5 pedidos simulados, um cliente cancela pelo site.
   const simular = simularPedido.mutate
+  const cancelarPeloCliente = simularCancelamento.mutate
   useEffect(() => {
     if (!preferencias.simular) return
-    const relogio = setInterval(() => simular(), intervaloSimulacao)
+    let vezes = 0
+    const relogio = setInterval(() => {
+      vezes += 1
+      if (vezes % CANCELA_A_CADA === 0) cancelarPeloCliente()
+      else simular()
+    }, intervaloSimulacao)
     return () => clearInterval(relogio)
-  }, [preferencias.simular, intervaloSimulacao, simular])
+  }, [preferencias.simular, intervaloSimulacao, simular, cancelarPeloCliente])
 
   const avisoDeErro = { onError: (erro: Error) => toast.error(erro.message) }
   /** A mudança mandou aviso ao cliente (simulado): mostra a mensagem que teria saído. */
@@ -521,6 +533,7 @@ export function PaginaFila({
         )
       : null
   const finalizados = finalizadosHoje(concluidos, criadosHoje)
+  useAlertasSecundarios({ fila, criadosHoje, agora, tempos })
   // Motoboys: quem está na rua, quem está livre (desde a última entrega de hoje) e quem não veio.
   const situacoes = situacaoDosMotoboys(motoboys ?? [], [...(fila ?? []), ...concluidos])
   const painelMotoboys = agora ? (

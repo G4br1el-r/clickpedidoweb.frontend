@@ -293,6 +293,16 @@ export function useDefinirAcrescimo() {
   return useMudancaNaLoja((servidor, minutos: number) => servidor.definirAcrescimo(minutos))
 }
 
+/** Demonstração: o cliente cancela pelo site o pedido mais novo que ainda não começou. */
+export function useSimularCancelamento() {
+  const segmento = useSegmento()
+  const cliente = useQueryClient()
+  return useMutation({
+    mutationFn: () => servidorDo(segmento).pedidos.simularCancelamentoDoCliente(),
+    onSuccess: () => cliente.invalidateQueries({ queryKey: chaves.pedidos(segmento) }),
+  })
+}
+
 /** Demonstração: um pedido novo chega agora. */
 export function useSimularPedido() {
   const segmento = useSegmento()

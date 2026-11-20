@@ -320,6 +320,38 @@ describe("PaginaFila", () => {
     expect(aviso).toHaveTextContent(`Seu pedido #${novo.numero} na Casa da Pizza foi aceito`)
   })
 
+  test("alerta secundário: pronto parado avisa uma vez, agrupado", async () => {
+    telaGrande()
+    renderizar()
+    await coluna("Prontos")
+    expect(
+      await screen.findByText(/pronto há \d+ min|pedidos prontos parados/, {}, { timeout: 8000 }),
+    ).toBeInTheDocument()
+  })
+
+  test("alerta secundário desligado no Este aparelho não avisa", async () => {
+    telaGrande()
+    usePreferenciasFila.setState({
+      alertas: { parado: false, atraso: false, pago: true, cancelou: true },
+    })
+    renderizar()
+    await coluna("Prontos")
+    await new Promise((pronto) => setTimeout(pronto, 300))
+    expect(screen.queryByText(/pronto há \d+ min|pedidos prontos parados/)).not.toBeInTheDocument()
+    const menu = await abrirEsteAparelho()
+    expect(menu.getByRole("switch", { name: "Pronto parado" })).not.toBeChecked()
+    expect(menu.getByRole("switch", { name: "Cliente cancelou" })).toBeChecked()
+  })
+
+  test("demonstração: de vez em quando o cliente cancela, e a fila avisa", async () => {
+    telaGrande()
+    usePreferenciasFila.setState({ simular: true })
+    renderizar(100)
+    expect(
+      await screen.findByText(/o cliente cancelou|cancelados pelo cliente/, {}, { timeout: 8000 }),
+    ).toBeInTheDocument()
+  })
+
   test("no celular, as colunas viram abas com a contagem", async () => {
     renderizar()
     const aba = await screen.findByRole("tab", { name: /Novos/ }, { timeout: 8000 })
