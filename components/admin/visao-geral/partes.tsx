@@ -49,6 +49,8 @@ export function ListaDeFatias({
     percentual: number
     /** Leva para os pedidos daquela fatia. */
     href?: string
+    /** Troca a contagem de pedidos por outro texto (ex.: "4 un."). */
+    detalhe?: string
   }[]
   vazio: string
 }) {
@@ -71,7 +73,7 @@ export function ListaDeFatias({
                 <span className="truncate font-medium">{item.nome}</span>
               )}
               <span className="text-xs text-muted-foreground sm:text-sm">
-                {plural(item.pedidos, "pedido", "pedidos")}
+                {item.detalhe ?? plural(item.pedidos, "pedido", "pedidos")}
               </span>
             </span>
             <span className="shrink-0 tabular-nums">{emReais(item.total)}</span>

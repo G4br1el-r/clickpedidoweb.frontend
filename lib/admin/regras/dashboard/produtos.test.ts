@@ -11,6 +11,7 @@ import {
   margemDoPeriodo,
   opcoesMaisEscolhidas,
   porCategoria,
+  resumoABC,
   semVenda,
   vendasPorProduto,
 } from "./produtos"
@@ -105,6 +106,23 @@ describe("curvaABC", () => {
       ["Lanche", "A", 30],
       ["Refri", "B", 15],
       ["Bala", "C", 5],
+    ])
+  })
+
+  test("o resumo soma cada classe que aparece: produtos, faturamento e a parte dela", () => {
+    const curva = curvaABC([
+      vendido("Pizza", 50),
+      vendido("Lanche", 30),
+      vendido("Refri", 15),
+      vendido("Bala", 5),
+    ])
+    expect(resumoABC(curva)).toEqual([
+      { classe: "A", produtos: 2, faturamento: 80, percentual: 80 },
+      { classe: "B", produtos: 1, faturamento: 15, percentual: 15 },
+      { classe: "C", produtos: 1, faturamento: 5, percentual: 5 },
+    ])
+    expect(resumoABC(curvaABC([vendido("Pizza", 10)]))).toEqual([
+      { classe: "A", produtos: 1, faturamento: 10, percentual: 100 },
     ])
   })
 

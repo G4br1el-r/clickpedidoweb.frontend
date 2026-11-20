@@ -235,3 +235,19 @@ export function coberturaDoEstoque(produtos: Produto[], pedidos: Pedido[], perio
     })
     .sort((a, b) => (a.dias ?? Infinity) - (b.dias ?? Infinity))
 }
+
+/** Resumo da curva: quantos produtos, quanto faturam e a parte de cada classe que aparece. */
+export function resumoABC(curva: ReturnType<typeof curvaABC>) {
+  return (["A", "B", "C"] as const).flatMap((classe) => {
+    const dela = curva.filter((produto) => produto.classe === classe)
+    if (dela.length === 0) return []
+    return [
+      {
+        classe,
+        produtos: dela.length,
+        faturamento: reais(dela.reduce((soma, produto) => soma + produto.faturamento, 0)),
+        percentual: dela.reduce((soma, produto) => soma + produto.percentual, 0),
+      },
+    ]
+  })
+}

@@ -313,7 +313,7 @@ describe("VisaoGeral", () => {
       within(abas)
         .getAllByRole("tab")
         .map((aba) => aba.textContent),
-    ).toEqual(["Resumo", "Vendas", "Financeiro"])
+    ).toEqual(["Resumo", "Vendas", "Produtos", "Financeiro"])
     expect(within(abas).getByRole("tab", { name: "Financeiro" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -327,5 +327,20 @@ describe("VisaoGeral", () => {
 
     expect(aoMudar.mock.lastCall?.[0].searchParams.get("aba")).toBe("vendas")
     expect(await screen.findByRole("region", { name: "Canais de venda" })).toBeInTheDocument()
+  })
+
+  test("a aba Produtos mostra os produtos da loja: ranking e o cardápio parado", async () => {
+    render(
+      <Provedores endereco="?aba=produtos">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole("region", { name: "Mais vendidos" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByRole("region", { name: "Por categoria" })).getAllByRole("listitem").length,
+    ).toBeGreaterThan(0)
+    expect(screen.getByRole("region", { name: "Sem venda no período" })).toBeInTheDocument()
   })
 })

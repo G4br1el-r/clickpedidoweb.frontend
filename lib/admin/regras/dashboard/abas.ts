@@ -1,11 +1,12 @@
 import type { SegmentoPainelId } from "../../segmentos-painel"
 
-export type AbaId = "resumo" | "vendas" | "financeiro"
+export type AbaId = "resumo" | "vendas" | "produtos" | "financeiro"
 export type InfoAba = { id: AbaId; titulo: string }
 
 const ABAS: readonly InfoAba[] = [
   { id: "resumo", titulo: "Resumo" },
   { id: "vendas", titulo: "Vendas" },
+  { id: "produtos", titulo: "Produtos" },
   { id: "financeiro", titulo: "Financeiro" },
 ]
 

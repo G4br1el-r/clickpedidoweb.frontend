@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLoja, usePedidos } from "@/lib/admin/dados/consultas"
-import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
+import { useCategorias, useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import { useMesas } from "@/lib/admin/dados/consultas-mesas"
 import { useFarmacia } from "@/lib/admin/farmacia-estado"
 import { useMetas } from "@/lib/admin/metas"
@@ -27,6 +27,7 @@ import { lotesDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
 import { AbaFinanceiro, AbaResumo } from "./painel-visao-geral"
+import { AbaProdutos } from "./produtos/aba-produtos"
 import { AbaVendas } from "./vendas/aba-vendas"
 
 /** De quanto em quanto tempo o Resumo confere os pedidos. */
@@ -92,6 +93,7 @@ export function VisaoGeral() {
   const { data: mesas } = useMesas(30_000, { ativo: temMesas })
 
   const { data: produtos } = useProdutos()
+  const { data: categorias } = useCategorias()
   const decisoes = useFarmacia((estado) => estado.decisoes)
   // A farmácia guarda receitas e lotes fora do servidor de demonstração.
   const farmacia = useMemo(
@@ -182,6 +184,19 @@ export function VisaoGeral() {
           {resumo && periodo ? (
             aba === "vendas" ? (
               <AbaVendas pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
+            ) : aba === "produtos" ? (
+              // Sem o cardápio, "o que não vendeu" estaria errado: espera os dois chegarem.
+              produtos && categorias ? (
+                <AbaProdutos
+                  pedidos={pedidos ?? []}
+                  periodo={periodo}
+                  segmento={segmento}
+                  produtos={produtos}
+                  categorias={categorias}
+                />
+              ) : (
+                <EsqueletoVisaoGeral />
+              )
             ) : aba === "financeiro" ? (
               <AbaFinanceiro resumo={resumo} />
             ) : (
