@@ -50,6 +50,26 @@ describe("filtrarMesas", () => {
     expect(numeros(achadas)).toEqual([12, 120])
   })
 
+  it("o número casa pelo começo: '12' não acha a 112 nem a 212", () => {
+    const linhas = [linha(12), linha(112), linha(120), linha(212)]
+    expect(numeros(filtrarMesas(linhas, { ...vazios, busca: "12" }, "numero"))).toEqual([12, 120])
+  })
+
+  it("termo só com dígitos olha só o número: '3' não acha a mesa 'Varanda 3'", () => {
+    const linhas = [linha(3), linha(7, { nome: "Varanda 3" })]
+    expect(numeros(filtrarMesas(linhas, { ...vazios, busca: "3" }, "numero"))).toEqual([3])
+  })
+
+  it("o garçom casa sem acento nem maiúscula nos dois lados", () => {
+    const linhas = [
+      linha(1, {}, { comanda: comandaDe("ania") }),
+      linha(2, {}, { comanda: comandaDe("Beto") }),
+    ]
+    expect(numeros(filtrarMesas(linhas, { ...vazios, garcom: "Ânia" }, "numero"))).toEqual([1])
+    const outras = [linha(3, {}, { comanda: comandaDe("ÂNIA") })]
+    expect(numeros(filtrarMesas(outras, { ...vazios, garcom: "ania" }, "numero"))).toEqual([3])
+  })
+
   it("busca sem acento nem maiúscula: 'julia' acha a cliente Júlia e 'VARANDA' acha 'Varanda 3'", () => {
     const linhas = [
       linha(1),

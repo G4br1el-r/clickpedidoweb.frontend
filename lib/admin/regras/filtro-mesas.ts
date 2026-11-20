@@ -22,11 +22,14 @@ export type MesaNaGrade = {
 function combinaBusca({ mesa }: MesaNaGrade, busca: string) {
   const texto = normalizar(busca).trim()
   if (!texto) return true
-  return (
-    String(mesa.numero).includes(texto) ||
-    normalizar(mesa.nome).includes(texto) ||
-    normalizar(mesa.clienteNome ?? "").includes(texto)
-  )
+  // Só dígitos: busca o número, pelo começo. Com texto: nome da mesa e cliente.
+  if (/^[0-9]+$/.test(texto)) return String(mesa.numero).startsWith(texto)
+  return normalizar(mesa.nome).includes(texto) || normalizar(mesa.clienteNome ?? "").includes(texto)
+}
+
+function combinaGarcom(linha: MesaNaGrade, garcom: string) {
+  const doPedido = linha.comanda?.mesa?.garcom
+  return doPedido !== undefined && normalizar(doPedido) === normalizar(garcom)
 }
 
 const desde = (linha: MesaNaGrade) =>
@@ -57,7 +60,7 @@ export function filtrarMesas(
       combinaBusca(linha, filtros.busca) &&
       (!filtros.area || linha.mesa.areaId === filtros.area) &&
       combinaEstado(linha, filtros.estado) &&
-      (!filtros.garcom || linha.comanda?.mesa?.garcom === filtros.garcom) &&
+      (!filtros.garcom || combinaGarcom(linha, filtros.garcom)) &&
       (!filtros.atencao || linha.alertas.length > 0),
   )
   return filtradas.sort((a, b) => comparar(a, b, ordem))
