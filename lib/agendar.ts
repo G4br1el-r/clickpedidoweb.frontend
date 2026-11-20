@@ -37,6 +37,22 @@ export function horariosParaAgendar(consulta: {
   return horariosLivres({ ...consulta, agendamentos: [] })
 }
 
+/**
+ * O dia que já vem marcado: o primeiro da lista em que ainda cabe o serviço inteiro.
+ * Hoje no fim do expediente, por exemplo, pula para o próximo dia com vaga. Se nenhum
+ * dia tem vaga, fica no primeiro, e a tela avisa que não há horário.
+ */
+export function diaInicialParaAgendar(consulta: {
+  dias: Date[]
+  duracaoMin: number
+  horarios: HorarioFuncionamento[]
+  capacidade: number
+  agora: Date
+}): Date | undefined {
+  const { dias, ...resto } = consulta
+  return dias.find((dia) => horariosParaAgendar({ ...resto, dia }).length > 0) ?? dias[0]
+}
+
 /** "sábado, 14/11, às 10:00": como a revisão e o acompanhamento mostram o horário. */
 export function textoDoHorario(inicio: string): string {
   return format(parseISO(inicio), "EEEE, dd/MM, 'às' HH:mm", { locale: ptBR })
