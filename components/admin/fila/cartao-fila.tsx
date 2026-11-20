@@ -111,6 +111,7 @@ export function CartaoFila({
   aoRecusar,
   aoCancelar,
   aoAvancar,
+  aoServir,
   aoAbrir,
   aoImprimir,
 }: {
@@ -138,6 +139,8 @@ export function CartaoFila({
   aoRecusar: (escolhido: MotivoEscolhido) => void
   aoCancelar: (escolhido: MotivoEscolhido) => void
   aoAvancar: () => void
+  /** Mesa pronta: a rodada chegou à mesa. */
+  aoServir?: () => void
   aoAbrir: () => void
   aoImprimir: () => void
 }) {
@@ -387,6 +390,17 @@ export function CartaoFila({
                   onClick={aoAvancar}
                 >
                   {acao}
+                </Button>
+              ) : aoServir && pedido.tipo === "mesa" && pedido.status === "pronto" ? (
+                // A mesa sai da fila quando a rodada chega; a conta continua em Mesas.
+                <Button
+                  type="button"
+                  size="sm"
+                  className="min-w-[min(100%,7rem)] flex-1"
+                  disabled={ocupado}
+                  onClick={aoServir}
+                >
+                  Servido
                 </Button>
               ) : (
                 <span className="flex-1 text-xs text-muted-foreground">Fecha em Mesas</span>

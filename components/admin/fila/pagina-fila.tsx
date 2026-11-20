@@ -48,6 +48,7 @@ import {
   usePedidos,
   useReabrirPedido,
   useRecusarPedido,
+  useServirMesa,
   useSimularCancelamento,
   useSimularPedido,
   useVoltarPedido,
@@ -247,6 +248,7 @@ type AcoesDoCartao = {
   recusar: (pedido: Pedido, escolhido: MotivoEscolhido) => void
   cancelar: (pedido: Pedido, escolhido: MotivoEscolhido) => void
   avancar: (pedido: Pedido) => void
+  servir: (pedido: Pedido) => void
   abrir: (pedido: Pedido) => void
   imprimir: (pedido: Pedido) => void
   /** A loja tem motoboys: a entrega pronta se despacha. */
@@ -339,6 +341,7 @@ function Coluna({
                 despacha={acoes.despacha && pedido.tipo === "entrega" && pedido.status === "pronto"}
                 maioridade={acoes.comAlcool(pedido)}
                 aoAvancar={() => acoes.avancar(pedido)}
+                aoServir={() => acoes.servir(pedido)}
                 aoAbrir={() => acoes.abrir(pedido)}
                 aoImprimir={() => acoes.imprimir(pedido)}
               />
@@ -385,6 +388,7 @@ export function PaginaFila({
     Boolean(filtro || ferramentas.busca) || ferramentas.canal.length > 0 || ferramentas.naoPagos
   const avancar = useAvancarPedido()
   const voltar = useVoltarPedido()
+  const servir = useServirMesa()
   const reabrir = useReabrirPedido()
   const [finalizadosAberto, setFinalizadosAberto] = useState(false)
   const [ajudaAberta, setAjudaAberta] = useState(false)
@@ -500,6 +504,11 @@ export function PaginaFila({
     imprimir: impressao.imprimir,
     despacha,
     comAlcool,
+    servir: (pedido) =>
+      servir.mutate(pedido.id, {
+        ...avisoDeErro,
+        onSuccess: (servido) => toast(`#${servido.numero} servido. A conta continua em Mesas.`),
+      }),
   }
   function avancarDeVez(pedido: Pedido) {
     avancar.mutate(

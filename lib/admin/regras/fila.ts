@@ -29,6 +29,10 @@ function ficouParaTras(pedido: Pedido, agora: Date): boolean {
   return criado(pedido) < hoje
 }
 
+/** Mesa pronta e já servida: sai da fila; a conta continua aberta em Mesas. */
+const servida = (pedido: Pedido) =>
+  pedido.tipo === "mesa" && pedido.status === "pronto" && Boolean(pedido.servidoEm)
+
 /** O que ficou aberto de outro dia: sai das colunas e vai para o aviso, com ações em lote. */
 export function pedidosDeDiasAnteriores(pedidos: Pedido[], agora: Date): Pedido[] {
   return pedidos.filter((pedido) => ficouParaTras(pedido, agora))
@@ -45,7 +49,9 @@ export function colunasDaFila(
   agora: Date,
 ): ColunaFila[] {
   const com = (status: StatusPedido) =>
-    pedidos.filter((pedido) => pedido.status === status && !ficouParaTras(pedido, agora))
+    pedidos.filter(
+      (pedido) => pedido.status === status && !ficouParaTras(pedido, agora) && !servida(pedido),
+    )
 
   if (segmento === "salao") {
     return [

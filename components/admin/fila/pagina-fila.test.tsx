@@ -386,6 +386,24 @@ describe("PaginaFila", () => {
     )
   })
 
+  test("mesa pronta: Servido tira da fila; a conta continua em Mesas", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const prontos = await coluna("Prontos")
+    const servido = await prontos.findByRole("button", { name: "Servido" }, { timeout: 8000 })
+    const cartao = servido.closest("article") as HTMLElement
+    const numero = within(cartao).getByRole("heading").textContent ?? ""
+
+    await usuario.click(servido)
+    await waitFor(() =>
+      expect(prontos.queryByRole("heading", { name: numero })).not.toBeInTheDocument(),
+    )
+    const mesa = await servidorDo("pizzaria").pedidos.buscar(Number(numero.slice(1)))
+    expect(mesa?.status).toBe("pronto")
+    expect(mesa?.servidoEm).toBeDefined()
+  })
+
   test("no celular, as colunas viram abas com a contagem", async () => {
     renderizar()
     const aba = await screen.findByRole("tab", { name: /Novos/ }, { timeout: 8000 })

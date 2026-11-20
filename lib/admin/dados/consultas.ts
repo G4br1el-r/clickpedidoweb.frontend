@@ -179,6 +179,14 @@ export function useMotoboyVoltou() {
   })
 }
 
+/** Mesa: a rodada pronta chegou à mesa e sai da fila. */
+export function useServirMesa() {
+  return useMutacaoDePedido<number>(
+    (servidor, id) => servidor.pedidos.servir(id),
+    (pedido) => ({ ...pedido, servidoEm: pedido.servidoEm ?? new Date().toISOString() }),
+  )
+}
+
 export function useCancelarPedido() {
   return useMutacaoDePedido<MudancaDeEtapa & MotivoEscolhido>(
     (servidor, { id, de, ...escolhido }) => servidor.pedidos.cancelar(id, de, escolhido),

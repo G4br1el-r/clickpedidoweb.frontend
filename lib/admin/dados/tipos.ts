@@ -87,7 +87,7 @@ export type MotivoCancelamento =
 /** Uma linha da linha do tempo do pedido. A chegada não entra: é o `criadoEm`. */
 export type EventoPedido =
   | { tipo: "etapa"; status: StatusPedido; em: string }
-  | { tipo: "pago" | "impresso" | "aceito"; em: string }
+  | { tipo: "pago" | "impresso" | "aceito" | "servido"; em: string }
   /** Mensagem que a loja mandou ao cliente (simulada): o texto que teria saído. */
   | { tipo: "aviso"; em: string; texto: string }
 
@@ -133,6 +133,8 @@ export type Pedido = {
   esperaAceite?: boolean
   /** Recusado no aceite ou cancelado depois: por quê e quando. */
   cancelamento?: Cancelamento
+  /** Mesa: quando a rodada pronta chegou à mesa. Sai da fila; a conta continua em Mesas. */
+  servidoEm?: string
   /** Minutos prometidos na chegada, com o acréscimo da hora. Sem o campo, vale o da loja. */
   prazoMin?: number
 }

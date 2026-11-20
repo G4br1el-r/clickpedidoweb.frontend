@@ -220,6 +220,11 @@ function avisoAoCliente(base: BaseLoja, antes: Pedido, depois: Pedido, em: strin
   return [{ tipo: "aviso", em, texto }]
 }
 
+/** A comanda sem a marca de servida. */
+function semServido({ servidoEm: _servidoEm, ...pedido }: Pedido): Pedido {
+  return pedido
+}
+
 /** O pagamento foi registrado no mesmo momento da conclusão (cobrado na entrega ou no balcão). */
 function foiPagoAoConcluir(pedido: Pedido): boolean {
   const concluiu = pedido.historico
@@ -802,6 +807,17 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             return { ...semPagamento, status: destino, situacaoPagamento: "na-entrega" as const }
           }
           return { ...pedido, status: destino }
+        })
+      },
+
+      /** Mesa: a rodada pronta chegou à mesa. Sai da fila; a conta continua aberta em Mesas. */
+      servir(id: number) {
+        return alterar(id, (pedido) => {
+          if (pedido.tipo !== "mesa" || pedido.status !== "pronto") {
+            throw new Error("Só mesa pronta se serve.")
+          }
+          if (pedido.servidoEm) throw new Error("Esta mesa já foi servida.")
+          return { ...pedido, servidoEm: new Date().toISOString() }
         })
       },
 
@@ -1445,7 +1461,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const comanda: Pedido = recalcular(
           aberta
             ? {
-                ...aberta,
+                // Rodada nova para a cozinha: a mesa volta para a fila (deixa de estar servida).
+                ...(vaiParaCozinha ? semServido(aberta) : aberta),
                 itens: [...aberta.itens, ...novos],
                 status: vaiParaCozinha ? "recebido" : aberta.status,
                 enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
