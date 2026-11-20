@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { Motoboy, Pedido, StatusPedido } from "../dados/tipos"
-import { motoboySugerido, situacaoDosMotoboys } from "./despacho"
+import { entregasParaAgrupar, motoboySugerido, situacaoDosMotoboys } from "./despacho"
 import { AGORA_DE_TESTE as AGORA, PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
 
 const motoboy = (id: string, ativo = true): Motoboy => ({
@@ -48,5 +48,25 @@ describe("motoboySugerido", () => {
   test("ninguém disponível, sem sugestão", () => {
     const pedidos = ["a", "b", "c"].map((id, indice) => entrega(indice, id, "saiu-para-entrega", 5))
     expect(motoboySugerido(situacaoDosMotoboys(MOTOBOYS, pedidos))).toBeNull()
+  })
+})
+
+describe("entregasParaAgrupar", () => {
+  const noBairro = (id: number, bairro: string, status: StatusPedido = "pronto"): Pedido => ({
+    ...entrega(id, "", status, 5),
+    motoboyId: undefined,
+    endereco: { cep: "12630-000", logradouro: "Rua", numero: "1", bairro, cidade: "Lorena" },
+  })
+
+  test("as outras entregas prontas do mesmo bairro, sem ligar para acento e maiúscula", () => {
+    const atual = noBairro(1, "Jardim Esplanada")
+    const fila = [
+      atual,
+      noBairro(2, "jardim esplanada"),
+      noBairro(3, "Centro"),
+      noBairro(4, "Jardim Esplanada", "em-preparo"),
+      { ...noBairro(5, "Jardim Esplanada"), tipo: "retirada" as const },
+    ]
+    expect(entregasParaAgrupar(atual, fila).map((pedido) => pedido.id)).toEqual([2])
   })
 })

@@ -1,4 +1,5 @@
 import type { Motoboy, Pedido } from "../dados/tipos"
+import { normalizar } from "./filtro-pedidos"
 
 export type SituacaoMotoboy = {
   motoboy: Motoboy
@@ -39,4 +40,20 @@ export function motoboySugerido(situacoes: SituacaoMotoboy[]): Motoboy | null {
   const livres = situacoes.filter((item) => item.situacao === "disponivel")
   livres.sort((a, b) => (a.livreDesde ?? "").localeCompare(b.livreDesde ?? ""))
   return livres[0]?.motoboy ?? null
+}
+
+const prontaParaSair = (pedido: Pedido) =>
+  pedido.tipo === "entrega" && pedido.status === "pronto" && !pedido.esperaAceite
+
+/** As outras entregas prontas do mesmo bairro: dá para levar junto, numa rota só. */
+export function entregasParaAgrupar(pedido: Pedido, fila: Pedido[]): Pedido[] {
+  const bairro = pedido.endereco && normalizar(pedido.endereco.bairro).trim()
+  if (!bairro) return []
+  return fila.filter(
+    (outro) =>
+      outro.id !== pedido.id &&
+      prontaParaSair(outro) &&
+      outro.endereco !== undefined &&
+      normalizar(outro.endereco.bairro).trim() === bairro,
+  )
 }

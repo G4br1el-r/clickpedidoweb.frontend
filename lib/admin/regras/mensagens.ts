@@ -57,15 +57,36 @@ function cobranca(pedido: Pedido) {
 
 /** O que o motoboy precisa: cliente, endereço, quanto cobrar e o mapa. */
 export function mensagemParaMotoboy(pedido: Pedido, { loja }: { loja: string }) {
-  const linhas = [
+  return [
     `*${loja}* · pedido #${pedido.numero}`,
     `Cliente: ${pedido.cliente.nome} · ${formatarTelefone(pedido.cliente.telefone)}`,
-  ]
+    ...linhasDaEntrega(pedido),
+  ].join("\n")
+}
+
+/** Endereço, referência, cobrança e mapa de uma entrega, linha a linha. */
+function linhasDaEntrega(pedido: Pedido): string[] {
+  const linhas: string[] = []
   if (pedido.endereco) {
     linhas.push(`Endereço: ${enderecoEmTexto(pedido.endereco)}`)
     if (pedido.endereco.referencia) linhas.push(`Referência: ${pedido.endereco.referencia}`)
   }
   linhas.push(cobranca(pedido))
   if (pedido.endereco) linhas.push(`Mapa: ${linkDoMapa(pedido.endereco)}`)
-  return linhas.join("\n")
+  return linhas
+}
+
+/**
+ * A rota para o motoboy: uma entrega só é a mensagem de sempre; várias vão numeradas, cada
+ * uma com o cliente, o endereço, quanto cobrar (e o troco) e o mapa.
+ */
+export function mensagemDaRota(pedidos: Pedido[], { loja }: { loja: string }): string {
+  if (pedidos.length === 1) return mensagemParaMotoboy(pedidos[0], { loja })
+  const blocos = pedidos.map((pedido, indice) =>
+    [
+      `${indice + 1}) #${pedido.numero} · ${pedido.cliente.nome} · ${formatarTelefone(pedido.cliente.telefone)}`,
+      ...linhasDaEntrega(pedido),
+    ].join("\n"),
+  )
+  return [`*${loja}* · rota com ${pedidos.length} entregas`, ...blocos].join("\n\n")
 }
