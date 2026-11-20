@@ -119,7 +119,7 @@ describe("PaginaGarcom", () => {
     const opcoes = await screen.findAllByRole("option")
     expect(opcoes.length).toBe(mesas.length - 1)
     expect(
-      screen.queryByRole("option", { name: new RegExp(`^Mesa ${bloqueada.numero}\b`) }),
+      screen.queryByRole("option", { name: new RegExp(`^Mesa ${bloqueada.numero}\\b`) }),
     ).not.toBeInTheDocument()
   })
 

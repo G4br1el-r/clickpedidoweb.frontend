@@ -1800,6 +1800,7 @@ describe("migração", () => {
 
     const base = await api.base()
     const ocupadas = (await api.mesas.listar()).filter((mesa) => mesa.status === "ocupada")
+    expect(ocupadas.length).toBeGreaterThan(0)
     for (const mesa of ocupadas) {
       const comanda = base.pedidos.find((pedido) => pedido.id === mesa.pedidoAtivoId)
       expect(comanda?.mesa?.pessoas).toBeGreaterThanOrEqual(1)
