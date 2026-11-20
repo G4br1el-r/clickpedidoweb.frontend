@@ -35,6 +35,7 @@ export function JanelaDespacho({
   pedidos,
   mesmoBairro,
   situacoes,
+  comAlcool,
   nomeLoja,
   ocupado,
   aoDespachar,
@@ -45,6 +46,8 @@ export function JanelaDespacho({
   /** Outras prontas do mesmo bairro, para levar junto. */
   mesmoBairro: Pedido[]
   situacoes: SituacaoMotoboy[]
+  /** Adega: a entrega com bebida alcoólica pede documento (+18) na mensagem. */
+  comAlcool: (pedido: Pedido) => boolean
   nomeLoja: string
   ocupado: boolean
   aoDespachar: (ids: number[], motoboyId: string) => Promise<Pedido[]>
@@ -88,7 +91,7 @@ export function JanelaDespacho({
               <a
                 href={linkWhatsApp(
                   saiu.motoboy.telefone,
-                  mensagemDaRota(saiu.pedidos, { loja: nomeLoja }),
+                  mensagemDaRota(saiu.pedidos, { loja: nomeLoja, maioridade: comAlcool }),
                 )}
                 target="_blank"
                 rel="noreferrer"

@@ -3,6 +3,7 @@ import { ptBR } from "date-fns/locale"
 import { patternFormatter } from "react-number-format"
 import { emReais } from "@/lib/formato"
 import type { EnderecoEntrega, Pedido } from "../dados/tipos"
+import { AVISO_DE_MAIORIDADE } from "./maioridade"
 import { rotuloStatus } from "./status"
 
 /** Dinheiro em mensagem de texto: espaço comum, que o WhatsApp não quebra de forma estranha. */
@@ -56,17 +57,22 @@ function cobranca(pedido: Pedido) {
 }
 
 /** O que o motoboy precisa: cliente, endereço, quanto cobrar e o mapa. */
-export function mensagemParaMotoboy(pedido: Pedido, { loja }: { loja: string }) {
+export function mensagemParaMotoboy(
+  pedido: Pedido,
+  { loja, maioridade = false }: { loja: string; maioridade?: boolean },
+) {
   return [
     `*${loja}* · pedido #${pedido.numero}`,
     `Cliente: ${pedido.cliente.nome} · ${formatarTelefone(pedido.cliente.telefone)}`,
-    ...linhasDaEntrega(pedido),
+    ...linhasDaEntrega(pedido, maioridade),
   ].join("\n")
 }
 
 /** Endereço, referência, cobrança e mapa de uma entrega, linha a linha. */
-function linhasDaEntrega(pedido: Pedido): string[] {
+function linhasDaEntrega(pedido: Pedido, maioridade: boolean): string[] {
   const linhas: string[] = []
+  // Adega: bebida alcoólica só sai para maior de 18, com documento.
+  if (maioridade) linhas.push(`${AVISO_DE_MAIORIDADE} na entrega`)
   if (pedido.endereco) {
     linhas.push(`Endereço: ${enderecoEmTexto(pedido.endereco)}`)
     if (pedido.endereco.referencia) linhas.push(`Referência: ${pedido.endereco.referencia}`)
@@ -80,12 +86,17 @@ function linhasDaEntrega(pedido: Pedido): string[] {
  * A rota para o motoboy: uma entrega só é a mensagem de sempre; várias vão numeradas, cada
  * uma com o cliente, o endereço, quanto cobrar (e o troco) e o mapa.
  */
-export function mensagemDaRota(pedidos: Pedido[], { loja }: { loja: string }): string {
-  if (pedidos.length === 1) return mensagemParaMotoboy(pedidos[0], { loja })
+export function mensagemDaRota(
+  pedidos: Pedido[],
+  { loja, maioridade = () => false }: { loja: string; maioridade?: (pedido: Pedido) => boolean },
+): string {
+  if (pedidos.length === 1) {
+    return mensagemParaMotoboy(pedidos[0], { loja, maioridade: maioridade(pedidos[0]) })
+  }
   const blocos = pedidos.map((pedido, indice) =>
     [
       `${indice + 1}) #${pedido.numero} · ${pedido.cliente.nome} · ${formatarTelefone(pedido.cliente.telefone)}`,
-      ...linhasDaEntrega(pedido),
+      ...linhasDaEntrega(pedido, maioridade(pedido)),
     ].join("\n"),
   )
   return [`*${loja}* · rota com ${pedidos.length} entregas`, ...blocos].join("\n\n")

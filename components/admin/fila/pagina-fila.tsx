@@ -14,6 +14,16 @@ import { AnimatePresence } from "motion/react"
 import { parseAsStringLiteral, useQueryState, useQueryStates } from "nuqs"
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react"
 import { toast } from "sonner"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
@@ -42,6 +52,7 @@ import {
   useSimularPedido,
   useVoltarPedido,
 } from "@/lib/admin/dados/consultas"
+import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import type {
   MotivoEscolhido,
   Pedido,
@@ -66,6 +77,7 @@ import {
   resumoDaFila,
 } from "@/lib/admin/regras/fila"
 import { filtrarPedidos } from "@/lib/admin/regras/filtro-pedidos"
+import { pedidoComAlcool } from "@/lib/admin/regras/maioridade"
 import {
   FILTROS_DA_FILA,
   type FiltroDaFila,
@@ -239,6 +251,8 @@ type AcoesDoCartao = {
   imprimir: (pedido: Pedido) => void
   /** A loja tem motoboys: a entrega pronta se despacha. */
   despacha: boolean
+  /** Adega: o pedido leva bebida alcoólica (+18). */
+  comAlcool: (pedido: Pedido) => boolean
 }
 
 function Coluna({
@@ -323,6 +337,7 @@ function Coluna({
                 aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
                 aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
                 despacha={acoes.despacha && pedido.tipo === "entrega" && pedido.status === "pronto"}
+                maioridade={acoes.comAlcool(pedido)}
                 aoAvancar={() => acoes.avancar(pedido)}
                 aoAbrir={() => acoes.abrir(pedido)}
                 aoImprimir={() => acoes.imprimir(pedido)}
@@ -437,6 +452,10 @@ export function PaginaFila({
   const despacha = temModulo(segmento, "motoboys")
   const [despachando, setDespachando] = useState<Pedido[] | null>(null)
   const [bairrosAberto, setBairrosAberto] = useState(false)
+  const [conferindo, setConferindo] = useState<Pedido | null>(null)
+  // Adega: os produtos alcoólicos do cardápio dizem que pedido pede documento.
+  const { data: produtos = [] } = useProdutos()
+  const comAlcool = (pedido: Pedido) => pedidoComAlcool(pedido, produtos)
   const despachar = useDespachar()
   const motoboyVoltou = useMotoboyVoltou()
   const acoes: AcoesDoCartao = {
@@ -470,41 +489,51 @@ export function PaginaFila({
         setDespachando([pedido])
         return
       }
-      avancar.mutate(
-        { id: pedido.id, de: pedido.status },
-        {
-          ...avisoDeErro,
-          // 6 s para desfazer: o toque errado no pico volta o pedido para a coluna de antes.
-          onSuccess: (atualizado) => {
-            mostrarAviso(atualizado)
-            toast.success(
-              `#${atualizado.numero}: ${rotuloStatus(atualizado.tipo, atualizado.status)}`,
-              {
-                duration: DESFAZER_MS,
-                action: {
-                  label: "Desfazer",
-                  onClick: () =>
-                    voltar.mutate(
-                      { id: atualizado.id, de: atualizado.status },
-                      {
-                        ...avisoDeErro,
-                        onSuccess: (voltou) =>
-                          toast(
-                            `#${voltou.numero} de volta: ${rotuloStatus(voltou.tipo, voltou.status)}`,
-                          ),
-                      },
-                    ),
-                },
-              },
-            )
-          },
-        },
-      )
+      // Retirada com bebida alcoólica: antes de entregar, confere o documento.
+      if (pedido.tipo === "retirada" && pedido.status === "pronto" && comAlcool(pedido)) {
+        setConferindo(pedido)
+        return
+      }
+      avancarDeVez(pedido)
     },
     abrir: (pedido) => abrirPedido(pedido.id),
     imprimir: impressao.imprimir,
     despacha,
+    comAlcool,
   }
+  function avancarDeVez(pedido: Pedido) {
+    avancar.mutate(
+      { id: pedido.id, de: pedido.status },
+      {
+        ...avisoDeErro,
+        // 6 s para desfazer: o toque errado no pico volta o pedido para a coluna de antes.
+        onSuccess: (atualizado) => {
+          mostrarAviso(atualizado)
+          toast.success(
+            `#${atualizado.numero}: ${rotuloStatus(atualizado.tipo, atualizado.status)}`,
+            {
+              duration: DESFAZER_MS,
+              action: {
+                label: "Desfazer",
+                onClick: () =>
+                  voltar.mutate(
+                    { id: atualizado.id, de: atualizado.status },
+                    {
+                      ...avisoDeErro,
+                      onSuccess: (voltou) =>
+                        toast(
+                          `#${voltou.numero} de volta: ${rotuloStatus(voltou.tipo, voltou.status)}`,
+                        ),
+                    },
+                  ),
+              },
+            },
+          )
+        },
+      },
+    )
+  }
+
   // O cartão que está sendo mexido fica com os botões travados até o servidor responder.
   const emAndamento = [avancar, aceitar, recusar, cancelar].find((mutacao) => mutacao.isPending)
   const idEmAndamento =
@@ -879,6 +908,7 @@ export function PaginaFila({
             ).values(),
           ]}
           situacoes={situacoes}
+          comAlcool={comAlcool}
           nomeLoja={loja?.nome ?? ""}
           ocupado={despachar.isPending}
           aoDespachar={async (ids, motoboyId) => {
@@ -905,6 +935,30 @@ export function PaginaFila({
           abrirPedido(pedido.id)
         }}
       />
+      <AlertDialog
+        open={conferindo !== null}
+        onOpenChange={(aberto) => !aberto && setConferindo(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Conferiu o documento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O pedido #{conferindo?.numero} tem bebida alcoólica: só sai para maior de 18.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (conferindo) avancarDeVez(conferindo)
+                setConferindo(null)
+              }}
+            >
+              Conferi, entregar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AjudaAtalhos aberta={ajudaAberta} aoMudar={setAjudaAberta} />
       <GavetaFinalizados
         pedidos={finalizados}

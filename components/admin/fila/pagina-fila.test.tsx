@@ -352,6 +352,40 @@ describe("PaginaFila", () => {
     ).toBeInTheDocument()
   })
 
+  test("adega: retirada com bebida alcoólica pede o documento antes de entregar", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    useSegmentoAtual.setState({ segmento: "adega" })
+    const api = servidorDo("adega")
+    const alcoolicos = new Set(
+      (await api.produtos.listar())
+        .filter((produto) => produto.alcoolico)
+        .map((produto) => produto.id),
+    )
+    const comAlcool = (await api.pedidos.listar({ status: ["em-preparo", "pronto"] })).find(
+      (pedido) =>
+        pedido.tipo === "retirada" &&
+        pedido.itens.some((item) => item.produtoId !== null && alcoolicos.has(item.produtoId)),
+    )
+    if (!comAlcool) throw new Error("A demonstração da adega devia ter retirada com álcool")
+    if (comAlcool.status === "em-preparo") await api.pedidos.avancar(comAlcool.id, "em-preparo")
+    renderizar()
+
+    const prontos = await coluna("Prontos")
+    const cartao = (await prontos.findByRole("heading", { name: `#${comAlcool.numero}` })).closest(
+      "article",
+    ) as HTMLElement
+    expect(within(cartao).getByText("+18: conferir documento")).toBeInTheDocument()
+    await usuario.click(within(cartao).getByRole("button", { name: "Cliente retirou" }))
+    const pergunta = within(
+      await screen.findByRole("alertdialog", { name: "Conferiu o documento?" }),
+    )
+    await usuario.click(pergunta.getByRole("button", { name: "Conferi, entregar" }))
+    await waitFor(async () =>
+      expect((await api.pedidos.buscar(comAlcool.id))?.status).toBe("concluido"),
+    )
+  })
+
   test("no celular, as colunas viram abas com a contagem", async () => {
     renderizar()
     const aba = await screen.findByRole("tab", { name: /Novos/ }, { timeout: 8000 })

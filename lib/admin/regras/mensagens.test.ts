@@ -173,3 +173,19 @@ describe("mensagemDaRota", () => {
     )
   })
 })
+
+describe("mensagem do motoboy com bebida alcoólica", () => {
+  test("pede para conferir o documento na entrega, na mensagem e em cada entrega da rota", () => {
+    expect(mensagemParaMotoboy(ENTREGA, { loja: "Adega", maioridade: true })).toContain(
+      "+18: conferir documento na entrega",
+    )
+    const outra = { ...ENTREGA, id: 99, numero: 13 }
+    const rota = mensagemDaRota([ENTREGA, outra], {
+      loja: "Adega",
+      maioridade: (pedido) => pedido.numero === 13,
+    })
+    const [, primeira, segunda] = rota.split("\n\n")
+    expect(primeira).not.toContain("+18")
+    expect(segunda).toContain("+18: conferir documento na entrega")
+  })
+})
