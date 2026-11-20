@@ -414,6 +414,13 @@ export function PaginaFila({
   }, [preferencias.simular, intervaloSimulacao, simular])
 
   const avisoDeErro = { onError: (erro: Error) => toast.error(erro.message) }
+  /** A mudança mandou aviso ao cliente (simulado): mostra a mensagem que teria saído. */
+  const mostrarAviso = (pedido: Pedido) => {
+    const ultimo = pedido.historico?.at(-1)
+    if (ultimo?.tipo === "aviso" && ultimo.em === pedido.atualizadoEm) {
+      toast("Cliente avisado no WhatsApp", { description: ultimo.texto })
+    }
+  }
   // Despacho: com motoboys, a entrega pronta sai pela janela de despacho.
   const despacha = temModulo(segmento, "motoboys")
   const [despachando, setDespachando] = useState<Pedido[] | null>(null)
@@ -424,12 +431,21 @@ export function PaginaFila({
     aceitar: (pedido) =>
       aceitar.mutate(pedido.id, {
         ...avisoDeErro,
-        onSuccess: (aceito) => toast.success(`#${aceito.numero} aceito.`),
+        onSuccess: (aceito) => {
+          toast.success(`#${aceito.numero} aceito.`)
+          mostrarAviso(aceito)
+        },
       }),
     recusar: (pedido, escolhido) =>
       recusar.mutate(
         { id: pedido.id, ...escolhido },
-        { ...avisoDeErro, onSuccess: (recusado) => toast(`#${recusado.numero} recusado.`) },
+        {
+          ...avisoDeErro,
+          onSuccess: (recusado) => {
+            toast(`#${recusado.numero} recusado.`)
+            mostrarAviso(recusado)
+          },
+        },
       ),
     cancelar: (pedido, escolhido) =>
       cancelar.mutate(
@@ -447,7 +463,8 @@ export function PaginaFila({
         {
           ...avisoDeErro,
           // 6 s para desfazer: o toque errado no pico volta o pedido para a coluna de antes.
-          onSuccess: (atualizado) =>
+          onSuccess: (atualizado) => {
+            mostrarAviso(atualizado)
             toast.success(
               `#${atualizado.numero}: ${rotuloStatus(atualizado.tipo, atualizado.status)}`,
               {
@@ -467,7 +484,8 @@ export function PaginaFila({
                     ),
                 },
               },
-            ),
+            )
+          },
         },
       )
     },
@@ -853,6 +871,7 @@ export function PaginaFila({
           aoDespachar={async (ids, motoboyId) => {
             try {
               const { despachados, pulados } = await despachar.mutateAsync({ ids, motoboyId })
+              for (const pedido of despachados) mostrarAviso(pedido)
               if (pulados > 0)
                 toast(`${plural(pulados, "pedido ficou", "pedidos ficaram")} de fora.`)
               return despachados

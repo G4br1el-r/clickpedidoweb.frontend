@@ -306,6 +306,20 @@ describe("PaginaFila", () => {
     expect(within(grupos[0]).getAllByRole("listitem")[0]).toHaveTextContent(/^#\d+/)
   })
 
+  test("aceitar mostra a mensagem que teria saído para o cliente", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    const novo = await servidorDo("pizzaria").pedidos.simular()
+    renderizar()
+    const cartao = (
+      await (await coluna("Novos")).findByRole("heading", { name: `#${novo.numero}` })
+    ).closest("article") as HTMLElement
+    await usuario.click(within(cartao).getByRole("button", { name: "Aceitar" }))
+
+    const aviso = (await screen.findByText("Cliente avisado no WhatsApp")).closest("li")
+    expect(aviso).toHaveTextContent(`Seu pedido #${novo.numero} na Casa da Pizza foi aceito`)
+  })
+
   test("no celular, as colunas viram abas com a contagem", async () => {
     renderizar()
     const aba = await screen.findByRole("tab", { name: /Novos/ }, { timeout: 8000 })
