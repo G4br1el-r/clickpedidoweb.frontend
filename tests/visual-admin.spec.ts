@@ -87,6 +87,17 @@ for (const tema of ["light", "dark"] as const) {
     await expect(page).toHaveScreenshot(`painel-fila-${tema}.png`, { fullPage: true })
   })
 
+  test(`painel: painel de chamada da TV (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/chamada")
+    await expect(
+      page.getByRole("region", { name: "Pronto, pode retirar" }).getByRole("listitem").first(),
+    ).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-chamada-${tema}.png`, { fullPage: true })
+  })
+
   test(`painel: PDV (${tema})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
     await page.goto("/admin/pdv")

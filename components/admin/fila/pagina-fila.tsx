@@ -680,10 +680,12 @@ export function PaginaFila({
                 Painel de chamada
               </a>
             </Button>
+            {/* Tela cheia é para o monitor do balcão: no celular não serve. */}
             <Button
               type="button"
               variant="outline"
               size="sm"
+              className="max-md:hidden"
               onClick={() => void quadro.current?.requestFullscreen?.()}
             >
               <MaximizeIcon data-icon="inline-start" />

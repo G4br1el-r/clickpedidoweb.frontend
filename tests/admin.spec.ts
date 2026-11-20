@@ -875,6 +875,94 @@ test("fila: despachar a entrega pronta com o motoboy e chamá-lo no WhatsApp", a
   await expect(page.getByText("Cliente avisado no WhatsApp").first()).toBeVisible()
 })
 
+test("fila: a mesa pronta sai da fila com Servido; a conta continua em Mesas", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/fila")
+  await expect(page.getByRole("article").first()).toBeVisible({ timeout: 15_000 })
+  // No celular e no tablet, a fila usa abas.
+  const aba = page.getByRole("tab", { name: /^Prontos/ })
+  if (await aba.isVisible()) await aba.click()
+  const cartao = page
+    .getByRole("region", { name: /^Prontos, / })
+    .getByRole("article")
+    .filter({ has: page.getByRole("button", { name: "Servido" }) })
+    .first()
+  const numero = (await cartao.getByRole("heading").textContent()) ?? ""
+  await esperarAnimacoes(page)
+  await verificarAcessibilidade(page)
+  await cartao.getByRole("button", { name: "Servido" }).click()
+  await expect(page.getByText(`${numero} servido. A conta continua em Mesas.`)).toBeVisible()
+  await expect(page.getByRole("heading", { name: numero, exact: true })).toHaveCount(0)
+})
+
+test("fila: sem impressora neste aparelho, a barra mostra e o cupom não sai", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/fila")
+  const cartao = page.getByRole("article").filter({ visible: true }).first()
+  await expect(cartao).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole("status").filter({ hasText: "Impressora online" })).toBeVisible()
+
+  // No celular, Este aparelho fica no Mais.
+  const mais = page.getByRole("button", { name: "Mais" })
+  if (await mais.isVisible()) await mais.click()
+  await page.getByRole("button", { name: /Este aparelho/ }).click()
+  await page.getByRole("combobox", { name: "Onde este aparelho imprime" }).click()
+  await page.getByRole("option", { name: "Sem impressora" }).click()
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("status").filter({ hasText: "Sem impressora" })).toBeVisible()
+
+  const numero = (await cartao.getByRole("heading").textContent()) ?? ""
+  await cartao.getByRole("button", { name: `Imprimir cupom de ${numero}` }).click()
+  await expect(page.getByText(`Sem impressora: o cupom de ${numero} não saiu.`)).toBeVisible()
+})
+
+test("painel de chamada: a TV mostra só os números do balcão, sem o painel em volta", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/fila")
+  const link = page.getByRole("link", { name: "Painel de chamada" })
+  await expect(link).toHaveAttribute("target", "_blank")
+  await page.goto((await link.getAttribute("href")) ?? "")
+
+  await expect(page.getByRole("region", { name: "Preparando" })).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole("region", { name: "Pronto, pode retirar" })).toBeVisible()
+  // Sem a barra lateral: o cliente não vê o menu do painel.
+  await expect(page.getByRole("link", { name: "Fila de pedidos" })).toHaveCount(0)
+  const largura = await page.evaluate(() => document.documentElement.scrollWidth)
+  expect(largura).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0)
+  await esperarAnimacoes(page)
+  await verificarAcessibilidade(page)
+})
+
+test("painel de chamada: o pedido que a cozinha marca pronto vai para Pronto, pode retirar", async ({
+  context,
+  page,
+}, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a cozinha usa abas")
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/chamada")
+  const preparando = page.getByRole("region", { name: "Preparando" })
+  const primeiro = preparando.getByRole("listitem").first()
+  await expect(primeiro).toBeVisible({ timeout: 15_000 })
+  const numero = (await primeiro.locator("span").first().textContent()) ?? ""
+
+  // Na outra aba (o tablet da cozinha), o ticket desse número anda até pronto.
+  const cozinha = await context.newPage()
+  await cozinha.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await cozinha.goto("/admin/cozinha")
+  const ticket = cozinha.getByRole("article", { name: new RegExp(`#${numero}$`) })
+  const iniciar = ticket.getByRole("button", { name: "Iniciar preparo" })
+  await expect(ticket).toBeVisible({ timeout: 15_000 })
+  if (await iniciar.isVisible()) await iniciar.click()
+  await ticket.getByRole("button", { name: "Marcar pronto" }).click()
+
+  await expect(
+    page.getByRole("region", { name: "Pronto, pode retirar" }).getByText(numero, { exact: true }),
+  ).toBeVisible({ timeout: 10_000 })
+  await expect(preparando.getByText(numero, { exact: true })).toHaveCount(0)
+})
+
 test("fila: arrastar o cartão para a coluna seguinte avança o pedido", async ({ page }, info) => {
   test.skip(
     (info.project.use.viewport?.width ?? 0) < 1024,

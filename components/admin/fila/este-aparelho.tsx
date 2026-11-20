@@ -111,7 +111,12 @@ export function EsteAparelho({ loja }: { loja: ConfigLoja | undefined }) {
           Este aparelho
         </Button>
       </PopoverTrigger>
-      <PopoverContent aria-label="Este aparelho" align="end" className="w-80 gap-0 p-0">
+      <PopoverContent
+        aria-label="Este aparelho"
+        align="end"
+        // Com tantos grupos, passa da tela: limita à altura livre e rola por dentro.
+        className="max-h-(--radix-popover-content-available-height) w-80 gap-0 overflow-y-auto overscroll-contain p-0"
+      >
         <p className="px-4 pt-3 pb-1 text-sm font-semibold">Este aparelho</p>
         <Grupo titulo="Som">
           <Linha

@@ -70,7 +70,8 @@ function Coluna({
           <li key={pedido.id} className="flex flex-col gap-1">
             <span
               className={cn(
-                "font-semibold leading-none tracking-tight tabular-nums",
+                // Sem tabular: o 1 tabular da Geist tem pé e, gigante, parece máquina de escrever.
+                "font-semibold leading-none tracking-tight",
                 destaque ? "text-[clamp(3rem,6.5vw,7rem)]" : "text-[clamp(2.5rem,4.5vw,5rem)]",
               )}
             >
