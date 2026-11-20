@@ -9,6 +9,7 @@ import { useAgora } from "@/hooks/use-agora"
 import { useFila } from "@/lib/admin/dados/consultas"
 import { useMesas } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa, Pedido } from "@/lib/admin/dados/tipos"
+import { tempoDesde } from "@/lib/admin/regras/alertas-mesa"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
@@ -16,13 +17,6 @@ import { CabecalhoPagina } from "../cabecalho-pagina"
 import { Traco } from "../traco"
 import { ComandaMesa } from "./comanda-mesa"
 import { NovaMesa } from "./nova-mesa"
-
-/** "25 min" ou "1 h 05". */
-function tempoDesde(inicio: string, agora: Date) {
-  const minutos = Math.max(0, Math.floor((agora.getTime() - Date.parse(inicio)) / 60_000))
-  if (minutos < 60) return `${minutos} min`
-  return `${Math.floor(minutos / 60)} h ${String(minutos % 60).padStart(2, "0")}`
-}
 
 const nomePadrao = (mesa: Mesa) => mesa.nome === `Mesa ${String(mesa.numero).padStart(2, "0")}`
 
