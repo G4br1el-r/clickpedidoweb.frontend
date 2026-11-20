@@ -555,7 +555,7 @@ Situação: pronta em 13/11/2026.
 - **Fora da tela:** o pedido passa a guardar o horário de cada status, o produto ganha custo (com cópia na venda), o cancelamento ganha motivo, as Configurações ganham a taxa de cada forma de pagamento e o gerador de demonstração sobe para a versão 3.
 - **Etapas,** cada uma num PR: 1. Resumo; 2. Vendas; 3. Base de dados; 4. Produtos e Financeiro; 5. Operação e Clientes; 6. Entrega e abas do segmento; 7. CSV e impressão.
 
-Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 3 (Base de dados) prontas em 19/11/2026.
+Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 3 (Base de dados) prontas em 19/11/2026; etapa 4 (Produtos e Financeiro) pronta em 20/11/2026.
 
 - **Etapa 1:**
   - abas Resumo, Vendas e Financeiro no endereço (`?aba=`), dentro do painel de cada aba para leitores de tela;
@@ -582,4 +582,13 @@ Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 
   - **um custo só,** no produto: o custo que ficava no estoque saiu, e a entrada de compra e a configuração do estoque passam a gravar o custo do produto;
   - nos pedidos em andamento gerados, o `atualizadoEm` continua o da criação (a Cozinha usa esse campo para os prontos recentes); o histórico tem as horas de cada etapa.
 - **Etapa 3, corrigido no caminho:** salvar o formulário do produto apagava o estoque e os dados do medicamento; agora eles ficam como estavam.
+- **Etapa 4:**
+  - aba Produtos (entre Vendas e Financeiro): régua com produtos vendidos, unidades (kg no açougue), margem e sem venda; ranking por R$ ou quantidade, com o caminho para os pedidos de cada produto (`?busca=`); categorias; curva ABC; margem por produto, com o aviso de quem ficou sem custo; adicionais e opções mais escolhidos; estoque, com o valor parado e em quantos dias cada produto acaba; o que não vendeu; e a tabela de todos os produtos;
+  - aba Financeiro completa: do bruto ao líquido (com os descontos do PDV), depois das taxas e do custo (taxas estimadas, líquido depois delas, margem bruta com a cobertura do custo e o que falta receber), formas de pagamento com o caminho para os pedidos e as taxas de cada forma, com o aviso da forma sem taxa e o link para configurar;
+  - regras em `lib/admin/regras/dashboard/produtos.ts` e `financeiro.ts`.
+- **Etapa 4, decidido no caminho:**
+  - a margem usa o total do item (com os adicionais, que não têm custo próprio) contra o custo do produto vezes a quantidade (no quilo, vezes o peso); a tela avisa;
+  - o faturamento por produto é o total do item como foi vendido, sem ratear o desconto do pedido; os descontos ficam no Financeiro;
+  - a barra do ranking se mede pelo primeiro colocado (com muitos produtos, a parte de cada um é pequena); a % ao lado continua sendo a parte no faturamento;
+  - o caminho de um produto para os pedidos usa a busca por nome, que também acha os produtos com nome parecido.
 - **Também mudou:** as fotos do Playwright escondem o selo de avisos do Next no modo dev (`tests/sem-avisos-do-next.css`), que aparecia mesmo com `devIndicators: false`.
