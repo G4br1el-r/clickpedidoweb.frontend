@@ -5,7 +5,6 @@ import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter, type OnUrlUpdateFunction } from "nuqs/adapters/testing"
 import { type ReactNode, useState } from "react"
-import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -65,9 +64,6 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.useRealTimers()
-  // Os avisos ficam guardados no sonner entre os testes: sem isto, o "Produto salvo." de um
-  // teste aparece no seguinte.
-  toast.dismiss()
 })
 
 describe("FormularioProduto: campos por segmento", () => {
