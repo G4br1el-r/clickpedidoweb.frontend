@@ -16,6 +16,7 @@ import { NumericFormat, PatternFormat } from "react-number-format"
 import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
@@ -32,11 +33,12 @@ import { Textarea } from "@/components/ui/textarea"
 import { useAgora } from "@/hooks/use-agora"
 import { useLoja } from "@/lib/admin/dados/consultas"
 import { useConectarPagamento, useSalvarLoja } from "@/lib/admin/dados/consultas-entrega"
-import type { ConfigLoja, FormaPagamento, SomAlerta } from "@/lib/admin/dados/tipos"
+import type { ConfigLoja, FormaPagamento, SomAlerta, TipoPedido } from "@/lib/admin/dados/tipos"
 import { avisosDaLoja, ETAPAS_DO_AVISO, type EtapaDoAviso } from "@/lib/admin/regras/avisos-cliente"
 import { esquemaLoja, type FormularioLoja } from "@/lib/admin/regras/esquema-loja"
 import { copiarParaTodos, textoDoHorario } from "@/lib/admin/regras/loja"
 import { resumoDasAlteracoes, secoesAlteradas } from "@/lib/admin/regras/secoes-loja"
+import { VIAS_DE_FABRICA } from "@/lib/admin/regras/vias"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo, temRecurso } from "@/lib/admin/segmentos-painel"
 import { tocarAlerta } from "@/lib/admin/som"
@@ -518,7 +520,60 @@ const valoresIniciais = (loja: ConfigLoja): FormularioLoja => ({
   videoBanner: loja.videoBanner ?? "",
   // Os avisos ao cliente aparecem com os textos de fábrica no que a loja não mudou.
   avisosCliente: avisosDaLoja(loja),
+  // Cada canal com as vias escolhidas, ou as de fábrica.
+  viasPorCanal: { ...VIAS_DE_FABRICA, ...loja.viasPorCanal },
 })
+
+const ROTULO_DO_CANAL: Record<TipoPedido, string> = {
+  entrega: "Entrega",
+  retirada: "Retirada",
+  mesa: "Mesa",
+  atendimento: "Salão",
+}
+
+/** As vias do cupom de cada canal: produção (sem preço) e cliente e entregador. */
+function ViasDoCupom({ controle, canais }: { controle: Controle; canais: TipoPedido[] }) {
+  return (
+    <fieldset className="flex flex-col">
+      <legend className="mb-1 text-sm font-medium">Vias do cupom</legend>
+      <p className="mb-2 text-[13px] text-muted-foreground">
+        Produção sai sem preço e com letra grande; cliente e entregador leva preços, cobrança e
+        troco.
+      </p>
+      <div className="flex flex-col divide-y divide-border/70 border-y border-border/70">
+        {canais.map((canal) => (
+          <div key={canal} className="flex flex-wrap items-center gap-x-6 gap-y-2 py-2.5">
+            <span className="w-24 text-sm">{ROTULO_DO_CANAL[canal]}</span>
+            {(["producao", "cliente"] as const).map((via) => (
+              <Controller
+                key={via}
+                control={controle}
+                name={`viasPorCanal.${canal}.${via}`}
+                render={({ field }) => {
+                  const id = `via-${canal}-${via}`
+                  const nome = via === "producao" ? "produção" : "cliente e entregador"
+                  return (
+                    <div className="flex items-center gap-2">
+                      <Checkbox
+                        id={id}
+                        checked={Boolean(field.value)}
+                        onCheckedChange={(marcado) => field.onChange(marcado === true)}
+                        aria-label={`${ROTULO_DO_CANAL[canal]}: ${nome}`}
+                      />
+                      <label htmlFor={id} className="text-[13px]">
+                        {via === "producao" ? "Produção" : "Cliente e entregador"}
+                      </label>
+                    </div>
+                  )
+                }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </fieldset>
+  )
+}
 
 const ROTULO_DO_AVISO: Record<EtapaDoAviso, string> = {
   aceito: "Pedido aceito",
@@ -1004,6 +1059,18 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
           />
           <Chave controle={controle} nome="cortarPapel" rotulo="Cortar o papel no fim do cupom" />
         </Linhas>
+        <ViasDoCupom
+          controle={controle}
+          canais={
+            salao
+              ? ["atendimento"]
+              : [
+                  ...(comEntrega ? (["entrega"] as const) : []),
+                  "retirada",
+                  ...(temModulo(segmento, "mesas") ? (["mesa"] as const) : []),
+                ]
+          }
+        />
         <Button type="button" variant="outline" className="self-start" onClick={() => imprimir()}>
           <PrinterIcon data-icon="inline-start" />
           Imprimir cupom de teste

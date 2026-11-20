@@ -3,6 +3,8 @@ import { esquemaLinkDeVideo } from "./video"
 
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/
 
+const viasDoCanal = z.object({ producao: z.boolean(), cliente: z.boolean() })
+
 const texto = (maximo: number) =>
   z
     .string()
@@ -88,6 +90,14 @@ export const esquemaLoja = z
       .int({ error: "Entre 1 e 30 minutos." })
       .min(1, { error: "Entre 1 e 30 minutos." })
       .max(30, { error: "Entre 1 e 30 minutos." }),
+    viasPorCanal: z
+      .object({
+        entrega: viasDoCanal.optional(),
+        retirada: viasDoCanal.optional(),
+        mesa: viasDoCanal.optional(),
+        atendimento: viasDoCanal.optional(),
+      })
+      .optional(),
     avisosCliente: z
       .object({
         ligado: z.boolean(),

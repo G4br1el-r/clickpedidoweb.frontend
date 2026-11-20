@@ -38,6 +38,7 @@ const SECAO_DO_CAMPO: Partial<Record<keyof ConfigLoja, SecaoLoja>> = {
   pagamentoOnlineConectado: "Pagamento online",
   impressaoAutomatica: "Impressão",
   cortarPapel: "Impressão",
+  viasPorCanal: "Impressão",
   aceiteManual: "Fila e pedidos",
   limiteAceiteMin: "Fila e pedidos",
   avisosCliente: "Fila e pedidos",

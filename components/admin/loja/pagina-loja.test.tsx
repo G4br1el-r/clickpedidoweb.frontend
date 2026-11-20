@@ -222,6 +222,23 @@ describe("PaginaLoja: fila e pedidos", () => {
   })
 })
 
+describe("PaginaLoja: vias do cupom", () => {
+  test("cada canal escolhe as vias; de fábrica a mesa sai só na produção", async () => {
+    const usuario = await abrir()
+    const impressao = secao("Impressão")
+    const mesaCliente = impressao.getByRole("checkbox", { name: "Mesa: cliente e entregador" })
+    expect(impressao.getByRole("checkbox", { name: "Mesa: produção" })).toBeChecked()
+    expect(mesaCliente).not.toBeChecked()
+    expect(impressao.getByRole("checkbox", { name: "Entrega: cliente e entregador" })).toBeChecked()
+
+    await usuario.click(mesaCliente)
+    await usuario.click(screen.getByRole("button", { name: "Salvar alterações" }))
+    await waitFor(async () =>
+      expect((await api().loja()).viasPorCanal?.mesa).toEqual({ producao: true, cliente: true }),
+    )
+  })
+})
+
 describe("PaginaLoja: recursos de cada loja", () => {
   test("açougue: vitrines com título e liga/desliga", async () => {
     useSegmentoAtual.setState({ segmento: "acougue" })

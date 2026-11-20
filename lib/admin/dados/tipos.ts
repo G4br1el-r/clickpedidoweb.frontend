@@ -372,6 +372,8 @@ export type ConfigLoja = {
   /** Salão: quantos atendimentos cabem ao mesmo tempo. Sem o campo, 1. */
   capacidadeAtendimentos?: number
   impressaoAutomatica: boolean
+  /** Vias do cupom em cada canal: produção (sem preço) e cliente/entregador. */
+  viasPorCanal?: Partial<Record<TipoPedido, { producao: boolean; cliente: boolean }>>
   cortarPapel: boolean
   som: SomAlerta
   /** Pedido do site espera a loja aceitar ou recusar na fila. */

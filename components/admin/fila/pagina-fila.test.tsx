@@ -195,7 +195,8 @@ describe("PaginaFila", () => {
     const barra = within(screen.getByRole("region", { name: "Pedidos selecionados" }))
     expect(barra.getByText("2 selecionados")).toBeInTheDocument()
     await usuario.click(barra.getByRole("button", { name: "Imprimir" }))
-    expect(imprimir).toHaveBeenCalledTimes(2)
+    // A mesa sai só na via de produção; a retirada, em produção e cliente.
+    await waitFor(() => expect(imprimir).toHaveBeenCalledTimes(3))
 
     await usuario.click(barra.getByRole("button", { name: "Avançar" }))
     const preparo = await coluna("Em preparo")
@@ -641,8 +642,25 @@ describe("PaginaFila", () => {
       expect(novos.length).toBeGreaterThan(0)
       for (const pedido of novos) expect(pedido.impressoEm).toBeDefined()
     })
-    // Uma impressão para cada pedido que chegou.
-    expect(imprimir).toHaveBeenCalledTimes((await chegaram()).length)
+    // Pedido do site é entrega ou retirada: duas vias (produção e cliente) para cada um.
+    expect(imprimir).toHaveBeenCalledTimes((await chegaram()).length * 2)
+  })
+
+  test("vias do cupom: a retirada sai em produção e cliente; a mesa, só na produção", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const novos = await coluna("Novos")
+    const tipo = (canal: string) =>
+      novos.getAllByRole("article").find((cartao) => within(cartao).queryByText(canal)) as HTMLElement
+    const imprimirDo = (cartao: HTMLElement) =>
+      within(cartao).getByRole("button", { name: /^Imprimir cupom de #/ })
+
+    await usuario.click(imprimirDo(tipo("Retirada")))
+    await waitFor(() => expect(imprimir).toHaveBeenCalledTimes(2))
+    imprimir.mockClear()
+    await usuario.click(imprimirDo(tipo("Mesa 3")))
+    await waitFor(() => expect(imprimir).toHaveBeenCalledTimes(1))
   })
 
   test("os detalhes do pedido também imprimem o cupom", async () => {
