@@ -25,7 +25,7 @@ const EM_ANDAMENTO: readonly Pedido["status"][] = [
 const minutosEntre = (de: number, ate: number) => Math.floor((ate - de) / 60_000)
 
 /** Quando o pedido ficou pronto, pela linha do tempo (ou pela última mudança). */
-function ficouPronto(pedido: Pedido): number {
+export function ficouPronto(pedido: Pedido): number {
   const evento = pedido.historico
     ?.filter((item) => item.tipo === "etapa" && item.status === "pronto")
     .at(-1)

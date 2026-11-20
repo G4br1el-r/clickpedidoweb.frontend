@@ -7,7 +7,8 @@ import { useConfig } from "@/lib/admin/config"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { ShellAdmin } from "./shell-admin"
 
-vi.mock("next/navigation", () => ({ usePathname: () => "/admin/fila" }))
+const navegacao = vi.hoisted(() => ({ caminho: "/admin/fila" }))
+vi.mock("next/navigation", () => ({ usePathname: () => navegacao.caminho }))
 
 function renderizar() {
   return render(
@@ -23,11 +24,20 @@ function renderizar() {
 }
 
 beforeEach(() => {
+  navegacao.caminho = "/admin/fila"
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
   useConfig.setState(useConfig.getInitialState(), true)
 })
 
 describe("ShellAdmin", () => {
+  test("o painel de chamada vai para a TV do cliente: sem a barra lateral do painel", () => {
+    navegacao.caminho = "/admin/chamada"
+    renderizar()
+    expect(screen.getByRole("heading", { level: 1, name: "Fila de pedidos" })).toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Fila de pedidos" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("textbox", { name: "Buscar configuração" })).not.toBeInTheDocument()
+  })
+
   test("a barra lateral com os módulos fica ao lado do conteúdo da página", async () => {
     renderizar()
     expect(screen.getByRole("heading", { level: 1, name: "Fila de pedidos" })).toBeInTheDocument()

@@ -16,6 +16,9 @@ export type ItemVenda = {
   observacao?: string
 }
 
+/** Nome do cliente na venda do balcão em que ninguém deu o nome. */
+export const CLIENTE_DO_BALCAO = "Venda no balcão"
+
 export type Desconto = { modo: "reais" | "porcento"; valor: number }
 
 const reais = (valor: number) => Math.round(valor * 100) / 100

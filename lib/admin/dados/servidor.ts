@@ -18,6 +18,7 @@ import { eventosDaMudanca } from "../regras/historico"
 import { proximoNumero } from "../regras/numero"
 import { pausaAtiva } from "../regras/pausa"
 import {
+  CLIENTE_DO_BALCAO,
   type Desconto,
   descontoPassaDoSubtotal,
   type Escolhas,
@@ -1250,7 +1251,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           origem: "pdv",
           tipo: "retirada",
           status: venda.concluida ? "concluido" : "recebido",
-          cliente: { nome: clienteNome || "Venda no balcão", telefone: base.loja.telefone },
+          cliente: { nome: clienteNome || CLIENTE_DO_BALCAO, telefone: base.loja.telefone },
           itens: itens.map((item, indice) => ({
             id: `${id}-${indice + 1}`,
             produtoId: item.produtoId,

@@ -1,5 +1,6 @@
 "use client"
 
+import { usePathname } from "next/navigation"
 import type { ReactNode } from "react"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useConfigCarregada } from "@/lib/admin/config"
@@ -8,12 +9,18 @@ import { useSegmentoCarregado } from "@/lib/admin/segmento-atual"
 import { cn } from "@/lib/utils"
 import { BarraLateralAdmin } from "./barra-lateral-admin"
 
+/** Telas que vão para a TV virada ao cliente: ocupam a tela, sem nada do painel em volta. */
+const TELAS_DO_CLIENTE = ["/admin/chamada"]
+
 /** Estrutura do painel: a barra lateral no fundo e a folha de trabalho ao lado. */
 export function ShellAdmin({ className, children }: { className?: string; children: ReactNode }) {
   useConfigCarregada()
   useSegmentoCarregado()
   // O que muda numa aba do painel aparece nas outras abas deste navegador.
   useSincronizarAbas()
+  const caminho = usePathname()
+
+  if (TELAS_DO_CLIENTE.includes(caminho)) return <div className={className}>{children}</div>
 
   return (
     <SidebarProvider className={cn("bg-sidebar", className)}>

@@ -417,6 +417,15 @@ describe("PaginaFila", () => {
     expect(cheia).toHaveBeenCalled()
   })
 
+  test("painel de chamada: abre numa aba nova, para levar à TV do balcão", async () => {
+    telaGrande()
+    renderizar()
+    await coluna("Novos")
+    const link = screen.getByRole("link", { name: "Painel de chamada" })
+    expect(link).toHaveAttribute("href", "/admin/chamada")
+    expect(link).toHaveAttribute("target", "_blank")
+  })
+
   test("no celular, as colunas viram abas com a contagem", async () => {
     renderizar()
     const aba = await screen.findByRole("tab", { name: /Novos/ }, { timeout: 8000 })

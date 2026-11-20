@@ -9,6 +9,7 @@ import {
   ListChecksIcon,
   MapPinIcon,
   MaximizeIcon,
+  TvIcon,
   VolumeXIcon,
 } from "lucide-react"
 import { AnimatePresence } from "motion/react"
@@ -671,15 +672,24 @@ export function PaginaFila({
         titulo="Fila de pedidos"
         vivo
         acoes={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void quadro.current?.requestFullscreen?.()}
-          >
-            <MaximizeIcon data-icon="inline-start" />
-            Tela cheia
-          </Button>
+          <>
+            {/* A TV virada ao cliente: só os números do balcão, numa aba que vai para a outra tela. */}
+            <Button variant="outline" size="sm" asChild>
+              <a href="/admin/chamada" target="_blank" rel="noreferrer">
+                <TvIcon data-icon="inline-start" />
+                Painel de chamada
+              </a>
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void quadro.current?.requestFullscreen?.()}
+            >
+              <MaximizeIcon data-icon="inline-start" />
+              Tela cheia
+            </Button>
+          </>
         }
         resumo={
           resumo
