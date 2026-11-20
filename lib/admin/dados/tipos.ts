@@ -88,6 +88,8 @@ export type MotivoCancelamento =
 export type EventoPedido =
   | { tipo: "etapa"; status: StatusPedido; em: string }
   | { tipo: "pago" | "impresso" | "aceito"; em: string }
+  /** Mensagem que a loja mandou ao cliente (simulada): o texto que teria saído. */
+  | { tipo: "aviso"; em: string; texto: string }
 
 export type Pedido = {
   id: number
@@ -371,6 +373,11 @@ export type ConfigLoja = {
   acrescimoPrazoMin?: number
   /** Pausa de pedidos: até quando e se vale para a loja toda ou só para a entrega. */
   pausa?: PausaPedidos
+  /** Avisos automáticos ao cliente (simulados): ligado e os textos de cada etapa. */
+  avisosCliente?: {
+    ligado: boolean
+    textos?: Partial<Record<"aceito" | "saiu" | "pronto" | "recusado", string>>
+  }
   /** Salão: vídeo do banner da loja (YouTube, Shorts ou Reels). */
   videoBanner?: string
   vitrines: {

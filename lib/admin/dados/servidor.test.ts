@@ -448,6 +448,33 @@ describe("servidor de demonstração", () => {
     })
   })
 
+  describe("avisos ao cliente", () => {
+    test("aceitar grava na linha do tempo a mensagem que teria saído (ligado de fábrica)", async () => {
+      const api = servidor()
+      await api.salvarLoja({ ...(await api.loja()), aceiteManual: true })
+      const novo = await api.pedidos.simular()
+
+      const aceito = await api.pedidos.aceitar(novo.id)
+      const aviso = aceito.historico?.find((evento) => evento.tipo === "aviso")
+      expect(aviso).toMatchObject({ tipo: "aviso", em: AGORA.toISOString() })
+      expect(aviso && "texto" in aviso ? aviso.texto : "").toContain(
+        `Seu pedido #${novo.numero} na ${(await api.loja()).nome} foi aceito`,
+      )
+    })
+
+    test("com os avisos desligados, nada é mandado", async () => {
+      const api = servidor()
+      await api.salvarLoja({
+        ...(await api.loja()),
+        aceiteManual: true,
+        avisosCliente: { ligado: false },
+      })
+      const novo = await api.pedidos.simular()
+      const aceito = await api.pedidos.aceitar(novo.id)
+      expect(aceito.historico?.some((evento) => evento.tipo === "aviso")).toBe(false)
+    })
+  })
+
   describe("voltar uma etapa", () => {
     test("desfaz o avanço e entra na linha do tempo; só a partir da etapa que a tela viu", async () => {
       const api = servidor()
@@ -599,7 +626,8 @@ describe("servidor de demonstração", () => {
       const aceito = await api.pedidos.aceitar(novo.id)
       expect(aceito.esperaAceite).toBe(false)
       expect(aceito.status).toBe("recebido")
-      expect(aceito.historico).toEqual([{ tipo: "aceito", em: AGORA.toISOString() }])
+      // O aceite, e depois o aviso ao cliente (ligado de fábrica).
+      expect(aceito.historico?.[0]).toEqual({ tipo: "aceito", em: AGORA.toISOString() })
       expect((await api.pedidos.avancar(novo.id, "recebido")).status).toBe("em-preparo")
       await expect(api.pedidos.aceitar(novo.id)).rejects.toThrow("Este pedido não espera aceite.")
     })

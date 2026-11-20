@@ -1,6 +1,7 @@
 import { addDays, addMinutes, endOfDay, format, isSameDay, startOfDay, subDays } from "date-fns"
 import { del, get, set } from "idb-keyval"
 import { expediente, horariosLivres, INTERVALO_MIN } from "../regras/agenda"
+import { avisoDaMudanca, avisosDaLoja, textoDoAviso } from "../regras/avisos-cliente"
 import {
   copiarProduto,
   reordenar,
@@ -39,6 +40,7 @@ import type {
   CatalogoLoja,
   Categoria,
   ConfigLoja,
+  EventoPedido,
   ItemPedido,
   Mesa,
   MotivoEscolhido,
@@ -203,6 +205,19 @@ function avancado(pedido: Pedido, de: StatusPedido): Pedido {
     status: proximo,
     ...(pagoAgora ? { situacaoPagamento: "pago" as const, pagoEm: new Date().toISOString() } : {}),
   }
+}
+
+/**
+ * O aviso ao cliente que a mudança pede (aceito, saiu, pronto, recusado), se a loja deixa os
+ * avisos ligados. O envio é simulado: o texto entra na linha do tempo.
+ */
+function avisoAoCliente(base: BaseLoja, antes: Pedido, depois: Pedido, em: string): EventoPedido[] {
+  const etapa = avisoDaMudanca(antes, depois)
+  const avisos = avisosDaLoja(base.loja)
+  if (!etapa || !avisos.ligado) return []
+  const endereco = typeof window === "undefined" ? "" : window.location.origin
+  const texto = textoDoAviso(avisos.textos[etapa], depois, { loja: base.loja.nome, endereco })
+  return [{ tipo: "aviso", em, texto }]
 }
 
 /** O pagamento foi registrado no mesmo momento da conclusão (cobrado na entrega ou no balcão). */
@@ -441,7 +456,10 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const agora = new Date().toISOString()
     const mudado = mudar(antes, base)
     // Toda ação passa por aqui: a linha do tempo se escreve sozinha.
-    const eventos = eventosDaMudanca(antes, mudado, agora)
+    const eventos = [
+      ...eventosDaMudanca(antes, mudado, agora),
+      ...avisoAoCliente(base, antes, mudado, agora),
+    ]
     const novo = {
       ...mudado,
       atualizadoEm: agora,

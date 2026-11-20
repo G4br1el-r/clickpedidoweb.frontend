@@ -88,6 +88,15 @@ export const esquemaLoja = z
       .int({ error: "Entre 1 e 30 minutos." })
       .min(1, { error: "Entre 1 e 30 minutos." })
       .max(30, { error: "Entre 1 e 30 minutos." }),
+    avisosCliente: z
+      .object({
+        ligado: z.boolean(),
+        textos: z
+          .object({ aceito: texto(500), saiu: texto(500), pronto: texto(500), recusado: texto(500) })
+          .partial()
+          .optional(),
+      })
+      .optional(),
     vitrines: z.object({ destaques: vitrine, ofertas: vitrine }),
     videoBanner: esquemaLinkDeVideo.optional(),
   })
