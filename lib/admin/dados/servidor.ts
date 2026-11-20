@@ -890,6 +890,25 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         })
       },
 
+      /**
+       * Demonstração: o cliente cancela pelo site o pedido mais novo que ainda não começou.
+       * Sem nenhum assim, nada acontece.
+       */
+      async simularCancelamentoDoCliente(): Promise<Pedido | null> {
+        const { pedidos } = await carregar()
+        const alvo = pedidos.findLast(
+          (pedido) => pedido.origem === "site" && pedido.status === "recebido",
+        )
+        if (!alvo) return null
+        return alterar(alvo.id, (pedido) => {
+          const pedidoCancelado = cancelado(pedido, "cancelamento", { motivo: "cliente-pediu" })
+          return {
+            ...pedidoCancelado,
+            cancelamento: { ...(pedidoCancelado.cancelamento as Cancelamento), porCliente: true },
+          }
+        })
+      },
+
       /** Demonstração ao vivo: chega um pedido novo agora. */
       async simular(): Promise<Pedido> {
         const base = await carregar()

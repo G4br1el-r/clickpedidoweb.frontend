@@ -389,6 +389,21 @@ describe("servidor de demonstração", () => {
     expect(resultado.pulados).toBe(2)
   })
 
+  test("demonstração: o cliente cancela o pedido do site que ainda não começou", async () => {
+    const api = servidor()
+    await api.salvarLoja({ ...(await api.loja()), aceiteManual: false })
+    const novo = await api.pedidos.simular()
+
+    const cancelado = await api.pedidos.simularCancelamentoDoCliente()
+    expect(cancelado?.id).toBe(novo.id)
+    expect(cancelado?.status).toBe("cancelado")
+    expect(cancelado?.cancelamento).toMatchObject({
+      tipo: "cancelamento",
+      motivo: "cliente-pediu",
+      porCliente: true,
+    })
+  })
+
   test("um pedido simulado chega como novo, com o número seguinte", async () => {
     const api = servidor()
     const [ultimo] = await api.pedidos.listar()
