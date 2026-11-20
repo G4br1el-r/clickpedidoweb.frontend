@@ -405,6 +405,18 @@ describe("PaginaFila", () => {
     expect(mesa?.servidoEm).toBeDefined()
   })
 
+  test("tela cheia: a fila ocupa a tela toda do monitor do balcão", async () => {
+    telaGrande()
+    const cheia = vi.fn(async () => {})
+    HTMLElement.prototype.requestFullscreen = cheia
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+
+    await usuario.click(screen.getByRole("button", { name: "Tela cheia" }))
+    expect(cheia).toHaveBeenCalled()
+  })
+
   test("no celular, as colunas viram abas com a contagem", async () => {
     renderizar()
     const aba = await screen.findByRole("tab", { name: /Novos/ }, { timeout: 8000 })

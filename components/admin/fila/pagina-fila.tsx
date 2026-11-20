@@ -8,6 +8,7 @@ import {
   InboxIcon,
   ListChecksIcon,
   MapPinIcon,
+  MaximizeIcon,
   VolumeXIcon,
 } from "lucide-react"
 import { AnimatePresence } from "motion/react"
@@ -394,6 +395,7 @@ export function PaginaFila({
   const servir = useServirMesa()
   const reabrir = useReabrirPedido()
   const [finalizadosAberto, setFinalizadosAberto] = useState(false)
+  const quadro = useRef<HTMLDivElement>(null)
   const [ajudaAberta, setAjudaAberta] = useState(false)
   // Seleção para ações em lote: o modo mostra as caixas; Shift+clique marca sem o modo.
   const [selecionando, setSelecionando] = useState(false)
@@ -660,10 +662,25 @@ export function PaginaFila({
         ]
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
+    // Em tela cheia a fila vira a página toda (o monitor do balcão): precisa do próprio fundo.
+    <div
+      ref={quadro}
+      className="flex flex-1 flex-col gap-5 bg-card p-4 md:p-6 lg:px-8 [&:fullscreen]:overflow-y-auto"
+    >
       <CabecalhoPagina
         titulo="Fila de pedidos"
         vivo
+        acoes={
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void quadro.current?.requestFullscreen?.()}
+          >
+            <MaximizeIcon data-icon="inline-start" />
+            Tela cheia
+          </Button>
+        }
         resumo={
           resumo
             ? [
