@@ -10,6 +10,7 @@ import type {
   TipoMensagemCozinha,
 } from "../dados/tipos"
 import type { Urgencia } from "./fila"
+import { type OutraPraca, pracaDoItem, ticketNaPraca, type VisaoDePraca } from "./pracas"
 
 export type FiltroCozinha = "todos" | "mesas" | "entrega" | "retirada"
 
@@ -87,7 +88,9 @@ export const chavesDaCozinha = (
   pedidos: Pedido[],
   agora?: Date,
   tempos: ConfigCozinha = TEMPOS_PADRAO,
-): Set<string> => new Set(chavesDosTickets(ticketsDaCozinha(pedidos), agora, tempos))
+  visao?: VisaoDePraca,
+): Set<string> =>
+  new Set(chavesDosTickets(daPraca(ticketsDaCozinha(pedidos), visao), agora, tempos))
 
 /**
  * O que chegou desde a última leitura: pedido novo, rodada nova, agendado que chegou a
@@ -98,8 +101,9 @@ export const novidadesNaCozinha = (
   pedidos: Pedido[],
   agora?: Date,
   tempos: ConfigCozinha = TEMPOS_PADRAO,
+  visao?: VisaoDePraca,
 ): string[] =>
-  chavesDosTickets(ticketsDaCozinha(pedidos), agora, tempos).filter(
+  chavesDosTickets(daPraca(ticketsDaCozinha(pedidos), visao), agora, tempos).filter(
     (chave) => !conhecidas.has(chave),
   )
 
@@ -149,9 +153,10 @@ export const atrasadosNaCozinha = (
   pedidos: Pedido[],
   agora: Date,
   tempos: ConfigCozinha = TEMPOS_PADRAO,
+  visao?: VisaoDePraca,
 ): Set<string> =>
   new Set(
-    ticketsDaCozinha(pedidos)
+    daPraca(ticketsDaCozinha(pedidos), visao)
       .filter(
         (ticket) =>
           ticket.status !== "pronto" &&
@@ -229,6 +234,8 @@ export type TicketCozinha = {
   avisos: AvisoCozinha[]
   /** Agendado: para quando a rodada tem de ficar pronta. */
   agendadoPara?: string
+  /** Na tela de uma praça: o que falta nas outras praças do mesmo ticket. */
+  outras?: OutraPraca[]
 }
 
 const pendentes = (pedido: Pedido) =>
@@ -388,6 +395,28 @@ export function riscarItem(pedido: Pedido, itemId: string, feito: boolean, agora
   })
 }
 
+/**
+ * A praça terminou a parte dela na rodada: risca os itens dela e começa a rodada inteira.
+ * Quando a última praça termina, a rodada fica pronta.
+ */
+export function prontoNaPraca(
+  pedido: Pedido,
+  rodada: number,
+  visao: VisaoDePraca,
+  agora: string,
+): Pedido {
+  conferirAtivo(pedido)
+  const ticket = ticketsDaCozinha([pedido]).find((item) => item.rodada === rodada)
+  const daqui = (item: ItemPedido) =>
+    pracaDoItem(item, visao.produtos, visao.pracas) === visao.pracaId
+  if (!ticket?.itens.some(daqui)) throw new Error("Esta praça não tem itens nesta rodada.")
+  return mudarItensDaRodada(pedido, ticket.itens, (item) => ({
+    ...item,
+    iniciadoEm: item.iniciadoEm ?? agora,
+    ...(daqui(item) ? { feitoEm: item.feitoEm ?? agora } : {}),
+  }))
+}
+
 /** O garçom levou a rodada pronta à mesa: ela sai da cozinha. */
 export function servirRodada(pedido: Pedido, rodada: number, agora: string): Pedido {
   conferirAtivo(pedido)
@@ -494,8 +523,9 @@ export function colunasDaCozinha(
   filtro: FiltroCozinha,
   agora: Date,
   tempos: ConfigCozinha = TEMPOS_PADRAO,
+  visao?: VisaoDePraca,
 ): ColunaCozinha[] {
-  const tickets = ticketsDaCozinha(pedidos.filter(PASSA_NO_FILTRO[filtro])).filter(
+  const tickets = daPraca(ticketsDaCozinha(pedidos.filter(PASSA_NO_FILTRO[filtro])), visao).filter(
     (ticket) => !esperando(ticket, agora, tempos),
   )
   const com = (status: StatusTicket) =>
@@ -516,14 +546,19 @@ export function colunasDaCozinha(
   ]
 }
 
+/** Na tela de uma praça, cada ticket como ela o vê; sem praça, a expedição vê tudo. */
+const daPraca = (tickets: TicketCozinha[], visao: VisaoDePraca | undefined) =>
+  visao ? tickets.flatMap((ticket) => ticketNaPraca(ticket, visao) ?? []) : tickets
+
 /** Os agendados que ainda esperam a hora de começar, do mais cedo ao mais tarde. */
 export const maisTardeNaCozinha = (
   pedidos: Pedido[],
   filtro: FiltroCozinha,
   agora: Date,
   tempos: ConfigCozinha = TEMPOS_PADRAO,
+  visao?: VisaoDePraca,
 ): TicketCozinha[] =>
-  ticketsDaCozinha(pedidos.filter(PASSA_NO_FILTRO[filtro]))
+  daPraca(ticketsDaCozinha(pedidos.filter(PASSA_NO_FILTRO[filtro])), visao)
     .filter((ticket) => ticket.itens.length > 0 && esperando(ticket, agora, tempos))
     .sort((a, b) => comecaEm(a, tempos) - comecaEm(b, tempos))
 

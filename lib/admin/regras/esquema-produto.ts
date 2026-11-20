@@ -100,6 +100,8 @@ export function esquemaProduto(segmento: SegmentoPainelId) {
       disponivel: z.boolean(),
       destaque: z.boolean(),
       oferta: z.boolean(),
+      // Cozinha: "categoria" (ou vazio) segue a praça da categoria.
+      pracaId: z.string().optional(),
       ...(campos.precoBalcao
         ? { precoBalcao: dinheiro("Informe o preço de balcão.").gt(0).optional() }
         : {}),

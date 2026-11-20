@@ -687,6 +687,27 @@ describe("servidor de demonstração", () => {
       ).rejects.toThrow("O atraso precisa vir depois da atenção.")
     })
 
+    test("as praças da cozinha são guardadas na loja, conferidas", async () => {
+      const api = servidor()
+      const forno = {
+        id: "praca-forno",
+        nome: "Forno",
+        cor: "ambar" as const,
+        categoriaIds: ["cat-1"],
+        imprime: true,
+        tocaSom: true,
+      }
+      expect((await api.salvarPracas([forno])).pracas).toEqual([forno])
+      await expect(
+        api.salvarPracas([forno, { ...forno, id: "praca-chapa", nome: "Chapa" }]),
+      ).rejects.toThrow("Uma categoria fica em uma praça só.")
+      // Salvar o resto da loja não apaga as praças.
+      await api.salvarLoja(await api.loja())
+      expect((await api.loja()).pracas).toEqual([forno])
+
+      expect((await api.ligarViaDaCozinha(true)).viaDaCozinha).toBe(true)
+    })
+
     test("a chave de abrir e fechar passa a loja para o controle manual", async () => {
       const api = servidor()
       expect((await api.loja()).controleAutomatico).toBe(true)
@@ -1723,6 +1744,37 @@ describe("cozinha", () => {
     expect(servida.itens[0].servidoEm).toBe(minutosDepois(9).toISOString())
     expect(estados(servida)).toEqual([[2, "recebido"]])
     expect(servida.status).toBe("recebido")
+  })
+
+  test("praças: cada uma marca pronto a sua parte, e a via sai uma vez só", async () => {
+    const api = servidor()
+    await api.salvarPracas([
+      {
+        id: "praca-chapa",
+        nome: "Chapa",
+        cor: "ambar",
+        categoriaIds: ["cat-lanches"],
+        imprime: true,
+        tocaSom: true,
+      },
+    ])
+    const mesa = await api.mesas.criar({ numero: 7 })
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [LANCHE, { avulso: { nome: "Batata", preco: 12 }, quantidade: 1 }],
+    })
+
+    const naChapa = await api.cozinha.prontoNaPraca(comanda.id, 1, "praca-chapa")
+    expect(naChapa.itens.map((item) => Boolean(item.feitoEm))).toEqual([true, false])
+    expect(naChapa.status).toBe("em-preparo")
+    // A batata é avulsa: fica com a praça Geral.
+    expect((await api.cozinha.prontoNaPraca(comanda.id, 1, "geral")).status).toBe("pronto")
+
+    expect((await api.cozinha.marcarVia(comanda.id, "1:praca-chapa")).nova).toBe(true)
+    const outraVez = await api.cozinha.marcarVia(comanda.id, "1:praca-chapa")
+    expect(outraVez.nova).toBe(false)
+    expect(outraVez.pedido.viasImpressas).toEqual(["1:praca-chapa"])
   })
 
   test("a cozinha avisa o salão sobre a rodada, e o Ok tira a mensagem", async () => {

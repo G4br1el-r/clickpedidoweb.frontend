@@ -15,6 +15,7 @@ import {
   conferirAgendado,
   darCiente,
   naMaoDaCozinha,
+  prontoNaPraca,
   riscarItem,
   type StatusTicket,
   servirRodada,
@@ -22,7 +23,7 @@ import {
   verMensagem,
   voltarRodada,
 } from "../regras/cozinha"
-import { esquemaLoja, esquemaTemposCozinha } from "../regras/esquema-loja"
+import { esquemaLoja, esquemaPracas, esquemaTemposCozinha } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
 import { normalizar } from "../regras/filtro-pedidos"
@@ -38,6 +39,7 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
+import { marcarVia } from "../regras/pracas"
 import { etapasDoCaminho, proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearEstoque } from "./estoque-demo"
@@ -53,6 +55,7 @@ import type {
   Motoboy,
   MovimentoEstoque,
   Pedido,
+  Praca,
   Produto,
   StatusPedido,
   TemposCozinha,
@@ -61,7 +64,7 @@ import type {
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 5
+const VERSAO = 6
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -1258,6 +1261,32 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return alterar(id, (pedido) => servirRodada(pedido, rodada, new Date().toISOString()))
       },
 
+      /** A praça terminou a parte dela na rodada. Com a última, a rodada fica pronta. */
+      prontoNaPraca(id: number, rodada: number, pracaId: string) {
+        return alterar(id, (pedido, base) =>
+          prontoNaPraca(
+            pedido,
+            rodada,
+            { pracaId, produtos: base.produtos, pracas: base.loja.pracas ?? [] },
+            new Date().toISOString(),
+          ),
+        )
+      },
+
+      /**
+       * Marca a via da cozinha ("rodada:praça") como impressa. `nova` diz se ainda não tinha
+       * saído: só o aparelho que a marcou primeiro imprime.
+       */
+      async marcarVia(id: number, via: string): Promise<{ pedido: Pedido; nova: boolean }> {
+        let nova = false
+        const pedido = await alterar(id, (antes) => {
+          const marcada = marcarVia(antes, via)
+          nova = marcada.nova
+          return marcada.pedido
+        })
+        return { pedido, nova }
+      },
+
       /** Mensagem rápida da cozinha para o salão (mesa) ou o caixa (entrega e retirada). */
       avisar(id: number, rodada: number, tipo: TipoMensagemCozinha) {
         return alterar(id, (pedido) =>
@@ -1670,6 +1699,18 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       const resultado = esquemaTemposCozinha.safeParse(tempos)
       if (!resultado.success) throw new Error(resultado.error.issues[0].message)
       return mudarLoja({ temposCozinha: resultado.data })
+    },
+
+    /** As praças da cozinha, com as categorias de cada uma. */
+    async salvarPracas(pracas: Praca[]): Promise<ConfigLoja> {
+      const resultado = esquemaPracas.safeParse(pracas)
+      if (!resultado.success) throw new Error(resultado.error.issues[0].message)
+      return mudarLoja({ pracas: resultado.data })
+    },
+
+    /** Sem praças: se a cozinha imprime a via (uma só, Geral). */
+    async ligarViaDaCozinha(ligada: boolean): Promise<ConfigLoja> {
+      return mudarLoja({ viaDaCozinha: ligada })
     },
 
     /** Demonstração: conecta ou desconecta a conta online. Sem ela, Pix e cartão online desligam. */

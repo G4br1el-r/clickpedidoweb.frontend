@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react"
 import type { Pedido } from "@/lib/admin/dados/tipos"
 import { usePreferenciasFila, useSomDoAparelho } from "@/lib/admin/preferencias-fila"
 import { atrasadosNaCozinha, type ConfigCozinha, chavesDaCozinha } from "@/lib/admin/regras/cozinha"
+import type { VisaoDePraca } from "@/lib/admin/regras/pracas"
 import { tocarAlerta, tocarSom } from "@/lib/admin/som"
 
 /** O alerta de novo repete a cada tantos tiques (30 s, com o tique de 5 s). */
@@ -27,28 +28,31 @@ export function useSonsDaCozinha(
   pedidos: Pedido[] | undefined,
   tempos: ConfigCozinha,
   tique = 5_000,
+  visao?: VisaoDePraca,
+  /** A praça deste aparelho não toca o alerta de pedido novo. */
+  semAlertaDeNovo = false,
 ) {
   const somLigado = usePreferenciasFila((estado) => estado.somLigado)
   const sons = usePreferenciasFila((estado) => estado.sons)
   const tipoSom = useSomDoAparelho()
-  const atuais = useRef({ pedidos, tempos, sons, somLigado, tipoSom })
-  atuais.current = { pedidos, tempos, sons, somLigado, tipoSom }
+  const atuais = useRef({ pedidos, tempos, sons, somLigado, tipoSom, visao, semAlertaDeNovo })
+  atuais.current = { pedidos, tempos, sons, somLigado, tipoSom, visao, semAlertaDeNovo }
   const vistos = useRef<{ chaves: Set<string>; atrasados: Set<string> } | null>(null)
   const tiques = useRef(0)
 
   const conferir = useRef((noTique: boolean) => {
-    const { pedidos, tempos, sons, somLigado, tipoSom } = atuais.current
+    const { pedidos, tempos, sons, somLigado, tipoSom, visao, semAlertaDeNovo } = atuais.current
     if (!pedidos) return
     const agora = new Date()
-    const chaves = chavesDaCozinha(pedidos, agora, tempos)
-    const atrasados = atrasadosNaCozinha(pedidos, agora, tempos)
+    const chaves = chavesDaCozinha(pedidos, agora, tempos, visao)
+    const atrasados = atrasadosNaCozinha(pedidos, agora, tempos, visao)
     const antes = vistos.current
     vistos.current = { chaves, atrasados }
     if (!antes || !somLigado) return
 
     const novo = temNova(chaves, antes.chaves, (chave) => !ehAviso(chave))
     const aviso = temNova(chaves, antes.chaves, ehAviso)
-    if (sons.novo && novo) tocarAlerta(tipoSom)
+    if (sons.novo && novo && !semAlertaDeNovo) tocarAlerta(tipoSom)
     if (sons.cancelado && aviso) tocarSom("cancelado")
     if (sons.atrasado && temNova(atrasados, antes.atrasados, () => true)) tocarSom("atrasado")
     if (!noTique) return
@@ -56,7 +60,8 @@ export function useSonsDaCozinha(
     if (sons.cancelado && !aviso && [...chaves].some(ehAviso)) tocarSom("cancelado")
     tiques.current += 1
     const repetir = sons.repetirNovo && tiques.current % TIQUES_PARA_REPETIR === 0
-    if (repetir && !novo && [...chaves].some((chave) => !ehAviso(chave))) tocarAlerta(tipoSom)
+    if (repetir && !novo && !semAlertaDeNovo && [...chaves].some((chave) => !ehAviso(chave)))
+      tocarAlerta(tipoSom)
   })
 
   // Chegou leitura nova do servidor.

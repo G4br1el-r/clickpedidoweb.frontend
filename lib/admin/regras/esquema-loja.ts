@@ -1,4 +1,5 @@
 import { z } from "zod"
+import { CORES_DE_PRACA } from "../dados/tipos"
 import { textoDoPrazo } from "./loja"
 import { esquemaLinkDeVideo } from "./video"
 
@@ -161,3 +162,37 @@ export const esquemaTemposCozinha = z
     // Confere a ordem mesmo com o tempo do pronto errado.
     when: ({ value }) => alertas.safeParse(value).success,
   })
+
+const esquemaPraca = z.object({
+  id: z.string().min(1),
+  nome: texto(30).min(1, { error: "Informe o nome da praça." }),
+  cor: z.enum(CORES_DE_PRACA),
+  categoriaIds: z.array(z.string()),
+  imprime: z.boolean(),
+  tocaSom: z.boolean(),
+})
+
+/** As praças da cozinha: nome sem repetir, e cada categoria em uma praça só. */
+export const esquemaPracas = z.array(esquemaPraca).superRefine((pracas, contexto) => {
+  const nomes = new Set<string>()
+  const categorias = new Set<string>()
+  pracas.forEach((praca, indice) => {
+    const nome = praca.nome.toLocaleLowerCase("pt-BR")
+    if (nome && nomes.has(nome)) {
+      contexto.addIssue({
+        code: "custom",
+        path: [indice, "nome"],
+        message: "Já existe uma praça com este nome.",
+      })
+    }
+    nomes.add(nome)
+    if (praca.categoriaIds.some((id) => categorias.has(id))) {
+      contexto.addIssue({
+        code: "custom",
+        path: [indice, "categoriaIds"],
+        message: "Uma categoria fica em uma praça só.",
+      })
+    }
+    for (const id of praca.categoriaIds) categorias.add(id)
+  })
+})

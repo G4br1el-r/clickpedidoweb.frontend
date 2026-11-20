@@ -9,6 +9,14 @@ import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -22,6 +30,7 @@ import {
   useDarCiente,
   useLoja,
   usePriorizarPedido,
+  useProntoNaPraca,
   useRiscarItem,
   useVoltarTicket,
 } from "@/lib/admin/dados/consultas"
@@ -48,14 +57,18 @@ import {
   TEMPOS_PADRAO,
   type TicketCozinha as Ticket,
 } from "@/lib/admin/regras/cozinha"
+import { type VisaoDePraca, viasDoTicket } from "@/lib/admin/regras/pracas"
 import { tomDoStatus } from "@/lib/admin/regras/status"
 import { tocarAlerta } from "@/lib/admin/som"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { useFilaDeVias } from "../impressao/via-cozinha"
 import { Traco } from "../traco"
 import { AjustesCozinha } from "./ajustes-cozinha"
 import { MaisTarde } from "./mais-tarde"
 import { nomeDoTicket, TicketCozinha } from "./ticket-cozinha"
+import { TracoDePraca } from "./traco-de-praca"
 import { useSonsDaCozinha } from "./use-sons-da-cozinha"
+import { useViasDaCozinha } from "./use-vias-da-cozinha"
 
 const ABAS = ["quadro", "ajustes"] as const
 
@@ -84,13 +97,16 @@ function Coluna({
   agora,
   tempos,
   prazos,
+  praca,
   emAndamento,
   aoAvancar,
+  aoProntoNaPraca,
   aoRiscar,
   aoVoltar,
   aoPriorizar,
   aoCiente,
   aoAvisar,
+  aoReimprimir,
   esgotaveis,
   aoEsgotar,
   comTitulo,
@@ -99,13 +115,17 @@ function Coluna({
   agora: Date
   tempos: ConfigCozinha
   prazos: ConfigLoja["prazos"]
+  /** Na tela de uma praça, o nome dela. */
+  praca: string | undefined
   emAndamento: string | undefined
   aoAvancar: (ticket: Ticket) => void
+  aoProntoNaPraca: (ticket: Ticket) => void
   aoRiscar: (ticket: Ticket, item: ItemPedido, feito: boolean) => void
   aoVoltar: (ticket: Ticket) => void
   aoPriorizar: (ticket: Ticket, prioridade: boolean) => void
   aoCiente: (ticket: Ticket, aviso: AvisoCozinha) => void
   aoAvisar: (ticket: Ticket, tipo: TipoMensagemCozinha) => void
+  aoReimprimir: (ticket: Ticket) => void
   esgotaveis: (ticket: Ticket) => Produto[]
   aoEsgotar: (produto: { id: string; nome: string }) => void
   comTitulo: boolean
@@ -138,6 +158,7 @@ function Coluna({
               agora={agora}
               tempos={tempos}
               prazos={prazos}
+              praca={praca ? { nome: praca, aoPronto: () => aoProntoNaPraca(ticket) } : undefined}
               ocupado={emAndamento === ticket.id}
               aoAvancar={() => aoAvancar(ticket)}
               aoRiscar={(item, feito) => aoRiscar(ticket, item, feito)}
@@ -145,6 +166,7 @@ function Coluna({
               aoPriorizar={(prioridade) => aoPriorizar(ticket, prioridade)}
               aoCiente={(aviso) => aoCiente(ticket, aviso)}
               aoAvisar={(tipo) => aoAvisar(ticket, tipo)}
+              aoReimprimir={() => aoReimprimir(ticket)}
               esgotaveis={esgotaveis(ticket)}
               aoEsgotar={aoEsgotar}
             />
@@ -188,14 +210,45 @@ export function PaginaCozinha({
     ...(loja?.temposCozinha ?? TEMPOS_PADRAO),
     preparoMin: loja?.prazos?.retirada.min,
   }
-  useSonsDaCozinha(pedidos, tempos, tique)
+  const pracas = loja?.pracas ?? []
+  const pracaEscolhida = usePreferenciasFila((estado) => estado.praca)
+  const escolherPraca = usePreferenciasFila((estado) => estado.escolherPraca)
+  // A praça apagada em outro aparelho volta para Todas.
+  const pracaAtual = pracas.find((praca) => praca.id === pracaEscolhida)
+  const visao: VisaoDePraca | undefined = pracaAtual
+    ? { pracaId: pracaAtual.id, produtos: produtos ?? [], pracas }
+    : undefined
+  const prontoNaPraca = useProntoNaPraca()
+  const imprimirVias = usePreferenciasFila((estado) => estado.imprimirVias)
+  const vias = useFilaDeVias()
+  useSonsDaCozinha(pedidos, tempos, tique, visao, pracaAtual?.tocaSom === false)
   const somLigado = usePreferenciasFila((estado) => estado.somLigado)
   const ligarSom = usePreferenciasFila((estado) => estado.ligarSom)
   const tipoSom = useSomDoAparelho()
   const quadro = useRef<HTMLDivElement>(null)
 
-  const colunas = pedidos && agora ? colunasDaCozinha(pedidos, filtro, agora, tempos) : null
-  const maisTarde = pedidos && agora ? maisTardeNaCozinha(pedidos, filtro, agora, tempos) : []
+  const colunas = pedidos && agora ? colunasDaCozinha(pedidos, filtro, agora, tempos, visao) : null
+  const maisTarde =
+    pedidos && agora ? maisTardeNaCozinha(pedidos, filtro, agora, tempos, visao) : []
+  useViasDaCozinha({
+    pedidos,
+    agora,
+    tempos,
+    produtos,
+    pracas,
+    viaDaCozinha: loja?.viaDaCozinha,
+    pracaDoAparelho: pracaAtual?.id ?? "todas",
+    ligado: imprimirVias,
+    imprimir: vias.imprimir,
+  })
+  const aoReimprimir = (ticket: Ticket) =>
+    vias.imprimir(
+      viasDoTicket(ticket, {
+        produtos: produtos ?? [],
+        pracas,
+        pracaDoAparelho: pracaAtual?.id ?? "todas",
+      }),
+    )
   const aoErrar = (erro: Error) => toast.error(erro.message)
   /** O avanço e a volta avisam para onde o ticket foi, com Desfazer para o toque errado. */
   const avisar = (ticket: Ticket, para: StatusTicket, desfazer: () => void) =>
@@ -225,6 +278,16 @@ export function PaginaCozinha({
       onSuccess: () =>
         avisar(ticket, para, () => avancar.mutate({ ...mudanca, de: para }, { onError: aoErrar })),
     })
+  }
+  const aoProntoNaPraca = (ticket: Ticket) => {
+    if (!visao || !pracaAtual) return
+    prontoNaPraca.mutate(
+      { id: ticket.pedido.id, rodada: ticket.rodada, visao },
+      {
+        onError: aoErrar,
+        onSuccess: () => toast(`${nomeDoTicket(ticket)}: ${pracaAtual.nome} pronto.`),
+      },
+    )
   }
   const aoPriorizar = (ticket: Ticket, prioridade: boolean) =>
     priorizar.mutate({ id: ticket.pedido.id, prioridade }, { onError: aoErrar })
@@ -304,6 +367,7 @@ export function PaginaCozinha({
           ))}
         </TabsList>
 
+        {vias.elemento}
         <TabsContent value="ajustes">
           <AjustesCozinha />
         </TabsContent>
@@ -324,6 +388,27 @@ export function PaginaCozinha({
                 </ToggleGroupItem>
               ))}
             </ToggleGroup>
+            {pracas.length > 0 && (
+              <Select
+                value={pracaAtual?.id ?? "todas"}
+                onValueChange={(valor) => escolherPraca(valor)}
+              >
+                <SelectTrigger size="sm" aria-label="Praça" className="min-w-36">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value="todas">Todas</SelectItem>
+                    {pracas.map((praca) => (
+                      <SelectItem key={praca.id} value={praca.id}>
+                        <TracoDePraca cor={praca.cor} />
+                        {praca.nome}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            )}
             <div className="flex items-center gap-2">
               <Switch
                 id="cozinha-alerta"
@@ -383,6 +468,8 @@ export function PaginaCozinha({
                   agora={agora}
                   tempos={tempos}
                   prazos={loja?.prazos}
+                  praca={pracaAtual?.nome}
+                  aoProntoNaPraca={aoProntoNaPraca}
                   emAndamento={emAndamento}
                   aoAvancar={aoAvancar}
                   aoRiscar={aoRiscar}
@@ -390,6 +477,7 @@ export function PaginaCozinha({
                   aoPriorizar={aoPriorizar}
                   aoCiente={aoCiente}
                   aoAvisar={aoAvisar}
+                  aoReimprimir={aoReimprimir}
                   esgotaveis={esgotaveis}
                   aoEsgotar={aoEsgotar}
                   comTitulo
@@ -419,6 +507,8 @@ export function PaginaCozinha({
                     agora={agora}
                     tempos={tempos}
                     prazos={loja?.prazos}
+                    praca={pracaAtual?.nome}
+                    aoProntoNaPraca={aoProntoNaPraca}
                     emAndamento={emAndamento}
                     aoAvancar={aoAvancar}
                     aoRiscar={aoRiscar}
@@ -426,6 +516,7 @@ export function PaginaCozinha({
                     aoPriorizar={aoPriorizar}
                     aoCiente={aoCiente}
                     aoAvisar={aoAvisar}
+                    aoReimprimir={aoReimprimir}
                     esgotaveis={esgotaveis}
                     aoEsgotar={aoEsgotar}
                     comTitulo={false}

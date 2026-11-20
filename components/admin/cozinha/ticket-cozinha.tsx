@@ -7,6 +7,7 @@ import {
   ClockIcon,
   MessageSquareIcon,
   MoreHorizontalIcon,
+  PrinterIcon,
   Undo2Icon,
   ZapIcon,
 } from "lucide-react"
@@ -150,6 +151,7 @@ export function TicketCozinha({
   agora,
   tempos,
   prazos,
+  praca,
   ocupado,
   aoAvancar,
   aoRiscar,
@@ -157,6 +159,7 @@ export function TicketCozinha({
   aoPriorizar,
   aoCiente,
   aoAvisar,
+  aoReimprimir,
   esgotaveis,
   aoEsgotar,
 }: {
@@ -166,6 +169,8 @@ export function TicketCozinha({
   tempos: ConfigCozinha
   /** O tempo de entrega e de retirada da loja: o horário prometido ao cliente sai dele. */
   prazos?: ConfigLoja["prazos"]
+  /** Na tela de uma praça: o nome dela e o pronto que risca só a parte dela. */
+  praca?: { nome: string; aoPronto: () => void }
   ocupado: boolean
   aoAvancar: () => void
   aoRiscar: (item: ItemPedido, feito: boolean) => void
@@ -174,6 +179,8 @@ export function TicketCozinha({
   aoCiente: (aviso: AvisoCozinha) => void
   /** Mensagem rápida para o salão (mesa) ou o caixa (entrega e retirada). */
   aoAvisar: (tipo: TipoMensagemCozinha) => void
+  /** Imprime de novo a via da cozinha. */
+  aoReimprimir: () => void
   /** Produtos do ticket que ainda estão no cardápio: a cozinha pode avisar que acabaram. */
   esgotaveis: { id: string; nome: string }[]
   aoEsgotar: (produto: { id: string; nome: string }) => void
@@ -190,6 +197,9 @@ export function TicketCozinha({
   const cancelado = pedido.status === "cancelado"
   const prometido = pronto || cancelado ? null : prometidoAoCliente(ticket, prazos, agora)
   const alteracoes = ticket.avisos.filter((aviso) => aviso.tipo === "alterado")
+  // Na tela de uma praça: o que as outras ainda não terminaram.
+  const outras = (ticket.outras ?? []).map((outra) => `${outra.nome} ${outra.faltam}`).join(", ")
+  const aguardando = (ticket.outras ?? []).map((outra) => outra.nome).join(", ")
   const avisados = mensagensPendentes(pedido).filter((mensagem) => mensagem.rodada === rodada)
 
   return (
@@ -271,6 +281,12 @@ export function TicketCozinha({
                   <DropdownMenuItem onSelect={aoVoltar}>
                     <Undo2Icon />
                     {ticket.status === "pronto" ? "Voltar para Preparando" : "Voltar para A fazer"}
+                  </DropdownMenuItem>
+                )}
+                {itens.length > 0 && (
+                  <DropdownMenuItem onSelect={aoReimprimir}>
+                    <PrinterIcon />
+                    Reimprimir via
                   </DropdownMenuItem>
                 )}
                 {itens.length > 0 && (
@@ -366,6 +382,9 @@ export function TicketCozinha({
           aoRiscar={aoRiscar}
         />
       )}
+      {outras && !pronto && (
+        <p className="-mt-1 text-[13px] text-muted-foreground">Falta: {outras}</p>
+      )}
       {pedido.observacao && (
         <p className="rounded-md bg-foreground/[0.05] px-2 py-1.5 text-sm">
           Obs.: {pedido.observacao}
@@ -390,9 +409,19 @@ export function TicketCozinha({
           </Button>
         ) : itens.length === 0 ? null : pronto ? (
           <span className="flex items-center gap-2 text-sm font-medium">
-            <Traco tom="pronto" />
-            {DEPOIS_DE_PRONTO[pedido.tipo]}
+            <Traco tom={aguardando ? "preparo" : "pronto"} />
+            {aguardando ? `Aguardando ${aguardando}` : DEPOIS_DE_PRONTO[pedido.tipo]}
           </span>
+        ) : praca && ticket.status === "em-preparo" ? (
+          <Button
+            type="button"
+            size="lg"
+            className="h-11 w-full text-[15px]"
+            disabled={ocupado}
+            onClick={praca.aoPronto}
+          >
+            Marcar pronto · {praca.nome}
+          </Button>
         ) : (
           <Button
             type="button"

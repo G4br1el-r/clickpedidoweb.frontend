@@ -15,12 +15,13 @@ import {
   useDarCiente,
   useLoja,
   usePriorizarPedido,
+  useProntoNaPraca,
   useRiscarItem,
   useServirRodada,
   useVerMensagem,
   useVoltarTicket,
 } from "./consultas"
-import { useSalvarTemposCozinha } from "./consultas-entrega"
+import { useSalvarPracas, useSalvarTemposCozinha } from "./consultas-entrega"
 
 function envolver() {
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -183,5 +184,40 @@ describe("consultas da cozinha", () => {
     const tempos = { atencaoMin: 8, atrasoMin: 12, prontoFicaMin: 4 }
     act(() => result.current.salvar.mutate(tempos))
     await waitFor(() => expect(result.current.loja.data?.temposCozinha).toEqual(tempos))
+  })
+
+  test("salvar as praças muda a loja, e o pronto na praça risca só a parte dela", async () => {
+    const { api, comanda } = await mesaNaCozinha()
+    const { result } = renderHook(
+      () => ({
+        ...useQuadro(),
+        loja: useLoja(),
+        salvar: useSalvarPracas(),
+        pronto: useProntoNaPraca(),
+      }),
+      { wrapper: envolver() },
+    )
+    await waitFor(() => expect(result.current.loja.data).toBeDefined())
+    const pracas = [
+      {
+        id: "praca-x",
+        nome: "Fritura",
+        cor: "rosa" as const,
+        categoriaIds: [],
+        imprime: true,
+        tocaSom: true,
+      },
+    ]
+    act(() => result.current.salvar.mutate(pracas))
+    await waitFor(() => expect(result.current.loja.data?.pracas).toEqual(pracas))
+
+    // Batata e esfiha são avulsas: são da praça Geral.
+    const doQuadro = () => result.current.cozinha.data?.find((item) => item.id === comanda.id)
+    await waitFor(() => expect(doQuadro()).toBeDefined())
+    const visao = { pracaId: "geral", produtos: [], pracas }
+    act(() => result.current.pronto.mutate({ id: comanda.id, rodada: 1, visao }))
+    await waitFor(() => expect(doQuadro()?.status).toBe("pronto"))
+    await waitFor(() => expect(result.current.pronto.isSuccess).toBe(true))
+    expect((await api.pedidos.buscar(comanda.id))?.status).toBe("pronto")
   })
 })

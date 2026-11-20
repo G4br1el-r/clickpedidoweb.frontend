@@ -207,6 +207,8 @@
   --tom-preparo-texto: #8a5c00;
   /* Dourado do plano Pro e das estrelas do wireframe. */
   --dourado: #c27c00;
+  /* A única cor de praça que não é um tom de status. */
+  --praca-rosa: #c8407a;
 }
 
 .dark {
@@ -220,4 +222,5 @@
   --tom-cancelado: #f2766b;
   --tom-preparo-texto: #f0b43a;
   --dourado: #f5b700;
+  --praca-rosa: #f07aa8;
 }

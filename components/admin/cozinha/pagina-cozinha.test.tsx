@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { act, render, screen, waitFor, within } from "@testing-library/react"
+import { act, cleanup, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter } from "nuqs/adapters/testing"
@@ -14,6 +14,13 @@ import type { Produto } from "@/lib/admin/dados/tipos"
 import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { PaginaCozinha } from "./pagina-cozinha"
+
+/** A impressora: anota o texto de cada via que sai. */
+const impressas: string[] = []
+vi.mock("react-to-print", () => ({
+  useReactToPrint: () => () =>
+    impressas.push(document.querySelector("[data-via]")?.textContent ?? ""),
+}))
 
 function Provedores({ children }: { children: ReactNode }) {
   const [cliente] = useState(
@@ -130,6 +137,7 @@ beforeEach(async () => {
   reiniciarServidores()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
   usePreferenciasFila.setState({ ...usePreferenciasFila.getInitialState(), simular: false }, true)
+  impressas.length = 0
 })
 
 afterEach(() => {
@@ -661,5 +669,233 @@ describe("PaginaCozinha: tempo", () => {
       await screen.findByRole("article", { name: `Retirada · #${atrasada.numero}` }),
     )
     expect(daAtrasada.getByText("até 20:25 · passou 5 min")).toBeInTheDocument()
+  })
+})
+
+describe("PaginaCozinha: praças", () => {
+  async function abrirPracas() {
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("tab", { name: "Ajustes" }))
+    const pracas = within(await screen.findByRole("region", { name: "Praças" }))
+    return { usuario, pracas }
+  }
+
+  test("a demo vem com as praças, e uma praça nova pega a categoria que ficou livre", async () => {
+    const { usuario, pracas } = await abrirPracas()
+    expect(
+      (await pracas.findAllByRole("listitem")).map((linha) => linha.getAttribute("aria-label")),
+    ).toEqual(["Forno", "Montagem", "Bebidas"])
+
+    await usuario.click(pracas.getByRole("button", { name: "Editar Montagem" }))
+    let janela = within(await screen.findByRole("dialog", { name: "Editar praça" }))
+    await usuario.click(janela.getByRole("checkbox", { name: "Sobremesas" }))
+    await usuario.click(janela.getByRole("button", { name: "Salvar praça" }))
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+
+    await usuario.click(pracas.getByRole("button", { name: "Nova praça" }))
+    janela = within(await screen.findByRole("dialog", { name: "Nova praça" }))
+    // A categoria que já está em outra praça não pode ser marcada aqui.
+    expect(janela.getByRole("checkbox", { name: "Bebidas" })).toBeDisabled()
+    await usuario.click(janela.getByRole("button", { name: "Salvar praça" }))
+    expect(await janela.findByText("Informe o nome da praça.")).toBeInTheDocument()
+
+    await usuario.type(janela.getByRole("textbox", { name: "Nome" }), "Doces")
+    await usuario.click(janela.getByRole("radio", { name: "Rosa" }))
+    await usuario.click(janela.getByRole("checkbox", { name: "Sobremesas" }))
+    await usuario.click(janela.getByRole("switch", { name: "Imprime a via" }))
+    await usuario.click(janela.getByRole("button", { name: "Salvar praça" }))
+
+    await waitFor(async () =>
+      expect((await api().loja()).pracas?.at(-1)).toMatchObject({
+        nome: "Doces",
+        cor: "rosa",
+        categoriaIds: ["cat-sobremesas"],
+        imprime: false,
+        tocaSom: true,
+      }),
+    )
+    expect(pracas.getByRole("listitem", { name: "Doces" })).toBeInTheDocument()
+  })
+
+  test("excluir uma praça devolve as categorias dela para Geral", async () => {
+    const { usuario, pracas } = await abrirPracas()
+    await usuario.click(await pracas.findByRole("button", { name: "Editar Bebidas" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Editar praça" }))
+    await usuario.click(janela.getByRole("button", { name: "Excluir praça" }))
+    await waitFor(async () =>
+      expect((await api().loja()).pracas?.map((praca) => praca.nome)).toEqual([
+        "Forno",
+        "Montagem",
+      ]),
+    )
+  })
+})
+
+describe("PaginaCozinha: quadro de uma praça", () => {
+  /** Mesa 80 com uma pizza (Forno) e uma massa (Montagem), sem opções. */
+  async function mesaComDuasPracas() {
+    const lista = await api().produtos.listar()
+    const daCategoria = (categoriaId: string) =>
+      lista.find(
+        (produto) =>
+          produto.categoriaId === categoriaId && produto.grupos.length === 0 && produto.disponivel,
+      ) as Produto
+    const pizza = daCategoria("cat-calzones")
+    const massa = daCategoria("cat-massas")
+    const mesa = await api().mesas.criar({ numero: 80 })
+    await api().mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [
+        { produtoId: pizza.id, escolhas: {}, quantidade: 1 },
+        { produtoId: massa.id, escolhas: {}, quantidade: 1 },
+      ],
+    })
+    return { pizza, massa }
+  }
+
+  async function escolherPraca(usuario: ReturnType<typeof userEvent.setup>, nome: string) {
+    await usuario.click(await screen.findByRole("combobox", { name: "Praça" }))
+    await usuario.click(await screen.findByRole("option", { name: nome }))
+  }
+
+  test("cada praça vê a sua parte; a última a terminar manda o ticket para Prontos", async () => {
+    telaGrande()
+    const { pizza, massa } = await mesaComDuasPracas()
+    const usuario = userEvent.setup()
+    renderizar()
+    await ticket("Mesa 80")
+
+    await escolherPraca(usuario, "Forno")
+    let noForno = within(await ticket("Mesa 80"))
+    expect(noForno.getByText(pizza.nome)).toBeInTheDocument()
+    expect(noForno.queryByText(massa.nome)).not.toBeInTheDocument()
+    expect(noForno.getByText("Falta: Montagem 1")).toBeInTheDocument()
+
+    await usuario.click(noForno.getByRole("button", { name: "Iniciar preparo" }))
+    noForno = within(
+      await (await coluna("Preparando")).findByRole("article", { name: /^Mesa 80 ·/ }),
+    )
+    await usuario.click(noForno.getByRole("button", { name: "Marcar pronto · Forno" }))
+    const pronto = within(
+      await (await coluna("Prontos")).findByRole("article", { name: /^Mesa 80 ·/ }),
+    )
+    expect(pronto.getByText("Aguardando Montagem")).toBeInTheDocument()
+
+    await escolherPraca(usuario, "Montagem")
+    const naMontagem = within(
+      await (await coluna("Preparando")).findByRole("article", { name: /^Mesa 80 ·/ }),
+    )
+    await usuario.click(naMontagem.getByRole("button", { name: "Marcar pronto · Montagem" }))
+
+    await escolherPraca(usuario, "Todas")
+    expect(
+      await (await coluna("Prontos")).findByRole("article", { name: /^Mesa 80 ·/ }),
+    ).toBeInTheDocument()
+    expect(usePreferenciasFila.getState().praca).toBe("todas")
+  })
+
+  test("o aparelho da praça só toca para o que é dela, e fica quieto se a praça não toca", async () => {
+    telaGrande()
+    const audio = simularAudio()
+    usePreferenciasFila.setState({ somLigado: true, praca: "praca-forno" })
+    renderizar(200, 60_000)
+    await coluna("A fazer")
+    const lista = await api().produtos.listar()
+    const daCategoria = (categoriaId: string) =>
+      lista.find(
+        (produto) =>
+          produto.categoriaId === categoriaId && produto.grupos.length === 0 && produto.disponivel,
+      ) as Produto
+    const lancar = async (numero: number, categoriaId: string) => {
+      const mesa = await api().mesas.criar({ numero })
+      await api().mesas.lancar({
+        mesaId: mesa.id,
+        enviarParaCozinha: true,
+        itens: [{ produtoId: daCategoria(categoriaId).id, escolhas: {}, quantidade: 1 }],
+      })
+    }
+
+    // Só massa: é da Montagem, o Forno não toca.
+    await lancar(81, "cat-massas")
+    await esperar(600)
+    expect(audio.novo()).toBe(0)
+    await lancar(82, "cat-calzones")
+    await waitFor(() => expect(audio.novo()).toBe(1))
+
+    const pracas = (await api().loja()).pracas ?? []
+    await api().salvarPracas(
+      pracas.map((praca) => (praca.id === "praca-forno" ? { ...praca, tocaSom: false } : praca)),
+    )
+    cleanup()
+    renderizar(200, 60_000)
+    await ticket("Mesa 82")
+    await lancar(83, "cat-calzones")
+    expect(await ticket("Mesa 83")).toBeInTheDocument()
+    await esperar(400)
+    expect(audio.novo()).toBe(1)
+  })
+})
+
+describe("PaginaCozinha: vias da cozinha", () => {
+  async function lancarNaMesa(numero: number, categorias: string[]) {
+    const lista = await api().produtos.listar()
+    const itens = categorias.map((categoriaId) => {
+      const produto = lista.find(
+        (item) => item.categoriaId === categoriaId && item.grupos.length === 0 && item.disponivel,
+      ) as Produto
+      return { produtoId: produto.id, escolhas: {}, quantidade: 1 }
+    })
+    const mesa = await api().mesas.criar({ numero })
+    return api().mesas.lancar({ mesaId: mesa.id, enviarParaCozinha: true, itens })
+  }
+
+  test("com as vias ligadas, a rodada nova imprime a via de cada praça que imprime", async () => {
+    telaGrande()
+    usePreferenciasFila.setState({ imprimirVias: true })
+    renderizar(200)
+    await coluna("A fazer")
+    await esperar(400)
+    // O que já estava na tela não sai de novo.
+    expect(impressas).toEqual([])
+
+    const comanda = await lancarNaMesa(84, ["cat-calzones", "cat-massas", "cat-bebidas"])
+    await waitFor(() => expect(impressas).toHaveLength(2))
+    expect(impressas[0]).toMatch(/^Mesa 84 · FORNO/)
+    expect(impressas[0]).not.toMatch(/R$/)
+    expect(impressas[1]).toMatch(/^Mesa 84 · MONTAGEM/)
+    expect((await api().pedidos.buscar(comanda.id))?.viasImpressas).toEqual([
+      "1:praca-forno",
+      "1:praca-montagem",
+    ])
+  })
+
+  test("sem a chave do aparelho, nada sai; Reimprimir via imprime a da praça na hora", async () => {
+    telaGrande()
+    await lancarNaMesa(85, ["cat-calzones", "cat-massas"])
+    usePreferenciasFila.setState({ praca: "praca-montagem" })
+    const usuario = userEvent.setup()
+    renderizar()
+    const doTicket = within(await ticket("Mesa 85"))
+    await esperar(300)
+    expect(impressas).toEqual([])
+
+    await usuario.click(doTicket.getByRole("button", { name: "Mais ações" }))
+    await usuario.click(await screen.findByRole("menuitem", { name: "Reimprimir via" }))
+    await waitFor(() => expect(impressas).toHaveLength(1))
+    expect(impressas[0]).toMatch(/^Mesa 85 · MONTAGEM/)
+  })
+
+  test("Ajustes: a chave deste aparelho e, sem praças, a via da cozinha da loja", async () => {
+    await api().salvarPracas([])
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("tab", { name: "Ajustes" }))
+    const vias = within(await screen.findByRole("region", { name: "Vias da cozinha" }))
+    await usuario.click(vias.getByRole("switch", { name: "Imprimir as vias neste aparelho" }))
+    expect(usePreferenciasFila.getState().imprimirVias).toBe(true)
+    await usuario.click(await vias.findByRole("switch", { name: "Imprimir a via da cozinha" }))
+    await waitFor(async () => expect((await api().loja()).viaDaCozinha).toBe(true))
   })
 })

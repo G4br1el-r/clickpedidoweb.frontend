@@ -373,3 +373,46 @@ As fronteiras de cada fase seguinte são escritas no início dela, como foi feit
    - Loja: mínimo e máximo;
    - Fila: o selo.
 5. **E2E e screenshots:** agendado do PDV em Mais tarde, o tempo de atraso mudado nos Ajustes, e os screenshots revisados da Cozinha, do PDV e da Loja.
+
+## Fase 5: produção
+
+A fase sai em dois commits, com revisão entre eles: **5a** (praças, expedição, via impressa e som por praça) e **5b** (resumo de produção, esgotados, tamanho e densidade, atalhos).
+
+**Desenho**
+
+- **Praças:**
+  - a loja guarda as praças (`ConfigLoja.pracas`): nome, cor de uma paleta de 6 tons (o traço), categorias ligadas, se imprime a via e se toca som;
+  - uma categoria fica em uma praça só;
+  - o cadastro fica na aba Ajustes da Cozinha, seção Praças, com lista e janela de edição;
+  - o produto ganha o campo opcional "Praça", que vale mais que a da categoria;
+  - a demo vem com praças: pizzaria (Forno, Montagem, Bebidas), lanchonete (Chapa, Fritura, Bebidas), adega (Bar, Balcão) e açougue (Corte, Balcão).
+- **Praça do item:** calculada na hora pelo cardápio atual: a do produto, senão a da categoria, senão **Geral**. O item avulso vai para Geral. Mudar a praça vale na hora, até nos tickets abertos; o desempenho por praça (Fase 7) usa o cadastro atual.
+- **Praça por aparelho:** seletor no topo do Quadro, "Todas" e cada praça, guardado no aparelho. Sem praças, não aparece.
+- **Quadro de uma praça:**
+  - o ticket mostra só os itens da praça e a linha "Falta: Montagem 2, Bebidas 1";
+  - o ticket sem itens da praça não aparece;
+  - a coluna sai dos itens da praça: com os dela riscados, vai para Prontos da praça, "aguardando" as outras;
+  - "Iniciar preparo" vale para o ticket inteiro; "Marcar pronto · Forno" risca só os itens da praça (o nome da praça pode ser feminino, e "no/na" não dá para escolher sozinho);
+  - com tudo riscado, o ticket fica pronto sozinho;
+  - "Todas" é a expedição, como o quadro de hoje.
+- **Som por praça:** o aparelho de uma praça só toca para ticket com itens dela, e não toca se a praça estiver com som desligado. "Todas" toca para tudo.
+- **Via impressa:**
+  - chave por aparelho "Imprimir as vias neste aparelho", desligada de fábrica;
+  - o aparelho imprime sozinho a via da sua praça (em "Todas", a de cada praça que imprime) quando a rodada chega em A fazer; na primeira leitura, o que já estava na tela não sai (ligar no meio do serviço não imprime tudo de uma vez);
+  - as vias do mesmo pedido são marcadas uma de cada vez: duas gravações ao mesmo tempo apagariam uma marca;
+  - o servidor marca a via impressa por rodada e praça, para dois aparelhos não repetirem;
+  - a via tem letra grande e não tem preço: "MESA 5 · 2ª rodada · FORNO · 20:31 · #1410", os itens com opções e observação;
+  - "Reimprimir via" no menu do ticket;
+  - sem praças, uma via só (Geral), com a chave da loja "Imprimir a via da cozinha".
+- **Resumo de produção (5b):** soma A fazer e Preparando por produto ("7× X-Burger"), seguindo a praça e o filtro. No desktop, painel à direita que abre e fecha; tocar num produto destaca os tickets dele e apaga os outros. No celular, botão "Em produção (12)" com gaveta de baixo, abas Em produção e Esgotados. Cada linha tem "Acabou".
+- **Esgotados (5b):** os produtos à venda que estão esgotados, com "Voltou", na aba Esgotados do painel.
+- **Tamanho e densidade (5b):** no aparelho; o botão "Exibição" abre A−, A+ (4 tamanhos) e "Compacto", que esconde cliente e garçom e aperta os espaços. O tamanho muda a escala só do quadro.
+- **Atalhos (5b, só no desktop):** setas movem o foco entre os tickets (← → colunas, ↑ ↓ na coluna); Enter avança; P prioridade; 1 a 9 riscam itens; Z desfaz a última ação com Desfazer; ? abre a lista. Não valem com campo, menu ou janela aberta.
+
+**Fronteiras de teste**
+
+1. **Regras (5a):** praça do item (produto, categoria, Geral, avulso); tickets e colunas de uma praça, com "Falta" e "aguardando"; pronto na praça; som por praça; vias a imprimir, sem repetir; validação do cadastro (nome, categoria em uma praça só).
+2. **Servidor (5a):** salvar praças; praça no produto; pronto na praça; marcar a via impressa; praças da demo.
+3. **Tela (5a):** Ajustes > Praças; campo Praça no produto; seletor de praça; quadro da praça com "Pronto no Forno"; via impressa e "Reimprimir via", com o `react-to-print` simulado.
+4. **Regras e tela (5b):** resumo somado e destaque; esgotados com "Voltou"; tamanho e compacto guardados no aparelho; cada atalho.
+5. **E2E e screenshots:** pizzaria: o Forno marca pronto, depois a Montagem, e o ticket vai para Prontos na expedição; o resumo no desktop e a gaveta no celular; screenshots revisados da Cozinha, dos Ajustes e da via.

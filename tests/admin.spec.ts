@@ -254,6 +254,11 @@ test("cozinha: os tempos de alerta mudam nos Ajustes e valem no quadro", async (
   await page.getByRole("tab", { name: "Ajustes" }).click()
   await expect(page).toHaveURL(/aba=ajustes/)
 
+  // Antes de salvar: o toast de salvo ficaria por cima no celular.
+  const pracas = page.getByRole("region", { name: "Praças" })
+  await expect(pracas.getByRole("listitem")).toHaveCount(3)
+  await esperarAnimacoes(page)
+  await expect(pracas).toHaveScreenshot("cozinha-pracas.png")
   const tempos = page.getByRole("region", { name: "Tempos da cozinha" })
   await tempos.getByRole("spinbutton", { name: "Atenção a partir de" }).fill("1")
   await tempos.getByRole("spinbutton", { name: "Atraso a partir de" }).fill("2")
@@ -262,12 +267,67 @@ test("cozinha: os tempos de alerta mudam nos Ajustes e valem no quadro", async (
   await verificarAcessibilidade(page)
   await page.waitForLoadState("networkidle")
   await esperarAnimacoes(page)
+  // O mouse fica onde clicou (Salvar): sem tirar, a linha embaixo dele aparece em realce.
+  await page.mouse.move(0, 0)
   await expect(page.getByRole("region", { name: "Sons deste aparelho" })).toHaveScreenshot(
     "cozinha-sons.png",
   )
 
   await page.getByRole("tab", { name: "Quadro" }).click()
   await expect(page.locator('article[data-urgencia="atrasado"]').first()).toBeVisible()
+})
+
+test("praças: o Forno e a Montagem fazem a sua parte, e a expedição vê pronto", async ({
+  page,
+}, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a cozinha usa abas")
+  test.setTimeout(90_000)
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/mesas")
+  await page.getByRole("button", { name: "Nova mesa" }).click()
+  await page.getByRole("spinbutton", { name: "Número" }).fill("91")
+  await page.getByRole("button", { name: "Criar mesa" }).click()
+
+  // Garçom: uma pizza (Forno) e uma massa (Montagem), sem opções.
+  await page.goto("/admin/garcom")
+  await page.getByRole("combobox", { name: "Mesa" }).click()
+  await page.getByRole("option", { name: "Mesa 91 · livre" }).click()
+  for (const categoria of [/^Calzones/, /^Massas/]) {
+    await page.getByRole("radio", { name: categoria }).click()
+    await page
+      .getByRole("button", { name: /^Adicionar .*\d$/ })
+      .first()
+      .click()
+  }
+  await page
+    .getByRole("region", { name: "Bandeja" })
+    .getByRole("button", { name: "Enviar para a cozinha" })
+    .click()
+  await expect(page.getByText("Mesa 91: enviado para a cozinha.")).toBeVisible()
+
+  await page.goto("/admin/cozinha")
+  const escolher = async (praca: string) => {
+    await page.getByRole("combobox", { name: "Praça" }).click()
+    await page.getByRole("option", { name: praca }).click()
+  }
+  const naColuna = (coluna: string) =>
+    page
+      .getByRole("region", { name: new RegExp(`^${coluna}`) })
+      .getByRole("article", { name: /^Mesa 91 ·/ })
+  await escolher("Forno")
+  await expect(naColuna("A fazer")).toContainText("Falta: Montagem 1", { timeout: 15_000 })
+  await verificarAcessibilidade(page)
+  await page.waitForLoadState("networkidle")
+  await esperarAnimacoes(page)
+  await expect(naColuna("A fazer")).toHaveScreenshot("praca-ticket-forno.png")
+  await naColuna("A fazer").getByRole("button", { name: "Iniciar preparo" }).click()
+  await naColuna("Preparando").getByRole("button", { name: "Marcar pronto · Forno" }).click()
+  await expect(naColuna("Prontos")).toContainText("Aguardando Montagem")
+
+  await escolher("Montagem")
+  await naColuna("Preparando").getByRole("button", { name: "Marcar pronto · Montagem" }).click()
+  await escolher("Todas")
+  await expect(naColuna("Prontos")).toContainText("Servir na mesa")
 })
 
 test("salão: o garçom lança, a cozinha prepara e a mesa fecha a conta", async ({ page }) => {

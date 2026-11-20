@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter, type OnUrlUpdateFunction } from "nuqs/adapters/testing"
 import { type ReactNode, useState } from "react"
+import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -64,6 +65,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.useRealTimers()
+  // Os toasts do Sonner vivem fora da árvore: o de um teste não pode sobrar no outro.
+  toast.dismiss()
 })
 
 describe("FormularioProduto: campos por segmento", () => {
@@ -175,6 +178,31 @@ describe("FormularioProduto: salvar", () => {
     expect(
       within(campos.getByRole("group", { name: "Grupo 1" })).getByLabelText("Nome do grupo"),
     ).toHaveValue("Borda")
+  })
+
+  test("a praça do produto vale mais que a da categoria; sem praças, o campo não aparece", async () => {
+    const usuario = userEvent.setup()
+    const [primeiro] = await servidorDo("pizzaria").produtos.listar()
+    abrir("pizzaria", primeiro.id)
+    const painel = await formulario()
+    const praca = await painel.findByRole("combobox", { name: "Praça" })
+    // A primeira categoria da pizzaria é do Forno.
+    expect(praca).toHaveTextContent("Da categoria (Forno)")
+    await usuario.click(praca)
+    await usuario.click(await screen.findByRole("option", { name: "Montagem" }))
+    await usuario.click(painel.getByRole("button", { name: "Salvar produto" }))
+    await waitFor(async () =>
+      expect(
+        (await servidorDo("pizzaria").produtos.listar()).find((item) => item.id === primeiro.id)
+          ?.pracaId,
+      ).toBe("praca-montagem"),
+    )
+  })
+
+  test("salão, sem praças, não tem o campo Praça", async () => {
+    abrir("salao")
+    const painel = await formulario()
+    expect(painel.queryByRole("combobox", { name: "Praça" })).not.toBeInTheDocument()
   })
 
   test("editar carrega o produto", async () => {

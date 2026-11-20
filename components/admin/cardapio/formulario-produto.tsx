@@ -91,6 +91,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
+import { useLoja } from "@/lib/admin/dados/consultas"
 import {
   useCategorias,
   useProdutos,
@@ -155,6 +156,8 @@ type ValoresGrupo = {
 /** Valores do formulário; o esquema do segmento decide quais são validados e salvos. */
 type Valores = {
   categoriaId: string
+  /** "categoria": segue a praça da categoria. */
+  pracaId: string
   nome: string
   descricao: string
   preco: number
@@ -171,9 +174,12 @@ type Valores = {
   grupos: ValoresGrupo[]
 }
 
+const DA_CATEGORIA = "categoria"
+
 function valoresIniciais(produto: Produto | undefined): Valores {
   return {
     categoriaId: produto?.categoriaId ?? "",
+    pracaId: produto?.pracaId ?? DA_CATEGORIA,
     nome: produto?.nome ?? "",
     descricao: produto?.descricao ?? "",
     preco: produto?.preco as number,
@@ -564,6 +570,8 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
   const campos = camposDoProduto(segmento)
   const { data: categorias = [] } = useCategorias()
   const { data: produtos = [] } = useProdutos()
+  const { data: loja } = useLoja()
+  const pracas = loja?.pracas ?? []
   const salvar = useSalvarProduto()
   const replicar = useReplicarOpcoes()
   const esquema = useMemo(() => esquemaProduto(segmento), [segmento])
@@ -581,6 +589,9 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
   const erros = formState.errors
   const imagem = watch("imagem")
   const oferta = watch("oferta")
+  const categoriaId = watch("categoriaId")
+  const pracaDaCategoria =
+    pracas.find((praca) => praca.categoriaIds.includes(categoriaId))?.nome ?? "Geral"
 
   const aoArrastar = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return
@@ -603,6 +614,7 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
     const salvo: Produto = {
       id: produto?.id ?? novoId("prod"),
       categoriaId: valores.categoriaId,
+      ...(valores.pracaId && valores.pracaId !== DA_CATEGORIA ? { pracaId: valores.pracaId } : {}),
       nome: valores.nome.trim(),
       descricao: valores.descricao.trim(),
       preco: valores.preco,
@@ -707,6 +719,35 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
                 )}
               />
             </div>
+            {pracas.length > 0 && (
+              <Controller
+                control={control}
+                name="pracaId"
+                render={({ field }) => (
+                  <Field>
+                    <FieldLabel htmlFor="produto-praca">Praça</FieldLabel>
+                    <Select value={field.value || DA_CATEGORIA} onValueChange={field.onChange}>
+                      <SelectTrigger id="produto-praca" aria-label="Praça" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value={DA_CATEGORIA}>
+                            Da categoria ({pracaDaCategoria})
+                          </SelectItem>
+                          {pracas.map((praca) => (
+                            <SelectItem key={praca.id} value={praca.id}>
+                              {praca.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>Onde a cozinha prepara este produto.</FieldDescription>
+                  </Field>
+                )}
+              />
+            )}
             <Controller
               control={control}
               name="descricao"

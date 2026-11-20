@@ -317,6 +317,33 @@ export const catalogoAdega: CatalogoLoja = {
     tempoEntrega: "30–50 min",
     tempoRetirada: "15–25 min",
     prazos: { entrega: { min: 30, max: 50 }, retirada: { min: 15, max: 25 } },
+    pracas: [
+      {
+        id: "praca-bar",
+        nome: "Bar",
+        cor: "roxo",
+        categoriaIds: ["cat-copao", "cat-caipirinhas", "cat-batidas-e-drinks", "cat-nossos-combos"],
+        imprime: true,
+        tocaSom: true,
+      },
+      {
+        id: "praca-balcao",
+        nome: "Balcão",
+        cor: "cinza",
+        categoriaIds: [
+          "cat-cervejas",
+          "cat-cerveja-fardo",
+          "cat-cerveja-retornavel",
+          "cat-garrafas-de-destilados",
+          "cat-energeticos",
+          "cat-gelos",
+          "cat-sucos-e-refrigerantes",
+          "cat-conveniencia",
+        ],
+        imprime: false,
+        tocaSom: true,
+      },
+    ],
     cidadesAtendidas: [],
     pagamentoOnlineConectado: true,
     pagamentos: {

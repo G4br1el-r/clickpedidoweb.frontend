@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { catalogoDeTeste } from "../dados/catalogo-de-teste"
-import { esquemaLoja, esquemaTemposCozinha } from "./esquema-loja"
+import { esquemaLoja, esquemaPracas, esquemaTemposCozinha } from "./esquema-loja"
 
 const VALIDA = { ...catalogoDeTeste().loja, pagamentoOnlineConectado: true }
 
@@ -143,6 +143,40 @@ describe("esquemaTemposCozinha", () => {
       atencaoMin: "De 1 a 120 min.",
       atrasoMin: "De 1 a 120 min.",
       prontoFicaMin: "De 1 a 60 min.",
+    })
+  })
+})
+
+describe("esquemaPracas", () => {
+  const forno = {
+    id: "praca-forno",
+    nome: " Forno ",
+    cor: "ambar",
+    categoriaIds: ["cat-pizzas"],
+    imprime: true,
+    tocaSom: true,
+  }
+  const errosDasPracas = (valores: unknown) => {
+    const resultado = esquemaPracas.safeParse(valores)
+    if (resultado.success) return {}
+    return Object.fromEntries(
+      resultado.error.issues.map((erro) => [erro.path.join("."), erro.message]),
+    )
+  }
+
+  test("aceita praças com nome e categorias, com o nome limpo", () => {
+    const [praca] = esquemaPracas.parse([forno])
+    expect(praca.nome).toBe("Forno")
+  })
+
+  test("nome obrigatório e sem repetir, e cada categoria em uma praça só", () => {
+    const chapa = { ...forno, id: "praca-chapa", nome: "Chapa", categoriaIds: ["cat-pizzas"] }
+    const semNome = { ...forno, id: "praca-x", nome: " ", categoriaIds: [] }
+    const repetida = { ...forno, id: "praca-y", nome: "forno", categoriaIds: [] }
+    expect(errosDasPracas([forno, chapa, semNome, repetida])).toEqual({
+      "1.categoriaIds": "Uma categoria fica em uma praça só.",
+      "2.nome": "Informe o nome da praça.",
+      "3.nome": "Já existe uma praça com este nome.",
     })
   })
 })

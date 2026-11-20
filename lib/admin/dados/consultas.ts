@@ -5,12 +5,14 @@ import {
   avancarRodada,
   avisarSobreRodada,
   darCiente,
+  prontoNaPraca,
   riscarItem,
   type StatusTicket,
   servirRodada,
   verMensagem,
   voltarRodada,
 } from "../regras/cozinha"
+import type { VisaoDePraca } from "../regras/pracas"
 import { proximoStatus } from "../regras/status"
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
@@ -228,6 +230,16 @@ export function useRiscarItem() {
   )
 }
 
+/** A praça terminou a parte dela na rodada; com a última, a rodada fica pronta. */
+export function useProntoNaPraca() {
+  return useMutacaoDePedido<{ id: number; rodada: number; visao: VisaoDePraca }>(
+    (servidor, { id, rodada, visao }) => servidor.cozinha.prontoNaPraca(id, rodada, visao.pracaId),
+    ouIgual((pedido, { rodada, visao }) =>
+      prontoNaPraca(pedido, rodada, visao, new Date().toISOString()),
+    ),
+  )
+}
+
 /** A cozinha viu o cancelamento ou a alteração: o aviso sai de todas as telas. */
 export function useDarCiente() {
   return useMutacaoDePedido<{ id: number; avisoId: string }>(
@@ -286,6 +298,18 @@ export function useDefinirAberta() {
 
 export function useDefinirEntrega() {
   return useMudancaNaLoja((servidor, entrega) => servidor.definirEntrega(entrega))
+}
+
+/**
+ * Marca a via da cozinha como impressa. `nova` diz se este aparelho foi o primeiro: só
+ * ele imprime.
+ */
+export function useMarcarVia() {
+  const segmento = useSegmento()
+  return useMutation({
+    mutationFn: ({ id, via }: { id: number; via: string }) =>
+      servidorDo(segmento).cozinha.marcarVia(id, via),
+  })
 }
 
 /** Demonstração: um pedido novo chega agora. */

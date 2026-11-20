@@ -294,6 +294,38 @@ export const catalogoLanchonete: CatalogoLoja = {
     tempoEntrega: "40–60 min",
     tempoRetirada: "20–30 min",
     prazos: { entrega: { min: 40, max: 60 }, retirada: { min: 20, max: 30 } },
+    pracas: [
+      {
+        id: "praca-chapa",
+        nome: "Chapa",
+        cor: "ambar",
+        categoriaIds: ["cat-lanches", "cat-combos", "cat-cafe-mineiro"],
+        imprime: true,
+        tocaSom: true,
+      },
+      {
+        id: "praca-fritura",
+        nome: "Fritura",
+        cor: "rosa",
+        categoriaIds: ["cat-pasteis", "cat-porcoes", "cat-salgados", "cat-caldos"],
+        imprime: true,
+        tocaSom: true,
+      },
+      {
+        id: "praca-bebidas",
+        nome: "Bebidas",
+        cor: "azul",
+        categoriaIds: [
+          "cat-bebidas",
+          "cat-sucos-e-vitaminas",
+          "cat-acai",
+          "cat-acai-gourmet",
+          "cat-doces-mineiros",
+        ],
+        imprime: false,
+        tocaSom: true,
+      },
+    ],
     cidadesAtendidas: [],
     pagamentoOnlineConectado: true,
     pagamentos: {

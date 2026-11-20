@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { useLoja } from "@/lib/admin/dados/consultas"
-import { useSalvarTemposCozinha } from "@/lib/admin/dados/consultas-entrega"
+import { useLigarViaDaCozinha, useSalvarTemposCozinha } from "@/lib/admin/dados/consultas-entrega"
 import type { TemposCozinha } from "@/lib/admin/dados/tipos"
 import {
   type EventoDeSom,
@@ -21,6 +21,7 @@ import {
 import { TEMPOS_PADRAO } from "@/lib/admin/regras/cozinha"
 import { esquemaTemposCozinha } from "@/lib/admin/regras/esquema-loja"
 import { tocarAlerta, tocarSom } from "@/lib/admin/som"
+import { PracasDaCozinha } from "./pracas-da-cozinha"
 
 /** Uma parte dos ajustes: título e explicação à esquerda, o conteúdo à direita. */
 export function SecaoAjuste({
@@ -195,6 +196,67 @@ function ChavesDeSom() {
   )
 }
 
+/** As vias: a chave deste aparelho e, sem praças, a via da cozinha da loja. */
+function ViasDaCozinha() {
+  const { data: loja } = useLoja()
+  const ligarDaLoja = useLigarViaDaCozinha()
+  const imprimirVias = usePreferenciasFila((estado) => estado.imprimirVias)
+  const ligarVias = usePreferenciasFila((estado) => estado.ligarVias)
+  const semPracas = loja && (loja.pracas ?? []).length === 0
+  return (
+    <div className="flex flex-col divide-y divide-border/70">
+      <LinhaDeChave
+        id="vias-aparelho"
+        rotulo="Imprimir as vias neste aparelho"
+        descricao="A via sai sozinha quando a rodada chega em A fazer. Ligue em um aparelho por praça."
+        ligada={imprimirVias}
+        aoMudar={ligarVias}
+      />
+      {semPracas ? (
+        <LinhaDeChave
+          id="vias-loja"
+          rotulo="Imprimir a via da cozinha"
+          descricao="Sem praças, sai uma via só, com todos os itens."
+          ligada={Boolean(loja.viaDaCozinha)}
+          aoMudar={(ligada) =>
+            ligarDaLoja.mutate(ligada, { onError: (erro) => toast.error(erro.message) })
+          }
+        />
+      ) : (
+        <p className="py-3 text-[13px] text-muted-foreground">
+          Cada praça escolhe se imprime a via, em Praças.
+        </p>
+      )}
+    </div>
+  )
+}
+
+function LinhaDeChave({
+  id,
+  rotulo,
+  descricao,
+  ligada,
+  aoMudar,
+}: {
+  id: string
+  rotulo: string
+  descricao: string
+  ligada: boolean
+  aoMudar: (ligada: boolean) => void
+}) {
+  return (
+    <div className="flex min-h-14 items-center justify-between gap-4 py-3">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <label htmlFor={id} className="text-sm font-medium">
+          {rotulo}
+        </label>
+        <span className="text-[13px] text-muted-foreground">{descricao}</span>
+      </div>
+      <Switch id={id} checked={ligada} onCheckedChange={aoMudar} />
+    </div>
+  )
+}
+
 /** Aba Ajustes da cozinha: os tempos da loja e os sons deste aparelho. */
 export function AjustesCozinha() {
   const { data: loja } = useLoja()
@@ -209,6 +271,18 @@ export function AjustesCozinha() {
         ) : (
           <Skeleton className="h-24 rounded-lg" />
         )}
+      </SecaoAjuste>
+      <SecaoAjuste
+        titulo="Praças"
+        descricao="Pontos de preparo, com as categorias de cada um. Cada aparelho escolhe a sua praça no Quadro."
+      >
+        <PracasDaCozinha />
+      </SecaoAjuste>
+      <SecaoAjuste
+        titulo="Vias da cozinha"
+        descricao="A via impressa de cada praça, sem preço, para quem prepara."
+      >
+        <ViasDaCozinha />
       </SecaoAjuste>
       <SecaoAjuste
         titulo="Sons deste aparelho"

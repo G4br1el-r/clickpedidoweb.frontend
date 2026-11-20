@@ -64,3 +64,20 @@ describe("sons de cada evento da cozinha", () => {
     })
   })
 })
+
+describe("praça e vias deste aparelho", () => {
+  test("começa em Todas, sem imprimir as vias, e guarda a escolha", async () => {
+    expect(usePreferenciasFila.getState()).toMatchObject({ praca: "todas", imprimirVias: false })
+    usePreferenciasFila.getState().escolherPraca("praca-forno")
+    usePreferenciasFila.getState().ligarVias(true)
+    const guardado = JSON.parse(localStorage.getItem("clickpedido-admin-fila") ?? "{}")
+
+    usePreferenciasFila.setState(usePreferenciasFila.getInitialState(), true)
+    localStorage.setItem("clickpedido-admin-fila", JSON.stringify(guardado))
+    await usePreferenciasFila.persist.rehydrate()
+    expect(usePreferenciasFila.getState()).toMatchObject({
+      praca: "praca-forno",
+      imprimirVias: true,
+    })
+  })
+})

@@ -134,6 +134,8 @@ export type Pedido = {
   etapas?: Partial<Record<StatusPedido, string>>
   /** O que a cozinha mandou dizer ao salão ou ao caixa. */
   mensagensCozinha?: MensagemCozinha[]
+  /** Vias da cozinha já impressas: "rodada:praça". Outro aparelho não imprime de novo. */
+  viasImpressas?: string[]
   impressoEm?: string
   /** Mesa: se a rodada vai para a cozinha. */
   enviarParaCozinha: boolean
@@ -209,6 +211,8 @@ export type Produto = {
   medicamento?: DadosMedicamento
   /** Controle de estoque do produto; sem o campo, não é controlado. */
   estoque?: ControleEstoque
+  /** Cozinha: a praça que prepara, no lugar da praça da categoria. */
+  pracaId?: string
 }
 
 /** Estoque de um produto, na unidade dele (peças ou kg). */
@@ -337,6 +341,22 @@ export type SomAlerta = "suave" | "alto" | "muito-alto"
 /** Tempo prometido ao cliente, em minutos. */
 export type Prazo = { min: number; max: number }
 
+/** As cores das praças: o traço que marca cada uma no painel. */
+export const CORES_DE_PRACA = ["ambar", "verde", "azul", "roxo", "rosa", "cinza"] as const
+export type CorDePraca = (typeof CORES_DE_PRACA)[number]
+
+/** Um ponto de preparo da cozinha (Forno, Chapa, Bebidas) e as categorias que são dele. */
+export type Praca = {
+  id: string
+  nome: string
+  cor: CorDePraca
+  categoriaIds: string[]
+  /** Imprime a via da cozinha desta praça. */
+  imprime: boolean
+  /** O aparelho desta praça toca o alerta de pedido novo. */
+  tocaSom: boolean
+}
+
 /** Quando o ticket pede atenção, quando atrasa e quanto o pronto fica na tela, em minutos. */
 export type TemposCozinha = { atencaoMin: number; atrasoMin: number; prontoFicaMin: number }
 
@@ -363,6 +383,10 @@ export type ConfigLoja = {
   prazos?: { entrega: Prazo; retirada: Prazo }
   /** Tempos de alerta da cozinha. Sem o campo, 15, 25 e 15 min. */
   temposCozinha?: TemposCozinha
+  /** Pontos de preparo da cozinha. Sem praças, tudo é da praça Geral. */
+  pracas?: Praca[]
+  /** Sem praças: se a cozinha imprime a via (uma só, Geral). */
+  viaDaCozinha?: boolean
   /** Vazio = qualquer cidade. */
   cidadesAtendidas: string[]
   pagamentos: Record<FormaPagamento, boolean>
