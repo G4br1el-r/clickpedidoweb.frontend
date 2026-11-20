@@ -17,6 +17,7 @@ import { useMetas } from "@/lib/admin/metas"
 import { abaEscolhida, abasDo } from "@/lib/admin/regras/dashboard/abas"
 import { alertasDoPainel } from "@/lib/admin/regras/dashboard/alertas"
 import { periodoDaBusca } from "@/lib/admin/regras/dashboard/busca"
+import { periodoDeClientes } from "@/lib/admin/regras/dashboard/clientes"
 import { situacaoDaMeta } from "@/lib/admin/regras/dashboard/metas"
 import { resumir } from "@/lib/admin/regras/dashboard/resumo"
 import { destaquesDoSegmento } from "@/lib/admin/regras/dashboard/segmento"
@@ -25,6 +26,7 @@ import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
 import { lotesDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { AbaClientes } from "./clientes/aba-clientes"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
 import { AbaFinanceiro } from "./financeiro/aba-financeiro"
 import { AbaResumo } from "./painel-visao-geral"
@@ -70,6 +72,11 @@ export function VisaoGeral() {
   const { data: pedidos } = usePedidos(filtro, {
     ativo: Boolean(filtro),
     atualizarACada: aba === "resumo" ? ATUALIZAR_RESUMO_A_CADA : undefined,
+  })
+
+  // A aba Clientes enxerga sempre os últimos 90 dias, numa busca própria.
+  const { data: pedidosDeClientes } = usePedidos(agora ? periodoDeClientes(agora) : undefined, {
+    ativo: aba === "clientes" && Boolean(agora),
   })
 
   const resumo = useMemo(
@@ -178,13 +185,29 @@ export function VisaoGeral() {
           </TabsList>
         </div>
 
-        <FiltroPeriodo />
+        {aba === "clientes" ? (
+          <p className="text-sm text-muted-foreground">Últimos 90 dias, até hoje</p>
+        ) : (
+          <FiltroPeriodo />
+        )}
 
         {/* Só a aba aberta é montada; cada uma é o painel da sua aba para leitores de tela. */}
         <TabsContent value={aba}>
           {resumo && periodo ? (
             aba === "vendas" ? (
               <AbaVendas pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
+            ) : aba === "clientes" ? (
+              pedidosDeClientes && loja && agora ? (
+                <AbaClientes
+                  pedidos={pedidosDeClientes}
+                  agora={agora}
+                  segmento={segmento}
+                  loja={loja}
+                  linkDaLoja={typeof window === "undefined" ? "/" : `${window.location.origin}/`}
+                />
+              ) : (
+                <EsqueletoVisaoGeral />
+              )
             ) : aba === "produtos" ? (
               // Sem o cardápio, "o que não vendeu" estaria errado: espera os dois chegarem.
               produtos && categorias ? (

@@ -306,7 +306,7 @@ describe("VisaoGeral", () => {
       within(abas)
         .getAllByRole("tab")
         .map((aba) => aba.textContent),
-    ).toEqual(["Resumo", "Vendas", "Produtos", "Financeiro"])
+    ).toEqual(["Resumo", "Vendas", "Produtos", "Clientes", "Financeiro"])
     expect(within(abas).getByRole("tab", { name: "Financeiro" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -320,6 +320,24 @@ describe("VisaoGeral", () => {
 
     expect(aoMudar.mock.lastCall?.[0].searchParams.get("aba")).toBe("vendas")
     expect(await screen.findByRole("region", { name: "Canais de venda" })).toBeInTheDocument()
+  })
+
+  test("a aba Clientes usa os últimos 90 dias: o filtro de período dá lugar ao aviso", async () => {
+    render(
+      <Provedores endereco="?aba=clientes">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole("region", { name: "Melhores clientes" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByRole("region", { name: "Melhores clientes" })).getAllByRole("listitem")
+        .length,
+    ).toBeGreaterThan(0)
+    expect(screen.queryByRole("group", { name: "Período" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("radiogroup", { name: "Período" })).not.toBeInTheDocument()
+    expect(screen.getAllByText("Últimos 90 dias, até hoje").length).toBeGreaterThan(0)
   })
 
   test("a aba Produtos mostra os produtos da loja: ranking e o cardápio parado", async () => {
