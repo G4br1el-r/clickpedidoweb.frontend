@@ -339,9 +339,11 @@ export type RecursoId =
   | "combosAutomaticos"
   /** Farmácia: tarja, tipo, princípio ativo e registro do medicamento. */
   | "medicamentos"
+  /** Adega: bebida alcoólica, que pede documento (+18). */
+  | "maioridade"
 
 const RECURSOS: Record<SegmentoPainelId, readonly RecursoId[]> = {
-  adega: ["adicionais", "precoBalcao", "combosAutomaticos"],
+  adega: ["adicionais", "precoBalcao", "combosAutomaticos", "maioridade"],
   acougue: [
     "adicionais",
     "precoBalcao",

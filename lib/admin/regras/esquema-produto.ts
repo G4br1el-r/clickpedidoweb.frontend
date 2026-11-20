@@ -10,6 +10,8 @@ export function camposDoProduto(segmento: SegmentoPainelId) {
     unidade: temRecurso(segmento, "vendaPorPeso"),
     duracao: segmento === "salao",
     video: temRecurso(segmento, "video"),
+    /** Adega: a marca de bebida alcoólica (+18). */
+    maioridade: temRecurso(segmento, "maioridade"),
   }
 }
 
@@ -100,6 +102,7 @@ export function esquemaProduto(segmento: SegmentoPainelId) {
       disponivel: z.boolean(),
       destaque: z.boolean(),
       oferta: z.boolean(),
+      alcoolico: z.boolean().optional(),
       ...(campos.precoBalcao
         ? { precoBalcao: dinheiro("Informe o preço de balcão.").gt(0).optional() }
         : {}),

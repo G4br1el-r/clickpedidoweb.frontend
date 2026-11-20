@@ -59,8 +59,11 @@ describe("camposDoProduto", () => {
       unidade: false,
       duracao: true,
       video: true,
+      maioridade: false,
     })
     expect(camposDoProduto("acougue")).toMatchObject({ unidade: true, grupos: true })
+    // Só a adega marca bebida alcoólica (+18).
+    expect(camposDoProduto("adega")).toMatchObject({ maioridade: true })
     expect(camposDoProduto("lanchonete")).toMatchObject({ precoBalcao: false, grupos: true })
   })
 })

@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter, type OnUrlUpdateFunction } from "nuqs/adapters/testing"
 import { type ReactNode, useState } from "react"
+import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -64,6 +65,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.useRealTimers()
+  // Os avisos do sonner ficam guardados entre os testes: cada teste começa sem nenhum.
+  toast.dismiss()
 })
 
 describe("FormularioProduto: campos por segmento", () => {
@@ -181,6 +184,32 @@ describe("FormularioProduto: salvar", () => {
     const [primeiro] = await servidorDo("pizzaria").produtos.listar()
     abrir("pizzaria", primeiro.id)
     expect(await (await formulario()).findByDisplayValue(primeiro.nome)).toBeInTheDocument()
+  })
+})
+
+describe("FormularioProduto: bebida alcoólica (adega)", () => {
+  test("a cerveja vem marcada; desmarcar grava o produto sem o +18", async () => {
+    const usuario = userEvent.setup()
+    const CERVEJA = "prod-cerveja-skol-350ml"
+    abrir("adega", CERVEJA)
+    const painel = await formulario()
+    const chave = painel.getByRole("switch", { name: "Bebida alcoólica (+18)" })
+    expect(chave).toBeChecked()
+
+    await usuario.click(chave)
+    await usuario.click(painel.getByRole("button", { name: "Salvar produto" }))
+    await waitFor(async () => {
+      const salvo = (await servidorDo("adega").produtos.listar()).find(
+        (item) => item.id === CERVEJA,
+      )
+      expect(salvo?.alcoolico).toBeFalsy()
+    })
+  })
+
+  test("fora da adega não existe a marca", async () => {
+    abrir("pizzaria")
+    const painel = await formulario()
+    expect(painel.queryByRole("switch", { name: "Bebida alcoólica (+18)" })).not.toBeInTheDocument()
   })
 })
 
