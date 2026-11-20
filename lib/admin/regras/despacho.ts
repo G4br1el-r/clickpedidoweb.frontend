@@ -57,3 +57,26 @@ export function entregasParaAgrupar(pedido: Pedido, fila: Pedido[]): Pedido[] {
       normalizar(outro.endereco.bairro).trim() === bairro,
   )
 }
+
+const EM_ANDAMENTO: readonly Pedido["status"][] = [
+  "recebido",
+  "em-preparo",
+  "pronto",
+  "saiu-para-entrega",
+]
+
+/** As entregas em andamento por bairro, do bairro com mais ao com menos (empate, pelo nome). */
+export function entregasPorBairro(fila: Pedido[]): { bairro: string; pedidos: Pedido[] }[] {
+  const porBairro = new Map<string, Pedido[]>()
+  for (const pedido of fila) {
+    if (pedido.tipo !== "entrega" || !pedido.endereco || !EM_ANDAMENTO.includes(pedido.status)) {
+      continue
+    }
+    const lista = porBairro.get(pedido.endereco.bairro) ?? []
+    lista.push(pedido)
+    porBairro.set(pedido.endereco.bairro, lista)
+  }
+  return [...porBairro]
+    .map(([bairro, pedidos]) => ({ bairro, pedidos }))
+    .sort((a, b) => b.pedidos.length - a.pedidos.length || a.bairro.localeCompare(b.bairro))
+}

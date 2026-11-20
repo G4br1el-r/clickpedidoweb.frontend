@@ -292,6 +292,20 @@ describe("PaginaFila", () => {
     expect(linha).toHaveTextContent(/disponível/i)
   })
 
+  test("Por bairro: as entregas em andamento agrupadas, do bairro com mais ao com menos", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+    await usuario.click(screen.getByRole("button", { name: "Por bairro" }))
+    const gaveta = within(await screen.findByRole("dialog", { name: "Entregas por bairro" }))
+    const grupos = gaveta.getAllByRole("region")
+    expect(grupos.length).toBeGreaterThan(0)
+    const quantos = grupos.map((grupo) => within(grupo).getAllByRole("listitem").length)
+    expect(quantos).toEqual([...quantos].sort((a, b) => b - a))
+    expect(within(grupos[0]).getAllByRole("listitem")[0]).toHaveTextContent(/^#\d+/)
+  })
+
   test("no celular, as colunas viram abas com a contagem", async () => {
     renderizar()
     const aba = await screen.findByRole("tab", { name: /Novos/ }, { timeout: 8000 })

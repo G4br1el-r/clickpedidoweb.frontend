@@ -2,7 +2,14 @@
 
 import NumberFlow from "@number-flow/react"
 import { startOfDay } from "date-fns"
-import { ArchiveIcon, ChevronDownIcon, InboxIcon, ListChecksIcon, VolumeXIcon } from "lucide-react"
+import {
+  ArchiveIcon,
+  ChevronDownIcon,
+  InboxIcon,
+  ListChecksIcon,
+  MapPinIcon,
+  VolumeXIcon,
+} from "lucide-react"
 import { AnimatePresence } from "motion/react"
 import { parseAsStringLiteral, useQueryState, useQueryStates } from "nuqs"
 import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react"
@@ -91,6 +98,7 @@ import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
 import { EsteAparelho } from "./este-aparelho"
 import { FerramentasFila, PARAMETROS_FILA } from "./ferramentas-fila"
+import { GavetaBairros } from "./gaveta-bairros"
 import { GavetaFinalizados } from "./gaveta-finalizados"
 import { JanelaDespacho } from "./janela-despacho"
 import { MetricasFila } from "./metricas-fila"
@@ -409,6 +417,7 @@ export function PaginaFila({
   // Despacho: com motoboys, a entrega pronta sai pela janela de despacho.
   const despacha = temModulo(segmento, "motoboys")
   const [despachando, setDespachando] = useState<Pedido[] | null>(null)
+  const [bairrosAberto, setBairrosAberto] = useState(false)
   const despachar = useDespachar()
   const motoboyVoltou = useMotoboyVoltou()
   const acoes: AcoesDoCartao = {
@@ -685,6 +694,18 @@ export function PaginaFila({
                   <ListChecksIcon data-icon="inline-start" />
                   Selecionar
                 </Toggle>
+                {despacha && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-haspopup="dialog"
+                    onClick={() => setBairrosAberto(true)}
+                  >
+                    <MapPinIcon data-icon="inline-start" />
+                    Por bairro
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="outline"
@@ -843,6 +864,15 @@ export function PaginaFila({
           aoFechar={() => setDespachando(null)}
         />
       )}
+      <GavetaBairros
+        fila={fila ?? []}
+        aberta={bairrosAberto}
+        aoMudar={setBairrosAberto}
+        aoAbrirPedido={(pedido) => {
+          setBairrosAberto(false)
+          abrirPedido(pedido.id)
+        }}
+      />
       <AjudaAtalhos aberta={ajudaAberta} aoMudar={setAjudaAberta} />
       <GavetaFinalizados
         pedidos={finalizados}

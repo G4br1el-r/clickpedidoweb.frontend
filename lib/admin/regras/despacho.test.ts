@@ -1,6 +1,11 @@
 import { describe, expect, test } from "vitest"
 import type { Motoboy, Pedido, StatusPedido } from "../dados/tipos"
-import { entregasParaAgrupar, motoboySugerido, situacaoDosMotoboys } from "./despacho"
+import {
+  entregasParaAgrupar,
+  entregasPorBairro,
+  motoboySugerido,
+  situacaoDosMotoboys,
+} from "./despacho"
 import { AGORA_DE_TESTE as AGORA, PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
 
 const motoboy = (id: string, ativo = true): Motoboy => ({
@@ -81,5 +86,36 @@ describe("entregasParaAgrupar", () => {
       { ...noBairro(5, "Jardim Esplanada"), tipo: "retirada" as const },
     ]
     expect(entregasParaAgrupar(atual, fila).map((pedido) => pedido.id)).toEqual([2])
+  })
+})
+
+describe("entregasPorBairro", () => {
+  const em = (
+    id: number,
+    bairro: string,
+    status: StatusPedido,
+    tipo: Pedido["tipo"] = "entrega",
+  ): Pedido => ({
+    ...entrega(id, "", status, 5),
+    tipo,
+    endereco: { cep: "12630-000", logradouro: "Rua", numero: "1", bairro, cidade: "Lorena" },
+  })
+
+  test("só entregas em andamento, do bairro com mais ao com menos", () => {
+    const fila = [
+      em(1, "Centro", "pronto"),
+      em(2, "Vila Nunes", "recebido"),
+      em(3, "Centro", "saiu-para-entrega"),
+      em(4, "Centro", "concluido"),
+      em(5, "Vila Nunes", "em-preparo"),
+      em(6, "Centro", "em-preparo"),
+      em(7, "Centro", "pronto", "retirada"),
+    ]
+    expect(
+      entregasPorBairro(fila).map(({ bairro, pedidos }) => [bairro, pedidos.map((p) => p.id)]),
+    ).toEqual([
+      ["Centro", [1, 3, 6]],
+      ["Vila Nunes", [2, 5]],
+    ])
   })
 })
