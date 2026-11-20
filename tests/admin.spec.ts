@@ -844,6 +844,37 @@ test("fila: buscar pelo número e reabrir um pedido pelos Finalizados hoje", asy
   await expect(page.getByText(`${reaberto} reaberto`)).toBeVisible()
 })
 
+test("fila: despachar a entrega pronta com o motoboy e chamá-lo no WhatsApp", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/fila")
+  await expect(page.getByRole("article").first()).toBeVisible({ timeout: 15_000 })
+  // No celular e no tablet, a fila usa abas.
+  const aba = page.getByRole("tab", { name: /^Prontos/ })
+  if (await aba.isVisible()) await aba.click()
+  const prontos = page.getByRole("region", { name: /^Prontos, / })
+  const cartao = prontos
+    .getByRole("article")
+    .filter({ has: page.getByRole("button", { name: "Despachar" }) })
+    .first()
+  const despachar = cartao.getByRole("button", { name: "Despachar" })
+  const numero = (await cartao.getByRole("heading").textContent()) ?? ""
+  await esperarAnimacoes(page)
+  await verificarAcessibilidade(page)
+  await despachar.click()
+
+  const janela = page.getByRole("dialog", { name: `Despachar ${numero}` })
+  await expect(janela.getByRole("radio", { checked: true })).toBeVisible()
+  await esperarAnimacoes(page)
+  await verificarAcessibilidade(page)
+  await janela.getByRole("button", { name: "Despachar" }).click()
+  await expect(janela.getByRole("link", { name: /^Chamar .+ no WhatsApp$/ })).toHaveAttribute(
+    "href",
+    /^https:\/\/wa\.me\/55\d+\?text=/,
+  )
+  await janela.getByRole("button", { name: "Fechar" }).click()
+  await expect(page.getByText("Cliente avisado no WhatsApp").first()).toBeVisible()
+})
+
 test("fila: arrastar o cartão para a coluna seguinte avança o pedido", async ({ page }, info) => {
   test.skip(
     (info.project.use.viewport?.width ?? 0) < 1024,

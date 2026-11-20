@@ -830,8 +830,13 @@ export function PaginaFila({
       ) : (
         <Tabs defaultValue={colunas[0].id}>
           <TabsList className="sem-barra w-full justify-start overflow-x-auto">
+            {/* A tinta a 60% do shadcn não chega a 4,5:1 sobre o trilho: aqui fica a 80%. */}
             {colunas.map((coluna) => (
-              <TabsTrigger key={coluna.id} value={coluna.id} className="gap-1.5">
+              <TabsTrigger
+                key={coluna.id}
+                value={coluna.id}
+                className="gap-1.5 text-foreground/80 dark:text-foreground/80"
+              >
                 <Traco tom={tomDoStatus(coluna.status)} className="h-3" />
                 {coluna.titulo}
                 <span className="text-xs tabular-nums text-muted-foreground">
