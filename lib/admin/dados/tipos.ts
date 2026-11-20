@@ -186,6 +186,8 @@ export type UnidadeVenda = "un" | "kg"
 export type Produto = {
   id: string
   categoriaId: string
+  /** Adega: bebida alcoólica, só para maior de 18 (o pedido pede documento). */
+  alcoolico?: boolean
   nome: string
   descricao: string
   /** Preço do cardápio; na venda por quilo, o preço do quilo. */
