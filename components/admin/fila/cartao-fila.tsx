@@ -228,7 +228,6 @@ export function CartaoFila({
                 {canal}
               </span>
               <Badge variant="outline">{rotuloOrigem(pedido.origem)}</Badge>
-              {seloCliente && <Badge variant="secondary">{seloCliente}</Badge>}
               {aPesar && (
                 <Badge variant="secondary" className="gap-1">
                   <ScaleIcon aria-hidden="true" />A pesar
@@ -274,7 +273,11 @@ export function CartaoFila({
                 </p>
               )}
               <div className="flex flex-col">
-                <span className="font-medium">{pedido.cliente.nome}</span>
+                {/* O selo do cliente fica com o nome: o cabeçalho é do pedido. */}
+                <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="font-medium">{pedido.cliente.nome}</span>
+                  {seloCliente && <Badge variant="secondary">{seloCliente}</Badge>}
+                </span>
                 {pedido.mesa?.garcom && (
                   <span className="text-xs text-muted-foreground">
                     Garçom: {pedido.mesa.garcom}
