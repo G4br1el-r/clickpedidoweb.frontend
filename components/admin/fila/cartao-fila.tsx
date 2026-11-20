@@ -29,7 +29,7 @@ import { resumoDosItens, textoCobranca, type Urgencia, urgencia } from "@/lib/ad
 import { AVISO_DE_MAIORIDADE } from "@/lib/admin/regras/maioridade"
 import { linkWhatsApp, mensagemParaCliente } from "@/lib/admin/regras/mensagens"
 import { textoRetirada } from "@/lib/admin/regras/numero"
-import { itensParaPesar } from "@/lib/admin/regras/pesagem"
+import { pesagemPendente } from "@/lib/admin/regras/pesagem"
 import { type TemposDaLoja, textoDoPrazo } from "@/lib/admin/regras/prazo"
 import { rotuloCanal, rotuloOrigem } from "@/lib/admin/regras/rotulos"
 import { rotuloAcao, tomDoStatus } from "@/lib/admin/regras/status"
@@ -114,6 +114,7 @@ export function CartaoFila({
   aoCancelar,
   aoAvancar,
   aoServir,
+  aoPesar,
   aoAbrir,
   aoImprimir,
 }: {
@@ -145,6 +146,8 @@ export function CartaoFila({
   aoAvancar: () => void
   /** Mesa pronta: a rodada chegou à mesa. */
   aoServir?: () => void
+  /** Açougue: abre a pesagem ali mesmo. Enquanto falta pesar, é a ação do cartão. */
+  aoPesar?: () => void
   aoAbrir: () => void
   aoImprimir: () => void
 }) {
@@ -154,7 +157,9 @@ export function CartaoFila({
   const acao = despacha ? "Despachar" : rotuloAcao(pedido.tipo, pedido.status)
   const motoboy = motoboys.find((item) => item.id === pedido.motoboyId)
   // Açougue: carne no quilo que ainda não passou pela balança.
-  const aPesar = !pedido.pesagem && itensParaPesar(pedido).length > 0
+  const aPesar = pesagemPendente(pedido)
+  // Em preparo, falta só a balança: "Marcar como pronto" espera a pesagem.
+  const pesarAgora = aPesar && pedido.status === "em-preparo" && aoPesar
   const canal = pedido.mesa
     ? `Mesa ${pedido.mesa.numero}`
     : CANAL_CURTO[pedido.tipo as keyof typeof CANAL_CURTO]
@@ -391,6 +396,17 @@ export function CartaoFila({
                     aoConfirmar={aoRecusar}
                   />
                 </>
+              ) : pesarAgora ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="min-w-[min(100%,7rem)] flex-1"
+                  disabled={ocupado}
+                  onClick={aoPesar}
+                >
+                  <ScaleIcon data-icon="inline-start" />
+                  Pesar
+                </Button>
               ) : acao ? (
                 <Button
                   type="button"

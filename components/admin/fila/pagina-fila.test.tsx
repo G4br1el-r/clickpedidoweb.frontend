@@ -10,6 +10,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
+import type { Pedido } from "@/lib/admin/dados/tipos"
 import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { PaginaFila } from "./pagina-fila"
@@ -1240,10 +1241,18 @@ describe("PaginaFila no açougue", () => {
     useSegmentoAtual.setState({ segmento: "acougue" })
     const api = servidorDo("acougue")
     const fila = await api.pedidos.listar({ status: ["recebido", "em-preparo", "pronto"] })
+    const noQuadro = (pedido: Pedido) =>
+      pedido.status !== "recebido" || !pedido.dataRetirada || pedido.dataRetirada <= "2026-11-13"
     const aPesar = fila.find(
-      (pedido) => pedido.itens.some((item) => item.pesoGramas) && !pedido.pesagem,
+      (pedido) =>
+        pedido.itens.some((item) => item.pesoGramas) && !pedido.pesagem && noQuadro(pedido),
     )
-    const comData = fila.find((pedido) => pedido.dataRetirada)
+    // A de outro dia ainda não começada espera na faixa Próximas retiradas, fora do quadro.
+    const comData = fila.find(
+      (pedido) =>
+        pedido.dataRetirada &&
+        (pedido.status !== "recebido" || pedido.dataRetirada <= "2026-11-13"),
+    )
     if (!aPesar || !comData) throw new Error("A demonstração do açougue devia ter os dois casos")
     renderizar()
 
@@ -1255,5 +1264,60 @@ describe("PaginaFila no açougue", () => {
         /^Retirar (dom|seg|ter|qua|qui|sex|sáb)\., \d{2}\/\d{2}$/,
       ),
     ).toBeInTheDocument()
+  })
+
+  test("pesar ali mesmo: em preparo, Pesar abre a balança e, pesado, o pedido pode ficar pronto", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    useSegmentoAtual.setState({ segmento: "acougue" })
+    const api = servidorDo("acougue")
+    const abertos = await api.pedidos.listar({ status: ["recebido", "em-preparo"] })
+    let pedido = abertos.find(
+      (item) =>
+        !item.pesagem &&
+        !item.esperaAceite &&
+        item.itens.some((i) => i.pesoGramas) &&
+        (!item.dataRetirada || item.dataRetirada <= "2026-11-13"),
+    )
+    if (!pedido) throw new Error("A demonstração do açougue devia ter um pedido a pesar")
+    if (pedido.status === "recebido") pedido = await api.pedidos.avancar(pedido.id, "recebido")
+    renderizar()
+
+    const cartao = within(
+      await screen.findByRole("article", { name: `#${pedido.numero}` }, { timeout: 8000 }),
+    )
+    await usuario.click(cartao.getByRole("button", { name: "Pesar" }))
+    const janela = within(await screen.findByRole("dialog", { name: `Pesar #${pedido.numero}` }))
+    for (const item of pedido.itens.filter((i) => i.pesoGramas)) {
+      await usuario.type(
+        janela.getByRole("textbox", { name: `Peso de ${item.nome}` }),
+        String((item.pesoGramas as number) * item.quantidade),
+      )
+    }
+    await usuario.click(janela.getByRole("button", { name: "Registrar pesagem" }))
+    expect(await screen.findByText("Pesagem registrada.")).toBeInTheDocument()
+    await usuario.keyboard("{Escape}")
+    expect(await cartao.findByRole("button", { name: "Marcar como pronto" })).toBeInTheDocument()
+  })
+
+  test("próximas retiradas: a de outro dia espera na faixa, por data, fora do quadro", async () => {
+    telaGrande()
+    useSegmentoAtual.setState({ segmento: "acougue" })
+    const api = servidorDo("acougue")
+    const fila = await api.pedidos.listar({ status: ["recebido"] })
+    const amanha = fila.find(
+      (pedido) => pedido.dataRetirada === "2026-11-14" && !pedido.esperaAceite,
+    )
+    if (!amanha) throw new Error("A demonstração do açougue devia ter retirada para amanhã")
+    renderizar()
+
+    const faixa = within(
+      await screen.findByRole("region", { name: "Próximas retiradas" }, { timeout: 8000 }),
+    )
+    expect(faixa.getByRole("heading", { name: "Amanhã, sáb., 14/11" })).toBeInTheDocument()
+    expect(
+      faixa.getByRole("button", { name: new RegExp(`^#${amanha.numero} `) }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("article", { name: `#${amanha.numero}` })).not.toBeInTheDocument()
   })
 })

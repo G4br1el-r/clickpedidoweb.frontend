@@ -28,7 +28,7 @@ import {
   resumoDasOpcoes,
   totaisDaVenda,
 } from "../regras/pdv"
-import { calcularPesagem, faltaPesar } from "../regras/pesagem"
+import { calcularPesagem, faltaPesar, pesagemPendente } from "../regras/pesagem"
 import { prazoNaChegada } from "../regras/prazo"
 import { proximoStatus, statusAnterior } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
@@ -201,6 +201,9 @@ function avancado(pedido: Pedido, de: StatusPedido): Pedido {
   if (pedido.esperaAceite) throw new Error("Aceite o pedido antes de começar.")
   const proximo = proximoStatus(pedido.tipo, pedido.status)
   if (!proximo) throw new Error("Este pedido não tem próxima etapa")
+  if (proximo === "pronto" && pesagemPendente(pedido)) {
+    throw new Error("Pese o pedido antes de marcar pronto.")
+  }
   const pagoAgora = proximo === "concluido" && pedido.situacaoPagamento === "na-entrega"
   return {
     ...pedido,

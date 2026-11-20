@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import type { Pedido } from "@/lib/admin/dados/tipos"
 import { AGORA_DE_TESTE as AGORA, PEDIDOS_DE_TESTE } from "@/lib/admin/regras/pedidos-de-teste"
@@ -129,5 +129,65 @@ describe("CartaoFila: cozinha", () => {
   test("o pedido na tela da cozinha leva o selo Na cozinha", () => {
     renderizar(PEDIDO, AGORA, null, false, false, true)
     expect(screen.getByText("Na cozinha")).toBeInTheDocument()
+  })
+})
+
+describe("CartaoFila: açougue", () => {
+  const PICANHA = {
+    id: "p1",
+    produtoId: "picanha",
+    nome: "Picanha",
+    quantidade: 1,
+    precoUnitario: 60,
+    opcoes: [],
+    total: 60,
+    pesoGramas: 1000,
+    precoKg: 60,
+  }
+
+  function comPesagem(pedido: Pedido, aoPesar: () => void) {
+    const nada = () => {}
+    return render(
+      <TooltipProvider>
+        <CartaoFila
+          pedido={pedido}
+          agora={AGORA}
+          tempos={TEMPOS}
+          motoboys={[]}
+          novo={false}
+          ocupado={false}
+          limiteAceiteMin={5}
+          aoAceitar={nada}
+          aoRecusar={nada}
+          aoCancelar={nada}
+          aoAvancar={nada}
+          aoPesar={aoPesar}
+          aoAbrir={nada}
+          aoImprimir={nada}
+        />
+      </TooltipProvider>,
+    )
+  }
+
+  test("em preparo com carne por quilo sem pesar: o botão é Pesar, não Marcar como pronto", async () => {
+    const aoPesar = vi.fn()
+    comPesagem({ ...PEDIDO, tipo: "retirada", itens: [PICANHA] }, aoPesar)
+    expect(screen.queryByRole("button", { name: "Marcar como pronto" })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Pesar" }))
+    expect(aoPesar).toHaveBeenCalled()
+  })
+
+  test("pesado, volta o Marcar como pronto", () => {
+    comPesagem(
+      {
+        ...PEDIDO,
+        tipo: "retirada",
+        itens: [{ ...PICANHA, pesoReal: 1000 }],
+        pesagem: { totalEstimado: 60, diferenca: 0, pesadoEm: AGORA.toISOString() },
+      },
+      vi.fn(),
+    )
+    expect(screen.getByRole("button", { name: "Marcar como pronto" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Pesar" })).not.toBeInTheDocument()
   })
 })

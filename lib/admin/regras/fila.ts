@@ -33,6 +33,29 @@ function ficouParaTras(pedido: Pedido, agora: Date): boolean {
 const servida = (pedido: Pedido) =>
   pedido.tipo === "mesa" && pedido.status === "pronto" && Boolean(pedido.servidoEm)
 
+/**
+ * Retirada marcada para um dia depois de hoje que ninguém começou: espera na faixa
+ * "Próximas retiradas" e entra em Novos no dia. Se já começou, fica no quadro.
+ */
+function ehParaOutroDia(pedido: Pedido, agora: Date): boolean {
+  if (pedido.status !== "recebido" || !pedido.dataRetirada) return false
+  return parseISO(pedido.dataRetirada).getTime() > startOfDay(agora).getTime()
+}
+
+export type GrupoDeRetirada = { dia: string; pedidos: Pedido[] }
+
+/** As próximas retiradas, por dia (o mais perto primeiro) e, no dia, por ordem de chegada. */
+export function proximasRetiradas(pedidos: Pedido[], agora: Date): GrupoDeRetirada[] {
+  const grupos = new Map<string, Pedido[]>()
+  for (const pedido of pedidos.filter((item) => ehParaOutroDia(item, agora))) {
+    const dia = pedido.dataRetirada as string
+    grupos.set(dia, [...(grupos.get(dia) ?? []), pedido])
+  }
+  return [...grupos.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([dia, doDia]) => ({ dia, pedidos: doDia.sort((a, b) => criado(a) - criado(b)) }))
+}
+
 /** O que ficou aberto de outro dia: sai das colunas e vai para o aviso, com ações em lote. */
 export function pedidosDeDiasAnteriores(pedidos: Pedido[], agora: Date): Pedido[] {
   return pedidos.filter((pedido) => ficouParaTras(pedido, agora))
@@ -50,7 +73,11 @@ export function colunasDaFila(
 ): ColunaFila[] {
   const com = (status: StatusPedido) =>
     pedidos.filter(
-      (pedido) => pedido.status === status && !ficouParaTras(pedido, agora) && !servida(pedido),
+      (pedido) =>
+        pedido.status === status &&
+        !ficouParaTras(pedido, agora) &&
+        !servida(pedido) &&
+        !ehParaOutroDia(pedido, agora),
     )
 
   if (segmento === "salao") {

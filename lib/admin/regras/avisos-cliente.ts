@@ -1,8 +1,9 @@
 import type { ConfigLoja, Pedido } from "../dados/tipos"
 import { textoDoMotivo } from "./aceite"
+import { reaisEmTexto } from "./mensagens"
 
 /** As etapas em que a loja avisa o cliente sozinha. */
-export const ETAPAS_DO_AVISO = ["aceito", "saiu", "pronto", "recusado"] as const
+export const ETAPAS_DO_AVISO = ["aceito", "saiu", "pronto", "recusado", "pesado"] as const
 export type EtapaDoAviso = (typeof ETAPAS_DO_AVISO)[number]
 
 /** Os textos de fábrica; a loja edita em Configurações → Fila e pedidos. */
@@ -12,6 +13,7 @@ export const AVISOS_DE_FABRICA: Record<EtapaDoAviso, string> = {
   saiu: "Olá, {nome}! Seu pedido #{numero} saiu para entrega. Acompanhe: {link}",
   pronto: "Olá, {nome}! Seu pedido #{numero} está pronto para retirar na {loja}.",
   recusado: "Olá, {nome}. Não conseguimos aceitar seu pedido #{numero}: {motivo}. Desculpe!",
+  pesado: "Olá, {nome}! Seu pedido #{numero} foi pesado e o total ficou {total}.",
 }
 
 /** O que a loja configurou, com os textos de fábrica no que faltar. Sem configuração, liga. */
@@ -28,13 +30,20 @@ export function avisoDaMudanca(antes: Pedido, depois: Pedido): EtapaDoAviso | nu
     return depois.cancelamento?.tipo === "recusa" ? "recusado" : null
   }
   if (antes.esperaAceite && depois.esperaAceite === false) return "aceito"
+  // Açougue: a balança mudou o total.
+  if (depois.pesagem && depois.pesagem.pesadoEm !== antes.pesagem?.pesadoEm) {
+    return depois.total === antes.total ? null : "pesado"
+  }
   if (depois.status === antes.status) return null
   if (depois.status === "saiu-para-entrega") return "saiu"
   if (depois.status === "pronto" && depois.tipo === "retirada") return "pronto"
   return null
 }
 
-/** O texto com os marcadores trocados: {nome} (primeiro nome), {numero}, {loja}, {link}, {motivo}. */
+/**
+ * O texto com os marcadores trocados: {nome} (primeiro nome), {numero}, {loja}, {link},
+ * {motivo} e {total}.
+ */
 export function textoDoAviso(
   modelo: string,
   pedido: Pedido,
@@ -46,6 +55,7 @@ export function textoDoAviso(
     loja,
     link: `${endereco}/pedido/${pedido.token}`,
     motivo: pedido.cancelamento ? textoDoMotivo(pedido.cancelamento, pedido.tipo) : "",
+    total: reaisEmTexto(pedido.total),
   }
   return modelo.replace(/\{(\w+)\}/g, (marcador, chave: string) => valores[chave] ?? marcador)
 }

@@ -107,6 +107,7 @@ export const esquemaLoja = z
             saiu: texto(500),
             pronto: texto(500),
             recusado: texto(500),
+            pesado: texto(500),
           })
           .partial()
           .optional(),

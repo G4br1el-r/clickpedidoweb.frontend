@@ -27,6 +27,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -78,6 +85,7 @@ import {
   finalizadosHoje,
   novosPedidos,
   pedidosDeDiasAnteriores,
+  proximasRetiradas,
   resumoDaFila,
 } from "@/lib/admin/regras/fila"
 import { filtrarPedidos } from "@/lib/admin/regras/filtro-pedidos"
@@ -104,6 +112,7 @@ import { CabecalhoPagina } from "../cabecalho-pagina"
 import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
+import { PesagemPedido } from "../pedidos/pesagem-pedido"
 import { Traco } from "../traco"
 import { AjudaAtalhos } from "./ajuda-atalhos"
 import { AjustePrazo } from "./ajuste-prazo"
@@ -122,6 +131,7 @@ import { JanelaDespacho } from "./janela-despacho"
 import { MetricasFila } from "./metricas-fila"
 import { PainelMotoboys } from "./painel-motoboys"
 import { PausaPedidos } from "./pausa-pedidos"
+import { ProximasRetiradas } from "./proximas-retiradas"
 import { useAlertasSecundarios } from "./use-alertas-secundarios"
 import { useAtalhosDaFila } from "./use-atalhos-da-fila"
 import { useTelaAcesa } from "./use-tela-acesa"
@@ -253,6 +263,8 @@ type AcoesDoCartao = {
   cancelar: (pedido: Pedido, escolhido: MotivoEscolhido) => void
   avancar: (pedido: Pedido) => void
   servir: (pedido: Pedido) => void
+  /** Açougue: abre a balança do pedido ali mesmo. */
+  pesar: (pedido: Pedido) => void
   abrir: (pedido: Pedido) => void
   imprimir: (pedido: Pedido) => void
   /** A loja tem motoboys: a entrega pronta se despacha. */
@@ -347,6 +359,7 @@ function Coluna({
                 naCozinha={estaNaCozinha(pedido)}
                 aoAvancar={() => acoes.avancar(pedido)}
                 aoServir={() => acoes.servir(pedido)}
+                aoPesar={() => acoes.pesar(pedido)}
                 aoAbrir={() => acoes.abrir(pedido)}
                 aoImprimir={() => acoes.imprimir(pedido)}
               />
@@ -463,6 +476,8 @@ export function PaginaFila({
   const [despachando, setDespachando] = useState<Pedido[] | null>(null)
   const [bairrosAberto, setBairrosAberto] = useState(false)
   const [conferindo, setConferindo] = useState<Pedido | null>(null)
+  // Açougue: a balança aberta pelo cartão. Guarda o id: o pedido vem da fila, já pesado.
+  const [pesando, setPesando] = useState<number | null>(null)
   // Adega: os produtos alcoólicos do cardápio dizem que pedido pede documento.
   const { data: produtos = [] } = useProdutos()
   const comAlcool = (pedido: Pedido) => pedidoComAlcool(pedido, produtos)
@@ -510,6 +525,7 @@ export function PaginaFila({
     imprimir: impressao.imprimir,
     despacha,
     comAlcool,
+    pesar: (pedido) => setPesando(pedido.id),
     servir: (pedido) =>
       servir.mutate(pedido.id, {
         ...avisoDeErro,
@@ -826,6 +842,14 @@ export function PaginaFila({
         )}
       </section>
 
+      {fila && agora && (
+        <ProximasRetiradas
+          grupos={proximasRetiradas(fila, agora)}
+          agora={agora}
+          aoAbrir={(pedido) => abrirPedido(pedido.id)}
+        />
+      )}
+
       {!colunas || !agora ? (
         <div role="status" aria-label="Carregando a fila" className="grid gap-3 lg:grid-cols-4">
           {[0, 1, 2, 3].map((indice) => (
@@ -943,6 +967,23 @@ export function PaginaFila({
           }
         />
       )}
+      <Dialog open={pesando !== null} onOpenChange={(aberta) => !aberta && setPesando(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Pesar #{fila?.find((pedido) => pedido.id === pesando)?.numero}
+            </DialogTitle>
+            <DialogDescription>
+              O peso da balança refaz o valor. Se o total mudar, o cliente fica sabendo.
+            </DialogDescription>
+          </DialogHeader>
+          {fila
+            ?.filter((pedido) => pedido.id === pesando)
+            .map((pedido) => (
+              <PesagemPedido key={pedido.id} pedido={pedido} loja={loja?.nome ?? ""} />
+            ))}
+        </DialogContent>
+      </Dialog>
       {despachando && (
         <JanelaDespacho
           pedidos={despachando}

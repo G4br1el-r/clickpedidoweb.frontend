@@ -387,7 +387,7 @@ export type ConfigLoja = {
   /** Avisos automáticos ao cliente (simulados): ligado e os textos de cada etapa. */
   avisosCliente?: {
     ligado: boolean
-    textos?: Partial<Record<"aceito" | "saiu" | "pronto" | "recusado", string>>
+    textos?: Partial<Record<"aceito" | "saiu" | "pronto" | "recusado" | "pesado", string>>
   }
   /** Salão: vídeo do banner da loja (YouTube, Shorts ou Reels). */
   videoBanner?: string

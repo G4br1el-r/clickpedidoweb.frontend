@@ -7,6 +7,10 @@ const reais = (valor: number) => Math.round(valor * 100) / 100
 export const itensParaPesar = (pedido: Pedido) =>
   pedido.itens.filter((item) => item.pesoGramas !== undefined && item.precoKg !== undefined)
 
+/** Tem item por quilo e ainda não foi pesado: não fica pronto enquanto não pesar. */
+export const pesagemPendente = (pedido: Pedido) =>
+  !pedido.pesagem && itensParaPesar(pedido).length > 0
+
 /** Pago depois da pesagem: enquanto não pesa, o valor não é final e o pedido não recebe. */
 export const faltaPesar = (pedido: Pedido) =>
   pedido.pagamento === "pagar-apos-pesagem" && !pedido.pesagem && itensParaPesar(pedido).length > 0

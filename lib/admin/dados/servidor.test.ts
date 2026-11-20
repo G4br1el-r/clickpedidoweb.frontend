@@ -500,6 +500,21 @@ describe("servidor de demonstração", () => {
   })
 
   describe("avisos ao cliente", () => {
+    test("açougue: a pesagem que muda o total avisa o cliente com o total novo", async () => {
+      const api = acougue()
+      const pedido = await aPesar(api)
+      const pesos = pesosPedidos(pedido)
+      const [primeiro] = Object.keys(pesos)
+      const pesado = await api.pedidos.registrarPesagem(pedido.id, {
+        ...pesos,
+        [primeiro]: pesos[primeiro] + 100,
+      })
+      const aviso = pesado.historico?.findLast((evento) => evento.tipo === "aviso")
+      expect(aviso && "texto" in aviso ? aviso.texto : "").toContain(
+        `Seu pedido #${pedido.numero} foi pesado e o total ficou`,
+      )
+    })
+
     test("aceitar grava na linha do tempo a mensagem que teria saído (ligado de fábrica)", async () => {
       const api = servidor()
       await api.salvarLoja({ ...(await api.loja()), aceiteManual: true })
@@ -1183,6 +1198,22 @@ describe("servidor de demonstração", () => {
       )
       await api.pedidos.registrarPesagem(pedido.id, pesosPedidos(pedido))
       expect((await api.pedidos.marcarPago(pedido.id)).situacaoPagamento).toBe("pago")
+    })
+
+    test("açougue: com item por quilo sem pesar, não fica pronto; pesado, fica", async () => {
+      const api = acougue()
+      const abertos = await api.pedidos.listar({ status: ["recebido", "em-preparo"] })
+      let pedido = abertos.find(
+        (item) => !item.pesagem && !item.esperaAceite && item.itens.some((i) => i.pesoGramas),
+      )
+      if (!pedido) throw new Error("A demonstração do açougue devia ter um pedido a pesar")
+      if (pedido.status === "recebido") pedido = await api.pedidos.avancar(pedido.id, "recebido")
+
+      await expect(api.pedidos.avancar(pedido.id, "em-preparo")).rejects.toThrow(
+        "Pese o pedido antes de marcar pronto.",
+      )
+      await api.pedidos.registrarPesagem(pedido.id, pesosPedidos(pedido))
+      expect((await api.pedidos.avancar(pedido.id, "em-preparo")).status).toBe("pronto")
     })
 
     test("açougue: pedido encerrado não muda de valor na pesagem", async () => {
