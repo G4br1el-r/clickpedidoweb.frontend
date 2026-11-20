@@ -125,7 +125,8 @@ function clienteDoPedido(clientes: CatalogoLoja["clientes"], sorteado: number, i
   }
   return {
     nome: `${PRIMEIROS_NOMES[id % PRIMEIROS_NOMES.length]} ${SOBRENOMES[(id * 7) % SOBRENOMES.length]}`,
-    telefone: `1298${String(id % 10_000_000).padStart(7, "0")}`,
+    // 7919 é primo com 10⁷: cada id dá um telefone diferente, sem lembrar o número do pedido.
+    telefone: `1298${String((id * 7919) % 10_000_000).padStart(7, "0")}`,
   }
 }
 
