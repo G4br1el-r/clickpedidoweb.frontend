@@ -2,8 +2,10 @@
 
 import { useEffect, useEffectEvent, useState } from "react"
 import { useLoja } from "@/lib/admin/dados/consultas"
+import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import { useMarcarImpresso } from "@/lib/admin/dados/consultas-entrega"
 import type { Pedido } from "@/lib/admin/dados/tipos"
+import { pedidoComAlcool } from "@/lib/admin/regras/maioridade"
 import { Cupom, useImpressora } from "./cupom"
 
 /**
@@ -12,6 +14,7 @@ import { Cupom, useImpressora } from "./cupom"
  */
 export function useImpressaoDePedidos() {
   const { data: loja } = useLoja()
+  const { data: produtos = [] } = useProdutos()
   const marcar = useMarcarImpresso()
   const { area, imprimir } = useImpressora("Cupom do pedido")
   const [fila, setFila] = useState<Pedido[]>([])
@@ -30,6 +33,14 @@ export function useImpressaoDePedidos() {
 
   return {
     imprimir: (pedido: Pedido) => setFila((atuais) => [...atuais, pedido]),
-    elemento: atual && loja ? <Cupom pedido={atual} loja={loja.nome} area={area} /> : null,
+    elemento:
+      atual && loja ? (
+        <Cupom
+          pedido={atual}
+          loja={loja.nome}
+          area={area}
+          maioridade={pedidoComAlcool(atual, produtos)}
+        />
+      ) : null,
   }
 }
