@@ -193,7 +193,7 @@ As mudanças nas outras telas ficam no mínimo necessário:
     | Lanchonete | desligada       | desligado       |
 
   - limpeza ligada nos 4 segmentos.
-- **Migração:** quem tem a versão 2 salva não perde nada. Todas as mesas vão para a área "Salão", com 4 lugares, forma quadrada e posições em fileiras de 6. Taxa, couvert e limpeza começam desligados. Os garçons saem dos nomes já usados nas comandas.
+- **Migração:** quem tem a base salva não perde nada. Era a versão 2 no plano; depois que o `main` subiu a base para a versão 3 (custos e histórico de status, que exigem gerar a demonstração de novo a partir da 2), a migração das mesas passou a valer para essa versão 3, e o resultado é a versão 4. Todas as mesas vão para a área "Salão", com 4 lugares, forma quadrada e posições em fileiras de 6. Taxa, couvert e limpeza começam desligados. Os garçons saem dos nomes já usados nas comandas.
 
 ### Decorrências que assumi (confirmar na revisão)
 
