@@ -639,14 +639,14 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
 
   test("o erro do servidor ao editar aparece no aviso e a janela continua aberta", async () => {
     const usuario = await abrir()
-    await usuario.click((await menu(usuario, 3)).getByRole("menuitem", { name: "Editar" }))
-    const janela = within(await screen.findByRole("dialog", { name: "Editar mesa 3" }))
+    await usuario.click((await menu(usuario, 12)).getByRole("menuitem", { name: "Editar" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Editar mesa 12" }))
     await usuario.clear(janela.getByRole("spinbutton", { name: "Número" }))
     await usuario.type(janela.getByRole("spinbutton", { name: "Número" }), "4")
     await usuario.click(janela.getByRole("button", { name: "Salvar" }))
 
     expect(await screen.findByText("Já existe a mesa 4.")).toBeInTheDocument()
-    expect(screen.getByRole("dialog", { name: "Editar mesa 3" })).toBeInTheDocument()
+    expect(screen.getByRole("dialog", { name: "Editar mesa 12" })).toBeInTheDocument()
   })
 
   test("Bloquear pergunta o motivo (opcional) e deixa o cartão Bloqueada com o motivo", async () => {
@@ -711,6 +711,26 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
     const itens = await menu(usuario, 6)
     expect(itens.getByRole("menuitem", { name: "Editar" })).toBeInTheDocument()
     expect(itens.queryByRole("menuitem", { name: "Bloquear" })).not.toBeInTheDocument()
+  })
+
+  test("Editar a mesa ocupada trava o Número e diz por quê; na mesa livre 12 o número muda", async () => {
+    const usuario = await abrir()
+    await usuario.click((await menu(usuario, 6)).getByRole("menuitem", { name: "Editar" }))
+    const ocupada = within(await screen.findByRole("dialog", { name: "Editar mesa 6" }))
+    const numero = ocupada.getByRole("spinbutton", { name: "Número" })
+    expect(numero).toBeDisabled()
+    expect(numero).toHaveAccessibleDescription("Feche a conta antes de mudar o número da mesa.")
+    await usuario.keyboard("{Escape}")
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Editar mesa 6" })).not.toBeInTheDocument(),
+    )
+
+    await usuario.click((await menu(usuario, 12)).getByRole("menuitem", { name: "Editar" }))
+    const livre = within(await screen.findByRole("dialog", { name: "Editar mesa 12" }))
+    expect(livre.getByRole("spinbutton", { name: "Número" })).toBeEnabled()
+    expect(
+      livre.queryByText("Feche a conta antes de mudar o número da mesa."),
+    ).not.toBeInTheDocument()
   })
 
   test("Editar: o campo Nome fica vazio no nome padrão e preenchido no nome próprio", async () => {

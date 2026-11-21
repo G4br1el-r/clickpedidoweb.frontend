@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import {
   Select,
@@ -44,6 +44,8 @@ function Campos({ mesa, aoFechar }: { mesa?: Mesa; aoFechar: () => void }) {
   const [area, setArea] = useState<string | null>(mesa?.areaId ?? null)
   const [lugares, setLugares] = useState(String(mesa?.lugares ?? 4))
   const [forma, setForma] = useState<FormaMesa>(mesa?.forma ?? "quadrada")
+  // A mesa ocupada não troca de número: o servidor recusa, e a tela já mostra o porquê.
+  const numeroTravado = mesa?.status === "ocupada"
   // Sem área ainda (o salão não carregou), o servidor põe a mesa na primeira.
   const areaId = area ?? areas[0]?.id
 
@@ -89,9 +91,16 @@ function Campos({ mesa, aoFechar }: { mesa?: Mesa; aoFechar: () => void }) {
             min={1}
             max={999}
             required
+            disabled={numeroTravado}
+            aria-describedby={numeroTravado ? "mesa-numero-travado" : undefined}
             value={numero}
             onChange={(evento) => setNumero(evento.target.value)}
           />
+          {numeroTravado && (
+            <FieldDescription id="mesa-numero-travado">
+              Feche a conta antes de mudar o número da mesa.
+            </FieldDescription>
+          )}
         </Field>
         <Field>
           <FieldLabel htmlFor="mesa-nome">Nome (opcional)</FieldLabel>
