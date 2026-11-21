@@ -24,6 +24,7 @@ import { CabecalhoPagina } from "../cabecalho-pagina"
 import { BloquearMesa } from "./bloquear-mesa"
 import { CartaoMesa } from "./cartao-mesa"
 import { ComandaMesa } from "./comanda-mesa"
+import { ConfigurarSalao } from "./configurar-salao"
 import { LIMPAR_GRADE, useEstadoGrade } from "./estado-grade"
 import { FiltrosMesas } from "./filtros-mesas"
 import { FormularioMesa } from "./formulario-mesa"
@@ -100,7 +101,12 @@ export function PaginaMesas() {
                 .join(" · ")
             : "Carregando as mesas…"
         }
-        acoes={<NovaMesa />}
+        acoes={
+          <>
+            <ConfigurarSalao salao={salao} />
+            <NovaMesa />
+          </>
+        }
       />
 
       {mesas && agora && (
