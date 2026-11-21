@@ -12,6 +12,7 @@ test.beforeEach(async ({ page }) => {
   await page.addInitScript(() => {
     localStorage.removeItem("clickpedido-admin")
     localStorage.removeItem("clickpedido-admin-segmento")
+    localStorage.removeItem("clickpedido-admin-metas")
   })
 })
 
@@ -55,6 +56,38 @@ for (const tema of ["light", "dark"] as const) {
     await page.waitForLoadState("networkidle")
     await esperarAnimacoes(page)
     await expect(page).toHaveScreenshot(`painel-visao-geral-${tema}.png`, { fullPage: true })
+  })
+
+  for (const aba of ["vendas", "produtos", "clientes", "operacao", "financeiro"] as const) {
+    test(`painel: visão geral, aba ${aba} (${tema})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+      await page.goto(`/admin?aba=${aba}`)
+      const bloco = {
+        vendas: "Canais de venda",
+        produtos: "Mais vendidos",
+        clientes: "Melhores clientes",
+        operacao: "Cancelamentos por motivo",
+        financeiro: "Formas de pagamento",
+      }[aba]
+      await expect(page.getByRole("region", { name: bloco })).toBeVisible({ timeout: 15_000 })
+      await page.waitForLoadState("networkidle")
+      await esperarAnimacoes(page)
+      await expect(page).toHaveScreenshot(`painel-visao-geral-${aba}-${tema}.png`, {
+        fullPage: true,
+      })
+    })
+  }
+
+  test(`painel: visão geral, abas com a página rolada (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin?aba=vendas")
+    const mapa = page.getByRole("region", { name: "Quando a loja vende" })
+    await expect(mapa).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState("networkidle")
+    await mapa.scrollIntoViewIfNeeded()
+    await esperarAnimacoes(page)
+    // Só a tela visível: no celular, a barra de abas fica presa embaixo do cabeçalho.
+    await expect(page).toHaveScreenshot(`painel-visao-geral-abas-rolada-${tema}.png`)
   })
 
   test(`painel: pedidos (${tema})`, async ({ page }) => {

@@ -227,7 +227,7 @@ export function JanelaEntrada({ produto, aoFechar }: { produto: Produto; aoFecha
     numero === null
       ? null
       : errosDoMovimento({ tipo: "entrada", quantidade: numero, unidade: produto.unidade })
-  const custoAtual = produto.estoque?.custo
+  const custoAtual = produto.custo
   return (
     <JanelaMovimento
       titulo={`Entrada de ${produto.nome}`}
@@ -398,7 +398,7 @@ export function JanelaConfigurar({
   const atual = produto.estoque
   const [controlar, setControlar] = useState(atual?.controlar ?? true)
   const [minimo, setMinimo] = useState(String(atual?.minimo ?? 0))
-  const [custo, setCusto] = useState<number | undefined>(atual?.custo)
+  const [custo, setCusto] = useState<number | undefined>(produto.custo)
   const [esgotar, setEsgotar] = useState(atual?.esgotarAoZerar ?? true)
   const configurar = useConfigurarEstoque()
   const ids = { controlar: useId(), minimo: useId(), esgotar: useId() }

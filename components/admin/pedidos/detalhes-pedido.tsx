@@ -36,6 +36,7 @@ import {
   usePedido,
 } from "@/lib/admin/dados/consultas"
 import type { Pedido } from "@/lib/admin/dados/tipos"
+import { textoDoMotivo } from "@/lib/admin/regras/aceite"
 import { linhaDoTempo } from "@/lib/admin/regras/historico"
 import {
   enderecoEmTexto,
@@ -173,6 +174,14 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
           {rotuloCanal(pedido.tipo)} · {dataEHora(pedido.criadoEm)}
         </SheetDescription>
         <CaminhoPedido pedido={pedido} />
+        {pedido.status === "cancelado" && (
+          <p className="text-sm text-muted-foreground">
+            Motivo:{" "}
+            {pedido.cancelamento
+              ? textoDoMotivo(pedido.cancelamento, pedido.tipo)
+              : "Não informado"}
+          </p>
+        )}
         <div className="flex items-center gap-2 pt-1">
           <Button
             type="button"

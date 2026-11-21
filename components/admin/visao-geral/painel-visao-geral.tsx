@@ -1,13 +1,10 @@
 "use client"
 
-import NumberFlow from "@number-flow/react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { ChevronDownIcon, TrendingDownIcon, TrendingUpIcon } from "lucide-react"
 import dynamic from "next/dynamic"
 import Link from "next/link"
-import { type ReactNode, useId, useState } from "react"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { useState } from "react"
 import { Progress } from "@/components/ui/progress"
 import { Skeleton } from "@/components/ui/skeleton"
 import {
@@ -20,112 +17,32 @@ import {
 } from "@/components/ui/table"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
-import type { Resumo } from "@/lib/admin/regras/dashboard"
+import type { Alerta } from "@/lib/admin/regras/dashboard/alertas"
+import type { SituacaoMeta } from "@/lib/admin/regras/dashboard/metas"
+import { nomesDo } from "@/lib/admin/regras/dashboard/nomes"
+import type { Resumo } from "@/lib/admin/regras/dashboard/resumo"
+import type { Destaque } from "@/lib/admin/regras/dashboard/segmento"
+import {
+  type ComparacaoHoje,
+  textosDaSemanaPassada,
+} from "@/lib/admin/regras/dashboard/semana-passada"
 import { diasNoPeriodo, type Periodo } from "@/lib/admin/regras/periodo"
-import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
-import { emReais, formatoMoeda, plural } from "@/lib/formato"
-import { cn } from "@/lib/utils"
+import { emReais, plural } from "@/lib/formato"
 import { BlocoSecao } from "../bloco-secao"
 import { SeloStatus } from "../pedidos/selos"
 import { AoVivo, Indicador, Regua } from "../regua"
+import { BlocoMeta } from "./bloco-meta"
+import { FaixaAtencao } from "./faixa-atencao"
 import type { MedidaDoGrafico } from "./grafico-por-dia"
+import { inteiro, Numero } from "./numero"
+import { Secao, Variacao } from "./partes"
 
 // Recharts pesa: o gráfico chega depois, só no navegador, com o esqueleto no lugar.
 const GraficoPorDia = dynamic(() => import("./grafico-por-dia"), {
   ssr: false,
   loading: () => <Skeleton className="h-64 w-full rounded-lg" />,
 })
-
-const porcentagem = new Intl.NumberFormat("pt-BR", {
-  style: "percent",
-  maximumFractionDigits: 1,
-  signDisplay: "exceptZero",
-})
-const inteiro = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 1 })
-
-/** No salão, o pedido é um atendimento. */
-function nomes(segmento: SegmentoPainelId) {
-  return segmento === "salao"
-    ? { Pedidos: "Atendimentos", pedido: "atendimento", pedidos: "atendimentos" }
-    : { Pedidos: "Pedidos", pedido: "pedido", pedidos: "pedidos" }
-}
-
-/** Número animado para quem vê; o valor formatado para leitores de tela e buscas. */
-function Numero({ valor, moeda = false }: { valor: number; moeda?: boolean }) {
-  return (
-    <>
-      <NumberFlow
-        value={valor}
-        locales="pt-BR"
-        format={moeda ? formatoMoeda : { maximumFractionDigits: 1 }}
-        aria-hidden="true"
-        className="tabular-nums"
-      />
-      <span className="sr-only">{moeda ? emReais(valor) : inteiro.format(valor)}</span>
-    </>
-  )
-}
-
-/** Seção com título que vira região para leitores de tela. */
-function Secao({
-  titulo,
-  descricao,
-  children,
-}: {
-  titulo: string
-  descricao?: ReactNode
-  children: ReactNode
-}) {
-  const id = useId()
-  return (
-    <section aria-labelledby={id} className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-        <h2 id={id} className="text-[15px] font-semibold tracking-[-0.01em]">
-          {titulo}
-        </h2>
-        {descricao && <p className="text-[13px] text-muted-foreground">{descricao}</p>}
-      </div>
-      {children}
-    </section>
-  )
-}
-
-function ListaDeFatias({
-  itens,
-  vazio,
-}: {
-  itens: { chave: string; nome: string; pedidos: number; total: number; percentual: number }[]
-  vazio: string
-}) {
-  if (itens.length === 0) return <p className="text-sm text-muted-foreground">{vazio}</p>
-  return (
-    <ul className="barras-do-grafico flex flex-col gap-3">
-      {itens.map((item) => (
-        <li key={item.chave} className="flex flex-col gap-1.5">
-          <div className="flex items-start gap-3 text-sm">
-            {/* No celular, a contagem desce para baixo do nome. */}
-            <span className="flex min-w-0 flex-1 flex-col gap-x-2 sm:flex-row sm:items-baseline">
-              <span className="truncate font-medium">{item.nome}</span>
-              <span className="text-xs text-muted-foreground sm:text-sm">
-                {plural(item.pedidos, "pedido", "pedidos")}
-              </span>
-            </span>
-            <span className="shrink-0 tabular-nums">{emReais(item.total)}</span>
-            <span className="w-9 shrink-0 text-right text-muted-foreground tabular-nums">
-              {Math.round(item.percentual)}%
-            </span>
-          </div>
-          <Progress
-            className="h-1.5"
-            value={item.percentual}
-            aria-label={`${item.nome}: ${Math.round(item.percentual)}%`}
-          />
-        </li>
-      ))}
-    </ul>
-  )
-}
 
 function ListaMaisVendidos({ produtos }: { produtos: Resumo["maisVendidos"]["periodo"] }) {
   if (produtos.length === 0)
@@ -156,34 +73,61 @@ function ListaMaisVendidos({ produtos }: { produtos: Resumo["maisVendidos"]["per
   )
 }
 
-export function PainelVisaoGeral({
+/** Resumo: o dia de hoje e o essencial do período. */
+export function AbaResumo({
   resumo,
   periodo,
   segmento,
+  comparacao,
+  alertas = [],
+  meta = null,
+  destaques = [],
 }: {
   resumo: Resumo
   periodo: Periodo
   segmento: SegmentoPainelId
+  /** Hoje contra o mesmo dia da semana passada, até a mesma hora. */
+  comparacao?: ComparacaoHoje
+  /** O que precisa de atenção agora; vazio esconde a faixa. */
+  alertas?: Alerta[]
+  /** Situação da meta do mês; `null` quando a loja ainda não definiu. */
+  meta?: SituacaoMeta | null
+  /** Os números próprios do segmento: agenda, receitas, pesagem, mesas. */
+  destaques?: Destaque[]
 }) {
   const [medida, setMedida] = useState<MedidaDoGrafico>("faturamento")
-  const [tabelaAberta, setTabelaAberta] = useState(false)
-  const n = nomes(segmento)
+  const n = nomesDo(segmento)
+  const textos = comparacao && textosDaSemanaPassada(comparacao.dia)
+  const comparar = (escolher: (variacao: NonNullable<ComparacaoHoje["variacao"]>) => number) =>
+    comparacao && textos ? (
+      comparacao.variacao ? (
+        <Variacao valor={escolher(comparacao.variacao)} texto={textos.comparacao} />
+      ) : (
+        textos.semBase
+      )
+    ) : undefined
   const dias = diasNoPeriodo(periodo)
   const { hoje, periodo: kpi } = resumo
   const anteriores = dias === 1 ? "o dia anterior" : `os ${dias} dias anteriores`
-  const Tendencia = (kpi.variacao ?? 0) >= 0 ? TrendingUpIcon : TrendingDownIcon
 
   return (
     <div className="flex flex-col gap-10">
+      <FaixaAtencao alertas={alertas} />
       <Secao titulo="Hoje" descricao={<AoVivo>Ao vivo, desde a abertura</AoVivo>}>
         <Regua>
-          <Indicador rotulo={`${n.Pedidos} hoje`}>
+          <Indicador
+            rotulo={`${n.Pedidos} hoje`}
+            detalhe={comparar((variacao) => variacao.pedidos)}
+          >
             <Numero valor={hoje.pedidos} />
           </Indicador>
-          <Indicador rotulo="Faturamento hoje" detalhe="Sem cancelados e pagamentos pendentes">
+          <Indicador
+            rotulo="Faturamento hoje"
+            detalhe={comparar((variacao) => variacao.faturamento)}
+          >
             <Numero valor={hoje.faturamento} moeda />
           </Indicador>
-          <Indicador rotulo="Ticket médio hoje">
+          <Indicador rotulo="Ticket médio hoje" detalhe={comparar((variacao) => variacao.ticket)}>
             <Numero valor={hoje.ticket} moeda />
           </Indicador>
           <Indicador
@@ -197,17 +141,38 @@ export function PainelVisaoGeral({
             <Numero valor={hoje.emAndamento} />
           </Indicador>
         </Regua>
-        {(hoje.aguardandoPagamento > 0 || hoje.cancelados > 0) && (
-          <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
-            {hoje.aguardandoPagamento > 0 && (
-              <span>{hoje.aguardandoPagamento} aguardando pagamento online</span>
-            )}
-            {hoje.cancelados > 0 && (
-              <span>{plural(hoje.cancelados, "cancelado", "cancelados")} hoje</span>
-            )}
-          </p>
-        )}
+        <p className="flex flex-wrap gap-x-4 text-sm text-muted-foreground">
+          <span>Faturamento sem cancelados e pagamentos pendentes</span>
+          {hoje.aguardandoPagamento > 0 && (
+            <span>{hoje.aguardandoPagamento} aguardando pagamento online</span>
+          )}
+          {hoje.cancelados > 0 && (
+            <span>{plural(hoje.cancelados, "cancelado", "cancelados")} hoje</span>
+          )}
+        </p>
       </Secao>
+
+      <BlocoMeta segmento={segmento} situacao={meta} />
+
+      {destaques.length > 0 && (
+        <Secao titulo="Agora na loja">
+          <Regua>
+            {destaques.map((destaque) => (
+              <Indicador
+                key={destaque.id}
+                rotulo={destaque.rotulo}
+                detalhe={
+                  <Link href={destaque.href} className="underline-offset-4 hover:underline">
+                    {destaque.detalhe ?? "Ver"}
+                  </Link>
+                }
+              >
+                <Numero valor={destaque.valor} />
+              </Indicador>
+            ))}
+          </Regua>
+        </Secao>
+      )}
 
       <Secao titulo="Desempenho do período" descricao={dias === 1 ? "1 dia" : `${dias} dias`}>
         <Regua>
@@ -217,15 +182,7 @@ export function PainelVisaoGeral({
               kpi.variacao === null ? (
                 "Sem vendas no período anterior"
               ) : (
-                <span
-                  className={cn(
-                    "inline-flex items-center gap-1",
-                    (kpi.variacao ?? 0) >= 0 ? "text-(--tom-pronto)" : "text-(--tom-cancelado)",
-                  )}
-                >
-                  <Tendencia className="size-3.5" aria-hidden="true" />
-                  {porcentagem.format(kpi.variacao / 100)} sobre {anteriores}
-                </span>
+                <Variacao valor={kpi.variacao} texto={`sobre ${anteriores}`} />
               )
             }
           >
@@ -282,29 +239,6 @@ export function PainelVisaoGeral({
       </Secao>
 
       <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
-        <BlocoSecao titulo="Formas de pagamento" descricao="No período">
-          <ListaDeFatias
-            vazio="Nenhuma venda no período."
-            itens={resumo.pagamentos.map((fatia) => ({
-              ...fatia,
-              chave: fatia.forma,
-              nome: rotuloPagamento(fatia.forma),
-            }))}
-          />
-        </BlocoSecao>
-        <BlocoSecao titulo="Canais de venda" descricao="No período">
-          <ListaDeFatias
-            vazio="Nenhuma venda no período."
-            itens={resumo.canais.map((fatia) => ({
-              ...fatia,
-              chave: fatia.tipo,
-              nome: rotuloCanal(fatia.tipo),
-            }))}
-          />
-        </BlocoSecao>
-      </div>
-
-      <div className="grid gap-x-10 gap-y-8 lg:grid-cols-2">
         <Tabs defaultValue="periodo" className="contents">
           <BlocoSecao
             titulo="Mais vendidos"
@@ -316,10 +250,10 @@ export function PainelVisaoGeral({
             }
           >
             <TabsContent value="periodo">
-              <ListaMaisVendidos produtos={resumo.maisVendidos.periodo} />
+              <ListaMaisVendidos produtos={resumo.maisVendidos.periodo.slice(0, 5)} />
             </TabsContent>
             <TabsContent value="hoje">
-              <ListaMaisVendidos produtos={resumo.maisVendidos.hoje} />
+              <ListaMaisVendidos produtos={resumo.maisVendidos.hoje.slice(0, 5)} />
             </TabsContent>
           </BlocoSecao>
         </Tabs>
@@ -362,49 +296,6 @@ export function PainelVisaoGeral({
           </Table>
         </BlocoSecao>
       </div>
-
-      <Collapsible open={tabelaAberta} onOpenChange={setTabelaAberta}>
-        <div className="border-y border-border/70">
-          <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between py-4 text-left text-[15px] font-semibold tracking-[-0.01em] outline-none focus-visible:ring-2 focus-visible:ring-ring">
-            Dia a dia do período, em tabela
-            <ChevronDownIcon
-              aria-hidden="true"
-              className="size-4 text-muted-foreground transition-transform duration-200 ease-saida data-[state=open]:rotate-180"
-              data-state={tabelaAberta ? "open" : "closed"}
-            />
-          </CollapsibleTrigger>
-          <CollapsibleContent>
-            <div className="pb-4">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Dia</TableHead>
-                    <TableHead className="text-right">{n.Pedidos}</TableHead>
-                    <TableHead className="text-right">Faturamento</TableHead>
-                    <TableHead className="hidden text-right sm:table-cell">Ticket médio</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {resumo.serie.toReversed().map((dia) => (
-                    <TableRow key={dia.data.toISOString()}>
-                      <TableCell className="capitalize">
-                        {format(dia.data, "EEE, dd/MM", { locale: ptBR })}
-                      </TableCell>
-                      <TableCell className="text-right tabular-nums">{dia.pedidos}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {emReais(dia.faturamento)}
-                      </TableCell>
-                      <TableCell className="hidden text-right tabular-nums sm:table-cell">
-                        {emReais(dia.pedidos ? dia.faturamento / dia.pedidos : 0)}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          </CollapsibleContent>
-        </div>
-      </Collapsible>
     </div>
   )
 }

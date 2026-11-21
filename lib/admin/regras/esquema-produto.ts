@@ -88,6 +88,10 @@ export function esquemaProduto(segmento: SegmentoPainelId) {
       descricao: z.string().trim().max(300, { error: "Até 300 caracteres." }),
       preco: dinheiro("Informe o preço.").gt(0, { error: "Informe um preço maior que zero." }),
       precoOriginal: dinheiro("Informe o preço “de”.").optional(),
+      // Quanto a loja paga por uma unidade (ou 1 kg): a margem das vendas sai daqui.
+      custo: dinheiro("Informe o custo.")
+        .min(0, { error: "O custo não pode ser negativo." })
+        .optional(),
       // A foto enviada (data:image/…, de lib/admin/imagem.ts) ou um caminho deste site
       // (/mock/…). "//" e "/\" levariam para outro endereço.
       imagem: z
