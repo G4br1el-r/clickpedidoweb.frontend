@@ -12,12 +12,11 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { AreaSalao, Garcom } from "@/lib/admin/dados/tipos"
-import type { FiltroEstadoMesa } from "@/lib/admin/regras/filtro-mesas"
-import { LIMPAR_GRADE, ROTULOS_ESTADO, useEstadoGrade } from "./estado-grade"
+import { type EstadoNoFiltro, LIMPAR_GRADE, ROTULOS_ESTADO, useEstadoGrade } from "./estado-grade"
 
 const TODOS = "todos"
 
-const OPCOES_ESTADO = (Object.keys(ROTULOS_ESTADO) as FiltroEstadoMesa[]).map((valor) => ({
+const OPCOES_ESTADO = (Object.keys(ROTULOS_ESTADO) as EstadoNoFiltro[]).map((valor) => ({
   valor,
   rotulo: ROTULOS_ESTADO[valor],
 }))
@@ -104,7 +103,7 @@ export function FiltrosMesas({
           todos="Todos os estados"
           valor={estado.estado ?? TODOS}
           opcoes={OPCOES_ESTADO}
-          aoMudar={(valor) => setEstado({ estado: escolher(valor) as FiltroEstadoMesa | null })}
+          aoMudar={(valor) => setEstado({ estado: escolher(valor) as EstadoNoFiltro | null })}
         />
         <Filtro
           rotulo="Garçom"

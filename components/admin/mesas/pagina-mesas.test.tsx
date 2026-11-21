@@ -482,6 +482,30 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
     )
   })
 
+  test("o filtro de estado não oferece Reservada nem Juntada, que só chegam nas Fases 5 e 7", async () => {
+    const usuario = await abrir()
+    await usuario.click(screen.getByRole("combobox", { name: "Estado" }))
+    const opcoes = within(await screen.findByRole("listbox")).getAllByRole("option")
+
+    expect(opcoes.map((opcao) => opcao.textContent)).toEqual([
+      "Todos os estados",
+      "Livre",
+      "Ocupada",
+      "Na cozinha",
+      "Servir",
+      "Pediu a conta",
+      "Limpeza",
+      "Bloqueada",
+    ])
+  })
+
+  test("o endereço ?estado=reservada não filtra: a grade abre inteira", async () => {
+    await abrir("?estado=reservada")
+
+    expect(await screen.findByRole("list", { name: "Salão" })).toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "Estado" })).toHaveTextContent("Todos os estados")
+  })
+
   test("o endereço ?estado=bloqueada abre a grade já filtrada", async () => {
     await abrir("?estado=bloqueada")
 
