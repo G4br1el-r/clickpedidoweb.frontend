@@ -269,6 +269,44 @@ describe("PaginaMesas", () => {
     expect(fechada).toMatchObject({ pagamento: "pix", situacaoPagamento: "pago", total: 13.5 })
   })
 
+  test("a faixa Números do salão mostra os quatro números da demonstração e esconde o resto em Ver mais", async () => {
+    const usuario = await abrir()
+
+    const faixa = within(await screen.findByRole("region", { name: "Números do salão" }))
+    // A demonstração não tem conta de mesa paga hoje: faturamento zerado, médias sem valor.
+    expect(faixa.getByText("Ocupação").nextElementSibling).toHaveTextContent("8/19 · 42%")
+    expect(faixa.getByText("Pessoas").nextElementSibling).toHaveTextContent("21")
+    expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent("R$ 0,00")
+    expect(faixa.getByText("Ticket por pessoa").nextElementSibling).toHaveTextContent("—")
+    expect(faixa.queryByText("Permanência média")).not.toBeInTheDocument()
+
+    await usuario.click(faixa.getByRole("button", { name: "Ver mais" }))
+
+    expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("—")
+    expect(faixa.getByText("Giro das mesas").nextElementSibling).toHaveTextContent("—")
+    expect(faixa.getByText("Ticket por mesa").nextElementSibling).toHaveTextContent("—")
+  })
+
+  test("a conta fechada hoje entra no faturamento, nos tickets, na permanência e no giro", async () => {
+    const mesa = await mesaOcupada()
+    const { pedidos } = await api().base()
+    const comandaAberta = pedidos.find((pedido) => pedido.mesa?.id === mesa.id)
+    if (!comandaAberta) throw new Error("A mesa 60 devia ter a comanda aberta")
+    await api().mesas.fecharConta(comandaAberta.id, "pix")
+    const usuario = await abrir()
+
+    const faixa = within(await screen.findByRole("region", { name: "Números do salão" }))
+    await usuario.click(faixa.getByRole("button", { name: "Ver mais" }))
+
+    await waitFor(() =>
+      expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent("R$ 13,50"),
+    )
+    expect(faixa.getByText("Ticket por pessoa").nextElementSibling).toHaveTextContent("R$ 13,50")
+    expect(faixa.getByText("Ticket por mesa").nextElementSibling).toHaveTextContent("R$ 13,50")
+    expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("25 min")
+    expect(faixa.getByText("Giro das mesas").nextElementSibling).toHaveTextContent("0,1")
+  })
+
   test("liberar aparece só com a comanda vazia; mesa livre pode ser excluída", async () => {
     await mesaOcupada()
     const usuario = await abrir()

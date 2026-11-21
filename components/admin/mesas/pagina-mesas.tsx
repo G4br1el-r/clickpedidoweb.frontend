@@ -16,6 +16,7 @@ import { CabecalhoPagina } from "../cabecalho-pagina"
 import { CartaoMesa } from "./cartao-mesa"
 import { ComandaMesa } from "./comanda-mesa"
 import { NovaMesa } from "./nova-mesa"
+import { NumerosSalao } from "./numeros-salao"
 
 const GRADE = "grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
 
@@ -73,6 +74,10 @@ export function PaginaMesas() {
         }
         acoes={<NovaMesa />}
       />
+
+      {mesas && agora && (
+        <NumerosSalao mesas={mesas} abertas={[...comandas.values()]} agora={agora} />
+      )}
 
       {!mesas || !salao ? (
         <div role="status" aria-label="Carregando as mesas" className={GRADE}>
