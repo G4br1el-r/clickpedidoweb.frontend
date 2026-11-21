@@ -21,10 +21,12 @@ import { filtrarMesas, type MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { plural } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { BloquearMesa } from "./bloquear-mesa"
 import { CartaoMesa } from "./cartao-mesa"
 import { ComandaMesa } from "./comanda-mesa"
 import { LIMPAR_GRADE, useEstadoGrade } from "./estado-grade"
 import { FiltrosMesas } from "./filtros-mesas"
+import { FormularioMesa } from "./formulario-mesa"
 import { NovaMesa } from "./nova-mesa"
 import { NumerosSalao } from "./numeros-salao"
 
@@ -38,6 +40,8 @@ export function PaginaMesas() {
   const agora = useAgora(30_000)
   const [filtros, setFiltros] = useEstadoGrade()
   const [abertaId, setAbertaId] = useState<string | null>(null)
+  const [editandoId, setEditandoId] = useState<string | null>(null)
+  const [bloqueandoId, setBloqueandoId] = useState<string | null>(null)
 
   const comandas = new Map(
     (fila ?? []).filter((pedido) => pedido.tipo === "mesa").map((p) => [p.id, p]),
@@ -51,6 +55,8 @@ export function PaginaMesas() {
       return mesa.status === "ocupada" && (status === "recebido" || status === "em-preparo")
     }).length ?? 0
   const aberta = mesas?.find((mesa) => mesa.id === abertaId) ?? null
+  const editando = mesas?.find((mesa) => mesa.id === editandoId)
+  const bloqueando = mesas?.find((mesa) => mesa.id === bloqueandoId)
 
   const linhas: MesaNaGrade[] = (mesas ?? []).map((mesa) => {
     const comanda = comandaDa(mesa)
@@ -161,6 +167,8 @@ export function PaginaMesas() {
                       {...linha}
                       agora={agora}
                       aoAbrir={() => setAbertaId(linha.mesa.id)}
+                      aoEditar={() => setEditandoId(linha.mesa.id)}
+                      aoBloquear={() => setBloqueandoId(linha.mesa.id)}
                     />
                   </li>
                 ))}
@@ -170,6 +178,15 @@ export function PaginaMesas() {
         </div>
       )}
 
+      <FormularioMesa
+        key={editandoId}
+        mesa={editando}
+        aberta={editando !== undefined}
+        aoMudar={() => setEditandoId(null)}
+      />
+      {bloqueando && (
+        <BloquearMesa mesa={bloqueando} aberta aoMudar={() => setBloqueandoId(null)} />
+      )}
       <ComandaMesa mesa={aberta} aoFechar={() => setAbertaId(null)} />
     </div>
   )

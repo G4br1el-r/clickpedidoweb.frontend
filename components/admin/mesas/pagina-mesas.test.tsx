@@ -487,3 +487,101 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
     expect(screen.queryByText("Nenhuma mesa com esses filtros")).not.toBeInTheDocument()
   })
 })
+
+describe("PaginaMesas: nova mesa, editar e bloquear", () => {
+  const menu = async (usuario: ReturnType<typeof userEvent.setup>, numero: number) => {
+    await usuario.click(await screen.findByRole("button", { name: `Ações da mesa ${numero}` }))
+    return within(await screen.findByRole("menu"))
+  }
+  const escolher = async (
+    usuario: ReturnType<typeof userEvent.setup>,
+    janela: ReturnType<typeof within>,
+    campo: string,
+    opcao: string,
+  ) => {
+    await usuario.click(janela.getByRole("combobox", { name: campo }))
+    await usuario.click(await screen.findByRole("option", { name: opcao }))
+  }
+
+  test("nova mesa pergunta área (a primeira marcada), lugares (4) e forma (quadrada) e nasce na área escolhida", async () => {
+    const usuario = await abrir()
+    await usuario.click(screen.getByRole("button", { name: "Nova mesa" }))
+    const janela = within(screen.getByRole("dialog", { name: "Nova mesa" }))
+    expect(janela.getByRole("combobox", { name: "Área" })).toHaveTextContent("Salão")
+    expect(janela.getByRole("spinbutton", { name: "Lugares" })).toHaveValue(4)
+    expect(janela.getByRole("combobox", { name: "Forma" })).toHaveTextContent("Quadrada")
+
+    await usuario.type(janela.getByRole("spinbutton", { name: "Número" }), "61")
+    await escolher(usuario, janela, "Área", "Varanda")
+    await usuario.clear(janela.getByRole("spinbutton", { name: "Lugares" }))
+    await usuario.type(janela.getByRole("spinbutton", { name: "Lugares" }), "6")
+    await escolher(usuario, janela, "Forma", "Redonda")
+    await usuario.click(janela.getByRole("button", { name: "Criar mesa" }))
+
+    expect(await screen.findByText("Mesa 61 criada.")).toBeInTheDocument()
+    const varanda = await screen.findByRole("list", { name: "Varanda" })
+    expect(within(varanda).getByRole("button", { name: "Mesa 61" })).toBeInTheDocument()
+    const mesa = (await api().mesas.listar()).find((item) => item.numero === 61)
+    expect(mesa).toMatchObject({ areaId: "area-varanda", lugares: 6, forma: "redonda" })
+  })
+
+  test("Editar abre o formulário preenchido, salva e a mesa muda de área", async () => {
+    const usuario = await abrir()
+    await usuario.click((await menu(usuario, 3)).getByRole("menuitem", { name: "Editar" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Editar mesa 3" }))
+    expect(janela.getByRole("spinbutton", { name: "Número" })).toHaveValue(3)
+    expect(janela.getByRole("combobox", { name: "Área" })).toHaveTextContent("Salão")
+    expect(janela.getByRole("combobox", { name: "Forma" })).toHaveTextContent("Quadrada")
+
+    await usuario.type(janela.getByRole("textbox", { name: "Nome (opcional)" }), "Janela")
+    await escolher(usuario, janela, "Área", "Varanda")
+    await usuario.click(janela.getByRole("button", { name: "Salvar" }))
+
+    expect(await screen.findByText("Mesa 3 salva.")).toBeInTheDocument()
+    const varanda = await screen.findByRole("list", { name: "Varanda" })
+    expect(within(varanda).getByRole("button", { name: "Mesa 3" })).toHaveTextContent("Janela")
+    expect(screen.queryByRole("dialog", { name: "Editar mesa 3" })).not.toBeInTheDocument()
+  })
+
+  test("o erro do servidor ao editar aparece no aviso e a janela continua aberta", async () => {
+    const usuario = await abrir()
+    await usuario.click((await menu(usuario, 3)).getByRole("menuitem", { name: "Editar" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Editar mesa 3" }))
+    await usuario.clear(janela.getByRole("spinbutton", { name: "Número" }))
+    await usuario.type(janela.getByRole("spinbutton", { name: "Número" }), "4")
+    await usuario.click(janela.getByRole("button", { name: "Salvar" }))
+
+    expect(await screen.findByText("Já existe a mesa 4.")).toBeInTheDocument()
+    expect(screen.getByRole("dialog", { name: "Editar mesa 3" })).toBeInTheDocument()
+  })
+
+  test("Bloquear pergunta o motivo (opcional) e deixa o cartão Bloqueada com o motivo", async () => {
+    const usuario = await abrir()
+    await usuario.click((await menu(usuario, 12)).getByRole("menuitem", { name: "Bloquear" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Bloquear mesa 12" }))
+    expect(janela.getByRole("textbox", { name: "Motivo (opcional)" })).toHaveValue("")
+    await usuario.type(janela.getByRole("textbox", { name: "Motivo (opcional)" }), "Pé quebrado")
+    await usuario.click(janela.getByRole("button", { name: "Bloquear" }))
+
+    expect(await screen.findByText("Mesa 12 bloqueada.")).toBeInTheDocument()
+    await waitFor(async () => expect(await cartao(12)).toHaveTextContent("Bloqueada"))
+    expect(await cartao(12)).toHaveTextContent("Pé quebrado")
+    expect(screen.queryByRole("dialog", { name: "Bloquear mesa 12" })).not.toBeInTheDocument()
+  })
+
+  test("sem motivo o bloqueio vale e o cartão diz 'Sem motivo'", async () => {
+    const usuario = await abrir()
+    await usuario.click((await menu(usuario, 12)).getByRole("menuitem", { name: "Bloquear" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Bloquear mesa 12" }))
+    await usuario.click(janela.getByRole("button", { name: "Bloquear" }))
+
+    await waitFor(async () => expect(await cartao(12)).toHaveTextContent("Sem motivo"))
+  })
+
+  test("a mesa ocupada não oferece Bloquear no menu", async () => {
+    const usuario = await abrir()
+    const itens = await menu(usuario, 6)
+    expect(itens.getByRole("menuitem", { name: "Editar" })).toBeInTheDocument()
+    expect(itens.queryByRole("menuitem", { name: "Bloquear" })).not.toBeInTheDocument()
+  })
+})

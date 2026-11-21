@@ -59,7 +59,7 @@ const ACOES: Record<EstadoMesa, AcaoMesa[]> = {
 
 type Acoes = {
   aoAbrir: () => void
-  /** Sem a função, o item aparece desligado (a janela de editar vem depois). */
+  /** Sem a função, o item aparece desligado. */
   aoEditar?: () => void
   aoBloquear?: () => void
 }
