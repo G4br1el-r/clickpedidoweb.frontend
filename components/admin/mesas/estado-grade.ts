@@ -3,17 +3,20 @@
 import { parseAsString, parseAsStringLiteral, useQueryStates } from "nuqs"
 import type { FiltroEstadoMesa, OrdemMesas } from "@/lib/admin/regras/filtro-mesas"
 
-const ESTADOS: readonly FiltroEstadoMesa[] = [
-  "livre",
-  "reservada",
-  "bloqueada",
-  "limpeza",
-  "juntada",
-  "ocupada",
-  "na-cozinha",
-  "servir",
-  "conta-pedida",
-]
+/** Os estados do filtro, na ordem do Select, com o rótulo de cada um. É a lista única. */
+export const ROTULOS_ESTADO = {
+  livre: "Livre",
+  ocupada: "Ocupada",
+  "na-cozinha": "Na cozinha",
+  servir: "Servir",
+  "conta-pedida": "Pediu a conta",
+  reservada: "Reservada",
+  limpeza: "Limpeza",
+  bloqueada: "Bloqueada",
+  juntada: "Juntada",
+} satisfies Record<FiltroEstadoMesa, string>
+
+const ESTADOS = Object.keys(ROTULOS_ESTADO) as FiltroEstadoMesa[]
 const ORDENS: readonly OrdemMesas[] = ["numero", "tempo"]
 
 /** Busca, filtros e ordem da grade de mesas, no endereço da página. O padrão não aparece. */

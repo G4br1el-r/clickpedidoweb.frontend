@@ -13,21 +13,14 @@ import {
 } from "@/components/ui/select"
 import type { AreaSalao, Garcom } from "@/lib/admin/dados/tipos"
 import type { FiltroEstadoMesa } from "@/lib/admin/regras/filtro-mesas"
-import { LIMPAR_GRADE, useEstadoGrade } from "./estado-grade"
+import { LIMPAR_GRADE, ROTULOS_ESTADO, useEstadoGrade } from "./estado-grade"
 
 const TODOS = "todos"
 
-const ESTADOS: { valor: FiltroEstadoMesa; rotulo: string }[] = [
-  { valor: "livre", rotulo: "Livre" },
-  { valor: "ocupada", rotulo: "Ocupada" },
-  { valor: "na-cozinha", rotulo: "Na cozinha" },
-  { valor: "servir", rotulo: "Servir" },
-  { valor: "conta-pedida", rotulo: "Pediu a conta" },
-  { valor: "reservada", rotulo: "Reservada" },
-  { valor: "limpeza", rotulo: "Limpeza" },
-  { valor: "bloqueada", rotulo: "Bloqueada" },
-  { valor: "juntada", rotulo: "Juntada" },
-]
+const OPCOES_ESTADO = (Object.keys(ROTULOS_ESTADO) as FiltroEstadoMesa[]).map((valor) => ({
+  valor,
+  rotulo: ROTULOS_ESTADO[valor],
+}))
 
 function Filtro({
   rotulo,
@@ -110,7 +103,7 @@ export function FiltrosMesas({
           rotulo="Estado"
           todos="Todos os estados"
           valor={estado.estado ?? TODOS}
-          opcoes={ESTADOS}
+          opcoes={OPCOES_ESTADO}
           aoMudar={(valor) => setEstado({ estado: escolher(valor) as FiltroEstadoMesa | null })}
         />
         <Filtro
