@@ -152,10 +152,7 @@ const EM_ANDAMENTO: StatusPedido[] = ["recebido", "em-preparo", "pronto", "saiu-
 const marcarEmAndamento = (pedido: Pedido): Pedido =>
   EM_ANDAMENTO.includes(pedido.status) ? { ...pedido, estoqueBaixado: true } : pedido
 
-/**
- * Ocupa as mesas que têm comanda aberta e libera as outras. Com a limpeza do salão ligada, a mesa
- * cuja conta acabou de ser paga fica em limpeza desde o pagamento.
- */
+/** Ocupa as mesas que têm comanda aberta e libera as outras. */
 function abrirMesas(base: BaseLoja): BaseLoja {
   const abertas = new Map(
     base.pedidos
@@ -166,8 +163,7 @@ function abrirMesas(base: BaseLoja): BaseLoja {
   )
   return {
     ...base,
-    mesas: base.mesas.map(({ pedidoAtivoId, clienteNome, ocupadaEm, ...mesa }) => {
-      const paga = base.pedidos.find((pedido) => pedido.id === pedidoAtivoId)?.pagoEm
+    mesas: base.mesas.map(({ pedidoAtivoId: _pedidoAtivoId, clienteNome, ocupadaEm, ...mesa }) => {
       const comanda = abertas.get(mesa.id)
       // Mesa ocupada deixa de estar em limpeza.
       const { limpezaDesde: _limpezaDesde, ...semLimpeza } = mesa
@@ -179,11 +175,7 @@ function abrirMesas(base: BaseLoja): BaseLoja {
             clienteNome: comanda.cliente.nome,
             ocupadaEm: comanda.criadoEm,
           }
-        : {
-            ...mesa,
-            status: "livre",
-            ...(base.salao.limpeza && paga ? { limpezaDesde: paga } : {}),
-          }
+        : { ...mesa, status: "livre" }
     }),
   }
 }
@@ -454,7 +446,18 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const comEstoque = aplicarEstoque(base, antes, novo, estoque)
     const pedidos = comEstoque.pedidos.with(indice, novo)
     const atualizada = abrirMesas({ ...comEstoque, pedidos })
-    await substituir(atualizada)
+    // A conta da mesa foi paga agora (e não por um dia que virou): a mesa espera a limpeza.
+    const contaFechada = novo.tipo === "mesa" && !antes.pagoEm && novo.pagoEm
+    await substituir(
+      contaFechada && atualizada.salao.limpeza
+        ? {
+            ...atualizada,
+            mesas: atualizada.mesas.map((mesa) =>
+              mesa.id === novo.mesa?.id ? { ...mesa, limpezaDesde: novo.pagoEm } : mesa,
+            ),
+          }
+        : atualizada,
+    )
     return responder(novo)
   }
 

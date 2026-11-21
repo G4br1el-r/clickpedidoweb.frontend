@@ -1600,6 +1600,20 @@ describe("servidor de demonstração", () => {
         expect((await mesaDe(api, mesa.id)).limpezaDesde).toBeUndefined()
       })
 
+      test("reabrir a base em outro dia encerra a comanda aberta sem pôr a mesa em limpeza", async () => {
+        const api = servidor()
+        await api.salao.salvar({ ...(await api.salao.config()), limpeza: true })
+        // A demonstração do dia novo ocupa as primeiras mesas: a da comanda velha fica no fim.
+        for (let numero = 20; numero < 30; numero++) await api.mesas.criar({ numero })
+        const ultima = (await api.mesas.listar()).at(-1) as Mesa
+        await api.mesas.lancar({ mesaId: ultima.id, enviarParaCozinha: false, itens: AGUA })
+
+        vi.setSystemTime(new Date(2026, 10, 15, 21, 0))
+        const depois = await mesaDe(servidor(), ultima.id)
+        expect(depois.status).toBe("livre")
+        expect(depois.limpezaDesde).toBeUndefined()
+      })
+
       test("liberar uma comanda vazia nunca deixa limpeza", async () => {
         const api = servidor()
         await api.salao.salvar({ ...(await api.salao.config()), limpeza: true })
