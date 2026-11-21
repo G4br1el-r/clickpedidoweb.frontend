@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
+import { usePreferenciasMesas } from "@/lib/admin/preferencias-mesas"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { FormularioMesa } from "./formulario-mesa"
 import { PaginaMesas } from "./pagina-mesas"
@@ -101,6 +102,8 @@ beforeEach(async () => {
   reiniciarServidores()
   imprimir.mockClear()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
+  localStorage.clear()
+  usePreferenciasMesas.setState(usePreferenciasMesas.getInitialState(), true)
 })
 
 afterEach(() => {
@@ -825,6 +828,23 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
       await usuario.keyboard("?")
       const folha = await screen.findByRole("dialog", { name: "Atalhos do teclado" })
       expect(within(folha).getByText("Abrir a mesa pelo número")).toBeInTheDocument()
+    })
+
+    test("o botão Atalhos do teclado abre a folha; desligar os de uma tecla faz o n não abrir Nova mesa", async () => {
+      const usuario = await abrir()
+      await usuario.click(screen.getByRole("button", { name: "Atalhos do teclado" }))
+      const folha = within(await screen.findByRole("dialog", { name: "Atalhos do teclado" }))
+      const interruptor = folha.getByRole("switch", { name: "Atalhos de uma tecla" })
+      expect(interruptor).toBeChecked()
+      await usuario.click(interruptor)
+      expect(interruptor).not.toBeChecked()
+      await usuario.keyboard("{Escape}")
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+
+      await usuario.keyboard("n")
+      await usuario.keyboard("?")
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+      expect(usePreferenciasMesas.getState().atalhosLigados).toBe(false)
     })
 
     test("com uma janela aberta, os atalhos não disparam", async () => {

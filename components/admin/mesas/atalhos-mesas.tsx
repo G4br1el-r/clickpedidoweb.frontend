@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import { Label } from "@/components/ui/label"
 import {
   Sheet,
   SheetContent,
@@ -8,6 +9,8 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { Switch } from "@/components/ui/switch"
+import { usePreferenciasMesas } from "@/lib/admin/preferencias-mesas"
 import { type AcaoAtalho, lerTecla } from "@/lib/admin/regras/atalhos-mesas"
 
 /** Some o aviso dos dígitos depois deste tempo sem tecla. */
@@ -61,6 +64,7 @@ export function AtalhosMesas({
         emCampo: emCampo(evento.target),
         comModificador: evento.ctrlKey || evento.altKey || evento.metaKey,
         janelaAberta: haJanelaAberta(),
+        ligados: usePreferenciasMesas.getState().atalhosLigados,
       })
       if (lido.acao.tipo !== "nenhuma") {
         // "/" digitado no campo de busca não pode virar texto; fora do campo não há texto.
@@ -113,6 +117,8 @@ export function FolhaAtalhos({
   aberta: boolean
   aoMudar: (aberta: boolean) => void
 }) {
+  const ligados = usePreferenciasMesas((estado) => estado.atalhosLigados)
+  const ligarAtalhos = usePreferenciasMesas((estado) => estado.ligarAtalhos)
   return (
     <Sheet open={aberta} onOpenChange={aoMudar}>
       <SheetContent>
@@ -120,6 +126,15 @@ export function FolhaAtalhos({
           <SheetTitle>Atalhos do teclado</SheetTitle>
           <SheetDescription>Valem na tela de mesas, fora dos campos de texto.</SheetDescription>
         </SheetHeader>
+        <div className="flex items-center justify-between gap-3 border-b border-border/70 px-4 pb-4">
+          <div className="flex flex-col gap-0.5">
+            <Label htmlFor="atalhos-uma-tecla">Atalhos de uma tecla</Label>
+            <p className="text-xs text-muted-foreground">
+              Desligue se o leitor de tela ou o ditado disparam ações sem querer.
+            </p>
+          </div>
+          <Switch id="atalhos-uma-tecla" checked={ligados} onCheckedChange={ligarAtalhos} />
+        </div>
         <dl className="flex flex-col gap-3 px-4">
           {ATALHOS.map(({ teclas, acao }) => (
             <div key={acao} className="flex items-center justify-between gap-3 text-sm">
