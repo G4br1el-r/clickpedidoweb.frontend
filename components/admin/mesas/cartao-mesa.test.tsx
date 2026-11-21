@@ -170,6 +170,14 @@ describe("CartaoMesa", () => {
     ).toEqual(itens)
   })
 
+  // jsdom não mede layout: a classe é o que garante que o ⋯ flutua no canto, fora do fluxo.
+  test("o ⋯ flutua no canto do cartão, sem perder o absolute para a área de toque", () => {
+    desenhar()
+    const botao = screen.getByRole("button", { name: "Ações da mesa 7" })
+    expect(botao).toHaveClass("absolute", "top-2", "right-2", "after:absolute", "after:-inset-2")
+    expect(botao).not.toHaveClass("relative")
+  })
+
   test("Abrir comanda abre a mesa; Editar e Bloquear ficam desligados até a página ligar", async () => {
     const usuario = userEvent.setup()
     const aoAbrir = vi.fn()

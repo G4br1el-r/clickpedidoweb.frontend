@@ -137,7 +137,7 @@ function MenuMesa({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className={cn("absolute top-2 right-2", ALVO_DE_TOQUE)}
+            className={cn(ALVO_DE_TOQUE, "absolute top-2 right-2")}
             aria-label={`Ações da mesa ${mesa.numero}`}
           >
             <EllipsisIcon />
