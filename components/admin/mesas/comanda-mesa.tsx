@@ -27,7 +27,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -55,7 +54,6 @@ import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useLoja, usePedido } from "@/lib/admin/dados/consultas"
 import {
   useAlterarQuantidade,
-  useExcluirMesa,
   useFecharConta,
   useLancarNaMesa,
   useLiberarMesa,
@@ -69,6 +67,7 @@ import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import { emReais, formatoMoeda } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
+import { ConfirmarExclusaoMesa } from "./excluir-mesa"
 
 const PAGAMENTOS: { valor: PagamentoMesa; rotulo: string; icone: typeof BanknoteIcon }[] = [
   { valor: "dinheiro", rotulo: "Dinheiro", icone: BanknoteIcon },
@@ -493,7 +492,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
 }
 
 function MesaLivre({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void }) {
-  const excluir = useExcluirMesa()
+  const [excluindo, setExcluindo] = useState(false)
   return (
     <>
       <SheetHeader className="gap-1.5 border-b border-border/70">
@@ -510,39 +509,21 @@ function MesaLivre({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void }) {
         </Button>
       </div>
       <SheetFooter className="border-t border-border/70">
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button type="button" variant="outline" className="text-destructive">
-              <Trash2Icon data-icon="inline-start" />
-              Excluir mesa
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir a mesa {mesa.numero}?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Ela sai da grade e do Garçom. As contas já fechadas continuam nos pedidos.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                onClick={() =>
-                  excluir.mutate(mesa.id, {
-                    onSuccess: () => {
-                      toast.success(`Mesa ${mesa.numero} excluída.`)
-                      aoFechar()
-                    },
-                    onError: (erro) => toast.error(erro.message),
-                  })
-                }
-              >
-                Excluir
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button
+          type="button"
+          variant="outline"
+          className="text-destructive"
+          onClick={() => setExcluindo(true)}
+        >
+          <Trash2Icon data-icon="inline-start" />
+          Excluir mesa
+        </Button>
+        <ConfirmarExclusaoMesa
+          mesa={mesa}
+          aberta={excluindo}
+          aoMudar={setExcluindo}
+          aoExcluir={aoFechar}
+        />
       </SheetFooter>
     </>
   )

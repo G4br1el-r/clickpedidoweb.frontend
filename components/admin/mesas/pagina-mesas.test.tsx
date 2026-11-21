@@ -66,7 +66,8 @@ async function abrir() {
       <PaginaMesas />
     </Provedores>,
   )
-  await screen.findByRole("list", { name: "Mesas" }, { timeout: 8000 })
+  // A grade tem uma lista por área; o Salão é a primeira da demonstração.
+  await screen.findByRole("list", { name: "Salão" }, { timeout: 8000 })
   return usuario
 }
 
@@ -128,6 +129,13 @@ describe("PaginaMesas", () => {
     expect(await cartao(maisAntiga.mesa.numero)).toHaveAccessibleDescription(/^Pediu a conta/)
     expect(await cartao(paraServir.mesa.numero)).toHaveAccessibleDescription(/^Servir/)
     expect(await cartao(9)).toHaveAccessibleDescription(/^Limpeza/)
+  })
+
+  test("a mesa 1 pediu a conta há 12 min: o cartão mostra o alerta e fica marcado", async () => {
+    await abrir()
+    const mesa = await cartao(1)
+    expect(mesa).toHaveAttribute("data-alerta", "conta-pedida")
+    expect(within(mesa).getByText("Pediu a conta há 12 min")).toBeInTheDocument()
   })
 
   test("a grade mostra a mesa ocupada com cliente, tempo, garçom e total", async () => {
@@ -286,5 +294,83 @@ describe("PaginaMesas", () => {
     )
     expect(await screen.findByText("Mesa 60 excluída.")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /^Mesa 60\b/ })).not.toBeInTheDocument()
+  })
+})
+
+describe("PaginaMesas: grade por área", () => {
+  test("uma seção por área, na ordem das áreas, com título e lista; área sem mesa não aparece", async () => {
+    // A ordem das áreas vale, não a posição na lista: o Balcão passa para a frente.
+    const salao = await api().salao.config()
+    await api().salao.salvar({
+      ...salao,
+      areas: [
+        { id: "area-salao", nome: "Salão", ordem: 3 },
+        { id: "area-varanda", nome: "Varanda", ordem: 2 },
+        { id: "area-balcao", nome: "Balcão", ordem: 1 },
+        { id: "area-terraco", nome: "Terraço", ordem: 4 },
+      ],
+    })
+    telaGrande()
+    render(
+      <Provedores>
+        <PaginaMesas />
+      </Provedores>,
+    )
+    const varanda = await screen.findByRole("list", { name: "Varanda" }, { timeout: 8000 })
+
+    expect(
+      screen.getAllByRole("heading", { level: 2 }).map((titulo) => titulo.textContent),
+    ).toEqual(["Balcão", "Varanda", "Salão"])
+    expect(screen.queryByRole("list", { name: "Terraço" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("heading", { name: "Terraço" })).not.toBeInTheDocument()
+    // Varanda: mesas 11 a 16. Balcão: 17 a 20.
+    expect(within(varanda).getAllByRole("listitem")).toHaveLength(6)
+    for (const numero of [11, 12, 13, 14, 15, 16]) {
+      expect(within(varanda).getByRole("button", { name: `Mesa ${numero}` })).toBeInTheDocument()
+    }
+    expect(
+      within(screen.getByRole("list", { name: "Balcão" })).getAllByRole("listitem"),
+    ).toHaveLength(4)
+  })
+})
+
+describe("PaginaMesas: menu ⋯", () => {
+  const menu = async (usuario: ReturnType<typeof userEvent.setup>, numero: number) => {
+    await usuario.click(await screen.findByRole("button", { name: `Ações da mesa ${numero}` }))
+    return within(await screen.findByRole("menu"))
+  }
+
+  test("marcar limpa pelo menu deixa a mesa livre", async () => {
+    const usuario = await abrir()
+    expect(await cartao(9)).toHaveAccessibleDescription(/^Limpeza/)
+    await usuario.click((await menu(usuario, 9)).getByRole("menuitem", { name: "Marcar limpa" }))
+    expect(await screen.findByText("Mesa 9 limpa.")).toBeInTheDocument()
+    await waitFor(async () => expect(await cartao(9)).toHaveAccessibleDescription("Livre"))
+  })
+
+  test("desbloquear pelo menu libera a mesa 20", async () => {
+    const usuario = await abrir()
+    expect(await cartao(20)).toHaveTextContent("Em manutenção")
+    await usuario.click((await menu(usuario, 20)).getByRole("menuitem", { name: "Desbloquear" }))
+    expect(await screen.findByText("Mesa 20 desbloqueada.")).toBeInTheDocument()
+    await waitFor(async () => expect(await cartao(20)).toHaveAccessibleDescription("Livre"))
+  })
+
+  test("excluir pelo menu pede confirmação", async () => {
+    const usuario = await abrir()
+    const pergunta = async () => {
+      await usuario.click((await menu(usuario, 20)).getByRole("menuitem", { name: "Excluir" }))
+      return within(await screen.findByRole("alertdialog", { name: "Excluir a mesa 20?" }))
+    }
+
+    // Cancelar não mexe na mesa.
+    await usuario.click((await pergunta()).getByRole("button", { name: "Cancelar" }))
+    expect(await cartao(20)).toBeInTheDocument()
+
+    await usuario.click((await pergunta()).getByRole("button", { name: "Excluir" }))
+    expect(await screen.findByText("Mesa 20 excluída.")).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /^Mesa 20\b/ })).not.toBeInTheDocument(),
+    )
   })
 })

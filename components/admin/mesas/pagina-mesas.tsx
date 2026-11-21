@@ -1,108 +1,28 @@
 "use client"
 
-import NumberFlow from "@number-flow/react"
 import { ArmchairIcon } from "lucide-react"
 import { useState } from "react"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAgora } from "@/hooks/use-agora"
 import { useFila } from "@/lib/admin/dados/consultas"
-import { useMesas } from "@/lib/admin/dados/consultas-mesas"
-import type { Mesa, Pedido } from "@/lib/admin/dados/tipos"
-import { tempoDesde } from "@/lib/admin/regras/alertas-mesa"
+import { useConfigSalao, useMesas } from "@/lib/admin/dados/consultas-mesas"
+import type { Mesa } from "@/lib/admin/dados/tipos"
+import { alertasDaMesa } from "@/lib/admin/regras/alertas-mesa"
+import type { MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
-import { emReais, formatoMoeda, plural } from "@/lib/formato"
-import { cn } from "@/lib/utils"
+import { plural } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
-import { Traco } from "../traco"
+import { CartaoMesa } from "./cartao-mesa"
 import { ComandaMesa } from "./comanda-mesa"
 import { NovaMesa } from "./nova-mesa"
 
-const nomePadrao = (mesa: Mesa) => mesa.nome === `Mesa ${String(mesa.numero).padStart(2, "0")}`
+const GRADE = "grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
 
-function CartaoMesa({
-  mesa,
-  comanda,
-  agora,
-  aoAbrir,
-}: {
-  mesa: Mesa
-  comanda: Pedido | undefined
-  agora: Date | null
-  aoAbrir: () => void
-}) {
-  const ocupada = mesa.status === "ocupada"
-  const estado = estadoDaMesa(mesa, comanda)
-  const itens = comanda?.itens.reduce((soma, item) => soma + item.quantidade, 0) ?? 0
-  return (
-    <button
-      type="button"
-      onClick={aoAbrir}
-      aria-labelledby={`mesa-${mesa.id}`}
-      aria-describedby={`mesa-${mesa.id}-detalhes`}
-      className={cn(
-        "flex h-full min-h-32 w-full cursor-pointer flex-col gap-1.5 rounded-xl p-3 text-left outline-none",
-        "transition-[transform,box-shadow,background-color] duration-150 ease-saida active:scale-[0.98] motion-reduce:transition-none",
-        "focus-visible:ring-3 focus-visible:ring-ring/50",
-        ocupada
-          ? "bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 ring-border/80 hover:ring-foreground/25"
-          : "bg-foreground/[0.03] hover:bg-foreground/[0.06]",
-      )}
-    >
-      <span className="flex items-center gap-2">
-        <span id={`mesa-${mesa.id}`} className="text-[15px] font-semibold">
-          Mesa {mesa.numero}
-        </span>
-        <span
-          className={cn(
-            "ml-auto flex items-center gap-1.5 text-xs font-medium",
-            !ocupada && "text-muted-foreground",
-          )}
-        >
-          <Traco tom={estado.tom} />
-          {estado.rotulo}
-        </span>
-      </span>
-      <span id={`mesa-${mesa.id}-detalhes`} className="sr-only">
-        {[estado.rotulo, mesa.clienteNome, comanda ? emReais(comanda.total) : null]
-          .filter(Boolean)
-          .join(", ")}
-      </span>
-      {!nomePadrao(mesa) && (
-        <span className="-mt-1 truncate text-xs text-muted-foreground">{mesa.nome}</span>
-      )}
-      {ocupada ? (
-        <>
-          <span className="truncate text-sm font-medium">{mesa.clienteNome}</span>
-          <span className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground tabular-nums">
-            {mesa.ocupadaEm && agora && <span>{tempoDesde(mesa.ocupadaEm, agora)}</span>}
-            {mesa.ocupadaEm && agora && comanda?.mesa?.garcom && <span aria-hidden="true">·</span>}
-            {comanda?.mesa?.garcom && <span>Garçom {comanda.mesa.garcom}</span>}
-          </span>
-          {comanda && (
-            <span className="mt-auto flex items-baseline justify-between gap-2 border-t border-border/70 pt-2">
-              <span className="text-xs text-muted-foreground">
-                {plural(itens, "item", "itens")}
-              </span>
-              <NumberFlow
-                value={comanda.total}
-                locales="pt-BR"
-                format={formatoMoeda}
-                className="text-[15px] font-semibold tabular-nums"
-              />
-            </span>
-          )}
-        </>
-      ) : (
-        <span className="mt-auto text-xs text-muted-foreground">Toque para ver</span>
-      )}
-    </button>
-  )
-}
-
-/** Mesas do salão: grade de livres e ocupadas e a comanda de cada uma. */
+/** Mesas do salão: a grade por área, na ordem das áreas, e a comanda de cada mesa. */
 export function PaginaMesas() {
   const { data: mesas } = useMesas()
+  const { data: salao } = useConfigSalao()
   const { data: fila } = useFila()
   const agora = useAgora(30_000)
   const [abertaId, setAbertaId] = useState<string | null>(null)
@@ -119,6 +39,21 @@ export function PaginaMesas() {
       return mesa.status === "ocupada" && (status === "recebido" || status === "em-preparo")
     }).length ?? 0
   const aberta = mesas?.find((mesa) => mesa.id === abertaId) ?? null
+
+  const linhas: MesaNaGrade[] = (mesas ?? []).map((mesa) => {
+    const comanda = comandaDa(mesa)
+    return {
+      mesa,
+      comanda,
+      estado: estadoDaMesa(mesa, comanda),
+      alertas: salao && agora ? alertasDaMesa(mesa, comanda, salao.alertas, agora) : [],
+    }
+  })
+  // Área sem mesa não aparece.
+  const grupos = (salao?.areas ?? [])
+    .toSorted((a, b) => a.ordem - b.ordem)
+    .map((area) => ({ area, linhas: linhas.filter(({ mesa }) => mesa.areaId === area.id) }))
+    .filter((grupo) => grupo.linhas.length > 0)
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
@@ -139,12 +74,8 @@ export function PaginaMesas() {
         acoes={<NovaMesa />}
       />
 
-      {!mesas ? (
-        <div
-          role="status"
-          aria-label="Carregando as mesas"
-          className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-        >
+      {!mesas || !salao ? (
+        <div role="status" aria-label="Carregando as mesas" className={GRADE}>
           {Array.from({ length: 10 }, (_, indice) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: esqueleto fixo
             <Skeleton key={indice} className="h-32 rounded-xl" />
@@ -163,21 +94,30 @@ export function PaginaMesas() {
           </EmptyHeader>
         </Empty>
       ) : (
-        <ul
-          aria-label="Mesas"
-          className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-        >
-          {mesas.map((mesa) => (
-            <li key={mesa.id}>
-              <CartaoMesa
-                mesa={mesa}
-                comanda={comandaDa(mesa)}
-                agora={agora}
-                aoAbrir={() => setAbertaId(mesa.id)}
-              />
-            </li>
+        <div className="flex flex-col gap-6">
+          {grupos.map(({ area, linhas }) => (
+            <section
+              key={area.id}
+              aria-labelledby={`area-${area.id}`}
+              className="flex flex-col gap-2.5"
+            >
+              <h2 id={`area-${area.id}`} className="text-[15px] font-semibold tracking-[-0.01em]">
+                {area.nome}
+              </h2>
+              <ul aria-labelledby={`area-${area.id}`} className={GRADE}>
+                {linhas.map((linha) => (
+                  <li key={linha.mesa.id}>
+                    <CartaoMesa
+                      {...linha}
+                      agora={agora}
+                      aoAbrir={() => setAbertaId(linha.mesa.id)}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
           ))}
-        </ul>
+        </div>
       )}
 
       <ComandaMesa mesa={aberta} aoFechar={() => setAbertaId(null)} />
