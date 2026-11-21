@@ -88,7 +88,7 @@ describe("esquema do salão", () => {
       esquemaSalao.safeParse({ ...padrao, taxaServico: { ativa: true, percentual } })
     const recusada = comTaxa(12.345)
     expect(recusada.success).toBe(false)
-    expect(recusada.error?.issues[0].message).toBe("A taxa de serviço vai de 0% a 20%.")
+    expect(recusada.error?.issues[0].message).toBe("Informe a taxa com até 2 casas decimais.")
     expect(comTaxa(12.5).success).toBe(true)
   })
 })

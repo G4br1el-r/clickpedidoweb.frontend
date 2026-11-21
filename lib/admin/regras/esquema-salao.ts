@@ -50,7 +50,7 @@ export const esquemaSalao = z
         .number({ error: "A taxa de serviço vai de 0% a 20%." })
         .min(0, { error: "A taxa de serviço vai de 0% a 20%." })
         .max(20, { error: "A taxa de serviço vai de 0% a 20%." })
-        .refine(temAteDuasCasas, { error: "A taxa de serviço vai de 0% a 20%." }),
+        .refine(temAteDuasCasas, { error: "Informe a taxa com até 2 casas decimais." }),
     }),
     couvert: z.object({
       ativo: z.boolean(),
