@@ -13,10 +13,10 @@ import { type AcaoAtalho, lerTecla } from "@/lib/admin/regras/atalhos-mesas"
 /** Some o aviso dos dígitos depois deste tempo sem tecla. */
 const ESQUECER_EM_MS = 2_000
 
-/** O alvo da tecla é um campo de texto: aí a tecla é da pessoa digitando. */
+/** O alvo da tecla é um campo (texto ou Select, mesmo fechado): aí a tecla é dele. */
 function emCampo(alvo: EventTarget | null) {
   if (!(alvo instanceof HTMLElement)) return false
-  return alvo.matches("input, textarea, select") || alvo.isContentEditable
+  return alvo.matches('input, textarea, select, [role="combobox"]') || alvo.isContentEditable
 }
 
 /** Há uma janela, folha, menu, lista de opções ou confirmação aberta: a tecla é dela. */

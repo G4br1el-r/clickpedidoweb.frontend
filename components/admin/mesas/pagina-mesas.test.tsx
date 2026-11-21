@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter, type OnUrlUpdateFunction } from "nuqs/adapters/testing"
@@ -735,6 +735,13 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
       const usuario = await abrir()
       await usuario.keyboard("?")
       await screen.findByRole("dialog", { name: "Atalhos do teclado" })
+      await usuario.keyboard("n")
+      expect(screen.queryByRole("dialog", { name: "Nova mesa" })).not.toBeInTheDocument()
+    })
+
+    test("com o foco no filtro de estado fechado, n não abre Nova mesa", async () => {
+      const usuario = await abrir()
+      act(() => screen.getByRole("combobox", { name: "Estado" }).focus())
       await usuario.keyboard("n")
       expect(screen.queryByRole("dialog", { name: "Nova mesa" })).not.toBeInTheDocument()
     })
