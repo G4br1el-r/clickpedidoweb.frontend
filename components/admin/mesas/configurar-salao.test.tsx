@@ -155,6 +155,34 @@ describe("Configurar salão", () => {
     expect((await api().salao.config()).taxaServico.percentual).toBe(10)
   })
 
+  test("taxa de 25% digitada e depois desligada: salva sem erro e guarda a taxa de antes, desligada", async () => {
+    const { usuario, painel } = await abrirPainel()
+
+    const taxa = painel.getByLabelText("Taxa de serviço (%)")
+    await usuario.clear(taxa)
+    await usuario.type(taxa, "25")
+    await usuario.click(painel.getByRole("switch", { name: "Cobrar taxa de serviço" }))
+    await usuario.click(painel.getByRole("button", { name: "Salvar" }))
+
+    expect(await screen.findByText("Salão salvo.")).toBeInTheDocument()
+    expect(screen.queryByText("A taxa de serviço vai de 0% a 20%.")).not.toBeInTheDocument()
+    expect((await api().salao.config()).taxaServico).toEqual({ ativa: false, percentual: 10 })
+  })
+
+  test("couvert de R$ 150 digitado e depois desligado: salva sem erro e guarda o couvert de antes", async () => {
+    const { usuario, painel } = await abrirPainel()
+
+    // Na demonstração da pizzaria o couvert é de R$ 8 por pessoa.
+    const couvert = painel.getByLabelText("Couvert por pessoa (R$)")
+    await usuario.clear(couvert)
+    await usuario.type(couvert, "150")
+    await usuario.click(painel.getByRole("switch", { name: "Cobrar couvert" }))
+    await usuario.click(painel.getByRole("button", { name: "Salvar" }))
+
+    expect(await screen.findByText("Salão salvo.")).toBeInTheDocument()
+    expect((await api().salao.config()).couvert).toEqual({ ativo: false, porPessoa: 8 })
+  })
+
   test("o couvert desligado esconde o campo de valor", async () => {
     const { usuario, painel } = await abrirPainel()
 

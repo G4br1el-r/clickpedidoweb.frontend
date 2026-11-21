@@ -62,8 +62,13 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
       ...salao,
       areas: areas.map((area, indice) => ({ ...area, ordem: indice })),
       garcons,
-      taxaServico: { ativa: taxaAtiva, percentual: numero(taxa) },
-      couvert: { ativo: couvertAtivo, porPessoa: numero(couvert) },
+      // Desligados, taxa e couvert guardam o valor que veio do servidor, não o texto escondido.
+      taxaServico: taxaAtiva
+        ? { ativa: true, percentual: numero(taxa) }
+        : { ...salao.taxaServico, ativa: false },
+      couvert: couvertAtivo
+        ? { ativo: true, porPessoa: numero(couvert) }
+        : { ...salao.couvert, ativo: false },
       limpeza,
       alertas: {
         semPedidoMin: numero(alertas.semPedidoMin),
