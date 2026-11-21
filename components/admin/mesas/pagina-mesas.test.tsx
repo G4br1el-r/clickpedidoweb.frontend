@@ -332,6 +332,31 @@ describe("PaginaMesas", () => {
     expect(faixa.getByText("Giro das mesas").nextElementSibling).toHaveTextContent("0,1")
   })
 
+  test("a gaveta da mesa 20 diz Bloqueada com o motivo e oferece Desbloquear, não o Garçom", async () => {
+    const usuario = await abrir()
+    await usuario.click(await cartao(20))
+    const gaveta = await screen.findByRole("dialog", { name: "Mesa 20" })
+    expect(gaveta).toHaveAccessibleDescription("Bloqueada.")
+    expect(within(gaveta).getByText("Em manutenção")).toBeInTheDocument()
+    expect(within(gaveta).queryByRole("link", { name: "Abrir o Garçom" })).not.toBeInTheDocument()
+
+    await usuario.click(within(gaveta).getByRole("button", { name: "Desbloquear" }))
+    expect(await screen.findByText("Mesa 20 desbloqueada.")).toBeInTheDocument()
+    await waitFor(() => expect(gaveta).toHaveAccessibleDescription("Mesa livre."))
+  })
+
+  test("a gaveta da mesa 9 diz Limpeza e oferece Marcar limpa, não o Garçom", async () => {
+    const usuario = await abrir()
+    await usuario.click(await cartao(9))
+    const gaveta = await screen.findByRole("dialog", { name: "Mesa 9" })
+    expect(gaveta).toHaveAccessibleDescription("Limpeza.")
+    expect(within(gaveta).queryByRole("link", { name: "Abrir o Garçom" })).not.toBeInTheDocument()
+
+    await usuario.click(within(gaveta).getByRole("button", { name: "Marcar limpa" }))
+    expect(await screen.findByText("Mesa 9 limpa.")).toBeInTheDocument()
+    await waitFor(() => expect(gaveta).toHaveAccessibleDescription("Mesa livre."))
+  })
+
   test("liberar aparece só com a comanda vazia; mesa livre pode ser excluída", async () => {
     await mesaOcupada()
     const usuario = await abrir()
