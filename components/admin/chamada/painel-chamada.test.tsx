@@ -146,3 +146,23 @@ describe("PainelChamada", () => {
     ).toBeInTheDocument()
   })
 })
+
+describe("PainelChamada na lanchonete", () => {
+  test("chama pelo número do mês, o mesmo do cupom: recomeça do 1 a cada mês", async () => {
+    useSegmentoAtual.setState({ segmento: "lanchonete" })
+    const lanchonete = servidorDo("lanchonete")
+    const venda = await lanchonete.pdv.finalizar({
+      itens: [{ avulso: { nome: "X-salada", preco: 22 }, quantidade: 1 }],
+      pagamento: "pix",
+      desconto: { modo: "reais", valor: 0 },
+      concluida: false,
+      clienteNome: "Rafael Lima",
+    })
+    // Numeração mensal: o número é pequeno, não o id que corre desde o começo.
+    expect(venda.numero).toBeLessThan(venda.id)
+    renderizar()
+    expect(
+      await (await coluna("Preparando")).findByText(String(venda.numero)),
+    ).toBeInTheDocument()
+  })
+})
