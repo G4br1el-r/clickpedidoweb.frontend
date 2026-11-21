@@ -47,6 +47,7 @@ import {
   useAvancarEmLote,
   useAvancarPedido,
   useCancelarPedido,
+  useClienteChegou,
   useDefinirEntrega,
   useDespachar,
   useEntregarComReceitaRetida,
@@ -78,7 +79,7 @@ import {
   usePreferenciasFila,
   useSomDoAparelho,
 } from "@/lib/admin/preferencias-fila"
-import { alarmeTocando } from "@/lib/admin/regras/aceite"
+import { alarmeTocando, somDoAlarme } from "@/lib/admin/regras/aceite"
 import { type HistoricoCliente, seloDoCliente } from "@/lib/admin/regras/clientes"
 import { estaNaCozinha } from "@/lib/admin/regras/cozinha"
 import { entregasParaAgrupar, situacaoDosMotoboys } from "@/lib/admin/regras/despacho"
@@ -108,7 +109,7 @@ import {
   tomDoStatus,
 } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
-import { temModulo } from "@/lib/admin/segmentos-painel"
+import { type SegmentoPainelId, temModulo } from "@/lib/admin/segmentos-painel"
 import { liberarSom, somBloqueado, tocarAlerta } from "@/lib/admin/som"
 import { plural } from "@/lib/formato"
 import { receitaDoPedidoDemo } from "@/lib/mock/admin/farmacia"
@@ -224,7 +225,11 @@ function AvisoSomBloqueado({ somLigado }: { somLigado: boolean }) {
 }
 
 /** Detecta pedidos que chegaram desde a última leitura: destaque no cartão e alerta sonoro. */
-function useChegadas(pedidos: Pedido[] | undefined, aoChegar: (chegaram: Pedido[]) => void) {
+function useChegadas(
+  pedidos: Pedido[] | undefined,
+  segmento: SegmentoPainelId,
+  aoChegar: (chegaram: Pedido[]) => void,
+) {
   const conhecidos = useRef<Set<number> | null>(null)
   const [novos, setNovos] = useState<ReadonlySet<number>>(new Set())
   const somLigado = usePreferenciasFila((estado) => estado.somLigado)
@@ -246,7 +251,7 @@ function useChegadas(pedidos: Pedido[] | undefined, aoChegar: (chegaram: Pedido[
     if (conhecidos.current) {
       const chegaram = novosPedidos(conhecidos.current, pedidos)
       if (chegaram.length > 0) {
-        if (somLigado) tocarAlerta(tipoSom)
+        if (somLigado) tocarAlerta(somDoAlarme(segmento, tipoSom))
         avisar(pedidos.filter((pedido) => chegaram.includes(pedido.id)))
         setNovos((atuais) => new Set([...atuais, ...chegaram]))
         const relogio = setTimeout(() => {
@@ -257,7 +262,7 @@ function useChegadas(pedidos: Pedido[] | undefined, aoChegar: (chegaram: Pedido[
       }
     }
     conhecidos.current = new Set(pedidos.map((pedido) => pedido.id))
-  }, [pedidos, somLigado, tipoSom])
+  }, [pedidos, somLigado, tipoSom, segmento])
 
   return novos
 }
@@ -276,6 +281,9 @@ type AcoesDoCartao = {
   controlado: (pedido: Pedido) => boolean
   conferirReceita: (pedido: Pedido) => void
   trocarParaRetirada: (pedido: Pedido) => void
+  /** Salão: a cliente chegou, ou não veio (cancela e conta como falta). */
+  chegou: (pedido: Pedido) => void
+  naoVeio: (pedido: Pedido) => void
   abrir: (pedido: Pedido) => void
   imprimir: (pedido: Pedido) => void
   /** A loja tem motoboys: a entrega pronta se despacha. */
@@ -375,6 +383,9 @@ function Coluna({
                 controlado={acoes.controlado(pedido)}
                 aoConferirReceita={() => acoes.conferirReceita(pedido)}
                 aoTrocarParaRetirada={() => acoes.trocarParaRetirada(pedido)}
+                aoChegou={() => acoes.chegou(pedido)}
+                aoNaoVeio={() => acoes.naoVeio(pedido)}
+                faltas={historico?.[pedido.id]?.faltas ?? 0}
                 aoAbrir={() => acoes.abrir(pedido)}
                 aoImprimir={() => acoes.imprimir(pedido)}
               />
@@ -444,7 +455,7 @@ export function PaginaFila({
   const enviadosParaImprimir = useRef(new Set<number>())
   const marcarNaAba = useTituloDaAba(fila, preferencias.piscarAba)
   useTelaAcesa(preferencias.telaAcesa)
-  const novos = useChegadas(fila, (chegaram) => {
+  const novos = useChegadas(fila, segmento, (chegaram) => {
     avisarChegada(chegaram, usePreferenciasFila.getState())
     marcarNaAba(chegaram)
     if (!loja?.impressaoAutomatica) return
@@ -459,9 +470,12 @@ export function PaginaFila({
   const tocando = Boolean(fila && alarmeTocando(fila))
   useEffect(() => {
     if (!tocando || !preferencias.somLigado) return
-    const relogio = setInterval(() => tocarAlerta(somDoAparelho), intervaloAlarme)
+    const relogio = setInterval(
+      () => tocarAlerta(somDoAlarme(segmento, somDoAparelho)),
+      intervaloAlarme,
+    )
     return () => clearInterval(relogio)
-  }, [tocando, preferencias.somLigado, somDoAparelho, intervaloAlarme])
+  }, [tocando, preferencias.somLigado, somDoAparelho, intervaloAlarme, segmento])
 
   // Demonstração: um pedido novo chega de tempos em tempos.
   // A cada 5 pedidos simulados, um cliente cancela pelo site.
@@ -498,6 +512,7 @@ export function PaginaFila({
   const [conferindoReceita, setConferindoReceita] = useState<number | null>(null)
   const [retendo, setRetendo] = useState<Pedido | null>(null)
   const trocar = useTrocarParaRetirada()
+  const chegou = useClienteChegou()
   const entregarRetida = useEntregarComReceitaRetida()
   const receitaDe = (pedido: Pedido) => {
     const tipo = receitaDoPedido(pedido, produtos)
@@ -568,6 +583,19 @@ export function PaginaFila({
     receitaDe,
     controlado,
     conferirReceita: (pedido) => setConferindoReceita(pedido.id),
+    chegou: (pedido) =>
+      chegou.mutate(pedido.id, {
+        ...avisoDeErro,
+        onSuccess: (chegada) => toast(`#${chegada.numero}: cliente chegou.`),
+      }),
+    naoVeio: (pedido) =>
+      cancelar.mutate(
+        { id: pedido.id, de: pedido.status, motivo: "cliente-nao-veio" },
+        {
+          ...avisoDeErro,
+          onSuccess: (faltou) => toast(`#${faltou.numero}: não veio. Conta como falta.`),
+        },
+      ),
     trocarParaRetirada: (pedido) =>
       trocar.mutate(pedido.id, {
         ...avisoDeErro,
@@ -739,13 +767,15 @@ export function PaginaFila({
         vivo
         acoes={
           <>
-            {/* A TV virada ao cliente: só os números do balcão, numa aba que vai para a outra tela. */}
-            <Button variant="outline" size="sm" asChild>
-              <a href="/admin/chamada" target="_blank" rel="noreferrer">
-                <TvIcon data-icon="inline-start" />
-                Painel de chamada
-              </a>
-            </Button>
+            {/* A TV virada ao cliente: só os números do balcão. O salão chama pelo nome. */}
+            {segmento !== "salao" && (
+              <Button variant="outline" size="sm" asChild>
+                <a href="/admin/chamada" target="_blank" rel="noreferrer">
+                  <TvIcon data-icon="inline-start" />
+                  Painel de chamada
+                </a>
+              </Button>
+            )}
             {/* Tela cheia é para o monitor do balcão: no celular não serve. */}
             <Button
               type="button"
@@ -820,7 +850,8 @@ export function PaginaFila({
               </Button>
             )}
           </div>
-          {loja && <AjustePrazo loja={loja} comEntrega={temEntrega} />}
+          {/* No salão o prazo é o horário marcado: o tempo por canal e o +min não se aplicam. */}
+          {loja && segmento !== "salao" && <AjustePrazo loja={loja} comEntrega={temEntrega} />}
         </div>
 
         {/* Faixas 2 e 3: a régua e as ferramentas. No celular, recolhidas no Mais. */}

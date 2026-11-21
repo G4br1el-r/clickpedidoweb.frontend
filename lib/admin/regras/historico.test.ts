@@ -31,6 +31,13 @@ describe("eventosDaMudanca", () => {
     )
   })
 
+  test('salão: a cliente que chega vira o evento "Cliente chegou"', () => {
+    const marcado: Pedido = { ...recebido, tipo: "atendimento" }
+    const eventos = eventosDaMudanca(marcado, { ...marcado, chegouEm: EM }, EM)
+    expect(eventos).toEqual([{ tipo: "chegou", em: EM }])
+    expect(linhaDoTempo({ ...marcado, historico: eventos }).at(-1)?.texto).toBe("Cliente chegou")
+  })
+
   test("a troca de etapa vira um evento com a etapa nova e a hora", () => {
     const depois: Pedido = { ...recebido, status: "em-preparo" }
 

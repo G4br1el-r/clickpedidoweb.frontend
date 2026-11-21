@@ -21,12 +21,24 @@ import {
 } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { useState } from "react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { MotivoEscolhido, Motoboy, Pedido } from "@/lib/admin/dados/tipos"
 import { esperaDoAceite } from "@/lib/admin/regras/aceite"
+import { textoDosLembretes } from "@/lib/admin/regras/agenda"
 import { resumoDosItens, textoCobranca, type Urgencia, urgencia } from "@/lib/admin/regras/fila"
 import { AVISO_DE_MAIORIDADE } from "@/lib/admin/regras/maioridade"
 import { linkWhatsApp, mensagemParaCliente } from "@/lib/admin/regras/mensagens"
@@ -35,6 +47,7 @@ import { pesagemPendente } from "@/lib/admin/regras/pesagem"
 import { type TemposDaLoja, textoDoPrazo } from "@/lib/admin/regras/prazo"
 import { rotuloCanal, rotuloOrigem } from "@/lib/admin/regras/rotulos"
 import { rotuloAcao, tomDoStatus } from "@/lib/admin/regras/status"
+import { plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { ConfirmarComMotivo } from "../pedidos/confirmar-com-motivo"
 import { Traco } from "../traco"
@@ -121,6 +134,9 @@ export function CartaoFila({
   controlado = false,
   aoConferirReceita,
   aoTrocarParaRetirada,
+  aoChegou,
+  aoNaoVeio,
+  faltas = 0,
   aoAbrir,
   aoImprimir,
 }: {
@@ -160,6 +176,12 @@ export function CartaoFila({
   controlado?: boolean
   aoConferirReceita?: () => void
   aoTrocarParaRetirada?: () => void
+  /** Salão: a cliente chegou para o horário. */
+  aoChegou?: () => void
+  /** Salão: a cliente não veio; o horário cancela e conta como falta. */
+  aoNaoVeio?: () => void
+  /** Salão: quantas vezes a cliente já não veio. */
+  faltas?: number
   aoAbrir: () => void
   aoImprimir: () => void
 }) {
@@ -178,6 +200,13 @@ export function CartaoFila({
     pedido.tipo === "entrega" &&
     ["recebido", "em-preparo", "pronto"].includes(pedido.status) &&
     aoTrocarParaRetirada
+  // Salão: agendado que ainda não chegou espera "Cliente chegou" ou "Não veio".
+  const agendado =
+    pedido.tipo === "atendimento" &&
+    pedido.status === "recebido" &&
+    !pedido.chegouEm &&
+    !pedido.esperaAceite
+  const lembretes = agendado ? textoDosLembretes(pedido, agora) : null
   const conferirReceita = receita !== undefined && receita !== "aprovada" && aoConferirReceita
   const botaoTrocar = (
     <Button
@@ -332,6 +361,7 @@ export function CartaoFila({
                   Controlado: só sai com a receita retida
                 </p>
               )}
+              {lembretes && <p className="text-xs text-muted-foreground">{lembretes}</p>}
               {maioridade && (
                 <p className="flex items-center gap-1.5 text-[13px] font-medium">
                   <IdCardIcon className="size-4" aria-hidden="true" />
@@ -358,6 +388,9 @@ export function CartaoFila({
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="font-medium">{pedido.cliente.nome}</span>
                   {seloCliente && <Badge variant="secondary">{seloCliente}</Badge>}
+                  {faltas > 0 && (
+                    <Badge variant="outline">{plural(faltas, "falta", "faltas")}</Badge>
+                  )}
                 </span>
                 {pedido.mesa?.garcom && (
                   <span className="text-xs text-muted-foreground">
@@ -438,7 +471,7 @@ export function CartaoFila({
                       disabled={ocupado}
                       onClick={aoAceitar}
                     >
-                      Aceitar
+                      {pedido.tipo === "atendimento" ? "Confirmar horário" : "Aceitar"}
                     </Button>
                   )}
                   <ConfirmarComMotivo
@@ -458,6 +491,40 @@ export function CartaoFila({
                     confirmar="Sim, recusar"
                     aoConfirmar={aoRecusar}
                   />
+                </>
+              ) : agendado && aoChegou && aoNaoVeio ? (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="min-w-[min(100%,7rem)] flex-1"
+                    disabled={ocupado}
+                    onClick={aoChegou}
+                  >
+                    Cliente chegou
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button type="button" size="sm" variant="outline" disabled={ocupado}>
+                        Não veio
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>A cliente não veio?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          O horário de #{pedido.numero} é cancelado e conta como falta de{" "}
+                          {pedido.cliente.nome}.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Voltar</AlertDialogCancel>
+                        <AlertDialogAction onClick={aoNaoVeio}>
+                          Não veio, conta falta
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </>
               ) : viraRetirada ? (
                 botaoTrocar

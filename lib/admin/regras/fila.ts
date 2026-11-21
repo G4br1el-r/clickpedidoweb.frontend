@@ -64,7 +64,7 @@ export function pedidosDeDiasAnteriores(pedidos: Pedido[], agora: Date): Pedido[
 /**
  * Colunas do quadro: comida vai de Novos a A caminho (só com entrega no segmento);
  * o salão mostra os agendamentos de hoje (e os atrasados de dias anteriores), pela hora
- * marcada, e quem está em atendimento.
+ * marcada, quem já chegou e quem está em atendimento.
  */
 export function colunasDaFila(
   pedidos: Pedido[],
@@ -90,9 +90,19 @@ export function colunasDaFila(
         pedidos: com("recebido")
           .filter(
             (pedido) =>
-              isSameDay(inicio(pedido), agora) || inicio(pedido) < startOfDay(agora).getTime(),
+              !pedido.chegouEm &&
+              (isSameDay(inicio(pedido), agora) || inicio(pedido) < startOfDay(agora).getTime()),
           )
           .sort((a, b) => inicio(a) - inicio(b)),
+      },
+      {
+        id: "chegou",
+        titulo: "Chegou",
+        status: "recebido",
+        // Na ordem em que chegaram: quem espera há mais tempo começa primeiro.
+        pedidos: com("recebido")
+          .filter((pedido) => pedido.chegouEm)
+          .sort((a, b) => Date.parse(a.chegouEm ?? "") - Date.parse(b.chegouEm ?? "")),
       },
       {
         id: "atendimento",

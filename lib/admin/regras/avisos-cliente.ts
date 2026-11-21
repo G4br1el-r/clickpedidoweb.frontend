@@ -3,7 +3,14 @@ import { textoDoMotivo } from "./aceite"
 import { reaisEmTexto } from "./mensagens"
 
 /** As etapas em que a loja avisa o cliente sozinha. */
-export const ETAPAS_DO_AVISO = ["aceito", "saiu", "pronto", "recusado", "pesado", "retirada"] as const
+export const ETAPAS_DO_AVISO = [
+  "aceito",
+  "saiu",
+  "pronto",
+  "recusado",
+  "pesado",
+  "retirada",
+] as const
 export type EtapaDoAviso = (typeof ETAPAS_DO_AVISO)[number]
 
 /** Os textos de fábrica; a loja edita em Configurações → Fila e pedidos. */

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { Pedido } from "../dados/tipos"
-import { alarmeTocando, esperaDoAceite, motivosDeCancelamento } from "./aceite"
+import { alarmeTocando, esperaDoAceite, motivosDeCancelamento, somDoAlarme } from "./aceite"
 import { PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
 
 /** Chegou às 20:30 de 13/11/2026 (São Paulo). */
@@ -70,5 +70,17 @@ describe("esperaDoAceite", () => {
     expect(esperaDoAceite(aceito, new Date(2026, 10, 13, 20, 50), 5)).toBeNull()
     const cancelado: Pedido = { ...esperando, status: "cancelado" }
     expect(esperaDoAceite(cancelado, new Date(2026, 10, 13, 20, 50), 5)).toBeNull()
+  })
+})
+
+describe("somDoAlarme", () => {
+  test("salão: confirmar horário não pede sirene; toca o suave, seja qual for o som escolhido", () => {
+    expect(somDoAlarme("salao", "sirene")).toBe("suave")
+    expect(somDoAlarme("salao", "muito-alto")).toBe("suave")
+  })
+
+  test("nos outros, o som escolhido no aparelho ou na loja", () => {
+    expect(somDoAlarme("pizzaria", "sirene")).toBe("sirene")
+    expect(somDoAlarme("farmacia", "alto")).toBe("alto")
   })
 })

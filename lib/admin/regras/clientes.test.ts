@@ -35,7 +35,20 @@ describe("historicoDoCliente", () => {
       pedido(3, ANA, 5, "cancelado"),
       pedido(4, BRUNO, 1),
     ]
-    expect(historicoDoCliente(atual, todos)).toEqual({ anteriores: 2, nosUltimos30: 1 })
+    expect(historicoDoCliente(atual, todos)).toEqual({ anteriores: 2, nosUltimos30: 1, faltas: 0 })
+  })
+
+  test("salão: o horário em que a cliente não veio conta como falta", () => {
+    const atual = pedido(10, ANA, 0, "recebido")
+    const naoVeio: Pedido = {
+      ...pedido(5, ANA, 7, "cancelado"),
+      cancelamento: { tipo: "cancelamento", motivo: "cliente-nao-veio", em: "" },
+    }
+    const desistiu: Pedido = {
+      ...pedido(6, ANA, 3, "cancelado"),
+      cancelamento: { tipo: "cancelamento", motivo: "cliente-pediu", em: "" },
+    }
+    expect(historicoDoCliente(atual, [atual, naoVeio, desistiu]).faltas).toBe(1)
   })
 })
 

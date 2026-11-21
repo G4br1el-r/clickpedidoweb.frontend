@@ -1391,3 +1391,39 @@ describe("PaginaFila na farmácia", () => {
     )
   })
 })
+
+describe("PaginaFila no salão", () => {
+  beforeEach(() => {
+    // 14h de sexta: o salão está aberto e a agenda do dia está cheia (fecha às 19h).
+    vi.setSystemTime(new Date(2026, 10, 13, 14, 0))
+    useSegmentoAtual.setState({ segmento: "salao" })
+  })
+
+  test("a cliente chega e vai para Chegou; a que não veio sai e conta como falta", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const agendados = await coluna("Agendados")
+    const [primeiro, segundo] = agendados.getAllByRole("article")
+    const numero = (cartao: HTMLElement) => within(cartao).getByRole("heading").textContent ?? ""
+    const [chegou, faltou] = [numero(primeiro), numero(segundo)]
+
+    await usuario.click(within(primeiro).getByRole("button", { name: "Cliente chegou" }))
+    expect(
+      await (await coluna("Chegou")).findByRole("article", { name: chegou }),
+    ).toBeInTheDocument()
+
+    await usuario.click(within(segundo).getByRole("button", { name: "Não veio" }))
+    const pergunta = within(await screen.findByRole("alertdialog", { name: "A cliente não veio?" }))
+    await usuario.click(pergunta.getByRole("button", { name: "Não veio, conta falta" }))
+    expect(await screen.findByText(`${faltou}: não veio. Conta como falta.`)).toBeInTheDocument()
+  })
+
+  test("o prazo é o horário marcado: sem +min na barra e sem painel de chamada", async () => {
+    telaGrande()
+    renderizar()
+    await coluna("Agendados")
+    expect(screen.queryByRole("radio", { name: "+15 min" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Painel de chamada" })).not.toBeInTheDocument()
+  })
+})

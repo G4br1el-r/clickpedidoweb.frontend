@@ -194,6 +194,14 @@ export function useServirMesa() {
   )
 }
 
+/** Salão: a cliente chegou para o horário. */
+export function useClienteChegou() {
+  return useMutacaoDePedido<number>(
+    (servidor, id) => servidor.pedidos.clienteChegou(id),
+    (pedido) => ({ ...pedido, chegouEm: new Date().toISOString() }),
+  )
+}
+
 /** Farmácia: a entrega com controlado vira retirada no balcão. */
 export function useTrocarParaRetirada() {
   return useMutacaoDePedido<number>(

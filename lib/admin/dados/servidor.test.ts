@@ -363,7 +363,7 @@ describe("servidor de demonstração", () => {
     const ultimoDoFiel = fiel[0]
 
     const historico = await api.pedidos.historicoDosClientes([unico.id, ultimoDoFiel.id])
-    expect(historico[unico.id]).toEqual({ anteriores: 0, nosUltimos30: 0 })
+    expect(historico[unico.id]).toEqual({ anteriores: 0, nosUltimos30: 0, faltas: 0 })
     expect(historico[ultimoDoFiel.id].anteriores).toBe(fiel.length - 1)
   })
 
@@ -1540,6 +1540,29 @@ describe("servidor de demonstração", () => {
       await expect(api.agendamentos.remarcar(outro.id, sabado(17))).rejects.toThrow(
         "Só dá para remarcar antes de começar.",
       )
+    })
+  })
+
+  describe("salão: cliente chegou", () => {
+    const salao = () =>
+      criarServidor({
+        segmento: "salao",
+        carregarCatalogo: () => carregarCatalogo("salao"),
+        espera: 0,
+      })
+
+    test("marca a chegada do agendado e recusa o que não está esperando", async () => {
+      const api = salao()
+      const [agendado] = (await api.pedidos.listar({ status: ["recebido"] })).filter(
+        (pedido) => !pedido.esperaAceite && !pedido.chegouEm,
+      )
+      const chegou = await api.pedidos.clienteChegou(agendado.id)
+      expect(chegou.chegouEm).toBe(AGORA.toISOString())
+      await expect(api.pedidos.clienteChegou(agendado.id)).rejects.toThrow(
+        "Só o agendado que ainda não chegou pode chegar.",
+      )
+      const atendimento = await api.pedidos.avancar(agendado.id, "recebido")
+      expect(atendimento.status).toBe("em-preparo")
     })
   })
 

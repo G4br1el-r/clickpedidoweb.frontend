@@ -986,6 +986,19 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return responder(chegou)
       },
 
+      /** Salão: a cliente chegou para o horário; vai de Agendados para Chegou. */
+      clienteChegou(id: number) {
+        return alterar(id, (pedido) => {
+          const esperando =
+            pedido.tipo === "atendimento" &&
+            pedido.status === "recebido" &&
+            !pedido.esperaAceite &&
+            !pedido.chegouEm
+          if (!esperando) throw new Error("Só o agendado que ainda não chegou pode chegar.")
+          return { ...pedido, chegouEm: new Date().toISOString() }
+        })
+      },
+
       /**
        * Farmácia: a entrega com controlado vira retirada no balcão. Sai a taxa de entrega
        * e o endereço; o resto do pedido fica igual.

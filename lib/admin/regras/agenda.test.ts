@@ -1,7 +1,13 @@
 import { format } from "date-fns"
 import { describe, expect, test } from "vitest"
 import type { HorarioFuncionamento, Pedido, StatusPedido } from "../dados/tipos"
-import { faixasDoDia, horariosLivres, listaDaAgenda, resumoDaAgenda } from "./agenda"
+import {
+  faixasDoDia,
+  horariosLivres,
+  listaDaAgenda,
+  resumoDaAgenda,
+  textoDosLembretes,
+} from "./agenda"
 import { PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
 
 /** Empório: terça a sábado, das 9h às 19h; domingo e segunda fechado. */
@@ -172,5 +178,34 @@ describe("listaDaAgenda", () => {
     expect(busca({ busca: "bruna" })).toEqual([1, 3])
     expect(busca({ busca: "9111" })).toEqual([1])
     expect(busca({ status: ["em-preparo"] })).toEqual([2])
+  })
+})
+
+describe("textoDosLembretes", () => {
+  const marcado = (inicio: Date, criadoEm: Date): Pedido => ({
+    ...PEDIDOS_DE_TESTE[2],
+    tipo: "atendimento",
+    status: "recebido",
+    criadoEm: criadoEm.toISOString(),
+    agendamento: { inicio: inicio.toISOString(), duracaoMin: 60 },
+  })
+
+  test("véspera às 18h e 1 h antes: o que já passou foi enviado; o que falta diz a hora", () => {
+    const amanha = marcado(new Date(2026, 10, 14, 10, 0), new Date(2026, 10, 10, 9, 0))
+    expect(textoDosLembretes(amanha, new Date(2026, 10, 13, 20, 30))).toBe(
+      "Lembretes: véspera enviado · 1 h antes às 09:00",
+    )
+    expect(textoDosLembretes(amanha, new Date(2026, 10, 14, 9, 30))).toBe(
+      "Lembretes: véspera enviado · 1 h antes enviado",
+    )
+  })
+
+  test("marcado depois da hora do lembrete, aquele não sai; sem nenhum, não diz nada", () => {
+    const deHoje = marcado(new Date(2026, 10, 13, 21, 0), new Date(2026, 10, 13, 19, 0))
+    expect(textoDosLembretes(deHoje, new Date(2026, 10, 13, 19, 30))).toBe(
+      "Lembretes: 1 h antes às 20:00",
+    )
+    const emCimaDaHora = marcado(new Date(2026, 10, 13, 20, 0), new Date(2026, 10, 13, 19, 30))
+    expect(textoDosLembretes(emCimaDaHora, new Date(2026, 10, 13, 19, 40))).toBeNull()
   })
 })
