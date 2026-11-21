@@ -74,6 +74,8 @@ function desenhar(props: Partial<Props> = {}) {
         alertas={[]}
         agora={AGORA}
         aoAbrir={vi.fn()}
+        aoEditar={vi.fn()}
+        aoBloquear={vi.fn()}
         {...props}
       />
     </Provedores>,
@@ -187,24 +189,16 @@ describe("CartaoMesa", () => {
     expect(botao).not.toHaveClass("relative")
   })
 
-  test("Abrir comanda abre a mesa; Editar e Bloquear ficam desligados até a página ligar", async () => {
+  test("Abrir comanda abre a mesa", async () => {
     const usuario = userEvent.setup()
     const aoAbrir = vi.fn()
     desenhar({ aoAbrir })
     await usuario.click(screen.getByRole("button", { name: "Ações da mesa 7" }))
-    expect(await screen.findByRole("menuitem", { name: "Editar" })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    )
-    expect(screen.getByRole("menuitem", { name: "Bloquear" })).toHaveAttribute(
-      "aria-disabled",
-      "true",
-    )
-    await usuario.click(screen.getByRole("menuitem", { name: "Abrir comanda" }))
+    await usuario.click(await screen.findByRole("menuitem", { name: "Abrir comanda" }))
     expect(aoAbrir).toHaveBeenCalledOnce()
   })
 
-  test("com aoEditar e aoBloquear, os itens chamam a página", async () => {
+  test("Editar e Bloquear chamam a página com o botão ⋯, para onde o foco volta", async () => {
     const usuario = userEvent.setup()
     const aoEditar = vi.fn()
     const aoBloquear = vi.fn()
@@ -213,7 +207,8 @@ describe("CartaoMesa", () => {
     await usuario.click(await screen.findByRole("menuitem", { name: "Editar" }))
     await usuario.click(screen.getByRole("button", { name: "Ações da mesa 7" }))
     await usuario.click(await screen.findByRole("menuitem", { name: "Bloquear" }))
-    expect(aoEditar).toHaveBeenCalledOnce()
-    expect(aoBloquear).toHaveBeenCalledOnce()
+    const botao = screen.getByRole("button", { name: "Ações da mesa 7" })
+    expect(aoEditar).toHaveBeenCalledExactlyOnceWith(botao)
+    expect(aoBloquear).toHaveBeenCalledExactlyOnceWith(botao)
   })
 })

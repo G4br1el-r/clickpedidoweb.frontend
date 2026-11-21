@@ -59,9 +59,9 @@ const ACOES: Record<EstadoMesa, AcaoMesa[]> = {
 
 type Acoes = {
   aoAbrir: () => void
-  /** Sem a função, o item aparece desligado. Recebem o botão ⋯, para onde o foco volta. */
-  aoEditar?: (gatilho: HTMLElement | null) => void
-  aoBloquear?: (gatilho: HTMLElement | null) => void
+  /** Recebem o botão ⋯, para onde o foco volta quando a janela fecha. */
+  aoEditar: (gatilho: HTMLElement | null) => void
+  aoBloquear: (gatilho: HTMLElement | null) => void
 }
 
 function MenuMesa({
@@ -113,17 +113,13 @@ function MenuMesa({
       </DropdownMenuItem>
     ),
     editar: (
-      <DropdownMenuItem key="editar" disabled={!aoEditar} onSelect={() => aoEditar?.(gatilho)}>
+      <DropdownMenuItem key="editar" onSelect={() => aoEditar(gatilho)}>
         <PencilIcon />
         Editar
       </DropdownMenuItem>
     ),
     bloquear: (
-      <DropdownMenuItem
-        key="bloquear"
-        disabled={!aoBloquear}
-        onSelect={() => aoBloquear?.(gatilho)}
-      >
+      <DropdownMenuItem key="bloquear" onSelect={() => aoBloquear(gatilho)}>
         <LockIcon />
         Bloquear
       </DropdownMenuItem>
