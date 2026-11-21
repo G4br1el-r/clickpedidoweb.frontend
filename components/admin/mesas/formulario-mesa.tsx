@@ -43,7 +43,8 @@ function Campos({ mesa, aoFechar }: { mesa?: Mesa; aoFechar: () => void }) {
   const [area, setArea] = useState<string | null>(mesa?.areaId ?? null)
   const [lugares, setLugares] = useState(String(mesa?.lugares ?? 4))
   const [forma, setForma] = useState<FormaMesa>(mesa?.forma ?? "quadrada")
-  const areaId = area ?? areas[0]?.id ?? ""
+  // Sem área ainda (o salão não carregou), o servidor põe a mesa na primeira.
+  const areaId = area ?? areas[0]?.id
 
   return (
     <form
@@ -53,7 +54,7 @@ function Campos({ mesa, aoFechar }: { mesa?: Mesa; aoFechar: () => void }) {
         const dados = {
           numero: Number(numero),
           ...(nome.trim() ? { nome } : {}),
-          areaId,
+          ...(areaId ? { areaId } : {}),
           lugares: Number(lugares),
           forma,
         }
@@ -64,7 +65,8 @@ function Campos({ mesa, aoFechar }: { mesa?: Mesa; aoFechar: () => void }) {
           },
           onError: (erro: Error) => toast.error(erro.message),
         }
-        if (mesa) editar.mutate({ id: mesa.id, dados }, opcoes)
+        if (mesa)
+          editar.mutate({ id: mesa.id, dados: { ...dados, areaId: areaId ?? mesa.areaId } }, opcoes)
         else criar.mutate(dados, opcoes)
       }}
     >
@@ -102,7 +104,7 @@ function Campos({ mesa, aoFechar }: { mesa?: Mesa; aoFechar: () => void }) {
         </Field>
         <Field>
           <FieldLabel htmlFor="mesa-area">Área</FieldLabel>
-          <Select value={areaId} onValueChange={setArea}>
+          <Select value={areaId ?? ""} onValueChange={setArea}>
             <SelectTrigger id="mesa-area" className="w-full">
               <SelectValue />
             </SelectTrigger>

@@ -10,6 +10,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { FormularioMesa } from "./formulario-mesa"
 import { PaginaMesas } from "./pagina-mesas"
 
 // Impressora: a fronteira com o navegador. O teste confere só que a conta foi mandada.
@@ -726,5 +727,36 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
       const consulta = cliente.getQueryCache().find({ queryKey: ["admin", "pizzaria", "mesas"] })
       expect(consulta?.observers[0]?.options.refetchInterval).toBe(4_000)
     })
+  })
+})
+
+describe("FormularioMesa", () => {
+  test("criar a mesa antes de as áreas carregarem deixa o servidor pôr na primeira área", async () => {
+    // A leitura do salão só chega depois do clique em Criar mesa: é a rede lenta, do lado do
+    // servidor.
+    const salao = api().salao
+    const lerDeVerdade = salao.config.bind(salao)
+    let soltar = () => {}
+    vi.spyOn(salao, "config").mockImplementationOnce(
+      () =>
+        new Promise((resolver) => {
+          soltar = () => resolver(lerDeVerdade())
+        }),
+    )
+    const usuario = userEvent.setup()
+    render(
+      <Provedores>
+        <FormularioMesa aberta aoMudar={() => {}} />
+      </Provedores>,
+    )
+    const janela = within(await screen.findByRole("dialog", { name: "Nova mesa" }))
+    await usuario.type(janela.getByRole("spinbutton", { name: "Número" }), "61")
+    await usuario.click(janela.getByRole("button", { name: "Criar mesa" }))
+    soltar()
+
+    expect(await screen.findByText("Mesa 61 criada.")).toBeInTheDocument()
+    expect(screen.queryByText("Escolha uma área do salão.")).not.toBeInTheDocument()
+    const mesa = (await api().mesas.listar()).find((item) => item.numero === 61)
+    expect(mesa?.areaId).toBe("area-salao")
   })
 })
