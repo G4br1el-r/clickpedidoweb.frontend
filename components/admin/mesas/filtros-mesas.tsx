@@ -37,7 +37,7 @@ function Filtro({
 }) {
   return (
     <Select value={valor} onValueChange={aoMudar}>
-      <SelectTrigger aria-label={rotulo} className="w-[calc(50%-0.25rem)] sm:w-40">
+      <SelectTrigger aria-label={rotulo} className="w-full sm:w-40">
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

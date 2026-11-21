@@ -240,7 +240,7 @@ export function CartaoMesa({
             )}
             {comanda && (
               <span className="mt-auto flex items-baseline justify-between gap-2 border-t border-border/70 pt-2">
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs whitespace-nowrap text-muted-foreground">
                   {plural(itens, "item", "itens")}
                 </span>
                 <NumberFlow
