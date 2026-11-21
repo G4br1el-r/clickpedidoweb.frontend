@@ -241,7 +241,7 @@ describe("PaginaMesas", () => {
     await waitFor(() => expect(total()).toHaveTextContent("R$ 44,00"))
   })
 
-  test("imprimir a conta e fechar com a forma de pagamento libera a mesa", async () => {
+  test("imprimir a conta e fechar com a forma de pagamento tira a mesa de uso e a põe em limpeza", async () => {
     await mesaOcupada()
     const usuario = await abrir()
     await usuario.click(await cartao(60))
@@ -255,7 +255,8 @@ describe("PaginaMesas", () => {
     await usuario.click(fechar.getByRole("button", { name: "Receber R$ 13,50" }))
 
     expect(await screen.findByText("Conta da mesa 60 fechada.")).toBeInTheDocument()
-    expect(await cartao(60)).toHaveTextContent("Livre")
+    // A demonstração da pizzaria tem a limpeza ligada: a mesa paga espera ser limpa.
+    expect(await cartao(60)).toHaveTextContent("Limpeza")
     const [fechada] = await api().pedidos.listar({ status: ["concluido"] })
     expect(fechada).toMatchObject({ pagamento: "pix", situacaoPagamento: "pago", total: 13.5 })
   })

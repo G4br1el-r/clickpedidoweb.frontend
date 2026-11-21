@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto"
 import { clear, get, set } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { mesasSeCruzam } from "../regras/salao"
 import { catalogoDeTeste } from "./catalogo-de-teste"
 import { carregarCatalogo } from "./catalogos"
 import type { BaseLojaV3 } from "./migracao"
@@ -1361,6 +1362,259 @@ describe("servidor de demonstração", () => {
       await expect(servidor().mesas.criar({ numero: 300 })).rejects.toThrow(
         "Não cabe mais mesa nessa área do mapa.",
       )
+    })
+
+    describe("editar", () => {
+      const AGUA = [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }]
+
+      /** Duas mesas livres, em x 0 e x 4 da linha 8 do salão (as do catálogo ficam na linha 0). */
+      async function duasMesas() {
+        const [a, b] = [
+          await servidor().mesas.criar({ numero: 20 }),
+          await servidor().mesas.criar({ numero: 21 }),
+        ]
+        await alterarGuardada(a.id, { posicao: { x: 0, y: 8 } })
+        await alterarGuardada(b.id, { posicao: { x: 4, y: 8 } })
+        const igual = (mesa: Mesa) => ({
+          numero: mesa.numero,
+          nome: mesa.nome,
+          areaId: mesa.areaId,
+          lugares: mesa.lugares,
+          forma: mesa.forma,
+        })
+        return { api: servidor(), a, b, igual }
+      }
+
+      /** Salão com uma segunda área, a Varanda. */
+      async function comVaranda(api: Servidor) {
+        const salao = await api.salao.config()
+        await api.salao.salvar({
+          ...salao,
+          areas: [...salao.areas, { id: "area-varanda", nome: "Varanda", ordem: 2 }],
+        })
+      }
+
+      test("troca nome, área, lugares e forma", async () => {
+        const { api, a, igual } = await duasMesas()
+        await comVaranda(api)
+        const editada = await api.mesas.editar(a.id, {
+          ...igual(a),
+          nome: " Janela ",
+          areaId: "area-varanda",
+          lugares: 6,
+          forma: "redonda",
+        })
+        expect(editada).toMatchObject({
+          id: a.id,
+          numero: 20,
+          nome: "Janela",
+          areaId: "area-varanda",
+          lugares: 6,
+          forma: "redonda",
+        })
+        expect((await api.mesas.listar()).find((mesa) => mesa.id === a.id)).toEqual(editada)
+      })
+
+      test("número repetido é recusado", async () => {
+        const { api, a, igual } = await duasMesas()
+        await expect(api.mesas.editar(a.id, { ...igual(a), numero: 21 })).rejects.toThrow(
+          "Já existe a mesa 21.",
+        )
+      })
+
+      test("mesa ocupada não troca de número, mas muda nome e lugares", async () => {
+        const { api, a, igual } = await duasMesas()
+        await api.mesas.lancar({ mesaId: a.id, enviarParaCozinha: false, itens: AGUA })
+        await expect(api.mesas.editar(a.id, { ...igual(a), numero: 29 })).rejects.toThrow(
+          "Feche a conta antes de mudar o número da mesa.",
+        )
+        const editada = await api.mesas.editar(a.id, {
+          ...igual(a),
+          nome: "Aniversário",
+          lugares: 8,
+        })
+        expect(editada).toMatchObject({ nome: "Aniversário", lugares: 8, status: "ocupada" })
+      })
+
+      test("trocando de área, a mesa vai para a primeira posição livre da área nova", async () => {
+        const { api, b, igual } = await duasMesas()
+        await comVaranda(api)
+        const editada = await api.mesas.editar(b.id, { ...igual(b), areaId: "area-varanda" })
+        expect(editada.posicao).toEqual({ x: 0, y: 0 })
+      })
+
+      test("virar retangular de 8 lugares sobre uma vizinha leva a mesa para uma posição livre", async () => {
+        const { api, a, b, igual } = await duasMesas()
+        // A mesa de 4 células de largura, em x 0, cruzaria a vizinha, que passa para x 3.
+        await alterarGuardada(b.id, { posicao: { x: 3, y: 8 } })
+        const editada = await servidor().mesas.editar(a.id, {
+          ...igual(a),
+          lugares: 8,
+          forma: "retangular",
+        })
+        const vizinha = (await api.mesas.listar()).find((mesa) => mesa.id === b.id) as Mesa
+        expect(mesasSeCruzam(editada, vizinha)).toBe(false)
+        // A varredura começa na linha 0, onde as mesas 1 e 2 do catálogo ocupam x 0-1 e 4-5.
+        expect(editada.posicao).toEqual({ x: 6, y: 0 })
+      })
+
+      test("sem sobreposição, a mesa fica onde estava", async () => {
+        const { api, b, igual } = await duasMesas()
+        const editada = await api.mesas.editar(b.id, { ...igual(b), lugares: 2, forma: "redonda" })
+        expect(editada.posicao).toEqual({ x: 4, y: 8 })
+      })
+
+      test("nome vazio volta para o padrão", async () => {
+        const { api, a, igual } = await duasMesas()
+        const editada = await api.mesas.editar(a.id, { ...igual(a), numero: 7, nome: "   " })
+        expect(editada.nome).toBe("Mesa 07")
+      })
+
+      test("lugares, forma e área inválidos usam as mesmas mensagens de criar", async () => {
+        const { api, a, igual } = await duasMesas()
+        await expect(api.mesas.editar(a.id, { ...igual(a), lugares: 21 })).rejects.toThrow(
+          "Informe de 1 a 20 lugares.",
+        )
+        await expect(
+          api.mesas.editar(a.id, { ...igual(a), forma: "triangular" as never }),
+        ).rejects.toThrow("Escolha a forma da mesa.")
+        await expect(api.mesas.editar(a.id, { ...igual(a), areaId: "nada" })).rejects.toThrow(
+          "Escolha uma área do salão.",
+        )
+      })
+
+      test("id inexistente", async () => {
+        const { api, a, igual } = await duasMesas()
+        await expect(api.mesas.editar("nada", igual(a))).rejects.toThrow("Mesa não encontrada")
+      })
+    })
+
+    describe("bloquear, desbloquear e marcar limpa", () => {
+      const AGUA = [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }]
+
+      test("bloquear guarda o motivo aparado e cortado em 80", async () => {
+        const api = servidor()
+        const mesa = await api.mesas.criar({ numero: 20 })
+        expect((await api.mesas.bloquear(mesa.id, "  Em manutenção  ")).bloqueio).toEqual({
+          motivo: "Em manutenção",
+        })
+        const longo = await api.mesas.bloquear(mesa.id, "x".repeat(100))
+        expect(longo.bloqueio?.motivo).toBe("x".repeat(80))
+        expect((await api.mesas.listar()).find((item) => item.id === mesa.id)?.bloqueio).toEqual({
+          motivo: "x".repeat(80),
+        })
+      })
+
+      test("sem motivo, o bloqueio fica vazio", async () => {
+        const api = servidor()
+        const mesa = await api.mesas.criar({ numero: 20 })
+        expect((await api.mesas.bloquear(mesa.id)).bloqueio).toEqual({})
+        expect((await api.mesas.bloquear(mesa.id, "   ")).bloqueio).toEqual({})
+      })
+
+      test("mesa ocupada não bloqueia", async () => {
+        const api = servidor()
+        const mesa = await api.mesas.criar({ numero: 20 })
+        await api.mesas.lancar({ mesaId: mesa.id, enviarParaCozinha: false, itens: AGUA })
+        await expect(api.mesas.bloquear(mesa.id, "Quebrada")).rejects.toThrow(
+          "Feche a conta antes de bloquear a mesa.",
+        )
+      })
+
+      test("desbloquear tira o bloqueio e a mesa volta a aceitar lançamento", async () => {
+        const api = servidor()
+        const mesa = await api.mesas.criar({ numero: 20 })
+        await api.mesas.bloquear(mesa.id, "Em manutenção")
+        await expect(
+          api.mesas.lancar({ mesaId: mesa.id, enviarParaCozinha: false, itens: AGUA }),
+        ).rejects.toThrow("A mesa 20 está bloqueada.")
+        const livre = await api.mesas.desbloquear(mesa.id)
+        expect(livre.bloqueio).toBeUndefined()
+        const comanda = await api.mesas.lancar({
+          mesaId: mesa.id,
+          enviarParaCozinha: false,
+          itens: AGUA,
+        })
+        expect(comanda.mesa?.id).toBe(mesa.id)
+      })
+
+      test("marcar limpa tira a limpeza", async () => {
+        const mesa = await servidor().mesas.criar({ numero: 20 })
+        await alterarGuardada(mesa.id, { limpezaDesde: AGORA.toISOString() })
+        const api = servidor()
+        const limpa = await api.mesas.marcarLimpa(mesa.id)
+        expect(limpa.limpezaDesde).toBeUndefined()
+        expect(
+          (await api.mesas.listar()).find((item) => item.id === mesa.id)?.limpezaDesde,
+        ).toBeUndefined()
+      })
+
+      test("id inexistente nas quatro operações", async () => {
+        const api = servidor()
+        await expect(
+          api.mesas.editar("nada", {
+            numero: 1,
+            areaId: "area-salao",
+            lugares: 4,
+            forma: "quadrada",
+          }),
+        ).rejects.toThrow("Mesa não encontrada")
+        await expect(api.mesas.bloquear("nada")).rejects.toThrow("Mesa não encontrada")
+        await expect(api.mesas.desbloquear("nada")).rejects.toThrow("Mesa não encontrada")
+        await expect(api.mesas.marcarLimpa("nada")).rejects.toThrow("Mesa não encontrada")
+      })
+    })
+
+    describe("limpeza ao fechar a conta", () => {
+      const AGUA = [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }]
+
+      /** Mesa nova com uma comanda aberta; a limpeza do salão ligada ou desligada. */
+      async function comComanda(limpeza: boolean) {
+        const api = servidor()
+        await api.salao.salvar({ ...(await api.salao.config()), limpeza })
+        const mesa = await api.mesas.criar({ numero: 20 })
+        const comanda = await api.mesas.lancar({
+          mesaId: mesa.id,
+          enviarParaCozinha: false,
+          itens: AGUA,
+        })
+        return { api, mesa, comanda }
+      }
+
+      const mesaDe = async (api: Servidor, id: string) =>
+        (await api.mesas.listar()).find((item) => item.id === id) as Mesa
+
+      test("com a limpeza ligada, a mesa fica em limpeza desde o pagamento", async () => {
+        const { api, mesa, comanda } = await comComanda(true)
+        vi.setSystemTime(new Date(2026, 10, 13, 21, 0))
+        await api.mesas.fecharConta(comanda.id, "pix")
+        expect(await mesaDe(api, mesa.id)).toMatchObject({
+          status: "livre",
+          limpezaDesde: new Date(2026, 10, 13, 21, 0).toISOString(),
+        })
+      })
+
+      test("com a limpeza desligada, a mesa fica livre e sem limpeza", async () => {
+        const { api, mesa, comanda } = await comComanda(false)
+        await api.mesas.fecharConta(comanda.id, "pix")
+        expect((await mesaDe(api, mesa.id)).limpezaDesde).toBeUndefined()
+      })
+
+      test("liberar uma comanda vazia nunca deixa limpeza", async () => {
+        const api = servidor()
+        await api.salao.salvar({ ...(await api.salao.config()), limpeza: true })
+        const mesa = await api.mesas.criar({ numero: 20 })
+        // Comanda aberta e vazia: o garçom lança e remove o item.
+        const comanda = await api.mesas.lancar({
+          mesaId: mesa.id,
+          enviarParaCozinha: false,
+          itens: AGUA,
+        })
+        await api.mesas.removerItem(comanda.id, comanda.itens[0].id)
+        await api.mesas.liberar(mesa.id)
+        expect(await mesaDe(api, mesa.id)).toMatchObject({ status: "livre" })
+        expect((await mesaDe(api, mesa.id)).limpezaDesde).toBeUndefined()
+      })
     })
 
     test("só exclui mesa livre", async () => {
