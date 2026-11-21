@@ -1277,6 +1277,7 @@ export const catalogoFarmacia: CatalogoLoja = {
     tempoRetirada: "15 min",
     cidadesAtendidas: ["São José dos Campos"],
     pagamentoOnlineConectado: true,
+    taxasPagamento: { pixOnline: 0.99, cartaoOnline: 3.99, maquininha: 1.89 },
     pagamentos: {
       pix: true,
       "cartao-online": true,

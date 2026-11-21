@@ -1,10 +1,10 @@
 import { describe, expect, test } from "vitest"
-import { resumir } from "./dashboard"
 import {
   AGORA_DE_TESTE as AGORA,
   PEDIDOS_DE_TESTE as PEDIDOS,
   PERIODO_DE_TESTE as PERIODO,
-} from "./pedidos-de-teste"
+} from "../pedidos-de-teste"
+import { resumir } from "./resumo"
 
 describe("resumir", () => {
   const resumo = resumir(PEDIDOS, PERIODO, AGORA)

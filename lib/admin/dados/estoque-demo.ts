@@ -56,7 +56,9 @@ export function semearEstoque({
   escolhidos.forEach(({ produto, posicao }, ordem) => {
     const quilo = produto.unidade === "kg"
     const minimo = quilo ? sorte.inteiro(3, 8) : sorte.inteiro(4, 12)
-    const custo = reais((produto.preco * sorte.inteiro(40, 65)) / 100)
+    // O sorteio acontece sempre, para os outros não mudarem quando o produto já tem custo.
+    const sorteado = reais((produto.preco * sorte.inteiro(40, 65)) / 100)
+    const custo = produto.custo ?? sorteado
     const ehZerado = ordem % 23 === 11 || ordem === zerado
     const ehBaixo = !ehZerado && (ordem % 9 === 4 || ordem === baixo)
     let quantidade = quilo
@@ -129,11 +131,15 @@ export function semearEstoque({
       controlar: true,
       quantidade,
       minimo,
-      custo,
       esgotarAoZerar: true,
       ...(ehZerado ? { esgotadoPeloEstoque: true } : {}),
     }
-    novos.set(posicao, { ...produto, estoque, ...(ehZerado ? { disponivel: false } : {}) })
+    novos.set(posicao, {
+      ...produto,
+      custo,
+      estoque,
+      ...(ehZerado ? { disponivel: false } : {}),
+    })
   })
 
   return {

@@ -1,6 +1,20 @@
-import type { EventoPedido, Pedido } from "../dados/tipos"
+import type { EtapaDoPedido, EventoPedido, Pedido } from "../dados/tipos"
 import { textoDoMotivo } from "./aceite"
 import { rotuloStatus } from "./status"
+
+/** Só as etapas do histórico, na ordem, sem os outros eventos. */
+export const etapasDe = (pedido: Pedido): EtapaDoPedido[] =>
+  pedido.historico.filter((evento) => evento.tipo === "etapa")
+
+/** Anota a etapa atual do pedido no histórico, se ela ainda não for a última anotada. */
+export function comEtapa(pedido: Pedido, em: string): Pedido {
+  const ultima = pedido.historico.findLast((evento) => evento.tipo === "etapa")
+  if (ultima?.tipo === "etapa" && ultima.status === pedido.status) return pedido
+  return {
+    ...pedido,
+    historico: [...pedido.historico, { tipo: "etapa", status: pedido.status, em }],
+  }
+}
 
 /** O que mudou de um jeito para o outro do pedido, como linhas da linha do tempo. */
 export function eventosDaMudanca(antes: Pedido, depois: Pedido, em: string): EventoPedido[] {
@@ -37,13 +51,19 @@ function textoDoEvento(evento: EventoPedido, pedido: Pedido): string {
   }
 }
 
+/** A etapa anotada na chegada já é a linha "Pedido recebido". */
+const ehAChegada = (evento: EventoPedido, pedido: Pedido) =>
+  evento.tipo === "etapa" && evento.status === "recebido" && evento.em === pedido.criadoEm
+
 /** O caminho do pedido para a tela: a chegada e depois cada evento, em ordem. */
 export function linhaDoTempo(pedido: Pedido): LinhaDoTempo[] {
   return [
     { texto: "Pedido recebido", em: pedido.criadoEm },
-    ...(pedido.historico ?? []).map((evento) => ({
-      texto: textoDoEvento(evento, pedido),
-      em: evento.em,
-    })),
+    ...pedido.historico
+      .filter((evento) => !ehAChegada(evento, pedido))
+      .map((evento) => ({
+        texto: textoDoEvento(evento, pedido),
+        em: evento.em,
+      })),
   ]
 }

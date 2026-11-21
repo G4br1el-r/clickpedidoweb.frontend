@@ -93,6 +93,16 @@ describe("esquemaLoja", () => {
 })
 
 describe("vídeo do banner (salão)", () => {
+  test("taxas de pagamento: opcionais, em %, de 0 a 30", () => {
+    const taxas = { pixOnline: 0.99, cartaoOnline: 4.98, maquininha: 2.39 }
+    expect(esquemaLoja.parse({ ...VALIDA, taxasPagamento: taxas }).taxasPagamento).toEqual(taxas)
+    expect(erros({ ...VALIDA, taxasPagamento: {} })).toEqual({})
+    expect(erros({ ...VALIDA, taxasPagamento: { pixOnline: -1, maquininha: 31 } })).toEqual({
+      "taxasPagamento.pixOnline": "A taxa não pode ser negativa.",
+      "taxasPagamento.maquininha": "Até 30%.",
+    })
+  })
+
   test("aceita YouTube, Shorts e Reels; vazio é sem vídeo", () => {
     for (const link of [
       "https://www.youtube.com/watch?v=abc123",

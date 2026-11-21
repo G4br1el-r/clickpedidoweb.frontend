@@ -1,11 +1,30 @@
-import type { FormaPagamento, Pedido, StatusPedido, TipoPedido } from "../dados/tipos"
-import { ehValido } from "./dashboard"
+import type {
+  FormaPagamento,
+  MotivoCancelamento,
+  OrigemPedido,
+  Pedido,
+  StatusPedido,
+  TipoPedido,
+} from "../dados/tipos"
+import { telefoneDoCliente } from "./dashboard/clientes"
+import { ehValido } from "./dashboard/comum"
+
+/** O motivo no filtro: o cancelado sem motivo aparece como "Não informado". */
+export type MotivoDoFiltro = MotivoCancelamento | "nao-informado"
+
+/** O motivo do pedido cancelado, ou "nao-informado"; o que não foi cancelado não tem. */
+export const motivoDoPedido = (pedido: Pedido): MotivoDoFiltro | undefined =>
+  pedido.status === "cancelado" ? (pedido.cancelamento?.motivo ?? "nao-informado") : undefined
 
 export type FiltrosLista = {
   busca?: string
   status?: StatusPedido[]
   tipos?: TipoPedido[]
   pagamentos?: FormaPagamento[]
+  origens?: OrigemPedido[]
+  /** Telefones do cliente, só os dígitos com DDD. */
+  clientes?: string[]
+  motivos?: MotivoDoFiltro[]
 }
 
 /** Minúsculas e sem acento: "João" acha "joao". */
@@ -30,16 +49,22 @@ function combinaBusca(pedido: Pedido, busca: string) {
 
 const aceita = <T>(lista: T[] | undefined, valor: T) => !lista?.length || lista.includes(valor)
 
-/** Busca (número, cliente, telefone ou item) combinada com os filtros de status, canal e pagamento. */
+/**
+ * Busca (número, cliente, telefone ou item) combinada com os filtros de status, canal,
+ * pagamento, origem, cliente e motivo do cancelamento.
+ */
 export function filtrarPedidos(
   pedidos: Pedido[],
-  { busca = "", status, tipos, pagamentos }: FiltrosLista,
+  { busca = "", status, tipos, pagamentos, origens, clientes, motivos }: FiltrosLista,
 ) {
   return pedidos.filter(
     (pedido) =>
       aceita(status, pedido.status) &&
       aceita(tipos, pedido.tipo) &&
       aceita(pagamentos, pedido.pagamento) &&
+      aceita(origens, pedido.origem) &&
+      (!clientes?.length || clientes.includes(telefoneDoCliente(pedido.cliente.telefone) ?? "")) &&
+      (!motivos?.length || motivos.includes(motivoDoPedido(pedido) as MotivoDoFiltro)) &&
       combinaBusca(pedido, busca),
   )
 }
