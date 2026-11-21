@@ -297,6 +297,10 @@ test("salão: o garçom lança, a cozinha prepara e a mesa fecha a conta", async
 
   // Mesas: uma mesa nova, livre.
   await page.goto("/admin/mesas")
+  // A janela precisa das áreas do salão: espera a grade carregar antes de abrir.
+  await expect(page.getByRole("button", { name: "Mesa 1", exact: true })).toBeVisible({
+    timeout: 15_000,
+  })
   await page.getByRole("button", { name: "Nova mesa" }).click()
   await page.getByRole("spinbutton", { name: "Número" }).fill("90")
   await page.getByRole("button", { name: "Criar mesa" }).click()
@@ -352,7 +356,8 @@ test("salão: o garçom lança, a cozinha prepara e a mesa fecha a conta", async
   await fechar.getByText("Pix").click()
   await fechar.getByRole("button", { name: /^Receber/ }).click()
   await expect(page.getByText("Conta da mesa 90 fechada.")).toBeVisible()
-  await expect(mesa).toContainText("Livre")
+  // Conta fechada: a mesa vai para a limpeza antes de ficar livre.
+  await expect(mesa).toContainText("Limpeza")
 })
 
 test("salão: marcar um horário, ver na agenda, atender e concluir", async ({ page }) => {
