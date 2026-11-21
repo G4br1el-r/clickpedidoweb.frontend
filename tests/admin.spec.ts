@@ -901,3 +901,43 @@ test("cozinha: ao iniciar o preparo, o ticket anda de uma coluna para a outra", 
   const noCaminho = posicoes.filter((x) => x > xAFazer + 24 && x < xPreparando - 24)
   expect(noCaminho.length).toBeGreaterThan(2)
 })
+
+test("mesas: o filtro de atenção mostra só a mesa que pediu a conta e fica no endereço", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/mesas")
+  const filtro = page.getByRole("button", { name: "Precisam de atenção (1)" })
+  await expect(filtro).toBeVisible({ timeout: 15_000 })
+  await filtro.click()
+
+  await expect(page).toHaveURL(/atencao=sim/)
+  await expect(filtro).toHaveAttribute("aria-pressed", "true")
+  // Cada mesa é um botão "Mesa N"; só a que pediu a conta sobra na grade.
+  const mesas = page.getByRole("button", { name: /^Mesa \d+$/ })
+  await expect(mesas).toHaveCount(1)
+  await expect(mesas).toContainText("Pediu a conta há 12 min")
+})
+
+test("mesas: bloquear uma mesa livre com um motivo e desbloquear", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/mesas")
+  // A mesa 5 está ocupada nos dados de demonstração e mesa ocupada não bloqueia; a 11 está livre.
+  const menu = page.getByRole("button", { name: "Ações da mesa 11", exact: true })
+  await expect(menu).toBeVisible({ timeout: 15_000 })
+  const mesa = page.getByRole("button", { name: "Mesa 11", exact: true })
+  await expect(mesa).not.toContainText("Bloqueada")
+
+  await menu.click()
+  await page.getByRole("menuitem", { name: "Bloquear" }).click()
+  const janela = page.getByRole("dialog", { name: "Bloquear mesa 11" })
+  await janela.getByRole("textbox", { name: "Motivo (opcional)" }).fill("Em manutenção")
+  await janela.getByRole("button", { name: "Bloquear" }).click()
+  await expect(page.getByText("Mesa 11 bloqueada.")).toBeVisible()
+  await expect(mesa).toContainText("Bloqueada")
+
+  await menu.click()
+  await page.getByRole("menuitem", { name: "Desbloquear" }).click()
+  await expect(page.getByText("Mesa 11 desbloqueada.")).toBeVisible()
+  await expect(mesa).not.toContainText("Bloqueada")
+})
