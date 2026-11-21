@@ -963,6 +963,99 @@ test("painel de chamada: o pedido que a cozinha marca pronto vai para Pronto, po
   await expect(preparando.getByText(numero, { exact: true })).toHaveCount(0)
 })
 
+/** Abre a fila no segmento, com o relógio parado na hora dada (de 13/11/2026). */
+async function filaDo(page: Page, segmento: string, hora = "20:30") {
+  await page.clock.setFixedTime(new Date(`2026-11-13T${hora}:00-03:00`))
+  await page.addInitScript((escolhido) => {
+    localStorage.setItem(
+      "clickpedido-admin-segmento",
+      JSON.stringify({ state: { segmento: escolhido }, version: 1 }),
+    )
+  }, segmento)
+  await page.goto("/admin/fila")
+}
+
+test("açougue: a retirada de amanhã espera na faixa e a carne em preparo se pesa no cartão", async ({
+  page,
+}) => {
+  await filaDo(page, "acougue")
+  const faixa = page.getByRole("region", { name: "Próximas retiradas" })
+  await expect(faixa.getByRole("heading", { name: "Amanhã, sáb., 14/11" })).toBeVisible({
+    timeout: 15_000,
+  })
+
+  // No celular e no tablet, a fila usa abas.
+  const aba = page.getByRole("tab", { name: /^Em preparo/ })
+  if (await aba.isVisible()) await aba.click()
+  const aPesar = page
+    .getByRole("region", { name: /^Em preparo, / })
+    .getByRole("article")
+    .filter({ has: page.getByRole("button", { name: "Pesar" }) })
+    .first()
+  // Pesado, o botão some: depois disso o cartão se acha pelo número.
+  const numero = (await aPesar.getByRole("heading").textContent()) ?? ""
+  const cartao = page.getByRole("article", { name: numero })
+  await esperarAnimacoes(page)
+  await verificarAcessibilidade(page)
+  await cartao.getByRole("button", { name: "Pesar" }).click()
+
+  const janela = page.getByRole("dialog", { name: /^Pesar #/ })
+  for (const campo of await janela.getByRole("textbox", { name: /^Peso de / }).all()) {
+    await campo.fill("1000")
+  }
+  await esperarAnimacoes(page)
+  await verificarAcessibilidade(page)
+  await janela.getByRole("button", { name: "Registrar pesagem" }).click()
+  await expect(page.getByText("Pesagem registrada.")).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(cartao.getByRole("button", { name: "Marcar como pronto" })).toBeVisible()
+})
+
+test("farmácia: o aceite espera a receita, conferida ali mesmo", async ({ page }) => {
+  await filaDo(page, "farmacia")
+  const esperando = page
+    .getByRole("article")
+    .filter({ has: page.getByRole("button", { name: "Conferir receita" }) })
+    .first()
+  await expect(esperando).toBeVisible({ timeout: 15_000 })
+  // Aprovada, o botão some: depois disso o cartão se acha pelo número.
+  const numero = (await esperando.getByRole("heading").textContent()) ?? ""
+  const cartao = page.getByRole("article", { name: numero })
+  await cartao.getByRole("button", { name: "Conferir receita" }).click()
+
+  const janela = page.getByRole("dialog", { name: /^Receita do pedido #/ })
+  await janela.getByRole("checkbox", { name: "Via da receita retida na farmácia" }).check()
+  await esperarAnimacoes(page)
+  await verificarAcessibilidade(page)
+  await janela.getByRole("button", { name: "Aprovar" }).click()
+  await page.keyboard.press("Escape")
+  await expect(cartao.getByRole("button", { name: "Aceitar" })).toBeVisible()
+})
+
+test("salão: a cliente chega e passa de Agendados para Chegou", async ({ page }) => {
+  await filaDo(page, "salao", "14:00")
+  const aba = page.getByRole("tab", { name: /^Agendados/ })
+  await expect(page.getByRole("button", { name: "Cliente chegou" }).first()).toBeVisible({
+    timeout: 15_000,
+  })
+  if (await aba.isVisible()) await aba.click()
+  const cartao = page
+    .getByRole("region", { name: /^Agendados, / })
+    .getByRole("article")
+    .first()
+  const numero = (await cartao.getByRole("heading").textContent()) ?? ""
+  await esperarAnimacoes(page)
+  await verificarAcessibilidade(page)
+  await cartao.getByRole("button", { name: "Cliente chegou" }).click()
+  await expect(page.getByText(`${numero}: cliente chegou.`)).toBeVisible()
+
+  const abaChegou = page.getByRole("tab", { name: /^Chegou/ })
+  if (await abaChegou.isVisible()) await abaChegou.click()
+  await expect(
+    page.getByRole("region", { name: /^Chegou, / }).getByRole("heading", { name: numero }),
+  ).toBeVisible()
+})
+
 test("fila: arrastar o cartão para a coluna seguinte avança o pedido", async ({ page }, info) => {
   test.skip(
     (info.project.use.viewport?.width ?? 0) < 1024,

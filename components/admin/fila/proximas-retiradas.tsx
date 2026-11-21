@@ -51,12 +51,12 @@ export function ProximasRetiradas({
                   <li key={pedido.id} className="border-b border-border/70">
                     <button
                       type="button"
-                      aria-label={`#${pedido.numero} ${pedido.cliente.nome}, ${itens}`}
                       onClick={() => aoAbrir(pedido)}
                       className="flex min-h-10 w-full items-baseline gap-2 rounded-md px-1 text-left text-sm transition-colors duration-150 hover:bg-foreground/[0.025] focus-visible:outline-2 focus-visible:outline-ring"
                     >
-                      <span className="font-semibold tabular-nums">#{pedido.numero}</span>
-                      <span className="min-w-0 flex-1 truncate">{pedido.cliente.nome}</span>
+                      {/* Os espaços entram no nome do botão: "#1615 Ana Souza 2 itens". */}
+                      <span className="font-semibold tabular-nums">#{pedido.numero}</span>{" "}
+                      <span className="min-w-0 flex-1 truncate">{pedido.cliente.nome}</span>{" "}
                       <span className="text-xs text-muted-foreground tabular-nums">{itens}</span>
                     </button>
                   </li>
