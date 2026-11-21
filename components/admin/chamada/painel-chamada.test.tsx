@@ -161,8 +161,6 @@ describe("PainelChamada na lanchonete", () => {
     // Numeração mensal: o número é pequeno, não o id que corre desde o começo.
     expect(venda.numero).toBeLessThan(venda.id)
     renderizar()
-    expect(
-      await (await coluna("Preparando")).findByText(String(venda.numero)),
-    ).toBeInTheDocument()
+    expect(await (await coluna("Preparando")).findByText(String(venda.numero))).toBeInTheDocument()
   })
 })
