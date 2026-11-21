@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { Mesa, Pedido } from "../dados/tipos"
-import { estadoDaMesa } from "./mesas"
+import { estadoDaMesa, nomePadraoDaMesa } from "./mesas"
 
 const mesa = (status: Mesa["status"]) => ({ status }) as Mesa
 const comanda = (status: Pedido["status"]) => ({ status }) as Pedido
@@ -132,5 +132,13 @@ describe("estadoDaMesa com comanda residual em mesa livre", () => {
     expect(estadoDaMesa(livre, { status: "recebido", contaPedidaEm: "x" }).estado).toBe("livre")
     expect(estadoDaMesa(livre, { status: "pronto", servirDesde: "y" }).estado).toBe("livre")
     expect(estadoDaMesa(livre, { status: "recebido" }).estado).toBe("livre")
+  })
+})
+
+describe("nomePadraoDaMesa", () => {
+  test("completa o número com zero até 2 dígitos", () => {
+    expect(nomePadraoDaMesa(7)).toBe("Mesa 07")
+    expect(nomePadraoDaMesa(12)).toBe("Mesa 12")
+    expect(nomePadraoDaMesa(120)).toBe("Mesa 120")
   })
 })

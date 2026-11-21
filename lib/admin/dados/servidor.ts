@@ -14,6 +14,7 @@ import { esquemaSalao } from "../regras/esquema-salao"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
 import { normalizar } from "../regras/filtro-pedidos"
 import { comEtapa } from "../regras/historico"
+import { nomePadraoDaMesa } from "../regras/mesas"
 import { proximoNumero } from "../regras/numero"
 import {
   type Desconto,
@@ -1257,7 +1258,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const mesa: Mesa = {
           id: novoId("mesa")(),
           numero,
-          nome: nome?.trim().slice(0, 40) || `Mesa ${String(numero).padStart(2, "0")}`,
+          nome: nome?.trim().slice(0, 40) || nomePadraoDaMesa(numero),
           status: "livre",
           areaId: area.id,
           lugares,
@@ -1312,7 +1313,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const editada: Mesa = {
           ...mesa,
           numero,
-          nome: nome?.trim().slice(0, 40) || `Mesa ${String(numero).padStart(2, "0")}`,
+          nome: nome?.trim().slice(0, 40) || nomePadraoDaMesa(numero),
           areaId: area.id,
           lugares,
           forma,

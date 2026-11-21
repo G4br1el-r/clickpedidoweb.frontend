@@ -584,4 +584,32 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
     expect(itens.getByRole("menuitem", { name: "Editar" })).toBeInTheDocument()
     expect(itens.queryByRole("menuitem", { name: "Bloquear" })).not.toBeInTheDocument()
   })
+
+  test("Editar: o campo Nome fica vazio no nome padrão e preenchido no nome próprio", async () => {
+    await api().mesas.editar((await api().mesas.listar()).find((m) => m.numero === 4)?.id ?? "", {
+      numero: 4,
+      nome: "Janela",
+      areaId: "area-salao",
+      lugares: 4,
+      forma: "quadrada",
+    })
+    const usuario = await abrir()
+    await usuario.click((await menu(usuario, 3)).getByRole("menuitem", { name: "Editar" }))
+    expect(
+      within(await screen.findByRole("dialog", { name: "Editar mesa 3" })).getByRole("textbox", {
+        name: "Nome (opcional)",
+      }),
+    ).toHaveValue("")
+    await usuario.keyboard("{Escape}")
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Editar mesa 3" })).not.toBeInTheDocument(),
+    )
+
+    await usuario.click((await menu(usuario, 4)).getByRole("menuitem", { name: "Editar" }))
+    expect(
+      within(await screen.findByRole("dialog", { name: "Editar mesa 4" })).getByRole("textbox", {
+        name: "Nome (opcional)",
+      }),
+    ).toHaveValue("Janela")
+  })
 })

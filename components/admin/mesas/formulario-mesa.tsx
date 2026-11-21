@@ -22,14 +22,13 @@ import {
 } from "@/components/ui/select"
 import { useConfigSalao, useCriarMesa, useEditarMesa } from "@/lib/admin/dados/consultas-mesas"
 import { FORMAS_MESA, type FormaMesa, type Mesa } from "@/lib/admin/dados/tipos"
+import { nomePadraoDaMesa } from "@/lib/admin/regras/mesas"
 
 const ROTULO_FORMA: Record<FormaMesa, string> = {
   quadrada: "Quadrada",
   redonda: "Redonda",
   retangular: "Retangular",
 }
-
-const nomePadrao = (mesa: Mesa) => mesa.nome === `Mesa ${String(mesa.numero).padStart(2, "0")}`
 
 function Campos({ mesa, aoFechar }: { mesa?: Mesa; aoFechar: () => void }) {
   const { data: salao } = useConfigSalao()
@@ -38,7 +37,9 @@ function Campos({ mesa, aoFechar }: { mesa?: Mesa; aoFechar: () => void }) {
   const salvando = criar.isPending || editar.isPending
   const areas = (salao?.areas ?? []).toSorted((a, b) => a.ordem - b.ordem)
   const [numero, setNumero] = useState(mesa ? String(mesa.numero) : "")
-  const [nome, setNome] = useState(mesa && !nomePadrao(mesa) ? mesa.nome : "")
+  const [nome, setNome] = useState(
+    mesa && mesa.nome !== nomePadraoDaMesa(mesa.numero) ? mesa.nome : "",
+  )
   const [area, setArea] = useState<string | null>(mesa?.areaId ?? null)
   const [lugares, setLugares] = useState(String(mesa?.lugares ?? 4))
   const [forma, setForma] = useState<FormaMesa>(mesa?.forma ?? "quadrada")

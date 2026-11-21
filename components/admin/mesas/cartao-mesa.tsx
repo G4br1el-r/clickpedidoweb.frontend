@@ -23,14 +23,14 @@ import { useDesbloquearMesa, useMarcarLimpa } from "@/lib/admin/dados/consultas-
 import type { Mesa } from "@/lib/admin/dados/tipos"
 import { tempoDesde } from "@/lib/admin/regras/alertas-mesa"
 import type { MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
-import type { EstadoMesa } from "@/lib/admin/regras/mesas"
+import { type EstadoMesa, nomePadraoDaMesa } from "@/lib/admin/regras/mesas"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { ALVO_DE_TOQUE } from "../entrega/linha-animada"
 import { Traco } from "../traco"
 import { ConfirmarExclusaoMesa } from "./excluir-mesa"
 
-const nomePadrao = (mesa: Mesa) => mesa.nome === `Mesa ${String(mesa.numero).padStart(2, "0")}`
+const nomePadrao = (mesa: Mesa) => mesa.nome === nomePadraoDaMesa(mesa.numero)
 
 /** A linha de baixo da mesa sem comanda: o motivo do bloqueio, a limpeza ou os lugares. */
 function resumoSemComanda(mesa: Mesa, estado: EstadoMesa, agora: Date | null) {
