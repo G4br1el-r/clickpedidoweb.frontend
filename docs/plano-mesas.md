@@ -10,7 +10,7 @@
 
 **Origem:** as decisões Q1 a Q52 da sessão de perguntas de 18 e 19/11/2026, registradas abaixo. Base anterior: Fase 8 de [plano-painel-admin.md](plano-painel-admin.md).
 
-**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 começou em 20/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. As Fases 1 e 2 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
+**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. As Fases 1 e 2 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
 
 ## Restrições gerais
 
@@ -1109,6 +1109,43 @@ Só teste: nenhum código de produção muda.
 - [ ] `pnpm test:e2e:rapido`. `painel-mesas-*` e `painel-comanda-*` vão mudar: revisar a diferença (claro e escuro, celular e desktop) e só então atualizar esses testes.
 - [ ] Registrar a "Situação" no fim desta seção e abrir o PR da Fase 2 quando a Fase 1 estiver no `main`.
 
+Situação: pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. O PR sai depois que a Fase 1 estiver no `main`.
+
+- **O que as revisões pegaram:**
+  - a busca achava o número em qualquer posição ("12" achava 112), olhava nome e cliente mesmo com dígitos, e comparava o garçom com acento e maiúscula;
+  - a limpeza ficou primeiro numa rotina que roda a cada gravação. Com isso, reabrir a demonstração num dia novo punha em "Limpeza" as mesas das comandas de ontem, encerradas sozinhas. Agora a limpeza só entra quando a conta é fechada no painel;
+  - o ⋯ perdia o `absolute` para a área de toque e caía embaixo do cartão;
+  - o nome padrão "Mesa 07" estava escrito em quatro lugares e virou `nomePadraoDaMesa`;
+  - o resumo do cabeçalho dizia "12 livres" contando bloqueada e limpeza, e agora diz "10 livres";
+  - a gaveta dizia "Mesa livre." para a mesa bloqueada ou em limpeza, e agora mostra o estado, com "Desbloquear" ou "Marcar limpa";
+  - desligar a limpeza deixava mesas presas em "Limpeza";
+  - "Nova mesa" aberta antes de as áreas carregarem dava "Escolha uma área do salão.";
+  - Configurar salão abria em branco enquanto carregava, e um valor inválido escondido pelo interruptor bloqueava o salvar;
+  - os atalhos disparavam com o menu ⋯ ou um filtro aberto, e o foco se perdia ao fechar as janelas abertas pelo ⋯;
+  - no celular de 320 px, os filtros saíam cortados e "3 itens" quebrava linha.
+- **Mudou fora do plano:**
+  - o E2E de bloquear usa a mesa 11, porque a 5 está ocupada na demonstração;
+  - a taxa com mais de 2 casas tem a mensagem própria "Informe a taxa com até 2 casas decimais.";
+  - "Reservada" e "Juntada" saíram do filtro de estado até as Fases 5 e 7;
+  - "07" acha a mesa 7;
+  - a descrição falada do cartão traz o que ele mostra: nome, motivo, limpeza, lugares, garçom e pessoas;
+  - a confirmação de excluir virou um componente só (`ConfirmarExclusaoMesa`), usado pelo menu e pela gaveta.
+- **Fica para depois:**
+  - **"ao vivo" entre abas:** a grade consulta a cada 4 s, mas o servidor de demonstração guarda a base em memória. Mudança feita em outra aba só aparece depois de recarregar, e uma aba desatualizada pode apagar ao gravar o que a outra gravou. Isso já era assim antes desta fase e fica para a Fase 8, com o `BroadcastChannel` esvaziando também a cópia em memória do servidor;
+  - **pendências pequenas registradas na revisão:**
+    - os atalhos de uma letra não podem ser desligados;
+    - a limpeza depende de qual operação marca o pagamento;
+    - o número ativo ao editar a mesa ocupada;
+    - garçons com o mesmo nome;
+    - a demonstração sem conta fechada hoje às 20:30, com o faturamento em R$ 0,00 (junto com a Fase 4).
+- **Screenshots:**
+  - `painel-mesas-*` e `painel-comanda-*` mudaram nas 11 telas, com a grade nova;
+  - entraram `painel-nova-mesa-*` e `painel-configurar-salao-*`;
+  - todas as diferenças foram revisadas antes de atualizar.
+- **Testes e cobertura:**
+  - 1345 testes no Vitest e 436 no E2E rápido (28 pulados);
+  - os mínimos de cobertura subiram para 82/74/81/83 no geral, e `lib/**` continua em 98/94/98/98.
+
 ## Fase 3: comanda
 
 **Desenho:**
@@ -1242,7 +1279,7 @@ Só teste: nenhum código de produção muda.
 - vitrine em modo mesa: a rota e o parâmetro seguem o roteamento atual da vitrine (ler `node_modules/next/dist/docs/` antes);
 - pedido do cliente "aguardando aceite" ou direto;
 - chamados com selo, som, contador e Atender;
-- `BroadcastChannel("clickpedido-admin")` invalida as consultas das outras abas;
+- `BroadcastChannel("clickpedido-admin")` invalida as consultas das outras abas. Ele também esvazia a cópia em memória do servidor de demonstração (`carregar()`), e cada gravação parte da leitura mais recente do IndexedDB, para uma aba desatualizada não apagar o que a outra gravou (achado da revisão da Fase 2);
 - simular cliente e folha de QR em A4;
 - entradas `salao.mapa`, `salao.reservas` e `salao.qr` no `CATALOGO_PRO` (preços da decorrência 6);
 - cenário de demonstração com 1 chamado aberto.
