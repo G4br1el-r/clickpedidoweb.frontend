@@ -1217,7 +1217,12 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (retirada) {
           throw new Error(`Mova as mesas da área ${retirada.nome} antes de excluí-la.`)
         }
-        await substituir({ ...base, salao: lida.data })
+        // Sem a limpeza, nenhuma mesa pode ficar esperando ser limpa.
+        const mesas =
+          base.salao.limpeza && !lida.data.limpeza
+            ? base.mesas.map(({ limpezaDesde: _, ...mesa }) => mesa)
+            : base.mesas
+        await substituir({ ...base, salao: lida.data, mesas })
         return responder(lida.data)
       },
     },

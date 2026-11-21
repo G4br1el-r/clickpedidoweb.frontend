@@ -1594,6 +1594,13 @@ describe("servidor de demonstração", () => {
         })
       })
 
+      test("desligar a limpeza no salão tira da limpeza a mesa que esperava ser limpa", async () => {
+        const { api, mesa, comanda } = await comComanda(true)
+        await api.mesas.fecharConta(comanda.id, "pix")
+        await api.salao.salvar({ ...(await api.salao.config()), limpeza: false })
+        expect((await mesaDe(api, mesa.id)).limpezaDesde).toBeUndefined()
+      })
+
       test("com a limpeza desligada, a mesa fica livre e sem limpeza", async () => {
         const { api, mesa, comanda } = await comComanda(false)
         await api.mesas.fecharConta(comanda.id, "pix")
