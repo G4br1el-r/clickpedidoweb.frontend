@@ -129,6 +129,14 @@ describe("PaginaMesas", () => {
     expect(await screen.findByText(/4 com rodada na cozinha/)).toBeInTheDocument()
   })
 
+  test("o resumo conta como livre só a mesa livre: a bloqueada e a em limpeza ficam de fora", async () => {
+    // Na demonstração: 8 ocupadas, 10 livres, a 9 em limpeza e a 20 bloqueada.
+    await abrir()
+    expect(
+      await screen.findByText("8 ocupadas · 10 livres · 3 com rodada na cozinha"),
+    ).toBeInTheDocument()
+  })
+
   test("a demonstração mostra a mesa 20 bloqueada, a comanda mais antiga pedindo a conta e outra para servir", async () => {
     const [mesas, base] = await Promise.all([api().mesas.listar(), api().base()])
     const comComanda = mesas.flatMap((mesa) => {

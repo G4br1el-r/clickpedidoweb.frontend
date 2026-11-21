@@ -78,6 +78,8 @@ export function PaginaMesas() {
       alertas: salao && agora ? alertasDaMesa(mesa, comanda, salao.alertas, agora) : [],
     }
   })
+  // Livre pelo estado: a bloqueada e a em limpeza não entram.
+  const livres = linhas.filter((linha) => linha.estado.estado === "livre").length
   const visiveis = filtrarMesas(
     linhas,
     {
@@ -104,7 +106,7 @@ export function PaginaMesas() {
           mesas
             ? [
                 plural(ocupadas, "ocupada", "ocupadas"),
-                plural(mesas.length - ocupadas, "livre", "livres"),
+                plural(livres, "livre", "livres"),
                 naCozinha > 0 ? `${naCozinha} com rodada na cozinha` : null,
               ]
                 .filter(Boolean)
