@@ -57,6 +57,16 @@ describe("cozinhaJaPreparou", () => {
     expect(cozinhaJaPreparou(pedido(1, "recebido", 5, "mesa", [pizza]), pizza)).toBe(false)
     expect(cozinhaJaPreparou(pedido(1, "pronto", 5, "mesa", [agua]), agua)).toBe(false)
   })
+
+  test("com a rodada 2 recém-chegada, a rodada 1 já foi preparada e a 2 ainda não", () => {
+    const pizza = item("Pizza", 1, true)
+    const esfiha = item("Esfiha", 2, true)
+    const agua = item("Água", 1, false)
+    const comanda = pedido(1, "recebido", 5, "mesa", [pizza, agua, esfiha])
+    expect(cozinhaJaPreparou(comanda, pizza)).toBe(true)
+    expect(cozinhaJaPreparou(comanda, esfiha)).toBe(false)
+    expect(cozinhaJaPreparou(comanda, agua)).toBe(false)
+  })
 })
 
 describe("itensDaCozinha", () => {

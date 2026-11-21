@@ -103,3 +103,16 @@ export function emQuantidade(valor: number, unidade: UnidadeVenda): string {
   const texto = valor < 0 ? numeroComSinal(valor) : numero.format(valor)
   return `${texto} ${unidade}`
 }
+
+const ROTULOS_MOVIMENTO: Record<TipoMovimento, string> = {
+  entrada: "Entrada",
+  saida: "Saída",
+  contagem: "Contagem",
+  venda: "Venda",
+  devolucao: "Devolução",
+  pesagem: "Pesagem",
+  perda: "Perda",
+}
+
+/** O nome do movimento no histórico do estoque. */
+export const rotuloDoMovimento = (tipo: TipoMovimento) => ROTULOS_MOVIMENTO[tipo]

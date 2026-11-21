@@ -44,11 +44,12 @@ import {
   useMovimentos,
   useSaidaEstoque,
 } from "@/lib/admin/dados/consultas-estoque"
-import type { MovimentoEstoque, Produto, TipoMovimento } from "@/lib/admin/dados/tipos"
+import type { MovimentoEstoque, Produto } from "@/lib/admin/dados/tipos"
 import {
   emQuantidade,
   errosDoMovimento,
   numeroComSinal,
+  rotuloDoMovimento,
   saldoDepois,
 } from "@/lib/admin/regras/estoque"
 import { emReais } from "@/lib/formato"
@@ -56,15 +57,6 @@ import { emReais } from "@/lib/formato"
 export type AcaoEstoque = "entrada" | "saida" | "contagem" | "historico" | "configurar"
 
 const MOTIVOS = ["Quebra", "Vencimento", "Consumo interno", "Ajuste", "Outro"] as const
-
-const ROTULO_MOVIMENTO: Record<TipoMovimento, string> = {
-  entrada: "Entrada",
-  saida: "Saída",
-  contagem: "Contagem",
-  venda: "Venda",
-  devolucao: "Devolução",
-  pesagem: "Pesagem",
-}
 
 /** O que a pessoa digitou no campo de número; vazio é `null`. */
 const lerNumero = (texto: string) => (texto.trim() === "" ? null : Number(texto.replace(",", ".")))
@@ -480,7 +472,7 @@ function LinhaMovimento({ movimento, produto }: { movimento: MovimentoEstoque; p
     <li className="flex items-start justify-between gap-3 py-3">
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="flex items-baseline gap-2 text-sm font-medium">
-          {ROTULO_MOVIMENTO[movimento.tipo]}
+          {rotuloDoMovimento(movimento.tipo)}
           {movimento.pedidoId !== undefined && (
             <span className="text-xs font-normal text-muted-foreground tabular-nums">
               Pedido #{movimento.pedidoId}

@@ -30,12 +30,16 @@ export function itensDaCozinha(pedido: Pedido): { atuais: ItemPedido[]; anterior
 }
 
 /**
- * A cozinha já preparou (ou está preparando) o item: ele foi para a cozinha e a comanda
- * está em preparo ou pronta. Tirar ou diminuir esse item pede confirmação.
+ * A cozinha já preparou (ou está preparando) o item: ele foi para a cozinha e é de uma rodada
+ * anterior à última (que a cozinha mostra como servida), ou é da última com a comanda em
+ * preparo ou pronta. O item sem cozinha nunca conta. Tirar esse item exige motivo.
  */
-export const cozinhaJaPreparou = (comanda: Pedido, item: ItemPedido) =>
-  (item.vaiParaCozinha ?? comanda.enviarParaCozinha) &&
-  (comanda.status === "em-preparo" || comanda.status === "pronto")
+export function cozinhaJaPreparou(comanda: Pedido, item: ItemPedido): boolean {
+  if (!(item.vaiParaCozinha ?? comanda.enviarParaCozinha)) return false
+  const [atual] = itensDaCozinha(comanda).atuais
+  if (atual && rodadaDo(item) < rodadaDo(atual)) return true
+  return comanda.status === "em-preparo" || comanda.status === "pronto"
+}
 
 /** "id:rodada" da rodada que a cozinha tem de cada pedido. */
 function chaveDaRodada(pedido: Pedido): string | null {
