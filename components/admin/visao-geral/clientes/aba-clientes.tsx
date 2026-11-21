@@ -53,7 +53,8 @@ export function AbaClientes({
 
   return (
     <div className="flex flex-col gap-10">
-      <Secao titulo="Clientes" descricao="Últimos 90 dias, até hoje">
+      {/* O "Últimos 90 dias, até hoje" fica no lugar do filtro de período, acima. */}
+      <Secao titulo="Clientes">
         <Regua>
           <Indicador rotulo="Clientes" detalhe="pelo telefone do pedido">
             <Numero valor={regua.unicos} />

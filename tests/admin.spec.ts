@@ -162,6 +162,44 @@ test("abas Produtos e Financeiro: do produto e da forma de pagamento aos pedidos
   await expect(page).toHaveURL(/\/admin\/pedidos\?pagamento=dinheiro&de=2026-11-07&ate=2026-11-13/)
 })
 
+test("abas Clientes e Operação: o WhatsApp do sumido, o cliente e o motivo levando aos pedidos", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin?aba=clientes")
+  const melhores = page.getByRole("region", { name: "Melhores clientes" })
+  await expect(melhores).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText("Últimos 90 dias, até hoje")).toBeVisible()
+  await verificarAcessibilidade(page)
+
+  // O WhatsApp abre com a mensagem pronta; o teste não sai da página.
+  const chamar = page
+    .getByRole("region", { name: "Sumidos" })
+    .getByRole("link", { name: /^Chamar .+ no WhatsApp$/ })
+    .first()
+  await expect(chamar).toHaveAttribute("href", /^https:\/\/wa\.me\/55\d+\?text=Oi%2C/)
+
+  await melhores.getByRole("link").first().click()
+  await expect(page).toHaveURL(/\/admin\/pedidos\?cliente=\d+/)
+  await expect(page.getByRole("button", { name: /^Tirar o filtro Cliente: / })).toBeVisible()
+  await expect(page.getByRole("table")).toBeVisible()
+
+  await page.goto("/admin?aba=operacao")
+  await expect(page.getByRole("table", { name: "Tempo por etapa" })).toBeVisible({
+    timeout: 15_000,
+  })
+  await verificarAcessibilidade(page)
+  await page
+    .getByRole("region", { name: "Cancelamentos por motivo" })
+    .getByRole("link")
+    .first()
+    .click()
+  await expect(page).toHaveURL(
+    /\/admin\/pedidos\?status=cancelado&motivo=[a-z-]+&de=2026-11-07&ate=2026-11-13/,
+  )
+  await expect(page.getByRole("button", { name: /^Tirar o filtro Motivo: / })).toBeVisible()
+})
+
 test("do gráfico aos pedidos do dia: filtrar, abrir e avançar", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
   await page.goto("/admin")

@@ -48,7 +48,7 @@ import type {
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 3
+const VERSAO = 4
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
