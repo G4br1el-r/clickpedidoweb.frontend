@@ -501,7 +501,17 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
       "true",
     )
   })
-  test("a ordem Mais tempo aberta grava ordem=tempo", async () => {
+  test("a ordem Mais tempo aberta grava ordem=tempo e põe na frente a mesa aberta há mais tempo", async () => {
+    // A demonstração nasce às 20:30 (a mesa 1 abriu às 18:55). Depois, a mesa 10 abre às
+    // 18:00, antes de todas.
+    await api().mesas.listar()
+    vi.setSystemTime(new Date(2026, 10, 13, 18, 0))
+    await api().mesas.lancar({
+      mesaId: "mesa-10",
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 30))
     const aoMudarUrl = vi.fn()
     const usuario = await abrir(undefined, aoMudarUrl)
     await usuario.click(screen.getByRole("combobox", { name: "Ordem" }))
@@ -511,6 +521,24 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
       expect.objectContaining({ queryString: "?ordem=tempo" }),
     )
     expect(screen.getByRole("combobox", { name: "Ordem" })).toHaveTextContent("Mais tempo aberta")
+    // A mesa 9, em limpeza e sem comanda, vai para o fim.
+    const salao = within(screen.getByRole("list", { name: "Salão" }))
+    expect(
+      salao
+        .getAllByRole("button", { name: /^Mesa \d+$/ })
+        .map((cartao) => cartao.textContent?.match(/^Mesa \d+/)?.[0]),
+    ).toEqual([
+      "Mesa 10",
+      "Mesa 1",
+      "Mesa 2",
+      "Mesa 3",
+      "Mesa 4",
+      "Mesa 5",
+      "Mesa 6",
+      "Mesa 7",
+      "Mesa 8",
+      "Mesa 9",
+    ])
   })
 
   test("sem resultado, Limpar filtros volta ao endereço limpo", async () => {
