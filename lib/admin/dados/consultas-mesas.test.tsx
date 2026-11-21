@@ -8,11 +8,17 @@ import { useSegmentoAtual } from "../segmento-atual"
 import { reiniciarServidores, servidorDo, usePedido } from "./consultas"
 import {
   useAlterarQuantidade,
+  useBloquearMesa,
   useConfigSalao,
+  useCriarMesa,
+  useDesbloquearMesa,
+  useEditarMesa,
   useLancarNaMesa,
+  useMarcarLimpa,
   useMesas,
   useSalvarConfigSalao,
 } from "./consultas-mesas"
+import type { Mesa } from "./tipos"
 
 function envolver() {
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -103,5 +109,74 @@ describe("consultas das mesas", () => {
     await waitFor(() => expect(result.current.alterar.isError).toBe(true))
     expect(result.current.comanda.data?.itens[0].quantidade).toBe(3)
     expect(result.current.comanda.data?.total).toBe(12)
+  })
+
+  test("editar, bloquear, desbloquear e marcar limpa chegam ao servidor e atualizam as mesas", async () => {
+    const api = servidorDo("pizzaria")
+    const mesa = await api.mesas.criar({ numero: 82 })
+    const { result } = renderHook(
+      () => ({
+        mesas: useMesas(),
+        editar: useEditarMesa(),
+        bloquear: useBloquearMesa(),
+        desbloquear: useDesbloquearMesa(),
+        limpa: useMarcarLimpa(),
+      }),
+      { wrapper: envolver() },
+    )
+    await waitFor(() => expect(result.current.mesas.data).toBeDefined())
+    const doServidor = async () =>
+      (await api.mesas.listar()).find((item) => item.id === mesa.id) as Mesa
+    const daTela = () => result.current.mesas.data?.find((item) => item.id === mesa.id)
+
+    await act(() =>
+      result.current.editar.mutateAsync({
+        id: mesa.id,
+        dados: {
+          numero: 82,
+          nome: "Janela",
+          areaId: mesa.areaId,
+          lugares: 6,
+          forma: "redonda",
+        },
+      }),
+    )
+    expect(await doServidor()).toMatchObject({ nome: "Janela", lugares: 6, forma: "redonda" })
+    await waitFor(() => expect(daTela()?.nome).toBe("Janela"))
+
+    await act(() => result.current.bloquear.mutateAsync({ id: mesa.id, motivo: "Quebrada" }))
+    expect((await doServidor()).bloqueio).toEqual({ motivo: "Quebrada" })
+    await waitFor(() => expect(daTela()?.bloqueio).toEqual({ motivo: "Quebrada" }))
+
+    await act(() => result.current.desbloquear.mutateAsync(mesa.id))
+    expect((await doServidor()).bloqueio).toBeUndefined()
+    await waitFor(() => expect(daTela()?.bloqueio).toBeUndefined())
+
+    // A conta paga com a limpeza ligada (pizzaria) deixa a mesa em limpeza até marcá-la limpa.
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    await api.mesas.fecharConta(comanda.id, "pix")
+    expect((await doServidor()).limpezaDesde).toBeDefined()
+    await act(() => result.current.limpa.mutateAsync(mesa.id))
+    expect((await doServidor()).limpezaDesde).toBeUndefined()
+  })
+
+  test("criar mesa repassa área, lugares e forma", async () => {
+    const api = servidorDo("pizzaria")
+    const area = (await api.salao.config()).areas[0]
+    const { result } = renderHook(() => useCriarMesa(), { wrapper: envolver() })
+    await act(() =>
+      result.current.mutateAsync({
+        numero: 83,
+        areaId: area.id,
+        lugares: 8,
+        forma: "retangular",
+      }),
+    )
+    const criada = (await api.mesas.listar()).find((mesa) => mesa.numero === 83)
+    expect(criada).toMatchObject({ areaId: area.id, lugares: 8, forma: "retangular" })
   })
 })

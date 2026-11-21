@@ -69,9 +69,30 @@ const totalDe = (itens: Pedido["itens"]) =>
   Math.round(itens.reduce((soma, item) => soma + item.total, 0) * 100) / 100
 
 export function useCriarMesa() {
-  return useMudancaNasMesas((servidor, mesa: { numero: number; nome?: string }) =>
+  return useMudancaNasMesas((servidor, mesa: Parameters<Servidor["mesas"]["criar"]>[0]) =>
     servidor.mesas.criar(mesa),
   )
+}
+
+export function useEditarMesa() {
+  return useMudancaNasMesas(
+    (servidor, { id, dados }: { id: string; dados: Parameters<Servidor["mesas"]["editar"]>[1] }) =>
+      servidor.mesas.editar(id, dados),
+  )
+}
+
+export function useBloquearMesa() {
+  return useMudancaNasMesas((servidor, { id, motivo }: { id: string; motivo?: string }) =>
+    servidor.mesas.bloquear(id, motivo),
+  )
+}
+
+export function useDesbloquearMesa() {
+  return useMudancaNasMesas((servidor, id: string) => servidor.mesas.desbloquear(id))
+}
+
+export function useMarcarLimpa() {
+  return useMudancaNasMesas((servidor, id: string) => servidor.mesas.marcarLimpa(id))
 }
 
 export function useExcluirMesa() {
