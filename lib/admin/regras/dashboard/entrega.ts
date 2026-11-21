@@ -1,6 +1,6 @@
 import type { Pedido } from "../../dados/tipos"
-import type { Periodo } from "../periodo"
 import { SEM_MOTOBOY } from "../filtro-pedidos"
+import type { Periodo } from "../periodo"
 import { ehValido, noPeriodo, reais, soma, ticket } from "./comum"
 import { minutosEntre, minutosNaLoja, tempo } from "./operacao"
 

@@ -41,7 +41,9 @@ describe("ocupacaoDaAgenda", () => {
       atendimento(4, new Date(2026, 10, 14, 9), 60),
     ]
     // Dois dias de 540 min, com 2 cadeiras: 2.160 min; marcados 540.
-    expect(ocupacaoDaAgenda(pedidos, { horarios: HORARIOS, capacidade: 2, periodo: PERIODO })).toEqual({
+    expect(
+      ocupacaoDaAgenda(pedidos, { horarios: HORARIOS, capacidade: 2, periodo: PERIODO }),
+    ).toEqual({
       marcados: 540,
       disponiveis: 2160,
       percentual: 25,

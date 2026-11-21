@@ -85,9 +85,9 @@ describe("filtrarPedidos", () => {
         cidade: "Taubaté",
       },
     }
-    expect(ids(filtrarPedidos([...PEDIDOS, noJardim], { bairros: ["jardim sao jose"] }))).toEqual(
-      [80],
-    )
+    expect(ids(filtrarPedidos([...PEDIDOS, noJardim], { bairros: ["jardim sao jose"] }))).toEqual([
+      80,
+    ])
   })
 
   test("filtra pelo motoboy; sem-motoboy acha as entregas sem ninguém anotado", () => {

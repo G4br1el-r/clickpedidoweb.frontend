@@ -306,7 +306,7 @@ describe("VisaoGeral", () => {
       within(abas)
         .getAllByRole("tab")
         .map((aba) => aba.textContent),
-    ).toEqual(["Resumo", "Vendas", "Produtos", "Clientes", "Operação", "Financeiro"])
+    ).toEqual(["Resumo", "Vendas", "Produtos", "Clientes", "Operação", "Entrega", "Financeiro"])
     expect(within(abas).getByRole("tab", { name: "Financeiro" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -366,4 +366,45 @@ describe("VisaoGeral", () => {
     ).toBeGreaterThan(0)
     expect(screen.getByRole("region", { name: "Sem venda no período" })).toBeInTheDocument()
   })
+
+  test("a aba Entrega mostra os motoboys da loja pelo nome e os bairros", async () => {
+    render(
+      <Provedores endereco="?aba=entrega">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole("table", { name: "Por bairro" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    const motoboys = await servidorDo("pizzaria").motoboys.listar()
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole("region", { name: "Por motoboy" })).getAllByRole("link")[0],
+      ).toHaveTextContent(new RegExp(motoboys.map((motoboy) => motoboy.nome).join("|"))),
+    )
+  })
+
+  test.each([
+    ["salao", "agenda", "Agenda do período"],
+    ["farmacia", "farmacia", "Validade dos lotes"],
+    ["acougue", "pesagem", "Balança do período"],
+  ] as const)(
+    "no segmento %s, a aba %s abre com os números dela",
+    async (segmento, aba, titulo) => {
+      useSegmentoAtual.setState({ segmento })
+      render(
+        <Provedores endereco={`?aba=${aba}`}>
+          <VisaoGeral />
+        </Provedores>,
+      )
+      expect(
+        await screen.findByRole("region", { name: titulo }, { timeout: 8000 }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole("tab", {
+          name: { agenda: "Agenda", farmacia: "Farmácia", pesagem: "Pesagem" }[aba],
+        }),
+      ).toHaveAttribute("aria-selected", "true")
+    },
+  )
 })

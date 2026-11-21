@@ -175,9 +175,7 @@ describe("ListaPedidos", () => {
       </Provedores>,
     )
     expect(numeros()).toEqual(["#90"])
-    expect(
-      screen.getByRole("button", { name: "Tirar o filtro Motoboy: Léo" }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Tirar o filtro Motoboy: Léo" })).toBeInTheDocument()
   })
 
   test("o filtro de entregas sem motoboy aparece como Motoboy: Sem motoboy", () => {

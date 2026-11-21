@@ -9,7 +9,7 @@ import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useLoja, usePedidos } from "@/lib/admin/dados/consultas"
+import { useLoja, useMotoboys, usePedidos } from "@/lib/admin/dados/consultas"
 import { useCategorias, useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import { useMesas } from "@/lib/admin/dados/consultas-mesas"
 import { useFarmacia } from "@/lib/admin/farmacia-estado"
@@ -22,15 +22,20 @@ import { situacaoDaMeta } from "@/lib/admin/regras/dashboard/metas"
 import { resumir } from "@/lib/admin/regras/dashboard/resumo"
 import { destaquesDoSegmento } from "@/lib/admin/regras/dashboard/segmento"
 import { hojeVsSemanaPassada } from "@/lib/admin/regras/dashboard/semana-passada"
+import { escrituracao } from "@/lib/admin/regras/farmacia"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
-import { lotesDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
+import { lotesDemo, movimentosDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { AbaAgenda } from "./agenda/aba-agenda"
 import { AbaClientes } from "./clientes/aba-clientes"
+import { AbaEntrega } from "./entrega/aba-entrega"
+import { AbaFarmacia } from "./farmacia/aba-farmacia"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
 import { AbaFinanceiro } from "./financeiro/aba-financeiro"
 import { AbaOperacao } from "./operacao/aba-operacao"
 import { AbaResumo } from "./painel-visao-geral"
+import { AbaPesagem } from "./pesagem/aba-pesagem"
 import { AbaProdutos } from "./produtos/aba-produtos"
 import { AbaVendas } from "./vendas/aba-vendas"
 
@@ -79,6 +84,9 @@ export function VisaoGeral() {
   const { data: pedidosDeClientes } = usePedidos(agora ? periodoDeClientes(agora) : undefined, {
     ativo: aba === "clientes" && Boolean(agora),
   })
+  // A Agenda precisa de tudo o que está marcado (os vagos de amanhã), não só do período.
+  const { data: agenda } = usePedidos({}, { ativo: aba === "agenda" })
+  const { data: motoboys } = useMotoboys()
 
   const resumo = useMemo(
     () => (pedidos && periodo && agora ? resumir(pedidos, periodo, agora) : null),
@@ -111,6 +119,13 @@ export function VisaoGeral() {
         ? { lotes: lotesDemo(agora), receitas: receitasDemo(agora) }
         : { lotes: [], receitas: [] },
     [segmento, agora],
+  )
+  const movimentos = useMemo(
+    () =>
+      aba === "farmacia" && agora && produtos
+        ? escrituracao(movimentosDemo(agora), farmacia.receitas, produtos, decisoes)
+        : [],
+    [aba, agora, produtos, farmacia, decisoes],
   )
   const alertas = useMemo(
     () =>
@@ -224,6 +239,37 @@ export function VisaoGeral() {
               ) : (
                 <EsqueletoVisaoGeral />
               )
+            ) : aba === "entrega" ? (
+              <AbaEntrega pedidos={pedidos ?? []} periodo={periodo} motoboys={motoboys ?? []} />
+            ) : aba === "agenda" ? (
+              agenda && loja && agora ? (
+                <AbaAgenda
+                  pedidos={agenda}
+                  periodo={periodo}
+                  agora={agora}
+                  horarios={loja.horarios}
+                  capacidade={loja.capacidadeAtendimentos ?? 1}
+                />
+              ) : (
+                <EsqueletoVisaoGeral />
+              )
+            ) : aba === "farmacia" ? (
+              produtos && agora ? (
+                <AbaFarmacia
+                  pedidos={pedidos ?? []}
+                  periodo={periodo}
+                  agora={agora}
+                  produtos={produtos}
+                  receitas={farmacia.receitas}
+                  decisoes={decisoes}
+                  lotes={farmacia.lotes}
+                  movimentos={movimentos}
+                />
+              ) : (
+                <EsqueletoVisaoGeral />
+              )
+            ) : aba === "pesagem" ? (
+              <AbaPesagem pedidos={pedidos ?? []} periodo={periodo} />
             ) : aba === "financeiro" ? (
               <AbaFinanceiro
                 pedidos={pedidos ?? []}
