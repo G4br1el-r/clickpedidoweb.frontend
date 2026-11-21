@@ -10,6 +10,7 @@ import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { ConfigurarSalao } from "./configurar-salao"
 import { PaginaMesas } from "./pagina-mesas"
 
 vi.mock("react-to-print", () => ({ useReactToPrint: () => vi.fn() }))
@@ -62,6 +63,16 @@ afterEach(() => {
 })
 
 describe("Configurar salão", () => {
+  test("o botão fica desabilitado até a configuração chegar", () => {
+    render(
+      <Provedores>
+        <ConfigurarSalao salao={undefined} />
+      </Provedores>,
+    )
+
+    expect(screen.getByRole("button", { name: "Configurar salão" })).toBeDisabled()
+  })
+
   test("o botão do cabeçalho abre o painel com a configuração do servidor", async () => {
     const { painel } = await abrirPainel()
 

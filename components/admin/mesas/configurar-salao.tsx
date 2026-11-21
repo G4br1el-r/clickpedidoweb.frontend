@@ -288,7 +288,13 @@ export function ConfigurarSalao({ salao }: { salao: ConfigSalao | undefined }) {
   const [aberto, setAberto] = useState(false)
   return (
     <>
-      <Button type="button" size="sm" variant="outline" onClick={() => setAberto(true)}>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        disabled={!salao}
+        onClick={() => setAberto(true)}
+      >
         <SettingsIcon data-icon="inline-start" />
         Configurar salão
       </Button>
