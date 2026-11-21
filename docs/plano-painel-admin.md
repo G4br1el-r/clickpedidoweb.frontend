@@ -555,7 +555,7 @@ Situação: pronta em 13/11/2026.
 - **Fora da tela:** o pedido passa a guardar o horário de cada status, o produto ganha custo (com cópia na venda), o cancelamento ganha motivo, as Configurações ganham a taxa de cada forma de pagamento e o gerador de demonstração sobe para a versão 3.
 - **Etapas,** cada uma num PR: 1. Resumo; 2. Vendas; 3. Base de dados; 4. Produtos e Financeiro; 5. Operação e Clientes; 6. Entrega e abas do segmento; 7. CSV e impressão.
 
-Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 3 (Base de dados) prontas em 19/11/2026; etapa 4 (Produtos e Financeiro) pronta em 20/11/2026.
+Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 3 (Base de dados) prontas em 19/11/2026; etapa 4 (Produtos e Financeiro) pronta em 20/11/2026; etapa 5 (Operação e Clientes) pronta em 21/11/2026.
 
 - **Etapa 1:**
   - abas Resumo, Vendas e Financeiro no endereço (`?aba=`), dentro do painel de cada aba para leitores de tela;
@@ -591,4 +591,16 @@ Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 
   - o faturamento por produto é o total do item como foi vendido, sem ratear o desconto do pedido; os descontos ficam no Financeiro;
   - a barra do ranking se mede pelo primeiro colocado (com muitos produtos, a parte de cada um é pequena); a % ao lado continua sendo a parte no faturamento;
   - o caminho de um produto para os pedidos usa a busca por nome, que também acha os produtos com nome parecido.
+- **Etapa 5:**
+  - aba Clientes (depois de Produtos): usa sempre os últimos 90 dias, numa busca própria, e o filtro de período dá lugar a "Últimos 90 dias, até hoje"; régua com clientes, novos, % que voltou e pedidos por cliente; melhores clientes levando aos pedidos de cada um; sumidos com o botão que abre o WhatsApp com a mensagem pronta, sem enviar nada sozinho;
+  - aba Operação (depois de Clientes): régua com % no prazo, tempo na loja, cancelados e o online que não foi pago; tempo por etapa com a média e os 9 em 10; atrasos por hora; cancelamentos por motivo (levando aos cancelados) e por canal; mesas e vendas por garçom; no salão, a pontualidade toma o lugar dos tempos da fila;
+  - Pedidos aceita `?cliente=` e `?motivo=` pelo endereço, como etiquetas removíveis;
+  - regras em `lib/admin/regras/dashboard/clientes.ts` e `operacao.ts`; `MINUTOS_DE_ATRASO` virou constante da fila.
+- **Etapa 5, decidido no caminho:**
+  - **no prazo** é abaixo dos 40 min da fila, contando o que depende da loja: a entrega até entregar; a retirada e a mesa até ficar pronto; pago online, a partir do pagamento;
+  - **novos** são os clientes cujo primeiro pedido caiu nos últimos 30 dias (com 90 dias de histórico, todos teriam o primeiro pedido nos 90 dias);
+  - o telefone da própria loja (PDV e mesa) não conta como cliente;
+  - **no salão**, a pontualidade mede o atraso para começar (adiantado conta como zero), a % que começou até 10 min depois da hora e a duração real contra a marcada;
+  - a **ocupação das mesas** ficou de fora: o painel não guarda quanto tempo cada mesa ficou ocupada além das comandas; no lugar, o tempo de mesa e o ticket por mesa.
+- **Etapa 5, a demonstração:** com 42 clientes pedindo sem parar, a aba Clientes não tinha sumido nem novo. O gerador agora faz 1 em 7 clientes sumir (não pede há 40 dias) e 1 em 9 começar há 20 dias; o pedido que sai deles vai para um cliente de uma vez só. VERSAO 4.
 - **Também mudou:** as fotos do Playwright escondem o selo de avisos do Next no modo dev (`tests/sem-avisos-do-next.css`), que aparecia mesmo com `devIndicators: false`.
