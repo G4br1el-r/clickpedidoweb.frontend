@@ -45,7 +45,7 @@ import { linkWhatsApp, mensagemParaCliente } from "@/lib/admin/regras/mensagens"
 import { textoRetirada } from "@/lib/admin/regras/numero"
 import { pesagemPendente } from "@/lib/admin/regras/pesagem"
 import { type TemposDaLoja, textoDoPrazo } from "@/lib/admin/regras/prazo"
-import { rotuloCanal, rotuloOrigem } from "@/lib/admin/regras/rotulos"
+import { rotuloCanal, seloDaOrigem } from "@/lib/admin/regras/rotulos"
 import { rotuloAcao, tomDoStatus } from "@/lib/admin/regras/status"
 import { plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
@@ -307,7 +307,7 @@ export function CartaoFila({
               >
                 {canal}
               </span>
-              <Badge variant="outline">{rotuloOrigem(pedido.origem)}</Badge>
+              <Badge variant="outline">{seloDaOrigem(pedido.origem)}</Badge>
               {naCozinha && (
                 <Badge variant="outline" className="gap-1">
                   <ChefHatIcon aria-hidden="true" />

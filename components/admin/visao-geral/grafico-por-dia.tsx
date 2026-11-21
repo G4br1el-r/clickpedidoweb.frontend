@@ -11,7 +11,7 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
-import type { DiaDaSerie } from "@/lib/admin/regras/dashboard"
+import type { DiaDaSerie } from "@/lib/admin/regras/dashboard/resumo"
 import { emReais, emReaisCurto } from "@/lib/formato"
 
 export type MedidaDoGrafico = "faturamento" | "pedidos"

@@ -336,7 +336,7 @@ O movimento é parte do sistema, não enfeite. A assinatura: ao adicionar, a eti
 
 O painel da loja (`app/admin`, `components/admin`) é o fundo da mesma loja. Mesma família, Geist, mesmos fios, mesma curva; muda a cor: no lugar das quatro cores do lojista, um tema neutro fixo (névoa, folha branca, tinta quase preta), porque a marca da loja só aparece na prévia. O traço de 3 px da etiqueta continua sendo o único detalhe marcado, e aqui marca estado e seleção: a etapa do pedido, a página do menu, a coluna do quadro. O painel recusa o dashboard padrão de cartões com borda, pílula cinza para tudo e número grande em caixa: os números ficam numa régua entre fios, as listas são linhas e as colunas do quadro não têm bandeja.
 
-O painel é ferramenta de pico. Quem abre lê o estado, o tempo e a próxima ação em segundos: título de 24 px com um resumo vivo, a régua ou o quadro logo abaixo. O movimento só mostra que algo mudou de estado; a assinatura é "o pedido anda": ao avançar, o cartão desliza para a coluna seguinte e o traço troca de cor. Nada se mexe sozinho.
+O painel é ferramenta de pico. Quem abre lê o estado, o tempo e a próxima ação em segundos: título de 24 px com um resumo vivo, a régua ou o quadro logo abaixo. O movimento só mostra que algo mudou de estado; a assinatura é "o pedido anda": ao avançar, o cartão desliza para a coluna seguinte e o traço troca de cor. Nada se mexe sozinho, com uma exceção: na visão geral, o bloco Hoje e a faixa de alertas se atualizam a cada 30 s, e os números trocam pelo NumberFlow.
 
 **Key Characteristics:**
 - Quatro cores por loja (primária, acento, fundo, tinta); todo o resto é derivado em `lib/tema.ts` com contraste garantido de 4,5:1.
@@ -409,7 +409,7 @@ O painel passa um tema fixo pela mesma `temaParaCss` (`TEMA_PAINEL` em `app/admi
 
 **Atenção** (atencao / atencao-escuro, laranja): o pedido que acabou de chegar ("Chegou agora": traço, anel e realce). É o acento do tema do painel e não aparece em mais nada.
 
-**Gráfico** (grafico / grafico-escuro): uma série só, azul, com contraste de 3:1 sobre a folha nos dois temas. Barras do faturamento por dia e barras de proporção das listas da visão geral.
+**Gráfico** (grafico / grafico-escuro): uma série só, azul, com contraste de 3:1 sobre a folha nos dois temas. Barras do faturamento por dia e barras de proporção das listas da visão geral. A única segunda série permitida é a do período anterior, em cinza neutro (tinta em baixa opacidade, nunca cinza novo), atrás da azul, só nos gráficos de comparação. O mapa de calor usa o mesmo azul em 5 tons de opacidade.
 
 **Ouro Pro** (pro-ouro, pro-ouro-texto): só o plano Pro. O ícone de brilho do cartão Pro e o selo "Pro" liberado (degradê de pro-ouro com texto #2A1700) e o contorno da opção liberada.
 
@@ -685,7 +685,7 @@ A gaveta do shadcn sobre véu preto a 30%, sem desfoque (entra em 200 ms). Entra
 O painel só se mexe para mostrar que algo mudou de estado.
 - **O pedido anda (assinatura):** ao avançar, o cartão desliza até a coluna seguinte (o mesmo `layoutId` em todas as colunas, 250 ms, `[0.23, 1, 0.32, 1]`) e o traço troca de cor em 200 ms. Cartão novo entra de 8 px abaixo com opacidade, também em 250 ms.
 - **Durações:** 150 ms para hover, cor e toque; 200 a 250 ms para trocas e deslocamentos; 300 ms só para a haste do caminho, o traço do menu e o chevron. Saídas mais curtas: 120 a 160 ms.
-- **Números:** NumberFlow em régua, contagens e estoque.
+- **Números:** NumberFlow em régua, contagens e estoque. Na visão geral, o bloco Hoje e os alertas se atualizam a cada 30 s e o NumberFlow mostra a troca; é a única atualização sozinha do painel fora dos quadros ao vivo.
 - **Realce que esmaece:** o pedido que chegou ganha um véu laranja a 10% que some sozinho em 2,4 s. É a única transição longa, e é uma saída.
 - **Troca de dia na agenda:** desliza 12 px na direção do dia em 200 ms.
 - **Pro:** ao liberar, o contorno de ouro dá uma volta (1,6 s), um brilho varre a opção uma vez (1,3 s) e o selo brilha uma vez. Uma vez só.

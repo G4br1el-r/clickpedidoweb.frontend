@@ -81,6 +81,15 @@ describe("esquemaProduto", () => {
     })
   })
 
+  test("o custo é opcional, sem negativo, em todos os segmentos", () => {
+    expect(erros("pizzaria", { ...VALIDO, custo: 18.5 })).toEqual({})
+    expect(erros("salao", { ...VALIDO, grupos: undefined, duracaoMin: 60, custo: 0 })).toEqual({})
+    expect(erros("pizzaria", { ...VALIDO, custo: -1 })).toEqual({
+      custo: "O custo não pode ser negativo.",
+    })
+    expect(esquemaProduto("pizzaria").parse({ ...VALIDO, custo: 18.5 }).custo).toBe(18.5)
+  })
+
   test("oferta precisa de um preço 'de' maior que o preço", () => {
     expect(erros("pizzaria", { ...VALIDO, oferta: true, precoOriginal: 40 })).toEqual({
       precoOriginal: "O preço “de” precisa ser maior que o preço.",

@@ -169,6 +169,8 @@
  */
 :root {
   --grafico: #2a78d6;
+  /* Período anterior, atrás da série azul: a tinta em baixa opacidade, nunca cinza novo. */
+  --grafico-anterior: color-mix(in oklab, var(--foreground) 16%, transparent);
 }
 .dark {
   --grafico: #3987e5;

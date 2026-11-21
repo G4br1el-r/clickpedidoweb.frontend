@@ -28,6 +28,13 @@ describe("secoesAlteradas", () => {
     ).toEqual(["Vitrines", "Formas de pagamento"])
   })
 
+  test("as taxas têm a seção delas, logo depois do pagamento online", () => {
+    expect(secoesAlteradas({ cortarPapel: true, taxasPagamento: { maquininha: true } })).toEqual([
+      "Taxas de pagamento",
+      "Impressão",
+    ])
+  })
+
   test("impressão e o resto da loja", () => {
     expect(
       secoesAlteradas({ cortarPapel: true, videoBanner: true, mensagemFechada: true }),

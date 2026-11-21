@@ -335,6 +335,7 @@ export const catalogoAdega: CatalogoLoja = {
     tempoRetirada: "15–25 min",
     cidadesAtendidas: [],
     pagamentoOnlineConectado: true,
+    taxasPagamento: { pixOnline: 0.99, cartaoOnline: 4.49, maquininha: 2.19 },
     pagamentos: {
       pix: true,
       "cartao-online": true,

@@ -75,6 +75,7 @@ export const catalogoSalao: CatalogoLoja = {
     capacidadeAtendimentos: 2,
     cidadesAtendidas: [],
     pagamentoOnlineConectado: true,
+    taxasPagamento: { pixOnline: 0.99, cartaoOnline: 4.98, maquininha: 2.69 },
     pagamentos: {
       pix: true,
       "cartao-online": true,

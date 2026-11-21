@@ -15,7 +15,7 @@ import { esquemaProduto } from "../regras/esquema-produto"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
 import { controladosDoPedido } from "../regras/farmacia"
 import { normalizar } from "../regras/filtro-pedidos"
-import { eventosDaMudanca } from "../regras/historico"
+import { comEtapa, eventosDaMudanca } from "../regras/historico"
 import { proximoNumero } from "../regras/numero"
 import { pausaAtiva } from "../regras/pausa"
 import {
@@ -33,6 +33,7 @@ import { calcularPesagem, faltaPesar, pesagemPendente } from "../regras/pesagem"
 import { prazoNaChegada } from "../regras/prazo"
 import { proximoStatus, statusAnterior } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
+import { semearCustos } from "./custos-demo"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
 import type {
@@ -58,7 +59,7 @@ import type {
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 5
+const VERSAO = 7
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -380,7 +381,10 @@ function cancelado(pedido: Pedido, tipo: Cancelamento["tipo"], escolhido: Motivo
  */
 function encerrar(pedido: Pedido, momento: string): Pedido {
   if (pedido.status !== "aguardando-pagamento") return pedido
-  return { ...pedido, status: "cancelado", situacaoPagamento: "cancelado", atualizadoEm: momento }
+  return comEtapa(
+    { ...pedido, status: "cancelado", situacaoPagamento: "cancelado", atualizadoEm: momento },
+    momento,
+  )
 }
 
 /**
@@ -399,7 +403,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
   async function doZero(): Promise<BaseLoja> {
     const agora = new Date()
-    const catalogo = await carregarCatalogo()
+    const carregado = await carregarCatalogo()
+    // Custo nos produtos antes de gerar: cada item vendido guarda uma cópia dele.
+    const catalogo = { ...carregado, produtos: semearCustos(carregado.produtos, segmento) }
     const pedidos = gerarPedidos({
       catalogo,
       segmento,
@@ -579,9 +585,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         : {
             ...base,
             produtos: base.produtos.map((item) =>
-              item.id === produtoId && item.estoque
-                ? { ...item, estoque: { ...item.estoque, custo } }
-                : item,
+              item.id === produtoId ? { ...item, custo } : item,
             ),
           }
     const nova = movimentar(comCusto, produtoId, quantidade, { tipo, ...extra })
@@ -609,7 +613,12 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
    * (balcão quando o segmento usa), dos adicionais e do "grátis até"; as escolhas
    * passam pelo mínimo e o máximo de cada grupo.
    */
-  function precificar(base: BaseLoja, lancado: ItemLancado) {
+  function precificar(
+    base: BaseLoja,
+    lancado: ItemLancado,
+  ): Pick<ItemPedido, "produtoId" | "nome" | "precoUnitario" | "custoUnitario" | "opcoes"> & {
+    produtosDasOpcoes: string[]
+  } {
     if ("avulso" in lancado) {
       const nome = lancado.avulso.nome.trim().slice(0, 80)
       if (!nome) throw new Error("Informe o nome do item avulso.")
@@ -658,6 +667,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       produtoId: produto.id,
       nome: produto.nome,
       precoUnitario: precoComOpcoes(precoDeBalcao(produto, segmento), grupos, lancado.escolhas),
+      // A cópia do custo de agora: a margem do passado não muda quando o custo mudar.
+      ...(produto.custo !== undefined ? { custoUnitario: produto.custo } : {}),
       opcoes: resumoDasOpcoes(grupos, lancado.escolhas),
       produtosDasOpcoes,
     }
@@ -1276,10 +1287,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
         const base = await carregar()
         const itens = lancados.map((lancado) => {
-          const { produtoId, nome, precoUnitario, opcoes, produtosDasOpcoes } = precificar(
-            base,
-            lancado,
-          )
+          const { produtoId, nome, precoUnitario, custoUnitario, opcoes, produtosDasOpcoes } =
+            precificar(base, lancado)
           const observacao = lancado.observacao?.trim().slice(0, 140)
           return {
             chave: "",
@@ -1287,6 +1296,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             nome,
             quantidade: Math.min(lancado.quantidade, 999),
             precoUnitario,
+            ...(custoUnitario !== undefined ? { custoUnitario } : {}),
             opcoes,
             produtosDasOpcoes,
             ...(observacao ? { observacao } : {}),
@@ -1308,44 +1318,49 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const observacao = venda.observacao?.trim().slice(0, 280)
         const ultimo = base.pedidos.at(-1)
         const id = (ultimo?.id ?? 0) + 1
-        const pedido: Pedido = {
-          id,
-          numero: numeroNovo(base, id),
-          token: crypto.randomUUID(),
-          origem: "pdv",
-          tipo: "retirada",
-          status: venda.concluida ? "concluido" : "recebido",
-          cliente: { nome: clienteNome || CLIENTE_DO_BALCAO, telefone: base.loja.telefone },
-          itens: itens.map((item, indice) => ({
-            id: `${id}-${indice + 1}`,
-            produtoId: item.produtoId,
-            nome: item.nome,
-            quantidade: item.quantidade,
-            precoUnitario: item.precoUnitario,
-            opcoes: item.opcoes,
-            ...(item.produtosDasOpcoes.length > 0
-              ? { produtosDasOpcoes: item.produtosDasOpcoes }
+        const pedido: Pedido = comEtapa(
+          {
+            id,
+            numero: numeroNovo(base, id),
+            token: crypto.randomUUID(),
+            origem: "pdv",
+            tipo: "retirada",
+            status: venda.concluida ? "concluido" : "recebido",
+            cliente: { nome: clienteNome || CLIENTE_DO_BALCAO, telefone: base.loja.telefone },
+            itens: itens.map((item, indice) => ({
+              id: `${id}-${indice + 1}`,
+              produtoId: item.produtoId,
+              nome: item.nome,
+              quantidade: item.quantidade,
+              precoUnitario: item.precoUnitario,
+              ...(item.custoUnitario !== undefined ? { custoUnitario: item.custoUnitario } : {}),
+              opcoes: item.opcoes,
+              ...(item.produtosDasOpcoes.length > 0
+                ? { produtosDasOpcoes: item.produtosDasOpcoes }
+                : {}),
+              ...(item.observacao ? { observacao: item.observacao } : {}),
+              total: reais(item.precoUnitario * item.quantidade),
+            })),
+            subtotal: totais.subtotal,
+            desconto: totais.desconto,
+            taxaEntrega: 0,
+            total: totais.total,
+            pagamento: venda.pagamento,
+            situacaoPagamento: "pago",
+            pagoEm: agora,
+            ...(venda.pagamento === "dinheiro" && venda.valorRecebido
+              ? { trocoPara: venda.valorRecebido }
               : {}),
-            ...(item.observacao ? { observacao: item.observacao } : {}),
-            total: reais(item.precoUnitario * item.quantidade),
-          })),
-          subtotal: totais.subtotal,
-          desconto: totais.desconto,
-          taxaEntrega: 0,
-          total: totais.total,
-          pagamento: venda.pagamento,
-          situacaoPagamento: "pago",
-          pagoEm: agora,
-          ...(venda.pagamento === "dinheiro" && venda.valorRecebido
-            ? { trocoPara: venda.valorRecebido }
-            : {}),
-          ...(observacao ? { observacao } : {}),
-          criadoEm: agora,
-          atualizadoEm: agora,
-          enviarParaCozinha: !venda.concluida,
-          // A venda fechada no balcão já tira do estoque.
-          estoqueBaixado: true,
-        }
+            ...(observacao ? { observacao } : {}),
+            criadoEm: agora,
+            atualizadoEm: agora,
+            historico: [],
+            enviarParaCozinha: !venda.concluida,
+            // A venda fechada no balcão já tira do estoque.
+            estoqueBaixado: true,
+          },
+          agora,
+        )
         const comEstoque = aplicarEstoque(base, undefined, pedido, { conferir: true })
         await substituir({ ...comEstoque, pedidos: [...comEstoque.pedidos, pedido] })
         return responder(pedido)
@@ -1412,6 +1427,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           nome: servico.nome,
           quantidade: 1,
           precoUnitario: servico.preco,
+          ...(servico.custo !== undefined ? { custoUnitario: servico.custo } : {}),
           opcoes: [],
           total: servico.preco,
         }))
@@ -1435,6 +1451,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           ...(observacao ? { observacao } : {}),
           criadoEm: agora,
           atualizadoEm: agora,
+          historico: [{ tipo: "etapa", status: "recebido", em: agora }],
           enviarParaCozinha: false,
           agendamento: { inicio: inicio.toISOString(), duracaoMin },
         }
@@ -1503,10 +1520,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const id = aberta?.id ?? (base.pedidos.at(-1)?.id ?? 0) + 1
         const vaiParaCozinha = lancamento.enviarParaCozinha
         const novos: ItemPedido[] = lancamento.itens.map((lancado, indice) => {
-          const { produtoId, nome, precoUnitario, opcoes, produtosDasOpcoes } = precificar(
-            base,
-            lancado,
-          )
+          const { produtoId, nome, precoUnitario, custoUnitario, opcoes, produtosDasOpcoes } =
+            precificar(base, lancado)
           // Como o 0 e o negativo, o que não é número vira 1.
           const pedida = Number.isFinite(lancado.quantidade) ? Math.round(lancado.quantidade) : 1
           const quantidade = Math.min(Math.max(pedida, 1), 999)
@@ -1517,6 +1532,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             nome,
             quantidade,
             precoUnitario,
+            ...(custoUnitario !== undefined ? { custoUnitario } : {}),
             opcoes,
             ...(produtosDasOpcoes.length > 0 ? { produtosDasOpcoes } : {}),
             ...(observacao ? { observacao } : {}),
@@ -1529,40 +1545,44 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
         const garcom = lancamento.garcom?.trim().slice(0, 80)
         const cliente = lancamento.clienteNome?.trim().slice(0, 80)
-        const comanda: Pedido = recalcular(
-          aberta
-            ? {
-                // Rodada nova para a cozinha: a mesa volta para a fila (deixa de estar servida).
-                ...(vaiParaCozinha ? semServido(aberta) : aberta),
-                itens: [...aberta.itens, ...novos],
-                status: vaiParaCozinha ? "recebido" : aberta.status,
-                enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
-                ...(cliente ? { cliente: { ...aberta.cliente, nome: cliente } } : {}),
-                atualizadoEm: agora,
-                estoqueBaixado: true,
-              }
-            : {
-                id,
-                numero: numeroNovo(base, id),
-                token: crypto.randomUUID(),
-                origem: "garcom",
-                tipo: "mesa",
-                status: vaiParaCozinha ? "recebido" : "pronto",
-                cliente: { nome: cliente || mesa.nome, telefone: base.loja.telefone },
-                mesa: { id: mesa.id, numero: mesa.numero, ...(garcom ? { garcom } : {}) },
-                itens: novos,
-                subtotal: 0,
-                desconto: 0,
-                taxaEntrega: 0,
-                total: 0,
-                pagamento: "dinheiro",
-                situacaoPagamento: "na-entrega",
-                criadoEm: agora,
-                atualizadoEm: agora,
-                enviarParaCozinha: vaiParaCozinha,
-                // Cada lançamento do garçom tira do estoque.
-                estoqueBaixado: true,
-              },
+        const comanda: Pedido = comEtapa(
+          recalcular(
+            aberta
+              ? {
+                  // Rodada nova para a cozinha: a mesa volta para a fila (deixa de estar servida).
+                  ...(vaiParaCozinha ? semServido(aberta) : aberta),
+                  itens: [...aberta.itens, ...novos],
+                  status: vaiParaCozinha ? "recebido" : aberta.status,
+                  enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
+                  ...(cliente ? { cliente: { ...aberta.cliente, nome: cliente } } : {}),
+                  atualizadoEm: agora,
+                  estoqueBaixado: true,
+                }
+              : {
+                  id,
+                  numero: numeroNovo(base, id),
+                  token: crypto.randomUUID(),
+                  origem: "garcom",
+                  tipo: "mesa",
+                  status: vaiParaCozinha ? "recebido" : "pronto",
+                  cliente: { nome: cliente || mesa.nome, telefone: base.loja.telefone },
+                  mesa: { id: mesa.id, numero: mesa.numero, ...(garcom ? { garcom } : {}) },
+                  itens: novos,
+                  subtotal: 0,
+                  desconto: 0,
+                  taxaEntrega: 0,
+                  total: 0,
+                  pagamento: "dinheiro",
+                  situacaoPagamento: "na-entrega",
+                  criadoEm: agora,
+                  atualizadoEm: agora,
+                  historico: [],
+                  enviarParaCozinha: vaiParaCozinha,
+                  // Cada lançamento do garçom tira do estoque.
+                  estoqueBaixado: true,
+                },
+          ),
+          agora,
         )
         const comEstoque = aplicarEstoque(base, aberta, comanda, { conferir: true })
         const pedidos = aberta
@@ -1697,12 +1717,13 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         }
         return mudarProduto(produtoId, (produto) => ({
           ...produto,
+          // O custo é do produto: o mesmo da margem e do cardápio.
+          ...(dados.custo !== undefined ? { custo: Math.round(dados.custo * 100) / 100 } : {}),
           estoque: {
             ...produto.estoque,
             controlar: dados.controlar,
             quantidade: produto.estoque?.quantidade ?? 0,
             minimo: dados.minimo,
-            ...(dados.custo !== undefined ? { custo: Math.round(dados.custo * 100) / 100 } : {}),
             esgotarAoZerar: dados.esgotarAoZerar,
           },
         }))

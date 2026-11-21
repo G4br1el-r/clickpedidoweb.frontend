@@ -23,6 +23,12 @@ const dinheiro = (negativo: string) =>
     .min(0, { error: negativo })
     .max(9999, { error: "Até R$ 9.999,00." })
 
+const taxa = z
+  .number({ error: "Informe a taxa." })
+  .min(0, { error: "A taxa não pode ser negativa." })
+  .max(30, { error: "Até 30%." })
+  .optional()
+
 const esquemaHorario = z
   .object({
     dia: z.number().int().min(0).max(6),
@@ -80,6 +86,7 @@ export const esquemaLoja = z
       "pagar-apos-pesagem": z.boolean(),
     }),
     pagamentoOnlineConectado: z.boolean().optional(),
+    taxasPagamento: z.object({ pixOnline: taxa, cartaoOnline: taxa, maquininha: taxa }).optional(),
     capacidadeAtendimentos: z.number().int().min(1).max(20).optional(),
     impressaoAutomatica: z.boolean(),
     cortarPapel: z.boolean(),

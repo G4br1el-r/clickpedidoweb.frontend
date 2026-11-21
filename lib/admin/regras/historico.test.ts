@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import type { Pedido } from "../dados/tipos"
-import { eventosDaMudanca, linhaDoTempo } from "./historico"
-import { PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
+import { comEtapa, etapasDe, eventosDaMudanca, linhaDoTempo } from "./historico"
+import { PEDIDOS_DE_TESTE, pedidoDeTeste } from "./pedidos-de-teste"
 
 const EM = "2026-11-13T23:40:00.000Z"
 const recebido: Pedido = { ...PEDIDOS_DE_TESTE[2], status: "recebido" }
@@ -147,8 +147,61 @@ describe("linhaDoTempo", () => {
   })
 
   test("pedido antigo, sem eventos, mostra só a chegada", () => {
-    expect(linhaDoTempo({ ...recebido, historico: undefined })).toEqual([
+    expect(linhaDoTempo({ ...recebido, historico: [] })).toEqual([
       { texto: "Pedido recebido", em: recebido.criadoEm },
+    ])
+  })
+
+  test("a etapa anotada na chegada não repete a chegada", () => {
+    const chegou: Pedido = {
+      ...recebido,
+      historico: [{ tipo: "etapa", status: "recebido", em: recebido.criadoEm }],
+    }
+    expect(linhaDoTempo(chegou)).toEqual([{ texto: "Pedido recebido", em: recebido.criadoEm }])
+  })
+})
+
+const CRIADO = new Date(2026, 10, 13, 19, 0)
+
+describe("comEtapa", () => {
+  test("pedido sem histórico ganha a etapa em que está, na hora dada", () => {
+    const pedido = pedidoDeTeste(1, CRIADO, 30, { status: "recebido", historico: [] })
+
+    expect(comEtapa(pedido, "2026-11-13T22:00:00.000Z").historico).toEqual([
+      { tipo: "etapa", status: "recebido", em: "2026-11-13T22:00:00.000Z" },
+    ])
+  })
+
+  test("a etapa nova entra no fim; a mesma etapa de novo não se repete", () => {
+    const pedido = pedidoDeTeste(1, CRIADO, 30, {
+      status: "em-preparo",
+      historico: [{ tipo: "etapa", status: "recebido", em: "2026-11-13T22:00:00.000Z" }],
+    })
+
+    const avancado = comEtapa(pedido, "2026-11-13T22:05:00.000Z")
+    expect(avancado.historico).toEqual([
+      { tipo: "etapa", status: "recebido", em: "2026-11-13T22:00:00.000Z" },
+      { tipo: "etapa", status: "em-preparo", em: "2026-11-13T22:05:00.000Z" },
+    ])
+    expect(comEtapa(avancado, "2026-11-13T22:09:00.000Z")).toBe(avancado)
+  })
+})
+
+describe("etapasDe", () => {
+  test("só as etapas do histórico, na ordem, sem os outros eventos", () => {
+    const pedido: Pedido = {
+      ...recebido,
+      historico: [
+        { tipo: "etapa", status: "recebido", em: "2026-11-13T23:00:00.000Z" },
+        { tipo: "impresso", em: "2026-11-13T23:01:00.000Z" },
+        { tipo: "etapa", status: "em-preparo", em: "2026-11-13T23:03:00.000Z" },
+        { tipo: "pago", em: "2026-11-13T23:04:00.000Z" },
+      ],
+    }
+
+    expect(etapasDe(pedido)).toEqual([
+      { tipo: "etapa", status: "recebido", em: "2026-11-13T23:00:00.000Z" },
+      { tipo: "etapa", status: "em-preparo", em: "2026-11-13T23:03:00.000Z" },
     ])
   })
 })
