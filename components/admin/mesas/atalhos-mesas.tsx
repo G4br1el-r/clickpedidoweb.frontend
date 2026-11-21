@@ -19,8 +19,11 @@ function emCampo(alvo: EventTarget | null) {
   return alvo.matches("input, textarea, select") || alvo.isContentEditable
 }
 
-/** Há um dialog ou uma folha aberta (o Base UI marca os dois com role="dialog"). */
-const haJanelaAberta = () => document.querySelector('[role="dialog"]') !== null
+/** Há uma janela, folha, menu, lista de opções ou confirmação aberta: a tecla é dela. */
+const haJanelaAberta = () =>
+  document.querySelector(
+    '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]',
+  ) !== null
 
 /**
  * Ouve o teclado da tela de mesas e executa a ação que `lerTecla` decide. Os dígitos

@@ -677,6 +677,14 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
       expect(screen.queryByRole("dialog", { name: "Nova mesa" })).not.toBeInTheDocument()
     })
 
+    test("com o menu ⋯ aberto, n não abre Nova mesa", async () => {
+      const usuario = await abrir()
+      await usuario.click(await screen.findByRole("button", { name: "Ações da mesa 3" }))
+      await screen.findByRole("menu")
+      await usuario.keyboard("n")
+      expect(screen.queryByRole("dialog", { name: "Nova mesa" })).not.toBeInTheDocument()
+    })
+
     test("uma mesa criada no servidor depois da tela aberta aparece em até 4 s", async () => {
       // O relógio falso só mexe no Date; esperar 4 s de verdade pesaria no teste, então
       // confere o intervalo que a consulta usa.
