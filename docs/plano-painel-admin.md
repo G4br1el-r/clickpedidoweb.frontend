@@ -547,3 +547,60 @@ Situação: pronta em 13/11/2026.
 - **Também mudou:** a pedido dele, pizzaria e farmácia deixaram de ter cor própria no painel; todos os segmentos usam a mesma cor neutra (saiu o `lib/admin/tema-segmento.ts` e a faixa colorida da barra lateral).
 - **Testes e cobertura:** `tsc` e Biome limpos nos arquivos do painel; 757 testes no Vitest; os mínimos de cobertura subiram para geral 68/61/67/69 e `lib/**` 96/94/97/97. O E2E de estoque (contagem, venda no PDV que zera e esgota, cancelamento que devolve, com acessibilidade) passa; as fotos do Estoque (claro, escuro, celular e computador) foram revisadas.
 - **Pendente de outra sessão:** quem está mexendo no bloco "Personalizar loja" da barra lateral precisa revisar e atualizar as fotos do painel no computador, e o Biome acusa formatação em `components/produto/info-remedio*.tsx` e `produto-sheet.tsx`.
+
+## Fase 13: dashboard completo
+
+**Desenho** em [dashboard-completo.md](dashboard-completo.md), fechado em 19/11/2026. A visão geral da Fase 3 vira um painel com abas na URL (Resumo, Vendas, Produtos, Clientes, Operação, Entrega, Financeiro e uma aba própria do segmento), faixa de alertas, metas do mês, comparação com a semana passada, clique para Pedidos filtrada, CSV e impressão.
+
+- **Fora da tela:** o pedido passa a guardar o horário de cada status, o produto ganha custo (com cópia na venda), o cancelamento ganha motivo, as Configurações ganham a taxa de cada forma de pagamento e o gerador de demonstração sobe para a versão 3.
+- **Etapas,** cada uma num PR: 1. Resumo; 2. Vendas; 3. Base de dados; 4. Produtos e Financeiro; 5. Operação e Clientes; 6. Entrega e abas do segmento; 7. CSV e impressão.
+
+Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 3 (Base de dados) prontas em 19/11/2026; etapa 4 (Produtos e Financeiro) pronta em 20/11/2026; etapa 5 (Operação e Clientes) pronta em 21/11/2026.
+
+- **Etapa 1:**
+  - abas Resumo, Vendas e Financeiro no endereço (`?aba=`), dentro do painel de cada aba para leitores de tela;
+  - Resumo com a faixa Precisa de atenção, Hoje comparado com o mesmo dia da semana passada, a meta do mês (definir, mudar e apagar; meta de hoje e projeção), o bloco Agora na loja do segmento, o período resumido e os 5 mais vendidos;
+  - o Resumo confere os pedidos a cada 30 s;
+  - regras novas em `lib/admin/regras/dashboard/` (abas, nomes, semana passada, metas, alertas, destaques do segmento, contagens e a busca), e as metas em `lib/admin/metas.ts`.
+- **Diferente do desenho:**
+  - Vendas e Financeiro já nascem nesta etapa, só com o que saiu do Resumo (canais e o dia a dia; formas de pagamento); as etapas 2 e 4 completam;
+  - a barra de abas ainda não fica presa no topo nem rola de lado no celular: com 3 abas, ela cabe (entrou na etapa 2).
+- **Etapa 2:**
+  - aba Vendas com a régua (faturamento, pedidos, ticket e itens por pedido, cada um comparado ao período anterior), o gráfico por dia com o período anterior em cinza atrás e a troca Dia/Semana a partir de 14 dias, o mapa de calor dia da semana × hora (uma tabela, com o número ao passar o mouse, tocar ou focar), a média por hora do dia, canais, origem e o dia a dia em tabela;
+  - clicar no canal ou na origem abre Pedidos filtrada no período; a lista de Pedidos aceita `?origem=` só pelo endereço, como etiqueta removível;
+  - no celular, a barra de abas fica presa embaixo do cabeçalho e rola para o lado, com a borda esmaecida;
+  - regras em `lib/admin/regras/dashboard/vendas.ts`; o `fatias` foi para `comum.ts`.
+- **Etapa 2, diferente do desenho:** a semana agrupa os dias de 7 em 7 a partir do início do período (a última pode ser menor), para cada semana ter a mesma semana do período anterior ao lado; o mapa de calor mostra só as horas entre a primeira e a última com venda.
+- **Etapa 3:**
+  - o pedido guarda o `historico` de status (etapa e hora), anotado pelo `comEtapa` (`lib/admin/regras/historico.ts`) em toda mudança do servidor: Fila, Pedidos, PDV, Cozinha, Mesas, Garçom, agenda, pagamento e o encerramento do dia;
+  - cancelar aceita um motivo opcional, escolhido na confirmação (lista fixa em `rotulos.ts`); o pedido cancelado mostra "Motivo: …" ou "Não informado";
+  - o produto ganha `custo`, com o campo Custo no formulário do cardápio; PDV, mesa, agenda e o gerador copiam o custo no item vendido (`custoUnitario`);
+  - as Configurações ganham a seção Taxas de pagamento;
+  - gerador v3: histórico com tempos plausíveis (num sorteador próprio, para os outros sorteios não mudarem), custos de 31% a 59% do preço (no salão, 16% a 34%; cerca de 1 em 12 sem custo), motivos nos cancelados (uns sem motivo) e taxas nas lojas de demonstração.
+- **Etapa 3, diferente do desenho:**
+  - **taxas por forma do painel,** não por crédito e débito: o pedido não diz qual cartão foi usado. São três: Pix online, cartão online e cartão na maquininha. Dinheiro e Pix no balcão não têm taxa;
+  - **um custo só,** no produto: o custo que ficava no estoque saiu, e a entrada de compra e a configuração do estoque passam a gravar o custo do produto;
+  - nos pedidos em andamento gerados, o `atualizadoEm` continua o da criação (a Cozinha usa esse campo para os prontos recentes); o histórico tem as horas de cada etapa.
+- **Etapa 3, corrigido no caminho:** salvar o formulário do produto apagava o estoque e os dados do medicamento; agora eles ficam como estavam.
+- **Etapa 4:**
+  - aba Produtos (entre Vendas e Financeiro): régua com produtos vendidos, unidades (kg no açougue), margem e sem venda; ranking por R$ ou quantidade, com o caminho para os pedidos de cada produto (`?busca=`); categorias; curva ABC; margem por produto, com o aviso de quem ficou sem custo; adicionais e opções mais escolhidos; estoque, com o valor parado e em quantos dias cada produto acaba; o que não vendeu; e a tabela de todos os produtos;
+  - aba Financeiro completa: do bruto ao líquido (com os descontos do PDV), depois das taxas e do custo (taxas estimadas, líquido depois delas, margem bruta com a cobertura do custo e o que falta receber), formas de pagamento com o caminho para os pedidos e as taxas de cada forma, com o aviso da forma sem taxa e o link para configurar;
+  - regras em `lib/admin/regras/dashboard/produtos.ts` e `financeiro.ts`.
+- **Etapa 4, decidido no caminho:**
+  - a margem usa o total do item (com os adicionais, que não têm custo próprio) contra o custo do produto vezes a quantidade (no quilo, vezes o peso); a tela avisa;
+  - o faturamento por produto é o total do item como foi vendido, sem ratear o desconto do pedido; os descontos ficam no Financeiro;
+  - a barra do ranking se mede pelo primeiro colocado (com muitos produtos, a parte de cada um é pequena); a % ao lado continua sendo a parte no faturamento;
+  - o caminho de um produto para os pedidos usa a busca por nome, que também acha os produtos com nome parecido.
+- **Etapa 5:**
+  - aba Clientes (depois de Produtos): usa sempre os últimos 90 dias, numa busca própria, e o filtro de período dá lugar a "Últimos 90 dias, até hoje"; régua com clientes, novos, % que voltou e pedidos por cliente; melhores clientes levando aos pedidos de cada um; sumidos com o botão que abre o WhatsApp com a mensagem pronta, sem enviar nada sozinho;
+  - aba Operação (depois de Clientes): régua com % no prazo, tempo na loja, cancelados e o online que não foi pago; tempo por etapa com a média e os 9 em 10; atrasos por hora; cancelamentos por motivo (levando aos cancelados) e por canal; mesas e vendas por garçom; no salão, a pontualidade toma o lugar dos tempos da fila;
+  - Pedidos aceita `?cliente=` e `?motivo=` pelo endereço, como etiquetas removíveis;
+  - regras em `lib/admin/regras/dashboard/clientes.ts` e `operacao.ts`; `MINUTOS_DE_ATRASO` virou constante da fila.
+- **Etapa 5, decidido no caminho:**
+  - **no prazo** é abaixo dos 40 min da fila, contando o que depende da loja: a entrega até entregar; a retirada e a mesa até ficar pronto; pago online, a partir do pagamento;
+  - **novos** são os clientes cujo primeiro pedido caiu nos últimos 30 dias (com 90 dias de histórico, todos teriam o primeiro pedido nos 90 dias);
+  - o telefone da própria loja (PDV e mesa) não conta como cliente;
+  - **no salão**, a pontualidade mede o atraso para começar (adiantado conta como zero), a % que começou até 10 min depois da hora e a duração real contra a marcada;
+  - a **ocupação das mesas** ficou de fora: o painel não guarda quanto tempo cada mesa ficou ocupada além das comandas; no lugar, o tempo de mesa e o ticket por mesa.
+- **Etapa 5, a demonstração:** com 42 clientes pedindo sem parar, a aba Clientes não tinha sumido nem novo. O gerador agora faz 1 em 7 clientes sumir (não pede há 40 dias) e 1 em 9 começar há 20 dias; o pedido que sai deles vai para um cliente de uma vez só. VERSAO 4.
+- **Também mudou:** as fotos do Playwright escondem o selo de avisos do Next no modo dev (`tests/sem-avisos-do-next.css`), que aparecia mesmo com `devIndicators: false`.

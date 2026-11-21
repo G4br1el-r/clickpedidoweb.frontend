@@ -145,6 +145,7 @@ export function pedidoDeTeste(agora: Date): Pedido {
     trocoPara: 50,
     criadoEm: momento,
     atualizadoEm: momento,
+    historico: [{ tipo: "etapa", status: "recebido", em: momento }],
     enviarParaCozinha: true,
   }
 }

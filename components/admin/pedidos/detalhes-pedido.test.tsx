@@ -161,6 +161,15 @@ describe("DetalhesPedido", () => {
     await usuario.click(confirmar)
 
     expect(await detalhes.findByText("Cancelado: Acabou o gás")).toBeInTheDocument()
+    expect(detalhes.getByText("Motivo: Acabou o gás")).toBeInTheDocument()
+  })
+
+  test("cancelado sem motivo mostra Não informado", async () => {
+    const pedido = await umPedido((p) => p.status === "cancelado" && !p.cancelamento)
+    renderizar(pedido.id)
+    const detalhes = await painel(pedido)
+
+    expect(detalhes.getByText("Motivo: Não informado")).toBeInTheDocument()
   })
 
   test("marcar como pago some depois de pago", async () => {

@@ -40,6 +40,8 @@ export type ItemPedido = {
   nome: string
   quantidade: number
   precoUnitario: number
+  /** Custo de uma unidade (ou de 1 kg) na hora da venda, copiado do produto. Sem custo, fica de fora da margem. */
+  custoUnitario?: number
   /** Resumo das opções escolhidas, já em texto. Exemplo: "1º sabor: Calabresa". */
   opcoes: string[]
   /** Combos: produtos ligados às opções escolhidas (cada um sai 1 por unidade do item). */
@@ -72,7 +74,10 @@ export type EnderecoEntrega = {
   referencia?: string
 }
 
-/** Por que a loja recusou ou cancelou o pedido. "outro" vem com texto. */
+/**
+ * Por que a loja recusou ou cancelou o pedido. "outro" vem com texto. Pedido cancelado sem
+ * `cancelamento` (os antigos da demonstração) conta como "Não informado".
+ */
 export type MotivoCancelamento =
   | "sem-estoque"
   | "fora-da-area"
@@ -82,11 +87,17 @@ export type MotivoCancelamento =
   | "endereco-invalido"
   | "receita-invalida"
   | "fraude"
+  | "pagamento-nao-aprovado"
+  | "demora"
+  | "loja-fechou"
   | "outro"
 
-/** Uma linha da linha do tempo do pedido. A chegada não entra: é o `criadoEm`. */
+/** Uma mudança de etapa do pedido: para onde foi e quando. */
+export type EtapaDoPedido = { tipo: "etapa"; status: StatusPedido; em: string }
+
+/** Uma linha do histórico do pedido: as etapas, desde a primeira, e o que mais aconteceu. */
 export type EventoPedido =
-  | { tipo: "etapa"; status: StatusPedido; em: string }
+  | EtapaDoPedido
   | { tipo: "pago" | "impresso" | "aceito"; em: string }
   /** Mensagem que a loja mandou ao cliente (simulada): o texto que teria saído. */
   | { tipo: "aviso"; em: string; texto: string }
@@ -116,6 +127,8 @@ export type Pedido = {
   observacao?: string
   criadoEm: string
   atualizadoEm: string
+  /** Cada etapa por que o pedido passou, da primeira à atual, e o que mais aconteceu. */
+  historico: EventoPedido[]
   impressoEm?: string
   /** Mesa: se a rodada vai para a cozinha. */
   enviarParaCozinha: boolean
@@ -127,8 +140,6 @@ export type Pedido = {
   pesagem?: { totalEstimado: number; diferenca: number; pesadoEm: string }
   /** O estoque já saiu por este pedido (para devolver no cancelamento uma vez só). */
   estoqueBaixado?: boolean
-  /** O que aconteceu depois da chegada, do mais antigo para o mais novo. */
-  historico?: EventoPedido[]
   /** Chegou pelo site com o aceite manual ligado: espera a loja aceitar ou recusar. */
   esperaAceite?: boolean
   /** Recusado no aceite ou cancelado depois: por quê e quando. */
@@ -212,6 +223,8 @@ export type Produto = {
   grupos: GrupoOpcao[]
   /** Farmácia: dados do medicamento. Sem o campo, é um item de venda livre (higiene, beleza). */
   medicamento?: DadosMedicamento
+  /** Custo de uma unidade (ou de 1 kg): a margem das vendas e o valor parado em estoque. */
+  custo?: number
   /** Controle de estoque do produto; sem o campo, não é controlado. */
   estoque?: ControleEstoque
 }
@@ -221,8 +234,6 @@ export type ControleEstoque = {
   controlar: boolean
   quantidade: number
   minimo: number
-  /** Custo de uma unidade (ou de 1 kg), para o valor parado em estoque. */
-  custo?: number
   /** Zerou, esgota no cardápio; a entrada seguinte devolve. */
   esgotarAoZerar: boolean
   /** O estoque (e não a pessoa) esgotou o produto: só esse volta sozinho. */
@@ -341,6 +352,17 @@ export type PausaPedidos = { ate: string; so: "loja" | "entrega" }
 
 export type SomAlerta = "suave" | "alto" | "muito-alto" | "sirene"
 
+/**
+ * Taxa cobrada por forma de pagamento, em % do valor. Dinheiro e Pix no balcão não têm taxa;
+ * forma sem taxa informada conta como 0%.
+ */
+export type TaxasPagamento = {
+  pixOnline?: number
+  cartaoOnline?: number
+  /** Cartão na entrega ou no balcão, na maquininha. */
+  maquininha?: number
+}
+
 export type ConfigLoja = {
   nome: string
   slogan: string
@@ -364,6 +386,7 @@ export type ConfigLoja = {
   pagamentos: Record<FormaPagamento, boolean>
   /** Conta de pagamento online (Mercado Pago) conectada: libera Pix e cartão online. */
   pagamentoOnlineConectado?: boolean
+  taxasPagamento?: TaxasPagamento
   /** Salão: quantos atendimentos cabem ao mesmo tempo. Sem o campo, 1. */
   capacidadeAtendimentos?: number
   impressaoAutomatica: boolean

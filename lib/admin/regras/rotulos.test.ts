@@ -1,5 +1,13 @@
 import { describe, expect, test } from "vitest"
-import { rotuloCanal, rotuloOrigem, rotuloPagamento } from "./rotulos"
+import {
+  MOTIVOS_CANCELAMENTO,
+  rotuloCanal,
+  rotuloMotivo,
+  rotuloOrigem,
+  rotuloPagamento,
+  rotuloTaxa,
+  seloDaOrigem,
+} from "./rotulos"
 
 describe("rótulos", () => {
   test("canais de venda", () => {
@@ -16,13 +24,44 @@ describe("rótulos", () => {
     expect(rotuloPagamento("cartao-na-entrega")).toBe("Cartão na maquininha")
     expect(rotuloPagamento("pagar-apos-pesagem")).toBe("Após a pesagem")
   })
+
+  test("motivos do cancelamento, na ordem da lista; sem motivo, Não informado", () => {
+    expect(MOTIVOS_CANCELAMENTO.map(rotuloMotivo)).toEqual([
+      "Cliente pediu para cancelar",
+      "Sem estoque",
+      "Fora da área de entrega",
+      "Loja cheia",
+      "Endereço inválido",
+      "Cliente não veio",
+      "Receita inválida",
+      "Suspeita de fraude",
+      "Pagamento não aprovado",
+      "Demora",
+      "Loja fechou",
+      "Outro",
+    ])
+    expect(rotuloMotivo(undefined)).toBe("Não informado")
+  })
+
+  test("formas que têm taxa de pagamento", () => {
+    expect(rotuloTaxa("pixOnline")).toBe("Pix online")
+    expect(rotuloTaxa("cartaoOnline")).toBe("Cartão online")
+    expect(rotuloTaxa("maquininha")).toBe("Cartão na maquininha")
+  })
+
+  test("origens dos pedidos", () => {
+    expect(rotuloOrigem("site")).toBe("Site")
+    expect(rotuloOrigem("pdv")).toBe("PDV do balcão")
+    expect(rotuloOrigem("garcom")).toBe("Garçom")
+    expect(rotuloOrigem("painel")).toBe("Painel da loja")
+  })
 })
 
-describe("rotuloOrigem", () => {
+describe("seloDaOrigem", () => {
   test("de onde o pedido veio, como o selo do cartão mostra", () => {
-    expect(rotuloOrigem("site")).toBe("Site")
-    expect(rotuloOrigem("pdv")).toBe("PDV")
-    expect(rotuloOrigem("garcom")).toBe("Garçom")
-    expect(rotuloOrigem("painel")).toBe("Painel")
+    expect(seloDaOrigem("site")).toBe("Site")
+    expect(seloDaOrigem("pdv")).toBe("PDV")
+    expect(seloDaOrigem("garcom")).toBe("Garçom")
+    expect(seloDaOrigem("painel")).toBe("Painel")
   })
 })
