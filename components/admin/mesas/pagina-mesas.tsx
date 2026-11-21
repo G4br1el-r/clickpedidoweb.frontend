@@ -45,6 +45,8 @@ export function PaginaMesas() {
   const [abertaId, setAbertaId] = useState<string | null>(null)
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [bloqueandoId, setBloqueandoId] = useState<string | null>(null)
+  // O botão ⋯ que abriu Editar ou Bloquear: o foco volta a ele quando a janela fecha.
+  const [gatilhoMenu, setGatilhoMenu] = useState<HTMLElement | null>(null)
   const [novaAberta, setNovaAberta] = useState(false)
   const [ajudaAberta, setAjudaAberta] = useState(false)
 
@@ -185,8 +187,14 @@ export function PaginaMesas() {
                       {...linha}
                       agora={agora}
                       aoAbrir={() => setAbertaId(linha.mesa.id)}
-                      aoEditar={() => setEditandoId(linha.mesa.id)}
-                      aoBloquear={() => setBloqueandoId(linha.mesa.id)}
+                      aoEditar={(gatilho) => {
+                        setGatilhoMenu(gatilho)
+                        setEditandoId(linha.mesa.id)
+                      }}
+                      aoBloquear={(gatilho) => {
+                        setGatilhoMenu(gatilho)
+                        setBloqueandoId(linha.mesa.id)
+                      }}
                     />
                   </li>
                 ))}
@@ -201,9 +209,15 @@ export function PaginaMesas() {
         mesa={editando}
         aberta={editando !== undefined}
         aoMudar={() => setEditandoId(null)}
+        focoAoFechar={gatilhoMenu}
       />
       {bloqueando && (
-        <BloquearMesa mesa={bloqueando} aberta aoMudar={() => setBloqueandoId(null)} />
+        <BloquearMesa
+          mesa={bloqueando}
+          aberta
+          aoMudar={() => setBloqueandoId(null)}
+          focoAoFechar={gatilhoMenu}
+        />
       )}
       <ComandaMesa mesa={aberta} aoFechar={() => setAbertaId(null)} />
       <AtalhosMesas

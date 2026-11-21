@@ -23,6 +23,7 @@ import {
 import { useConfigSalao, useCriarMesa, useEditarMesa } from "@/lib/admin/dados/consultas-mesas"
 import { FORMAS_MESA, type FormaMesa, type Mesa } from "@/lib/admin/dados/tipos"
 import { nomePadraoDaMesa } from "@/lib/admin/regras/mesas"
+import { devolverFocoA } from "./devolver-foco"
 
 const ROTULO_FORMA: Record<FormaMesa, string> = {
   quadrada: "Quadrada",
@@ -162,14 +163,17 @@ export function FormularioMesa({
   mesa,
   aberta,
   aoMudar,
+  focoAoFechar,
 }: {
   mesa?: Mesa
   aberta: boolean
   aoMudar: (aberta: boolean) => void
+  /** Para onde o foco volta quando a janela fecha. */
+  focoAoFechar?: HTMLElement | null
 }) {
   return (
     <Dialog open={aberta} onOpenChange={aoMudar}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-sm" onCloseAutoFocus={devolverFocoA(focoAoFechar)}>
         <Campos mesa={mesa} aoFechar={() => aoMudar(false)} />
       </DialogContent>
     </Dialog>

@@ -644,6 +644,40 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
     await waitFor(async () => expect(await cartao(12)).toHaveTextContent("Sem motivo"))
   })
 
+  test("fechar o Bloquear aberto pelo ⋯ devolve o foco ao botão Ações da mesa 12", async () => {
+    const usuario = await abrir()
+    await usuario.click((await menu(usuario, 12)).getByRole("menuitem", { name: "Bloquear" }))
+    await screen.findByRole("dialog", { name: "Bloquear mesa 12" })
+    await usuario.keyboard("{Escape}")
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Bloquear mesa 12" })).not.toBeInTheDocument(),
+    )
+    expect(screen.getByRole("button", { name: "Ações da mesa 12" })).toHaveFocus()
+  })
+
+  test("fechar o Editar aberto pelo ⋯ devolve o foco ao botão Ações da mesa 3", async () => {
+    const usuario = await abrir()
+    await usuario.click((await menu(usuario, 3)).getByRole("menuitem", { name: "Editar" }))
+    await screen.findByRole("dialog", { name: "Editar mesa 3" })
+    await usuario.keyboard("{Escape}")
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Editar mesa 3" })).not.toBeInTheDocument(),
+    )
+    expect(screen.getByRole("button", { name: "Ações da mesa 3" })).toHaveFocus()
+  })
+
+  test("cancelar o Excluir aberto pelo ⋯ devolve o foco ao botão Ações da mesa 12", async () => {
+    const usuario = await abrir()
+    await usuario.click((await menu(usuario, 12)).getByRole("menuitem", { name: "Excluir" }))
+    const pergunta = await screen.findByRole("alertdialog", { name: "Excluir a mesa 12?" })
+    await usuario.click(within(pergunta).getByRole("button", { name: "Cancelar" }))
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument())
+    expect(screen.getByRole("button", { name: "Ações da mesa 12" })).toHaveFocus()
+  })
+
   test("a mesa ocupada não oferece Bloquear no menu", async () => {
     const usuario = await abrir()
     const itens = await menu(usuario, 6)

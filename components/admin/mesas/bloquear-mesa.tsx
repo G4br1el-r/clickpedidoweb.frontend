@@ -15,6 +15,7 @@ import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useBloquearMesa } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
+import { devolverFocoA } from "./devolver-foco"
 
 function Campos({ mesa, aoFechar }: { mesa: Pick<Mesa, "id" | "numero">; aoFechar: () => void }) {
   const bloquear = useBloquearMesa()
@@ -66,14 +67,17 @@ export function BloquearMesa({
   mesa,
   aberta,
   aoMudar,
+  focoAoFechar,
 }: {
   mesa: Pick<Mesa, "id" | "numero">
   aberta: boolean
   aoMudar: (aberta: boolean) => void
+  /** Para onde o foco volta quando a janela fecha. */
+  focoAoFechar?: HTMLElement | null
 }) {
   return (
     <Dialog open={aberta} onOpenChange={aoMudar}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-sm" onCloseAutoFocus={devolverFocoA(focoAoFechar)}>
         <Campos mesa={mesa} aoFechar={() => aoMudar(false)} />
       </DialogContent>
     </Dialog>

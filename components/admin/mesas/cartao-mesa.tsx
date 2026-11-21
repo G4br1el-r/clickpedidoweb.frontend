@@ -59,9 +59,9 @@ const ACOES: Record<EstadoMesa, AcaoMesa[]> = {
 
 type Acoes = {
   aoAbrir: () => void
-  /** Sem a função, o item aparece desligado. */
-  aoEditar?: () => void
-  aoBloquear?: () => void
+  /** Sem a função, o item aparece desligado. Recebem o botão ⋯, para onde o foco volta. */
+  aoEditar?: (gatilho: HTMLElement | null) => void
+  aoBloquear?: (gatilho: HTMLElement | null) => void
 }
 
 function MenuMesa({
@@ -74,6 +74,8 @@ function MenuMesa({
   const marcarLimpa = useMarcarLimpa()
   const desbloquear = useDesbloquearMesa()
   const [excluindo, setExcluindo] = useState(false)
+  // Em estado, não em ref: a pergunta de excluir lê o botão ao renderizar.
+  const [gatilho, setGatilho] = useState<HTMLButtonElement | null>(null)
   const aoErrar = (erro: Error) => toast.error(erro.message)
   const itens: Record<AcaoMesa, React.ReactNode> = {
     abrir: (
@@ -111,13 +113,21 @@ function MenuMesa({
       </DropdownMenuItem>
     ),
     editar: (
-      <DropdownMenuItem key="editar" disabled={!aoEditar} onSelect={aoEditar}>
+      <DropdownMenuItem
+        key="editar"
+        disabled={!aoEditar}
+        onSelect={() => aoEditar?.(gatilho)}
+      >
         <PencilIcon />
         Editar
       </DropdownMenuItem>
     ),
     bloquear: (
-      <DropdownMenuItem key="bloquear" disabled={!aoBloquear} onSelect={aoBloquear}>
+      <DropdownMenuItem
+        key="bloquear"
+        disabled={!aoBloquear}
+        onSelect={() => aoBloquear?.(gatilho)}
+      >
         <LockIcon />
         Bloquear
       </DropdownMenuItem>
@@ -134,6 +144,7 @@ function MenuMesa({
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
+            ref={setGatilho}
             type="button"
             variant="ghost"
             size="icon-sm"
@@ -147,7 +158,12 @@ function MenuMesa({
           {ACOES[estado].map((acao) => itens[acao])}
         </DropdownMenuContent>
       </DropdownMenu>
-      <ConfirmarExclusaoMesa mesa={mesa} aberta={excluindo} aoMudar={setExcluindo} />
+      <ConfirmarExclusaoMesa
+        mesa={mesa}
+        aberta={excluindo}
+        aoMudar={setExcluindo}
+        focoAoFechar={gatilho}
+      />
     </>
   )
 }
