@@ -16,6 +16,9 @@ import { PaginaMesas } from "./pagina-mesas"
 const imprimir = vi.fn()
 vi.mock("react-to-print", () => ({ useReactToPrint: () => imprimir }))
 
+// O cliente da última tela montada, para o teste ler a configuração das consultas.
+let ultimoCliente: QueryClient
+
 function Provedores({
   children,
   endereco,
@@ -25,9 +28,10 @@ function Provedores({
   endereco?: string
   aoMudarUrl?: OnUrlUpdateFunction
 }) {
-  const [cliente] = useState(
-    () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
-  )
+  const [cliente] = useState(() => {
+    ultimoCliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    return ultimoCliente
+  })
   return (
     <NuqsTestingAdapter hasMemory searchParams={endereco} onUrlUpdate={aoMudarUrl}>
       <QueryClientProvider client={cliente}>
@@ -611,5 +615,75 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
         name: "Nome (opcional)",
       }),
     ).toHaveValue("Janela")
+  })
+
+  describe("atalhos do teclado", () => {
+    test("digitar 6, 0 e Enter fora de campo abre a comanda da mesa 60", async () => {
+      await mesaOcupada()
+      const usuario = await abrir()
+      await cartao(60)
+      await usuario.keyboard("60")
+      expect(await screen.findByText("Mesa 60 ↵")).toBeInTheDocument()
+      await usuario.keyboard("{Enter}")
+      expect(await screen.findByRole("dialog", { name: /^Mesa 60/ })).toBeInTheDocument()
+    })
+
+    test("digitar 9, 9, 9 e Enter avisa que a mesa não existe", async () => {
+      const usuario = await abrir()
+      await usuario.keyboard("999{Enter}")
+      expect(await screen.findByText("Não existe a mesa 999.")).toBeInTheDocument()
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    })
+
+    test("0 e Enter tratam a mesa 0 como inexistente", async () => {
+      const usuario = await abrir()
+      await usuario.keyboard("0{Enter}")
+      expect(await screen.findByText("Não existe a mesa 0.")).toBeInTheDocument()
+    })
+
+    test("/ põe o foco na busca", async () => {
+      const usuario = await abrir()
+      await usuario.keyboard("/")
+      expect(screen.getByRole("searchbox", { name: "Buscar mesa" })).toHaveFocus()
+      expect(screen.getByRole("searchbox", { name: "Buscar mesa" })).toHaveValue("")
+    })
+
+    test("digitar n dentro da busca só escreve na busca", async () => {
+      const usuario = await abrir()
+      await usuario.click(screen.getByRole("searchbox", { name: "Buscar mesa" }))
+      await usuario.keyboard("n")
+      expect(screen.getByRole("searchbox", { name: "Buscar mesa" })).toHaveValue("n")
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    })
+
+    test("n abre Nova mesa", async () => {
+      const usuario = await abrir()
+      await usuario.keyboard("n")
+      expect(await screen.findByRole("dialog", { name: "Nova mesa" })).toBeInTheDocument()
+    })
+
+    test("? abre a folha Atalhos do teclado", async () => {
+      const usuario = await abrir()
+      await usuario.keyboard("?")
+      const folha = await screen.findByRole("dialog", { name: "Atalhos do teclado" })
+      expect(within(folha).getByText("Abrir a mesa pelo número")).toBeInTheDocument()
+    })
+
+    test("com uma janela aberta, os atalhos não disparam", async () => {
+      const usuario = await abrir()
+      await usuario.keyboard("?")
+      await screen.findByRole("dialog", { name: "Atalhos do teclado" })
+      await usuario.keyboard("n")
+      expect(screen.queryByRole("dialog", { name: "Nova mesa" })).not.toBeInTheDocument()
+    })
+
+    test("uma mesa criada no servidor depois da tela aberta aparece em até 4 s", async () => {
+      // O relógio falso só mexe no Date; esperar 4 s de verdade pesaria no teste, então
+      // confere o intervalo que a consulta usa.
+      await abrir()
+      const cliente = ultimoCliente
+      const consulta = cliente.getQueryCache().find({ queryKey: ["admin", "pizzaria", "mesas"] })
+      expect(consulta?.observers[0]?.options.refetchInterval).toBe(4_000)
+    })
   })
 })

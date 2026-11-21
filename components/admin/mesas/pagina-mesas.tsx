@@ -2,6 +2,7 @@
 
 import { ArmchairIcon, SearchXIcon } from "lucide-react"
 import { useState } from "react"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   Empty,
@@ -21,6 +22,7 @@ import { filtrarMesas, type MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { plural } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { AtalhosMesas, FolhaAtalhos } from "./atalhos-mesas"
 import { BloquearMesa } from "./bloquear-mesa"
 import { CartaoMesa } from "./cartao-mesa"
 import { ComandaMesa } from "./comanda-mesa"
@@ -35,7 +37,7 @@ const GRADE = "grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-co
 
 /** Mesas do salão: a grade por área, na ordem das áreas, e a comanda de cada mesa. */
 export function PaginaMesas() {
-  const { data: mesas } = useMesas()
+  const { data: mesas } = useMesas(4_000)
   const { data: salao } = useConfigSalao()
   const { data: fila } = useFila()
   const agora = useAgora(30_000)
@@ -43,6 +45,8 @@ export function PaginaMesas() {
   const [abertaId, setAbertaId] = useState<string | null>(null)
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [bloqueandoId, setBloqueandoId] = useState<string | null>(null)
+  const [novaAberta, setNovaAberta] = useState(false)
+  const [ajudaAberta, setAjudaAberta] = useState(false)
 
   const comandas = new Map(
     (fila ?? []).filter((pedido) => pedido.tipo === "mesa").map((p) => [p.id, p]),
@@ -58,6 +62,12 @@ export function PaginaMesas() {
   const aberta = mesas?.find((mesa) => mesa.id === abertaId) ?? null
   const editando = mesas?.find((mesa) => mesa.id === editandoId)
   const bloqueando = mesas?.find((mesa) => mesa.id === bloqueandoId)
+
+  function abrirPeloNumero(numero: number) {
+    const mesa = mesas?.find((candidata) => candidata.numero === numero)
+    if (mesa) setAbertaId(mesa.id)
+    else toast.error(`Não existe a mesa ${numero}.`)
+  }
 
   const linhas: MesaNaGrade[] = (mesas ?? []).map((mesa) => {
     const comanda = comandaDa(mesa)
@@ -104,7 +114,7 @@ export function PaginaMesas() {
         acoes={
           <>
             <ConfigurarSalao salao={salao} />
-            <NovaMesa />
+            <NovaMesa aberta={novaAberta} aoMudar={setNovaAberta} />
           </>
         }
       />
@@ -194,6 +204,12 @@ export function PaginaMesas() {
         <BloquearMesa mesa={bloqueando} aberta aoMudar={() => setBloqueandoId(null)} />
       )}
       <ComandaMesa mesa={aberta} aoFechar={() => setAbertaId(null)} />
+      <AtalhosMesas
+        aoAbrirMesa={abrirPeloNumero}
+        aoNovaMesa={() => setNovaAberta(true)}
+        aoAjuda={() => setAjudaAberta(true)}
+      />
+      <FolhaAtalhos aberta={ajudaAberta} aoMudar={setAjudaAberta} />
     </div>
   )
 }
