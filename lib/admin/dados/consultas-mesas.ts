@@ -12,12 +12,13 @@ const chaveMesas = (segmento: SegmentoPainelId) => ["admin", segmento, "mesas"] 
 const useSegmento = () => useSegmentoAtual((estado) => estado.segmento)
 
 /** Mesas da loja, conferidas de tempos em tempos: o garçom lança de outro aparelho. */
-export function useMesas(intervalo = 10_000) {
+export function useMesas(intervalo = 10_000, { ativo = true }: { ativo?: boolean } = {}) {
   const segmento = useSegmento()
   return useQuery({
     queryKey: chaveMesas(segmento),
     queryFn: () => servidorDo(segmento).mesas.listar(),
     refetchInterval: intervalo,
+    enabled: ativo,
   })
 }
 

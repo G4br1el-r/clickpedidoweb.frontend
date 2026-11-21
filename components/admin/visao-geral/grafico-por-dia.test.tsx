@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react"
 import { beforeEach, describe, expect, test, vi } from "vitest"
-import type { DiaDaSerie } from "@/lib/admin/regras/dashboard"
+import type { DiaDaSerie } from "@/lib/admin/regras/dashboard/resumo"
 import GraficoPorDia from "./grafico-por-dia"
 
 // Navegação do Next: a fronteira. O teste confere para onde o clique leva.
