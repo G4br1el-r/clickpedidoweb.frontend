@@ -63,6 +63,26 @@ describe("esquema do salão", () => {
     expect(resultado.error?.issues[0].message).toBe("Já existe a área Salão.")
   })
 
+  test.each([
+    ["Rafa", "rafa"],
+    ["Bia", " Biá "],
+  ])(
+    "dois garçons com o mesmo nome (%s e %s) são recusados no caminho do segundo",
+    (primeiro, segundo) => {
+      const resultado = esquemaSalao.safeParse({
+        ...padrao,
+        garcons: [
+          { id: "g1", nome: primeiro, ativo: true },
+          { id: "g2", nome: segundo, ativo: false },
+        ],
+      })
+      expect(resultado.error?.issues[0]).toMatchObject({
+        message: `Já existe o garçom ${primeiro}.`,
+        path: ["garcons", 1, "nome"],
+      })
+    },
+  )
+
   test("nomes de área e garçom são aparados e limitados a 30 e 40 caracteres", () => {
     const resultado = esquemaSalao.parse({
       ...padrao,

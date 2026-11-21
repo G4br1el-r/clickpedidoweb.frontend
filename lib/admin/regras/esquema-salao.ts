@@ -88,18 +88,27 @@ export const esquemaSalao = z
         message: "Há dois garçons com o mesmo identificador.",
       })
     }
-    const vistas = new Map<string, string>()
-    salao.areas.forEach((area, indice) => {
-      const chave = normalizar(area.nome)
-      const primeira = vistas.get(chave)
-      if (primeira !== undefined) {
-        contexto.addIssue({
-          code: "custom",
-          path: ["areas", indice, "nome"],
-          message: `Já existe a área ${primeira}.`,
-        })
-      } else {
-        vistas.set(chave, area.nome)
-      }
-    })
+    // Nome repetido, sem diferenciar acento e maiúscula: o erro fica no segundo.
+    const nomesRepetidos = (
+      campo: "areas" | "garcons",
+      itens: { nome: string }[],
+      mensagem: (primeiro: string) => string,
+    ) => {
+      const vistos = new Map<string, string>()
+      itens.forEach((item, indice) => {
+        const chave = normalizar(item.nome)
+        const primeiro = vistos.get(chave)
+        if (primeiro !== undefined) {
+          contexto.addIssue({
+            code: "custom",
+            path: [campo, indice, "nome"],
+            message: mensagem(primeiro),
+          })
+        } else {
+          vistos.set(chave, item.nome)
+        }
+      })
+    }
+    nomesRepetidos("areas", salao.areas, (primeira) => `Já existe a área ${primeira}.`)
+    nomesRepetidos("garcons", salao.garcons, (primeiro) => `Já existe o garçom ${primeiro}.`)
   }) satisfies z.ZodType<ConfigSalao, unknown>
