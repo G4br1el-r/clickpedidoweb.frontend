@@ -728,6 +728,20 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
       expect(await screen.findByRole("dialog", { name: /^Mesa 60/ })).toBeInTheDocument()
     })
 
+    test("o aviso dos dígitos é uma região viva sempre montada: vazia, com o número, vazia de novo", async () => {
+      const usuario = await abrir()
+      // Montada desde o começo, o leitor de tela já a conhece quando o texto chega.
+      const aviso = screen.getByRole("status")
+      expect(aviso).toHaveAttribute("aria-live", "polite")
+      expect(aviso).toBeEmptyDOMElement()
+
+      await usuario.keyboard("12")
+      expect(aviso).toHaveTextContent("Mesa 12 ↵")
+      await usuario.keyboard("{Escape}")
+      expect(aviso).toBeEmptyDOMElement()
+      expect(aviso).toBeInTheDocument()
+    })
+
     test("digitar 9, 9, 9 e Enter avisa que a mesa não existe", async () => {
       const usuario = await abrir()
       await usuario.keyboard("999{Enter}")

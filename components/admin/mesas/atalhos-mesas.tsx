@@ -85,13 +85,14 @@ export function AtalhosMesas({
     }
   }, [])
 
-  if (digitado === "") return null
+  // A região viva fica sempre montada e só o texto muda: assim o leitor de tela anuncia o número.
   return (
-    <output
-      aria-live="polite"
-      className="fixed bottom-4 left-1/2 -translate-x-1/2 rounded-full border bg-popover px-4 py-1.5 text-sm font-medium tabular-nums shadow-md"
-    >
-      Mesa {digitado} ↵
+    <output aria-live="polite" className="fixed bottom-4 left-1/2 -translate-x-1/2">
+      {digitado !== "" && (
+        <span className="block rounded-full border bg-popover px-4 py-1.5 text-sm font-medium tabular-nums shadow-md">
+          Mesa {digitado} ↵
+        </span>
+      )}
     </output>
   )
 }
