@@ -55,6 +55,12 @@ describe("filtrarMesas", () => {
     expect(numeros(filtrarMesas(linhas, { ...vazios, busca: "12" }, "numero"))).toEqual([12, 120])
   })
 
+  it("com zero à esquerda, como no nome 'Mesa 07': '07' acha a 7, não a 70; '7' acha a 7 e a 70", () => {
+    const linhas = [linha(7), linha(70)]
+    expect(numeros(filtrarMesas(linhas, { ...vazios, busca: "07" }, "numero"))).toEqual([7])
+    expect(numeros(filtrarMesas(linhas, { ...vazios, busca: "7" }, "numero"))).toEqual([7, 70])
+  })
+
   it("termo só com dígitos olha só o número: '3' não acha a mesa 'Varanda 3'", () => {
     const linhas = [linha(3), linha(7, { nome: "Varanda 3" })]
     expect(numeros(filtrarMesas(linhas, { ...vazios, busca: "3" }, "numero"))).toEqual([3])

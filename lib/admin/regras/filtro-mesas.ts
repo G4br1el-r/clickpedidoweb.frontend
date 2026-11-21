@@ -22,8 +22,11 @@ export type MesaNaGrade = {
 function combinaBusca({ mesa }: MesaNaGrade, busca: string) {
   const texto = normalizar(busca).trim()
   if (!texto) return true
-  // Só dígitos: busca o número, pelo começo. Com texto: nome da mesa e cliente.
-  if (/^[0-9]+$/.test(texto)) return String(mesa.numero).startsWith(texto)
+  // Só dígitos: busca o número, pelo começo. O número ganha zeros à esquerda até o tamanho do
+  // termo, como no nome "Mesa 07": "07" acha a 7 e não a 70. Com texto: nome da mesa e cliente.
+  if (/^[0-9]+$/.test(texto)) {
+    return String(mesa.numero).padStart(texto.length, "0").startsWith(texto)
+  }
   return normalizar(mesa.nome).includes(texto) || normalizar(mesa.clienteNome ?? "").includes(texto)
 }
 
