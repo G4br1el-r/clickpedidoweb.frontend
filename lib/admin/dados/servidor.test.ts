@@ -238,13 +238,13 @@ describe("servidor de demonstração", () => {
       }
     })
 
-    test("a comanda aberta há mais tempo já pediu a conta, 5 min atrás", async () => {
+    test("a comanda aberta há mais tempo já pediu a conta, 12 min atrás", async () => {
       const { mesas, base } = await salaoCheio()
       const comandas = mesas
         .filter((mesa) => mesa.status === "ocupada")
         .map((mesa) => base.pedidos.find((pedido) => pedido.id === mesa.pedidoAtivoId) as Pedido)
       const maisAntiga = comandas.reduce((a, b) => (a.criadoEm < b.criadoEm ? a : b))
-      expect(maisAntiga.contaPedidaEm).toBe(antes(5))
+      expect(maisAntiga.contaPedidaEm).toBe(antes(12))
       expect(comandas.filter((comanda) => comanda.contaPedidaEm)).toHaveLength(1)
     })
 
@@ -276,7 +276,7 @@ describe("servidor de demonstração", () => {
         (mesa) => base.pedidos.find((pedido) => pedido.id === mesa.pedidoAtivoId) as Pedido,
       )
       const maisAntiga = comandas.reduce((a, b) => (a.criadoEm < b.criadoEm ? a : b))
-      expect(maisAntiga.contaPedidaEm).toBe(new Date(dia.getTime() - 5 * 60_000).toISOString())
+      expect(maisAntiga.contaPedidaEm).toBe(new Date(dia.getTime() - 12 * 60_000).toISOString())
       const mesa9 = mesas.find((mesa) => mesa.id === "mesa-9")
       expect(mesa9?.status).toBe("livre")
       expect(mesa9?.limpezaDesde).toBe(new Date(dia.getTime() - 3 * 60_000).toISOString())

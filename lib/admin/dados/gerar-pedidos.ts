@@ -95,7 +95,7 @@ const AO_VIVO: readonly {
   /** No açougue, com carne no quilo, fica sempre para pagar depois de pesar. */
   pesar?: boolean
 }[] = [
-  { idade: 95, tipo: "mesa", pagamento: "dinheiro", contaPedidaHa: 5 },
+  { idade: 95, tipo: "mesa", pagamento: "dinheiro", contaPedidaHa: 12 },
   { idade: 80, tipo: "mesa", pagamento: "dinheiro" },
   { idade: 70, tipo: "mesa", pagamento: "dinheiro" },
   { idade: 64, tipo: "entrega", pagamento: "pix" },
