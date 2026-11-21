@@ -1,19 +1,41 @@
 "use client"
 
-import { format, startOfDay } from "date-fns"
+import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { ReceiptTextIcon, SquareKanbanIcon } from "lucide-react"
 import Link from "next/link"
+import { parseAsString, useQueryState } from "nuqs"
 import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLoja, usePedidos } from "@/lib/admin/dados/consultas"
-import { resumir } from "@/lib/admin/regras/dashboard"
-import { periodoAnterior } from "@/lib/admin/regras/periodo"
+import { useCategorias, useProdutos } from "@/lib/admin/dados/consultas-cardapio"
+import { useMesas } from "@/lib/admin/dados/consultas-mesas"
+import { useFarmacia } from "@/lib/admin/farmacia-estado"
+import { useMetas } from "@/lib/admin/metas"
+import { abaEscolhida, abasDo } from "@/lib/admin/regras/dashboard/abas"
+import { alertasDoPainel } from "@/lib/admin/regras/dashboard/alertas"
+import { periodoDaBusca } from "@/lib/admin/regras/dashboard/busca"
+import { periodoDeClientes } from "@/lib/admin/regras/dashboard/clientes"
+import { situacaoDaMeta } from "@/lib/admin/regras/dashboard/metas"
+import { resumir } from "@/lib/admin/regras/dashboard/resumo"
+import { destaquesDoSegmento } from "@/lib/admin/regras/dashboard/segmento"
+import { hojeVsSemanaPassada } from "@/lib/admin/regras/dashboard/semana-passada"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { temModulo } from "@/lib/admin/segmentos-painel"
+import { lotesDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { AbaClientes } from "./clientes/aba-clientes"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
-import { PainelVisaoGeral } from "./painel-visao-geral"
+import { AbaFinanceiro } from "./financeiro/aba-financeiro"
+import { AbaOperacao } from "./operacao/aba-operacao"
+import { AbaResumo } from "./painel-visao-geral"
+import { AbaProdutos } from "./produtos/aba-produtos"
+import { AbaVendas } from "./vendas/aba-vendas"
+
+/** De quanto em quanto tempo o Resumo confere os pedidos. */
+const ATUALIZAR_RESUMO_A_CADA = 30_000
 
 /** Esqueleto no formato final da tela: blocos de hoje, do período, gráfico e listas. */
 function EsqueletoVisaoGeral() {
@@ -41,16 +63,75 @@ function EsqueletoVisaoGeral() {
 export function VisaoGeral() {
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const { agora, periodo } = usePeriodo()
+  const [valorDaAba, setAba] = useQueryState("aba", parseAsString)
+  const aba = abaEscolhida(valorDaAba, segmento)
   const { data: loja } = useLoja()
 
   // Uma busca só cobre o período, o anterior (para comparar) e hoje.
-  const filtro =
-    agora && periodo ? { de: periodoAnterior(periodo).de, ate: startOfDay(agora) } : undefined
-  const { data: pedidos } = usePedidos(filtro, { ativo: Boolean(filtro) })
+  const filtro = agora && periodo ? periodoDaBusca(periodo, agora) : undefined
+  // No Resumo, hoje e os alertas se atualizam sozinhos; as abas de análise, não.
+  const { data: pedidos } = usePedidos(filtro, {
+    ativo: Boolean(filtro),
+    atualizarACada: aba === "resumo" ? ATUALIZAR_RESUMO_A_CADA : undefined,
+  })
+
+  // A aba Clientes enxerga sempre os últimos 90 dias, numa busca própria.
+  const { data: pedidosDeClientes } = usePedidos(agora ? periodoDeClientes(agora) : undefined, {
+    ativo: aba === "clientes" && Boolean(agora),
+  })
 
   const resumo = useMemo(
     () => (pedidos && periodo && agora ? resumir(pedidos, periodo, agora) : null),
     [pedidos, periodo, agora],
+  )
+  const comparacao = useMemo(
+    () => (pedidos && agora ? hojeVsSemanaPassada(pedidos, agora) : undefined),
+    [pedidos, agora],
+  )
+
+  const metaDefinida = useMetas((estado) => estado.metas[segmento])
+  const meta = useMemo(
+    () =>
+      metaDefinida && pedidos && loja && agora
+        ? situacaoDaMeta(metaDefinida, pedidos, loja.horarios, agora)
+        : null,
+    [metaDefinida, pedidos, loja, agora],
+  )
+
+  const temMesas = temModulo(segmento, "mesas")
+  const { data: mesas } = useMesas(30_000, { ativo: temMesas })
+
+  const { data: produtos } = useProdutos()
+  const { data: categorias } = useCategorias()
+  const decisoes = useFarmacia((estado) => estado.decisoes)
+  // A farmácia guarda receitas e lotes fora do servidor de demonstração.
+  const farmacia = useMemo(
+    () =>
+      segmento === "farmacia" && agora
+        ? { lotes: lotesDemo(agora), receitas: receitasDemo(agora) }
+        : { lotes: [], receitas: [] },
+    [segmento, agora],
+  )
+  const alertas = useMemo(
+    () =>
+      pedidos && produtos && loja && agora
+        ? alertasDoPainel({ segmento, agora, pedidos, produtos, loja, ...farmacia, decisoes, meta })
+        : [],
+    [pedidos, produtos, loja, agora, segmento, farmacia, decisoes, meta],
+  )
+  const destaques = useMemo(
+    () =>
+      pedidos && agora && (!temMesas || mesas)
+        ? destaquesDoSegmento({
+            segmento,
+            agora,
+            pedidos,
+            ...farmacia,
+            decisoes,
+            mesas: temMesas ? (mesas ?? []) : null,
+          })
+        : [],
+    [pedidos, agora, segmento, farmacia, decisoes, temMesas, mesas],
   )
 
   return (
@@ -81,13 +162,90 @@ export function VisaoGeral() {
         }
       />
 
-      <FiltroPeriodo />
+      <Tabs
+        value={aba}
+        // Resumo é o padrão: fica fora do endereço.
+        onValueChange={(valor) => void setAba(valor === "resumo" ? null : valor)}
+        className="gap-6"
+      >
+        {/*
+          No celular, a barra fica presa embaixo do cabeçalho e rola para o lado, com a borda
+          direita esmaecida quando há mais abas. No notebook em diante, as abas cabem inteiras.
+        */}
+        <div className="max-md:sticky max-md:top-14 max-md:z-20 max-md:-mx-4 max-md:border-b max-md:border-border/70 max-md:bg-card max-md:px-4">
+          <TabsList
+            variant="line"
+            aria-label="Abas da visão geral"
+            className="max-md:w-full max-md:justify-start max-md:overflow-x-auto max-md:[mask-image:linear-gradient(to_right,black_85%,transparent)] max-md:[scrollbar-width:none]"
+          >
+            {abasDo(segmento).map((item) => (
+              <TabsTrigger key={item.id} value={item.id} className="flex-none cursor-pointer">
+                {item.titulo}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
-      {resumo && periodo ? (
-        <PainelVisaoGeral resumo={resumo} periodo={periodo} segmento={segmento} />
-      ) : (
-        <EsqueletoVisaoGeral />
-      )}
+        {aba === "clientes" ? (
+          <p className="text-sm text-muted-foreground">Últimos 90 dias, até hoje</p>
+        ) : (
+          <FiltroPeriodo />
+        )}
+
+        {/* Só a aba aberta é montada; cada uma é o painel da sua aba para leitores de tela. */}
+        <TabsContent value={aba}>
+          {resumo && periodo ? (
+            aba === "vendas" ? (
+              <AbaVendas pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
+            ) : aba === "clientes" ? (
+              pedidosDeClientes && loja && agora ? (
+                <AbaClientes
+                  pedidos={pedidosDeClientes}
+                  agora={agora}
+                  segmento={segmento}
+                  loja={loja}
+                  linkDaLoja={typeof window === "undefined" ? "/" : `${window.location.origin}/`}
+                />
+              ) : (
+                <EsqueletoVisaoGeral />
+              )
+            ) : aba === "operacao" ? (
+              <AbaOperacao pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
+            ) : aba === "produtos" ? (
+              // Sem o cardápio, "o que não vendeu" estaria errado: espera os dois chegarem.
+              produtos && categorias ? (
+                <AbaProdutos
+                  pedidos={pedidos ?? []}
+                  periodo={periodo}
+                  segmento={segmento}
+                  produtos={produtos}
+                  categorias={categorias}
+                />
+              ) : (
+                <EsqueletoVisaoGeral />
+              )
+            ) : aba === "financeiro" ? (
+              <AbaFinanceiro
+                pedidos={pedidos ?? []}
+                periodo={periodo}
+                taxas={loja?.taxasPagamento}
+              />
+            ) : (
+              <AbaResumo
+                resumo={resumo}
+                periodo={periodo}
+                segmento={segmento}
+                comparacao={comparacao}
+                alertas={alertas}
+                meta={meta}
+                destaques={destaques}
+              />
+            )
+          ) : (
+            <EsqueletoVisaoGeral />
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

@@ -92,6 +92,9 @@ export function colunasDaFila(
   }))
 }
 
+/** Dashboard: de quantos minutos desde a criação o pedido conta como atrasado. */
+export const MINUTOS_DE_ATRASO = 40
+
 /** Âmbar nos 10 últimos minutos do prazo prometido, vermelho quando passa. */
 const AVISO_ANTES_MIN = 10
 

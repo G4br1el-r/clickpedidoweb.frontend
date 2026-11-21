@@ -72,6 +72,34 @@ describe("semearEstoque", () => {
     }
   })
 
+  test("as compras usam o custo do produto; sem custo, o produto ganha um plausível", async () => {
+    const catalogo = await carregarCatalogo("adega")
+    const [primeiro, segundo] = catalogo.produtos
+    const comCusto = {
+      ...catalogo,
+      produtos: [
+        { ...primeiro, custo: 12.34 },
+        { ...segundo, custo: undefined },
+      ],
+    }
+    const { produtos, movimentos } = semearEstoque({
+      catalogo: comCusto,
+      segmento: "adega",
+      agora: AGORA,
+    })
+    const entradas = (id: string) =>
+      movimentos.filter((movimento) => movimento.produtoId === id && movimento.tipo === "entrada")
+
+    expect(produtos[0].custo).toBe(12.34)
+    for (const entrada of entradas(primeiro.id)) expect(entrada.custoUnitario).toBe(12.34)
+    expect(produtos[0].estoque).not.toHaveProperty("custo")
+
+    const custo = produtos[1].custo as number
+    expect(custo).toBeGreaterThanOrEqual(segundo.preco * 0.4)
+    expect(custo).toBeLessThanOrEqual(segundo.preco * 0.65)
+    for (const entrada of entradas(segundo.id)) expect(entrada.custoUnitario).toBe(custo)
+  })
+
   test("produto que já vem com estoque fica como veio, sem histórico inventado", async () => {
     const catalogo = await carregarCatalogo("adega")
     const [primeiro] = catalogo.produtos

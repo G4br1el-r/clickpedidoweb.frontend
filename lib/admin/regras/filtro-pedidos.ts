@@ -1,11 +1,21 @@
 import type {
   FormaPagamento,
+  MotivoCancelamento,
+  OrigemPedido,
   Pedido,
   SituacaoPagamento,
   StatusPedido,
   TipoPedido,
 } from "../dados/tipos"
-import { ehValido } from "./dashboard"
+import { telefoneDoCliente } from "./dashboard/clientes"
+import { ehValido } from "./dashboard/comum"
+
+/** O motivo no filtro: o cancelado sem motivo aparece como "Não informado". */
+export type MotivoDoFiltro = MotivoCancelamento | "nao-informado"
+
+/** O motivo do pedido cancelado, ou "nao-informado"; o que não foi cancelado não tem. */
+export const motivoDoPedido = (pedido: Pedido): MotivoDoFiltro | undefined =>
+  pedido.status === "cancelado" ? (pedido.cancelamento?.motivo ?? "nao-informado") : undefined
 
 export type FiltrosLista = {
   busca?: string
@@ -14,6 +24,10 @@ export type FiltrosLista = {
   pagamentos?: FormaPagamento[]
   /** Só o que ainda falta receber: a cobrar na entrega ou aguardando pagamento. */
   naoPagos?: boolean
+  origens?: OrigemPedido[]
+  /** Telefones do cliente, só os dígitos com DDD. */
+  clientes?: string[]
+  motivos?: MotivoDoFiltro[]
 }
 
 /** Minúsculas e sem acento: "João" acha "joao". */
@@ -41,10 +55,22 @@ const A_RECEBER: readonly SituacaoPagamento[] = ["na-entrega", "pendente"]
 
 const aceita = <T>(lista: T[] | undefined, valor: T) => !lista?.length || lista.includes(valor)
 
-/** Busca (número, cliente, telefone, bairro ou item) combinada com os filtros de status, canal e pagamento. */
+/**
+ * Busca (número, cliente, telefone, bairro ou item) combinada com os filtros de status, canal,
+ * pagamento, origem, cliente, motivo do cancelamento e o que falta receber.
+ */
 export function filtrarPedidos(
   pedidos: Pedido[],
-  { busca = "", status, tipos, pagamentos, naoPagos = false }: FiltrosLista,
+  {
+    busca = "",
+    status,
+    tipos,
+    pagamentos,
+    origens,
+    clientes,
+    motivos,
+    naoPagos = false,
+  }: FiltrosLista,
 ) {
   return pedidos.filter(
     (pedido) =>
@@ -52,6 +78,9 @@ export function filtrarPedidos(
       aceita(tipos, pedido.tipo) &&
       aceita(pagamentos, pedido.pagamento) &&
       (!naoPagos || A_RECEBER.includes(pedido.situacaoPagamento)) &&
+      aceita(origens, pedido.origem) &&
+      (!clientes?.length || clientes.includes(telefoneDoCliente(pedido.cliente.telefone) ?? "")) &&
+      (!motivos?.length || motivos.includes(motivoDoPedido(pedido) as MotivoDoFiltro)) &&
       combinaBusca(pedido, busca),
   )
 }

@@ -59,7 +59,9 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
-describe("PaginaCardapio", () => {
+// Gera os 90 dias da demonstração e mostra o cardápio inteiro: tela pesada quando a suíte
+// roda em paralelo (o mesmo prazo da tela de estoque).
+describe("PaginaCardapio", { timeout: 15_000 }, () => {
   test("agrupa por categoria e a busca reduz a lista", async () => {
     const usuario = userEvent.setup()
     renderizar()
@@ -155,7 +157,7 @@ describe("PaginaCardapio", () => {
   })
 })
 
-describe("PaginaCardapio na farmácia", () => {
+describe("PaginaCardapio na farmácia", { timeout: 15_000 }, () => {
   test("se chama Produtos e cada medicamento mostra a tarja e o tipo", async () => {
     useSegmentoAtual.setState({ segmento: "farmacia", hidratado: true })
     renderizar()

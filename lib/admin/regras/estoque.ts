@@ -47,7 +47,7 @@ export function consumoDoPedido(pedido: Pedido, produtos: Produto[]): Map<string
 /** Topo da tela: o que está controlado, o que pede reposição e o dinheiro parado. */
 export function resumoDoEstoque(produtos: Produto[]) {
   const controlados = produtos.flatMap((produto) =>
-    produto.estoque?.controlar ? [produto.estoque] : [],
+    produto.estoque?.controlar ? [{ ...produto.estoque, custo: produto.custo }] : [],
   )
   const situacoes = controlados.map(situacaoEstoque)
   return {

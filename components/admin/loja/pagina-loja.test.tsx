@@ -145,6 +145,28 @@ describe("PaginaLoja", () => {
     expect(secao("Pagamento online").getByText("Não conectada")).toBeInTheDocument()
   })
 
+  test("taxas de pagamento em %, por forma; em branco conta como 0%", async () => {
+    const usuario = await abrir()
+    const taxas = secao("Taxas de pagamento")
+    expect(taxas.getByText(/Em branco, conta como 0%/)).toBeInTheDocument()
+
+    const cartao = taxas.getByRole("textbox", { name: "Cartão online" })
+    await usuario.clear(cartao)
+    await usuario.type(cartao, "4,98")
+    const maquininha = taxas.getByRole("textbox", { name: "Cartão na maquininha" })
+    await usuario.clear(maquininha)
+    await usuario.type(maquininha, "2,39")
+    const barra = within(await screen.findByRole("region", { name: "Alterações não salvas" }))
+    expect(barra.getByText("Em Taxas de pagamento")).toBeInTheDocument()
+    await usuario.click(barra.getByRole("button", { name: "Salvar alterações" }))
+
+    expect(await screen.findByText("Configurações salvas.")).toBeInTheDocument()
+    expect((await api().loja()).taxasPagamento).toMatchObject({
+      cartaoOnline: 4.98,
+      maquininha: 2.39,
+    })
+  })
+
   test("cidades atendidas, cupom de teste e o som da loja", async () => {
     const usuario = await abrir()
     const entrega = secao("Entrega e retirada")
