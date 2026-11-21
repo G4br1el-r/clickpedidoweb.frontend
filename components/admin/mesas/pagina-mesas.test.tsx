@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
+import { NuqsTestingAdapter, type OnUrlUpdateFunction } from "nuqs/adapters/testing"
 import { type ReactNode, useState } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
@@ -15,17 +16,27 @@ import { PaginaMesas } from "./pagina-mesas"
 const imprimir = vi.fn()
 vi.mock("react-to-print", () => ({ useReactToPrint: () => imprimir }))
 
-function Provedores({ children }: { children: ReactNode }) {
+function Provedores({
+  children,
+  endereco,
+  aoMudarUrl,
+}: {
+  children: ReactNode
+  endereco?: string
+  aoMudarUrl?: OnUrlUpdateFunction
+}) {
   const [cliente] = useState(
     () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
   )
   return (
-    <QueryClientProvider client={cliente}>
-      <TooltipProvider>
-        {children}
-        <Toaster />
-      </TooltipProvider>
-    </QueryClientProvider>
+    <NuqsTestingAdapter hasMemory searchParams={endereco} onUrlUpdate={aoMudarUrl}>
+      <QueryClientProvider client={cliente}>
+        <TooltipProvider>
+          {children}
+          <Toaster />
+        </TooltipProvider>
+      </QueryClientProvider>
+    </NuqsTestingAdapter>
   )
 }
 
@@ -58,16 +69,18 @@ async function mesaOcupada() {
   return mesa
 }
 
-async function abrir() {
+async function abrir(endereco?: string, aoMudarUrl?: OnUrlUpdateFunction) {
   telaGrande()
   const usuario = userEvent.setup()
   render(
-    <Provedores>
+    <Provedores endereco={endereco} aoMudarUrl={aoMudarUrl}>
       <PaginaMesas />
     </Provedores>,
   )
-  // A grade tem uma lista por área; o Salão é a primeira da demonstração.
-  await screen.findByRole("list", { name: "Salão" }, { timeout: 8000 })
+  // A grade tem uma lista por área; o Salão é a primeira da demonstração. Com filtro no
+  // endereço o Salão pode sumir, e então vale a barra de filtros, que aparece com a grade.
+  if (endereco) await screen.findByRole("searchbox", { name: "Buscar mesa" }, { timeout: 8000 })
+  else await screen.findByRole("list", { name: "Salão" }, { timeout: 8000 })
   return usuario
 }
 
@@ -410,5 +423,67 @@ describe("PaginaMesas: menu ⋯", () => {
     await waitFor(() =>
       expect(screen.queryByRole("button", { name: /^Mesa 20\b/ })).not.toBeInTheDocument(),
     )
+  })
+})
+
+describe("PaginaMesas: busca e filtros no endereço", () => {
+  test("digitar na busca escreve ?busca= e a grade mostra só as mesas que batem", async () => {
+    const aoMudarUrl = vi.fn()
+    const usuario = await abrir(undefined, aoMudarUrl)
+    await usuario.type(screen.getByRole("searchbox", { name: "Buscar mesa" }), "12")
+
+    expect(await screen.findByRole("button", { name: /^Mesa 12\b/ })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /^Mesa 11\b/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole("list", { name: "Salão" })).not.toBeInTheDocument()
+    expect(aoMudarUrl).toHaveBeenLastCalledWith(
+      expect.objectContaining({ queryString: "?busca=12" }),
+    )
+  })
+
+  test("o endereço ?estado=bloqueada abre a grade já filtrada", async () => {
+    await abrir("?estado=bloqueada")
+
+    expect(await screen.findByRole("button", { name: /^Mesa 20\b/ })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /^Mesa 1\b/ })).not.toBeInTheDocument()
+    expect(screen.getAllByRole("listitem")).toHaveLength(1)
+  })
+  test("Precisam de atenção mostra a contagem e grava atencao=sim", async () => {
+    const aoMudarUrl = vi.fn()
+    const usuario = await abrir(undefined, aoMudarUrl)
+    // A demonstração tem uma mesa com alerta: a que pediu a conta há 12 min.
+    await usuario.click(await screen.findByRole("button", { name: "Precisam de atenção (1)" }))
+
+    expect(aoMudarUrl).toHaveBeenLastCalledWith(
+      expect.objectContaining({ queryString: "?atencao=sim" }),
+    )
+    expect(screen.getAllByRole("listitem")).toHaveLength(1)
+    // A contagem é de antes do próprio filtro: continua 1.
+    expect(screen.getByRole("button", { name: "Precisam de atenção (1)" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    )
+  })
+  test("a ordem Mais tempo aberta grava ordem=tempo", async () => {
+    const aoMudarUrl = vi.fn()
+    const usuario = await abrir(undefined, aoMudarUrl)
+    await usuario.click(screen.getByRole("combobox", { name: "Ordem" }))
+    await usuario.click(await screen.findByRole("option", { name: "Mais tempo aberta" }))
+
+    expect(aoMudarUrl).toHaveBeenLastCalledWith(
+      expect.objectContaining({ queryString: "?ordem=tempo" }),
+    )
+    expect(screen.getByRole("combobox", { name: "Ordem" })).toHaveTextContent("Mais tempo aberta")
+  })
+
+  test("sem resultado, Limpar filtros volta ao endereço limpo", async () => {
+    const aoMudarUrl = vi.fn()
+    const usuario = await abrir("?busca=zzz", aoMudarUrl)
+
+    expect(await screen.findByText("Nenhuma mesa com esses filtros")).toBeInTheDocument()
+    await usuario.click(screen.getByRole("button", { name: "Limpar filtros" }))
+
+    expect(aoMudarUrl).toHaveBeenLastCalledWith(expect.objectContaining({ queryString: "" }))
+    expect(await screen.findByRole("list", { name: "Salão" })).toBeInTheDocument()
+    expect(screen.queryByText("Nenhuma mesa com esses filtros")).not.toBeInTheDocument()
   })
 })

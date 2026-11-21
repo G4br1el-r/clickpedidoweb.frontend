@@ -1,20 +1,30 @@
 "use client"
 
-import { ArmchairIcon } from "lucide-react"
+import { ArmchairIcon, SearchXIcon } from "lucide-react"
 import { useState } from "react"
-import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
+import { Button } from "@/components/ui/button"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useAgora } from "@/hooks/use-agora"
 import { useFila } from "@/lib/admin/dados/consultas"
 import { useConfigSalao, useMesas } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
 import { alertasDaMesa } from "@/lib/admin/regras/alertas-mesa"
-import type { MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
+import { filtrarMesas, type MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { plural } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { CartaoMesa } from "./cartao-mesa"
 import { ComandaMesa } from "./comanda-mesa"
+import { LIMPAR_GRADE, useEstadoGrade } from "./estado-grade"
+import { FiltrosMesas } from "./filtros-mesas"
 import { NovaMesa } from "./nova-mesa"
 import { NumerosSalao } from "./numeros-salao"
 
@@ -26,6 +36,7 @@ export function PaginaMesas() {
   const { data: salao } = useConfigSalao()
   const { data: fila } = useFila()
   const agora = useAgora(30_000)
+  const [filtros, setFiltros] = useEstadoGrade()
   const [abertaId, setAbertaId] = useState<string | null>(null)
 
   const comandas = new Map(
@@ -50,10 +61,21 @@ export function PaginaMesas() {
       alertas: salao && agora ? alertasDaMesa(mesa, comanda, salao.alertas, agora) : [],
     }
   })
+  const visiveis = filtrarMesas(
+    linhas,
+    {
+      busca: filtros.busca,
+      area: filtros.area,
+      estado: filtros.estado,
+      garcom: filtros.garcom,
+      atencao: filtros.atencao === "sim",
+    },
+    filtros.ordem,
+  )
   // Área sem mesa não aparece.
   const grupos = (salao?.areas ?? [])
     .toSorted((a, b) => a.ordem - b.ordem)
-    .map((area) => ({ area, linhas: linhas.filter(({ mesa }) => mesa.areaId === area.id) }))
+    .map((area) => ({ area, linhas: visiveis.filter(({ mesa }) => mesa.areaId === area.id) }))
     .filter((grupo) => grupo.linhas.length > 0)
 
   return (
@@ -79,6 +101,14 @@ export function PaginaMesas() {
         <NumerosSalao mesas={mesas} abertas={[...comandas.values()]} agora={agora} />
       )}
 
+      {mesas && salao && mesas.length > 0 && (
+        <FiltrosMesas
+          areas={salao.areas}
+          garcons={salao.garcons}
+          comAtencao={linhas.filter((linha) => linha.alertas.length > 0).length}
+        />
+      )}
+
       {!mesas || !salao ? (
         <div role="status" aria-label="Carregando as mesas" className={GRADE}>
           {Array.from({ length: 10 }, (_, indice) => (
@@ -97,6 +127,21 @@ export function PaginaMesas() {
               Crie as mesas do salão em Nova mesa para o garçom lançar os pedidos.
             </EmptyDescription>
           </EmptyHeader>
+        </Empty>
+      ) : grupos.length === 0 ? (
+        <Empty className="border">
+          <EmptyHeader>
+            <EmptyMedia variant="icon">
+              <SearchXIcon />
+            </EmptyMedia>
+            <EmptyTitle>Nenhuma mesa com esses filtros</EmptyTitle>
+            <EmptyDescription>Mude a busca ou os filtros.</EmptyDescription>
+          </EmptyHeader>
+          <EmptyContent>
+            <Button type="button" size="sm" onClick={() => setFiltros(LIMPAR_GRADE)}>
+              Limpar filtros
+            </Button>
+          </EmptyContent>
         </Empty>
       ) : (
         <div className="flex flex-col gap-6">

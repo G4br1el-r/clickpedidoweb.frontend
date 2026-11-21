@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen } from "@testing-library/react"
+import { NuqsTestingAdapter } from "nuqs/adapters/testing"
 import { beforeEach, describe, expect, test } from "vitest"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { PaginaModulo } from "./pagina-modulo"
@@ -30,11 +31,13 @@ describe("PaginaModulo", () => {
 
   test("no segmento que tem o módulo, mostra a página dele", () => {
     useSegmentoAtual.setState({ segmento: "adega", hidratado: true })
-    // A página de Mesas lê os dados da loja: precisa do cliente do React Query.
+    // A página de Mesas lê os dados da loja (React Query) e guarda os filtros no endereço (nuqs).
     render(
-      <QueryClientProvider client={new QueryClient()}>
-        <PaginaModulo id="mesas" />
-      </QueryClientProvider>,
+      <NuqsTestingAdapter>
+        <QueryClientProvider client={new QueryClient()}>
+          <PaginaModulo id="mesas" />
+        </QueryClientProvider>
+      </NuqsTestingAdapter>,
     )
 
     expect(screen.queryByText(/não faz parte/)).not.toBeInTheDocument()
