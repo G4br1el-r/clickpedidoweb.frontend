@@ -72,4 +72,23 @@ describe("esquema do salão", () => {
     expect(resultado.areas[0].nome).toBe("A".repeat(30))
     expect(resultado.garcons[0].nome).toBe("B".repeat(40))
   })
+
+  test("o couvert aceita só reais e centavos", () => {
+    const comCouvert = (porPessoa: number) =>
+      esquemaSalao.safeParse({ ...padrao, couvert: { ativo: true, porPessoa } })
+    const recusado = comCouvert(8.555)
+    expect(recusado.success).toBe(false)
+    expect(recusado.error?.issues[0].message).toBe("Informe o couvert em reais e centavos.")
+    expect(comCouvert(8.5).success).toBe(true)
+    expect(comCouvert(8.55).success).toBe(true)
+  })
+
+  test("a taxa de serviço aceita até 2 casas", () => {
+    const comTaxa = (percentual: number) =>
+      esquemaSalao.safeParse({ ...padrao, taxaServico: { ativa: true, percentual } })
+    const recusada = comTaxa(12.345)
+    expect(recusada.success).toBe(false)
+    expect(recusada.error?.issues[0].message).toBe("A taxa de serviço vai de 0% a 20%.")
+    expect(comTaxa(12.5).success).toBe(true)
+  })
 })
