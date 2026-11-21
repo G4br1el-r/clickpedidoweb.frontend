@@ -82,11 +82,17 @@ function desenhar(props: Partial<Props> = {}) {
 }
 
 describe("CartaoMesa", () => {
-  test("livre: o nome é Mesa N e mostra os lugares", () => {
+  test("livre: o nome é Mesa N e mostra e fala os lugares", () => {
     const cartao = desenhar()
     expect(cartao).toHaveAccessibleName("Mesa 7")
-    expect(cartao).toHaveAccessibleDescription("Livre")
+    expect(cartao).toHaveAccessibleDescription("Livre, 4 lugares")
     expect(cartao).toHaveTextContent("4 lugares")
+  })
+
+  test("com nome próprio: mostra e fala o nome logo depois do estado", () => {
+    const livre = desenhar({ mesa: { ...mesaLivre, nome: "Janela" } })
+    expect(livre).toHaveTextContent("Janela")
+    expect(livre).toHaveAccessibleDescription("Livre, Janela, 4 lugares")
   })
 
   test("limpeza: mostra há quanto tempo espera ser limpa", () => {
@@ -95,17 +101,19 @@ describe("CartaoMesa", () => {
       estado: { estado: "limpeza", rotulo: "Limpeza", tom: "espera" },
     })
     expect(cartao).toHaveTextContent("Limpeza há 5 min")
+    // O resumo já diz o estado: a descrição não repete "Limpeza".
+    expect(cartao).toHaveAccessibleDescription("Limpeza há 5 min")
     expect(cartao).not.toHaveTextContent("lugares")
   })
 
-  test("bloqueada: mostra o motivo", () => {
+  test("bloqueada: mostra e fala o motivo", () => {
     const bloqueada = { estado: "bloqueada", rotulo: "Bloqueada", tom: "cancelado" } as const
     const comMotivo = desenhar({
       mesa: { ...mesaLivre, bloqueio: { motivo: "Em manutenção" } },
       estado: bloqueada,
     })
     expect(comMotivo).toHaveTextContent("Em manutenção")
-    expect(comMotivo).toHaveAccessibleDescription("Bloqueada")
+    expect(comMotivo).toHaveAccessibleDescription("Bloqueada, Em manutenção")
   })
 
   test("bloqueada sem motivo diz Sem motivo", () => {
@@ -114,13 +122,14 @@ describe("CartaoMesa", () => {
       estado: { estado: "bloqueada", rotulo: "Bloqueada", tom: "cancelado" },
     })
     expect(cartao).toHaveTextContent("Sem motivo")
+    expect(cartao).toHaveAccessibleDescription("Bloqueada, Sem motivo")
     expect(cartao).not.toHaveTextContent("lugares")
   })
 
   test("ocupada: cliente, tempo, garçom, pessoas, itens e total", () => {
     const cartao = desenhar(ocupada)
     // Dinheiro do Intl vem com espaço não separável, que a descrição acessível mantém.
-    expect(cartao).toHaveAccessibleDescription("Ocupada, Júlia, R$ 13,50")
+    expect(cartao).toHaveAccessibleDescription("Ocupada, Júlia, Garçom Rafa, 3 pessoas, R$ 13,50")
     expect(cartao).toHaveTextContent("Júlia")
     expect(cartao).toHaveTextContent("25 min")
     expect(cartao).toHaveTextContent("Garçom Rafa")
@@ -143,7 +152,7 @@ describe("CartaoMesa", () => {
     expect(within(cartao).getByText("Pediu a conta há 12 min")).toBeVisible()
     expect(within(cartao).queryByText("Aberta há 2 h 30")).not.toBeInTheDocument()
     expect(cartao).toHaveAccessibleDescription(
-      "Pediu a conta, Júlia, R$ 13,50, Pediu a conta há 12 min, Aberta há 2 h 30",
+      "Pediu a conta, Júlia, Garçom Rafa, 3 pessoas, R$ 13,50, Pediu a conta há 12 min, Aberta há 2 h 30",
     )
   })
 

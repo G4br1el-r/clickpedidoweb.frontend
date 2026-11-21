@@ -113,11 +113,7 @@ function MenuMesa({
       </DropdownMenuItem>
     ),
     editar: (
-      <DropdownMenuItem
-        key="editar"
-        disabled={!aoEditar}
-        onSelect={() => aoEditar?.(gatilho)}
-      >
+      <DropdownMenuItem key="editar" disabled={!aoEditar} onSelect={() => aoEditar?.(gatilho)}>
         <PencilIcon />
         Editar
       </DropdownMenuItem>
@@ -185,6 +181,9 @@ export function CartaoMesa({
   const ocupada = mesa.status === "ocupada"
   const itens = comanda?.itens.reduce((soma, item) => soma + item.quantidade, 0) ?? 0
   const alerta = alertas[0]
+  const resumo = ocupada ? null : resumoSemComanda(mesa, estado.estado, agora)
+  const garcom = comanda?.mesa?.garcom ? `Garçom ${comanda.mesa.garcom}` : null
+  const pessoas = comanda?.mesa?.pessoas ? plural(comanda.mesa.pessoas, "pessoa", "pessoas") : null
   return (
     // O ⋯ fica ao lado do botão do cartão, não dentro: botão dentro de botão não vale.
     <div className="relative h-full">
@@ -221,8 +220,13 @@ export function CartaoMesa({
         </span>
         <span id={`mesa-${mesa.id}-detalhes`} className="sr-only">
           {[
-            estado.rotulo,
+            // Na limpeza o resumo já começa pelo estado: "Limpeza há 5 min".
+            estado.estado === "limpeza" ? resumo : estado.rotulo,
+            nomePadrao(mesa) ? null : mesa.nome,
+            estado.estado === "limpeza" ? null : resumo,
             mesa.clienteNome,
+            ocupada ? garcom : null,
+            ocupada ? pessoas : null,
             comanda ? emReais(comanda.total) : null,
             ...alertas.map((item) => item.texto),
           ]
@@ -236,11 +240,7 @@ export function CartaoMesa({
           <>
             <span className="truncate text-sm font-medium">{mesa.clienteNome}</span>
             <span className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground tabular-nums">
-              {[
-                mesa.ocupadaEm && agora ? tempoDesde(mesa.ocupadaEm, agora) : null,
-                comanda?.mesa?.garcom ? `Garçom ${comanda.mesa.garcom}` : null,
-                comanda?.mesa?.pessoas ? plural(comanda.mesa.pessoas, "pessoa", "pessoas") : null,
-              ]
+              {[mesa.ocupadaEm && agora ? tempoDesde(mesa.ocupadaEm, agora) : null, garcom, pessoas]
                 .filter((parte) => parte !== null)
                 .map((parte, indice) => (
                   <Fragment key={parte}>
@@ -270,7 +270,7 @@ export function CartaoMesa({
           </>
         ) : (
           <span className="mt-auto truncate text-xs text-muted-foreground tabular-nums">
-            {resumoSemComanda(mesa, estado.estado, agora)}
+            {resumo}
           </span>
         )}
       </button>

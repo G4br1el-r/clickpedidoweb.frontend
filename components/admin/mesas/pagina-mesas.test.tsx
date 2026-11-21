@@ -434,7 +434,9 @@ describe("PaginaMesas: menu ⋯", () => {
     expect(await cartao(9)).toHaveAccessibleDescription(/^Limpeza/)
     await usuario.click((await menu(usuario, 9)).getByRole("menuitem", { name: "Marcar limpa" }))
     expect(await screen.findByText("Mesa 9 limpa.")).toBeInTheDocument()
-    await waitFor(async () => expect(await cartao(9)).toHaveAccessibleDescription("Livre"))
+    await waitFor(async () =>
+      expect(await cartao(9)).toHaveAccessibleDescription("Livre, 8 lugares"),
+    )
   })
 
   test("desbloquear pelo menu libera a mesa 20", async () => {
@@ -442,7 +444,9 @@ describe("PaginaMesas: menu ⋯", () => {
     expect(await cartao(20)).toHaveTextContent("Em manutenção")
     await usuario.click((await menu(usuario, 20)).getByRole("menuitem", { name: "Desbloquear" }))
     expect(await screen.findByText("Mesa 20 desbloqueada.")).toBeInTheDocument()
-    await waitFor(async () => expect(await cartao(20)).toHaveAccessibleDescription("Livre"))
+    await waitFor(async () =>
+      expect(await cartao(20)).toHaveAccessibleDescription("Livre, 2 lugares"),
+    )
   })
 
   test("excluir pelo menu pede confirmação", async () => {
