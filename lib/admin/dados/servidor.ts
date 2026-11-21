@@ -1,5 +1,6 @@
-import { addDays, addMinutes, endOfDay, isSameDay, startOfDay, subDays } from "date-fns"
+import { addDays, addMinutes, endOfDay, format, isSameDay, startOfDay, subDays } from "date-fns"
 import { del, get, set } from "idb-keyval"
+import { plural } from "../../formato"
 import { expediente, horariosLivres, INTERVALO_MIN } from "../regras/agenda"
 import {
   copiarProduto,
@@ -13,8 +14,8 @@ import { esquemaProduto } from "../regras/esquema-produto"
 import { esquemaSalao } from "../regras/esquema-salao"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
 import { normalizar } from "../regras/filtro-pedidos"
-import { comEtapa } from "../regras/historico"
-import { nomePadraoDaMesa } from "../regras/mesas"
+import { comEtapa, comEvento, itensEmTexto } from "../regras/historico"
+import { estadoDaMesa, nomePadraoDaMesa } from "../regras/mesas"
 import { proximoNumero } from "../regras/numero"
 import {
   type Desconto,
@@ -135,6 +136,17 @@ export type LancamentoMesa = {
   enviarParaCozinha: boolean
   garcom?: string
   clienteNome?: string
+  /** Quem lançou, para o histórico: o nome guardado no aparelho. */
+  por?: string
+}
+
+/** Abertura da mesa pela tela de Mesas. `por`: quem está no aparelho, para o histórico. */
+export type AberturaMesa = {
+  pessoas: number
+  garcom?: string
+  clienteNome?: string
+  /** A mesa está reservada: abrir mesmo assim. */
+  confirmarReserva?: boolean
 }
 
 export type OpcoesServidor = {
@@ -189,6 +201,14 @@ const comandaDa = (base: BaseLoja, mesaId: string) =>
     (pedido) =>
       pedido.tipo === "mesa" && pedido.mesa?.id === mesaId && EM_ANDAMENTO.includes(pedido.status),
   )
+
+/** O `por` do evento: o nome aparado e limitado, ou nada. */
+function autor(por: string | undefined): { por?: string } {
+  const nome = por?.trim().slice(0, 80)
+  return nome ? { por: nome } : {}
+}
+
+const semContaPedida = ({ contaPedidaEm: _contaPedidaEm, ...comanda }: Pedido): Pedido => comanda
 
 /** Subtotal e total da comanda refeitos a partir dos itens. */
 function recalcular(pedido: Pedido): Pedido {
@@ -563,6 +583,58 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       ultimo: base.pedidos.at(-1),
       agora: new Date(),
     })
+
+  /** Comanda nova da mesa, aberta agora. Sem itens, fica "pronto" e não passa pela cozinha. */
+  function comandaNova(
+    base: BaseLoja,
+    mesa: Mesa,
+    {
+      id,
+      agora,
+      cliente,
+      garcom,
+      pessoas,
+      itens,
+      enviarParaCozinha,
+    }: {
+      id: number
+      agora: string
+      cliente?: string | undefined
+      garcom?: string | undefined
+      pessoas?: number
+      itens: ItemPedido[]
+      enviarParaCozinha: boolean
+    },
+  ): Pedido {
+    return {
+      id,
+      numero: numeroNovo(base, id),
+      token: crypto.randomUUID(),
+      origem: "garcom",
+      tipo: "mesa",
+      status: enviarParaCozinha ? "recebido" : "pronto",
+      cliente: { nome: cliente || mesa.nome, telefone: base.loja.telefone },
+      mesa: {
+        id: mesa.id,
+        numero: mesa.numero,
+        ...(garcom ? { garcom } : {}),
+        ...(pessoas !== undefined ? { pessoas } : {}),
+      },
+      itens,
+      subtotal: 0,
+      desconto: 0,
+      taxaEntrega: 0,
+      total: 0,
+      pagamento: "dinheiro",
+      situacaoPagamento: "na-entrega",
+      criadoEm: agora,
+      atualizadoEm: agora,
+      historico: [],
+      enviarParaCozinha,
+      // Cada lançamento do garçom tira do estoque.
+      estoqueBaixado: true,
+    }
+  }
 
   /** Troca a base inteira (já carregada) e guarda. */
   async function substituir(nova: BaseLoja) {
@@ -1355,6 +1427,76 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       },
 
       /**
+       * Abre a mesa com a comanda vazia: pessoas, garçom da lista e, se quiser, o cliente.
+       * Mais pessoas que lugares não recusa (a tela avisa).
+       */
+      async abrir(
+        mesaId: string,
+        { pessoas, garcom: garcomPedido, clienteNome, confirmarReserva }: AberturaMesa,
+      ): Promise<Pedido> {
+        const base = await carregar()
+        const mesa = base.mesas.find((item) => item.id === mesaId)
+        if (!mesa) throw new Error("Mesa não encontrada")
+        if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
+        if (comandaDa(base, mesa.id)) throw new Error(`A mesa ${mesa.numero} já está aberta.`)
+        if (!Number.isInteger(pessoas) || pessoas < 1 || pessoas > 99) {
+          throw new Error("Informe de 1 a 99 pessoas.")
+        }
+        const agoraData = new Date()
+        const { antecedenciaMin, toleranciaMin } = base.salao.reservas
+        // A próxima reserva marcada da mesa, ainda dentro da tolerância.
+        const reserva = base.reservas
+          .filter(
+            (item) =>
+              item.mesaId === mesa.id &&
+              item.status === "marcada" &&
+              Date.parse(item.inicio) >= agoraData.getTime() - toleranciaMin * 60_000,
+          )
+          .toSorted((a, b) => Date.parse(a.inicio) - Date.parse(b.inicio))[0]
+        const reservada =
+          reserva &&
+          estadoDaMesa(mesa, undefined, { reserva, agora: agoraData, antecedenciaMin }).estado ===
+            "reservada"
+        if (reservada && !confirmarReserva) {
+          throw new Error(
+            `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}. Confirme para abrir.`,
+          )
+        }
+        const ativos = base.salao.garcons.filter((item) => item.ativo)
+        const pedido = garcomPedido?.trim() ?? ""
+        let garcom: string | undefined
+        if (ativos.length > 0) {
+          if (!pedido) throw new Error("Escolha o garçom.")
+          garcom = ativos.find((item) => normalizar(item.nome) === normalizar(pedido))?.nome
+          if (!garcom) throw new Error("Esse garçom não está na lista do salão.")
+        }
+        const agora = new Date().toISOString()
+        const id = (base.pedidos.at(-1)?.id ?? 0) + 1
+        const comanda = comEvento(
+          comEtapa(
+            comandaNova(base, mesa, {
+              id,
+              agora,
+              cliente: clienteNome?.trim().slice(0, 80),
+              garcom,
+              pessoas,
+              itens: [],
+              enviarParaCozinha: false,
+            }),
+            agora,
+          ),
+          {
+            tipo: "aberta",
+            em: agora,
+            ...(garcom ? { por: garcom } : {}),
+            texto: `Mesa aberta para ${plural(pessoas, "pessoa", "pessoas")}`,
+          },
+        )
+        await substituir(abrirMesas({ ...base, pedidos: [...base.pedidos, comanda] }))
+        return responder(comanda)
+      },
+
+      /**
        * Lança itens na mesa: abre a comanda ou acrescenta uma rodada nova. Com cozinha,
        * a comanda volta para "Novo" e a cozinha vê só esta rodada.
        */
@@ -1396,43 +1538,37 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
         const garcom = lancamento.garcom?.trim().slice(0, 80)
         const cliente = lancamento.clienteNome?.trim().slice(0, 80)
-        const comanda: Pedido = comEtapa(
-          recalcular(
-            aberta
-              ? {
-                  ...aberta,
-                  itens: [...aberta.itens, ...novos],
-                  status: vaiParaCozinha ? "recebido" : aberta.status,
-                  enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
-                  ...(cliente ? { cliente: { ...aberta.cliente, nome: cliente } } : {}),
-                  atualizadoEm: agora,
-                  estoqueBaixado: true,
-                }
-              : {
-                  id,
-                  numero: numeroNovo(base, id),
-                  token: crypto.randomUUID(),
-                  origem: "garcom",
-                  tipo: "mesa",
-                  status: vaiParaCozinha ? "recebido" : "pronto",
-                  cliente: { nome: cliente || mesa.nome, telefone: base.loja.telefone },
-                  mesa: { id: mesa.id, numero: mesa.numero, ...(garcom ? { garcom } : {}) },
-                  itens: novos,
-                  subtotal: 0,
-                  desconto: 0,
-                  taxaEntrega: 0,
-                  total: 0,
-                  pagamento: "dinheiro",
-                  situacaoPagamento: "na-entrega",
-                  criadoEm: agora,
-                  atualizadoEm: agora,
-                  historico: [],
-                  enviarParaCozinha: vaiParaCozinha,
-                  // Cada lançamento do garçom tira do estoque.
-                  estoqueBaixado: true,
-                },
+        const comanda: Pedido = comEvento(
+          comEtapa(
+            recalcular(
+              aberta
+                ? {
+                    // Lançar de novo desfaz o "Pediu a conta" (Q23).
+                    ...semContaPedida(aberta),
+                    itens: [...aberta.itens, ...novos],
+                    status: vaiParaCozinha ? "recebido" : aberta.status,
+                    enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
+                    ...(cliente ? { cliente: { ...aberta.cliente, nome: cliente } } : {}),
+                    atualizadoEm: agora,
+                    estoqueBaixado: true,
+                  }
+                : comandaNova(base, mesa, {
+                    id,
+                    agora,
+                    cliente,
+                    garcom,
+                    itens: novos,
+                    enviarParaCozinha: vaiParaCozinha,
+                  }),
+            ),
+            agora,
           ),
-          agora,
+          {
+            tipo: "rodada",
+            em: agora,
+            ...autor(lancamento.por),
+            texto: `Rodada ${rodada} ${vaiParaCozinha ? "para a cozinha" : "lançada na mesa"}: ${itensEmTexto(novos)}`,
+          },
         )
         const comEstoque = aplicarEstoque(base, aberta, comanda, { conferir: true })
         const pedidos = aberta
@@ -1463,6 +1599,18 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return alterarComanda(pedidoId, (comanda) => {
           conferirItem(comanda, itemId)
           return { ...comanda, itens: comanda.itens.filter((item) => item.id !== itemId) }
+        })
+      },
+
+      /** A mesa pediu a conta: fica a hora do primeiro pedido. */
+      pedirConta(pedidoId: number, por?: string) {
+        return alterarComanda(pedidoId, (comanda) => {
+          if (comanda.contaPedidaEm) return comanda
+          const agora = new Date().toISOString()
+          return comEvento(
+            { ...comanda, contaPedidaEm: agora },
+            { tipo: "conta-pedida", em: agora, ...autor(por), texto: "Pediu a conta" },
+          )
         })
       },
 

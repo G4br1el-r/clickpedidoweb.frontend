@@ -112,8 +112,8 @@ afterEach(() => {
 })
 
 describe("PaginaMesas", () => {
-  // A Fase 3 (Q23) inverte isto de propósito: rodada nova passa a limpar o "Pediu a conta".
-  test("o resumo conta a rodada na cozinha pelo status da comanda, mesmo com a conta pedida", async () => {
+  // Fase 3 (Q23): a rodada nova limpa o "Pediu a conta", e a mesa volta para Na cozinha.
+  test("a rodada lançada depois de pedir a conta limpa o pedido e entra no resumo da cozinha", async () => {
     // Na demonstração, as mesas 6, 7 e 8 têm rodada na cozinha; a mesa 1 já pediu a conta.
     const [mesas, base] = await Promise.all([api().mesas.listar(), api().base()])
     const contaPedida = mesas.find((mesa) => mesa.numero === 1)
@@ -129,7 +129,7 @@ describe("PaginaMesas", () => {
     await api().pedidos.avancar(nova.id, nova.status)
     await abrir()
 
-    expect(await cartao(1)).toHaveAccessibleDescription(/^Pediu a conta/)
+    expect(await cartao(1)).toHaveAccessibleDescription(/^Na cozinha/)
     expect(await screen.findByText(/4 com rodada na cozinha/)).toBeInTheDocument()
   })
 
