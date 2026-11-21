@@ -83,6 +83,25 @@ describe("indicadoresSalao", () => {
     expect(indicadoresSalao(entrada({ concluidos })).faturamento).toBe(300)
   })
 
+  it("faturamento ignora conta não paga e conta sem pagoEm", () => {
+    const hoje = new Date(2026, 10, 13, 12)
+    const concluidos = [
+      paga(1, hoje, 100),
+      pedidoDeTeste(2, hoje, 60, {
+        tipo: "mesa",
+        situacaoPagamento: "pendente",
+        pagoEm: hoje.toISOString(),
+        mesa: { id: "m1", numero: 1, pessoas: 1 },
+      }),
+      pedidoDeTeste(3, hoje, 40, {
+        tipo: "mesa",
+        situacaoPagamento: "pago",
+        mesa: { id: "m1", numero: 1, pessoas: 1 },
+      }),
+    ]
+    expect(indicadoresSalao(entrada({ concluidos })).faturamento).toBe(100)
+  })
+
   it("tickets: por pessoa e por mesa", () => {
     const concluidos = [
       paga(1, new Date(2026, 10, 13, 12), 120, 4),
