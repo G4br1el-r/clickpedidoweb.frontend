@@ -29,6 +29,7 @@ import { CabecalhoPagina } from "../cabecalho-pagina"
 import { AbaClientes } from "./clientes/aba-clientes"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
 import { AbaFinanceiro } from "./financeiro/aba-financeiro"
+import { AbaOperacao } from "./operacao/aba-operacao"
 import { AbaResumo } from "./painel-visao-geral"
 import { AbaProdutos } from "./produtos/aba-produtos"
 import { AbaVendas } from "./vendas/aba-vendas"
@@ -208,6 +209,8 @@ export function VisaoGeral() {
               ) : (
                 <EsqueletoVisaoGeral />
               )
+            ) : aba === "operacao" ? (
+              <AbaOperacao pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
             ) : aba === "produtos" ? (
               // Sem o cardápio, "o que não vendeu" estaria errado: espera os dois chegarem.
               produtos && categorias ? (

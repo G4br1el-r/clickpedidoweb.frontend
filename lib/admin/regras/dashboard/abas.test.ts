@@ -2,12 +2,13 @@ import { describe, expect, test } from "vitest"
 import { abaEscolhida, abasDo } from "./abas"
 
 describe("abasDo", () => {
-  test("todo segmento começa no Resumo, com Vendas, Produtos, Clientes e Financeiro", () => {
+  test("todo segmento começa no Resumo, com Vendas, Produtos, Clientes, Operação e Financeiro", () => {
     expect(abasDo("pizzaria").map((aba) => aba.titulo)).toEqual([
       "Resumo",
       "Vendas",
       "Produtos",
       "Clientes",
+      "Operação",
       "Financeiro",
     ])
     expect(abasDo("salao").map((aba) => aba.id)).toEqual([
@@ -15,6 +16,7 @@ describe("abasDo", () => {
       "vendas",
       "produtos",
       "clientes",
+      "operacao",
       "financeiro",
     ])
   })

@@ -306,7 +306,7 @@ describe("VisaoGeral", () => {
       within(abas)
         .getAllByRole("tab")
         .map((aba) => aba.textContent),
-    ).toEqual(["Resumo", "Vendas", "Produtos", "Clientes", "Financeiro"])
+    ).toEqual(["Resumo", "Vendas", "Produtos", "Clientes", "Operação", "Financeiro"])
     expect(within(abas).getByRole("tab", { name: "Financeiro" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -338,6 +338,18 @@ describe("VisaoGeral", () => {
     expect(screen.queryByRole("group", { name: "Período" })).not.toBeInTheDocument()
     expect(screen.queryByRole("radiogroup", { name: "Período" })).not.toBeInTheDocument()
     expect(screen.getAllByText("Últimos 90 dias, até hoje").length).toBeGreaterThan(0)
+  })
+
+  test("a aba Operação mostra os tempos da loja a partir do histórico dos pedidos", async () => {
+    render(
+      <Provedores endereco="?aba=operacao">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole("table", { name: "Tempo por etapa" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("region", { name: "Cancelamentos por motivo" })).toBeInTheDocument()
   })
 
   test("a aba Produtos mostra os produtos da loja: ranking e o cardápio parado", async () => {
