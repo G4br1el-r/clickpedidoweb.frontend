@@ -60,6 +60,8 @@ describe("rótulos", () => {
       }),
     ).toBe("Pix")
     expect(rotuloPagamentoDoPedido(pedido)).toBe("Dinheiro")
+    // A comanda aberta (forma "dinheiro" até fechar) que pagou uma parte em Pix diz Pix.
+    expect(rotuloPagamentoDoPedido({ ...pedido, pagamentos: [pagamento("pix", 40)] })).toBe("Pix")
   })
 
   test("motivos do cancelamento, na ordem da lista; sem motivo, Não informado", () => {

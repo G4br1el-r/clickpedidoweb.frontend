@@ -6,6 +6,7 @@ import type {
   Pedido,
   TipoPedido,
 } from "../dados/tipos"
+import { formasDoPedido } from "./conta"
 
 const CANAIS: Record<TipoPedido, string> = {
   entrega: "Entrega",
@@ -54,10 +55,13 @@ export function rotuloDoPagamento({
   }
   return PAGAMENTOS[forma]
 }
-/** A forma do pedido: "Misto" quando a conta foi paga em mais de uma forma. */
+/**
+ * A forma do pedido: "Misto" quando a conta foi paga em mais de uma forma; com uma só, ela (a
+ * comanda aberta que pagou parte em Pix diz Pix, e não a forma provisória do pedido).
+ */
 export function rotuloPagamentoDoPedido(pedido: Pick<Pedido, "pagamento" | "pagamentos">) {
-  const formas = new Set((pedido.pagamentos ?? []).map((pagamento) => pagamento.forma))
-  return formas.size > 1 ? "Misto" : PAGAMENTOS[pedido.pagamento]
+  const formas = formasDoPedido(pedido)
+  return formas.length > 1 ? "Misto" : PAGAMENTOS[formas[0]]
 }
 export const rotuloOrigem = (origem: OrigemPedido) => ORIGENS[origem]
 export const rotuloMotivo = (motivo: MotivoCancelamento | undefined) =>

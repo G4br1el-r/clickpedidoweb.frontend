@@ -158,6 +158,12 @@ export function valorDosItens(conta: ContaDaMesa, itemIds: string[]): number {
   )
   return emReais(marcados + taxaEmCentavos(conta, marcados))
 }
+/** As formas em que o pedido foi (ou está sendo) pago: as dos pagamentos ou, sem eles, a do pedido. */
+export function formasDoPedido(pedido: Pick<Pedido, "pagamento" | "pagamentos">): FormaPagamento[] {
+  if (!pedido.pagamentos?.length) return [pedido.pagamento]
+  return [...new Set(pedido.pagamentos.map((pagamento) => pagamento.forma))]
+}
+
 export type PagamentoRecebido = Pick<PagamentoConta, "valor" | "em" | "cartao" | "troco"> & {
   forma: FormaPagamento
 }

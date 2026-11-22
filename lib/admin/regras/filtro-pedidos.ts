@@ -1,4 +1,5 @@
 import type { FormaPagamento, OrigemPedido, Pedido, StatusPedido, TipoPedido } from "../dados/tipos"
+import { formasDoPedido } from "./conta"
 import { ehValido } from "./dashboard/comum"
 
 export type FiltrosLista = {
@@ -40,7 +41,8 @@ export function filtrarPedidos(
     (pedido) =>
       aceita(status, pedido.status) &&
       aceita(tipos, pedido.tipo) &&
-      aceita(pagamentos, pedido.pagamento) &&
+      // A conta Misto aparece em cada forma que ela tem.
+      (!pagamentos?.length || formasDoPedido(pedido).some((forma) => pagamentos.includes(forma))) &&
       aceita(origens, pedido.origem) &&
       combinaBusca(pedido, busca),
   )
@@ -59,6 +61,12 @@ export function totaisDaLista(pedidos: Pedido[]) {
 /** Contagem por valor de um campo, para mostrar ao lado de cada opção dos filtros. */
 export function contarPor<K extends "status" | "tipo" | "pagamento">(pedidos: Pedido[], campo: K) {
   const contagem = new Map<Pedido[K], number>()
-  for (const pedido of pedidos) contagem.set(pedido[campo], (contagem.get(pedido[campo]) ?? 0) + 1)
+  for (const pedido of pedidos) {
+    // Na forma de pagamento, a conta Misto conta em cada forma, como no filtro.
+    const valores = (
+      campo === "pagamento" ? formasDoPedido(pedido) : [pedido[campo]]
+    ) as Pedido[K][]
+    for (const valor of valores) contagem.set(valor, (contagem.get(valor) ?? 0) + 1)
+  }
   return contagem
 }

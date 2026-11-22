@@ -44,6 +44,27 @@ describe("filtrarPedidos", () => {
     expect(ids(filtrarPedidos(PEDIDOS, { busca: "calabresa", status: ["cancelado"] }))).toEqual([3])
   })
 
+  test("a conta paga em Pix e dinheiro (Misto) aparece no filtro de cada uma das formas", () => {
+    const misto = {
+      ...PEDIDOS_DE_TESTE[5],
+      id: 60,
+      pagamento: "dinheiro" as const,
+      pagamentos: [
+        { id: "p1", forma: "pix" as const, valor: 30, em: "" },
+        { id: "p2", forma: "dinheiro" as const, valor: 40, em: "" },
+      ],
+    }
+    expect(ids(filtrarPedidos([misto], { pagamentos: ["pix"] }))).toEqual([60])
+    expect(ids(filtrarPedidos([misto], { pagamentos: ["dinheiro"] }))).toEqual([60])
+    expect(ids(filtrarPedidos([misto], { pagamentos: ["cartao-na-entrega"] }))).toEqual([])
+    expect(contarPor([misto], "pagamento")).toEqual(
+      new Map([
+        ["pix", 1],
+        ["dinheiro", 1],
+      ]),
+    )
+  })
+
   test("filtra pela origem do pedido", () => {
     const doPdv = { ...PEDIDOS_DE_TESTE[0], id: 50, origem: "pdv" as const }
     expect(ids(filtrarPedidos([...PEDIDOS, doPdv], { origens: ["pdv"] }))).toEqual([50])
