@@ -762,7 +762,7 @@ export function ComandaMesa({ mesa, aoFechar }: { mesa: Mesa | null; aoFechar: (
     <Sheet open={mesa !== null} onOpenChange={(aberto) => !aberto && aoFechar()}>
       <SheetContent
         side={telaGrande ? "right" : "bottom"}
-        className="gap-0 data-[side=bottom]:max-h-[92dvh] data-[side=right]:w-full data-[side=right]:sm:max-w-md"
+        className="gap-0 data-[side=bottom]:max-h-[92dvh] data-[side=right]:w-full data-[side=right]:sm:max-w-lg data-[side=right]:xl:max-w-xl"
       >
         {mesa && <ConteudoComanda key={mesa.id} mesa={mesa} aoFechar={aoFechar} />}
       </SheetContent>

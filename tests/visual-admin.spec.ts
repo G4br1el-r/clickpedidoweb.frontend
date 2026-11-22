@@ -157,6 +157,47 @@ for (const tema of ["light", "dark"] as const) {
     await expect(page).toHaveScreenshot(`painel-comanda-${tema}.png`)
   })
 
+  test(`painel: abrir a mesa livre (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas?mesa=11")
+    const gaveta = page.getByRole("dialog", { name: "Mesa 11" })
+    await expect(gaveta.getByRole("button", { name: "Abrir mesa" })).toBeVisible({
+      timeout: 15_000,
+    })
+    await page.waitForLoadState("networkidle")
+    // 3 pessoas na mesa de 2 lugares: o aviso aparece, sem impedir.
+    await gaveta.getByRole("spinbutton", { name: "Pessoas" }).fill("3")
+    await expect(gaveta.getByText("A mesa 11 tem 2 lugares.")).toBeVisible()
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-abrir-mesa-${tema}.png`)
+  })
+
+  test(`painel: adicionar itens na comanda (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas")
+    const ocupada = page.getByRole("button", { name: /^Mesa \d+$/ }).filter({ hasText: "Ocupada" })
+    await expect(ocupada.first()).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState("networkidle")
+    await ocupada.first().click()
+    await page.getByRole("button", { name: "Adicionar itens" }).click()
+    const janela = page.getByRole("dialog", { name: /^Adicionar itens · Mesa \d+$/ })
+    await expect(janela.getByRole("button", { name: /^Adicionar / }).first()).toBeVisible()
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-adicionar-itens-${tema}.png`)
+  })
+
+  test(`painel: folha de atalhos das mesas (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas")
+    await expect(page.getByRole("list", { name: "Salão" })).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState("networkidle")
+    await page.getByRole("button", { name: "Atalhos do teclado" }).click()
+    await expect(page.getByRole("switch", { name: "Atalhos de uma tecla" })).toBeVisible()
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-atalhos-mesas-${tema}.png`)
+  })
+
   test(`painel: janela Nova mesa (${tema})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
     await page.goto("/admin/mesas")
