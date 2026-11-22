@@ -2403,12 +2403,37 @@ export function reservasDemo(mesas: Mesa[], agora: Date): { reservas: Reserva[];
 - [ ] Os screenshots ficam para a revisão.
 - [ ] Registrar a "Situação" no fim desta seção.
 
-Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-7`, empilhada sobre a Fase 6, antes da revisão. O PR sai depois que as Fases 1 a 6 estiverem no `main`.
+Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-7`, empilhada sobre a Fase 6, depois da revisão. O PR sai depois que as Fases 1 a 6 estiverem no `main`.
+
+- **O que a revisão pegou** (cada correção começou por um teste vermelho):
+  - "Sentar" vinha com a mesa da reserva mesmo quando ela não podia abrir: ocupada, o Select ficava vazio e só o servidor reclamava; excluída, o botão não fazia nada. Agora a mesa da reserva só vem escolhida se recebe (`porQueNaoSenta`, em `reservas.ts`); senão vem a sugestão, e a janela diz o porquê ("A mesa 13 está ocupada.", "… está bloqueada.", "A mesa 31 está junto com a mesa 30.", "A mesa da reserva foi excluída."). Sem mesa válida, "Escolha a mesa.";
+  - com duas reservas na janela da mesma mesa, a tela e o servidor discordavam sobre qual pedia confirmação: "Sentar" e a gaveta passam a procurar a outra reserva da vez sem a própria, como o servidor (`useReservaDaVez()(mesa, ignorar)`), e a gaveta manda `confirmarReserva` ao sentar quando há outra;
+  - perto da meia-noite, sem recarregar, a reserva das 23:50 sumia do painel mas segurava a mesa: `reservas.listar` mantém a de ontem que ainda está na tolerância, e a tela mostra o aviso e deixa confirmar (às 00:06 ela sai e solta a mesa);
+  - com a função desligada, as reservas ativas seguravam a mesa sem caminho na tela (bloquear e excluir recusavam). Escolha: as reservas continuam valendo (como a decisão da fase) e o bloco Pro lista as ativas com "Cancelar", com a pergunta antes. É o mais simples e não muda o servidor;
+  - "Sentar" não tinha o aviso de mais pessoas que lugares (Q17) e a lista não dizia os lugares: agora "Mesa 8 · 4 lugares" e "A mesa 8 tem 4 lugares.";
+  - `conferirReserva` aceitava "23:99" (virava 00:39 do dia seguinte): hora de 00 a 23 e minuto de 00 a 59;
+  - mutações que sobreviviam ganharam testes: a antecedência às 20:20 em ponto, o minuto de agora às 20:30:45, a mesa em limpeza para mais tarde (dados em que ela é a escolhida) e a ordem da chegada com duas pessoas disputando a mesma mesa;
+  - o foco caía no `body` ao fechar Nova reserva, Editar (pelo ⋯), Sentar e Entrar na espera: volta ao botão (ou ao ⋯) com `devolverFocoA`;
+  - desvios do plano: "Desistiu" à vista entre as ações da espera (era um ⋯ só com ele), "chamada há 2 min" (o substantivo, sem concordar com a pessoa) e sentar na mesa juntada diz "A mesa 31 está junto com a mesa 30." também no servidor;
+  - entre 1280 e 1535 px os cartões ficavam com uns 147 px em 4 colunas ("Marina Costa · 2 pes…" cortado, os filtros em quatro linhas). A grade e os filtros passam a seguir a largura da coluna (container query): 3 colunas a partir de 36rem, 4 a partir de 52rem e 5 a partir de 64rem; a busca vai para o lado dos filtros só quando cabem todos na linha. Em 1366 e 1024 a grade fica com 3 colunas; no celular deitado, com 2;
+  - confirmar antes de cancelar a reserva (estava em "fica para depois").
+- **O E2E pegou** (nas 11 telas): a aba "Espera" de fora abaixo de 4,5:1 no claro (`text-foreground/75`); no celular deitado, o ⋯ da reserva meio escondido sob o cabeçalho ao editar o mapa (o painel sai de cena na edição, e o mapa fica com a largura toda) e o botão "Salvar reserva" fora da tela (a janela rola por dentro). Em Juntar, "Mesa 13 · reservada 20:50" quebrava separando "Mesa" do número; em Sentar, a mesa com os lugares não cabia em meia janela no celular (um campo por linha).
+- **Testes antigos que mudaram (mudança planejada pela revisão):** em `reservas-espera.test.tsx`, "Editar, Não compareceu e Cancelar pelo ⋯" confirma a pergunta antes de cancelar; "Desistiu tira da fila" usa o botão à vista ("Juliana Rocha desistiu"); "chamado há" virou "chamada há" nos dois testes da fila.
+- **Fica para depois:**
+  - reservar para outro dia (o painel é "do dia");
+  - desfazer o cancelamento da reserva;
+  - "Sentar a reserva" no menu ⋯ da mesa reservada (hoje está na gaveta e no painel);
+  - entradas `salao.reservas` no `CATALOGO_PRO` (Fase 8, com as outras);
+  - avisar sozinho quando uma mesa libera (a sugestão aparece na fila, sem som nem destaque).
+- **Screenshots:** novos, nas 11 telas e nos dois temas: `painel-nova-reserva`, `painel-sentar`, `painel-espera` (só o painel), `painel-entrar-na-espera` e `painel-reservas-pro` (o bloco com as reservas ativas). Atualizados depois de conferir esperada, atual e diferença: `painel-mesas`, `painel-comanda`, `painel-comanda-conta`, `painel-receber-conta`, `painel-abrir-mesa`, `painel-atalhos-mesas`, `painel-nova-mesa`, `painel-configurar-salao`, `painel-transferir-mesa`, `painel-juntar-mesas`, `painel-transferir-itens`, `painel-mapa`, `painel-mapa-edicao` e `painel-adicionar-itens` (só onde a grade aparece por trás). O `painel-adicionar-itens` do celular-390 claro saiu uma vez com as fotos ainda carregando e foi descartado (voltou ao de antes e passou).
+- **Testes e cobertura depois da revisão:** 1822 testes no Vitest (`pnpm check` verde). E2E rápido (`celular-390` e `desktop-1920`, contra o `next start` na porta 3010): 491 passaram, 31 pulados, nenhum falhou. Os E2E das reservas e do mapa (reservar e sentar, mover pelo teclado, arrastar, o mapa no celular) passaram nas 11 telas (28 passaram, 16 pulados: a edição do mapa não existe abaixo de 768 px). A cobertura ficou em 85,51/78,87/83,89/86,5 no geral: os mínimos continuam em 85/78/83/86 (nenhum subiu de inteiro); `lib/**` continua em 98/95/98/98.
+
+Antes da revisão:
 
 - **Mudou fora do plano:**
   - a confirmação de reserva na tela ganhou o arquivo de teste próprio, `aviso-reserva.test.tsx`, e "Entrar na espera" ganhou o componente `entrar-na-espera.tsx` (botão "Pôr na fila");
   - as abas do painel dizem a contagem: "Reservas 2" (as marcadas dentro da tolerância) e "Espera 3";
-  - com o painel à direita a partir de 1280 px, a grade passa a ter 5 colunas só de 1536 px para cima (`2xl`; antes, `xl`);
+  - com o painel à direita a partir de 1280 px, a grade passava a ter 5 colunas só de 1536 px para cima (`2xl`); a revisão trocou isso pelas colunas pela largura da coluna (acima);
   - o E2E escolhe a mesa 8 na lista: às 20:30, para as 21:15 (fora da antecedência), a sugestão para 4 pessoas é a mesa 1, ocupada agora (a regra deixa a ocupada entrar para mais tarde). A conta ganha uma Água antes de fechar, porque a comanda vazia só oferece "Liberar mesa";
   - minutos da reserva fora de 0 a 600 em Configurar salão mostram a mensagem que o esquema já tinha ("Informe os minutos.").
 - **Testes antigos que mudaram (mudança de comportamento planejada):**
@@ -2416,18 +2441,7 @@ Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-7`, empilha
   - `movimentacoes.test.tsx`: "?estado=juntada mostra só a 16" conta os botões das mesas, pelo mesmo motivo;
   - `configurar-salao.test.tsx`: "reservas e QR não aparecem…" virou "o QR não aparece…" (as reservas entraram no painel).
 - **Testes que passaram de primeira**, porque a regra já saía do desenho de outra fatia: em `reservas.test.ts`, "quem conta" em `reservaDaMesa` e "sem mesa que caiba"; em `servidor-reservas.test.ts`, a reserva de ontem fora da lista, as recusas de sentar (mesa dada, atrasada, cancelada, outra reserva da vez; a exclusão da própria reserva foi conferida tirando-a do código e vendo o vermelho) e a reserva vencida ou cancelada que não impede excluir e bloquear; em `mapa-salao.test.tsx`, a mesa 13 no mapa (o mapa recebe as linhas da grade).
-- **Fica para depois:**
-  - reservar para outro dia (o painel é "do dia");
-  - confirmação antes de cancelar a reserva e desfazer o cancelamento;
-  - "Sentar a reserva" no menu ⋯ da mesa reservada (hoje está na gaveta e no painel);
-  - entradas `salao.reservas` no `CATALOGO_PRO` (Fase 8, com as outras);
-  - avisar sozinho quando uma mesa libera (a sugestão aparece na fila, sem som nem destaque);
-  - os E2E antigos e os screenshots não foram rodados nesta fase (ficaram para a revisão).
-- **Telas que mudam nos screenshots** (para a revisão):
-  - pela tela e pela demonstração: `painel-mesas-*` (o painel "Reservas e espera", a 13 "Reservada 20:50" com "Marina Costa · 2 pessoas", "8 livres", a grade com 4 colunas entre 1280 e 1535 px), `painel-mapa-*` e `painel-mapa-edicao-*` (a 13 reservada no mapa da Varanda não aparece no Salão, mas o painel fica ao lado), `painel-configurar-salao-*` (o interruptor de reservas em Funções Pro e o bloco Reservas);
-  - por trás das janelas e da gaveta: `painel-comanda-*`, `painel-comanda-conta-*`, `painel-receber-conta-*`, `painel-adicionar-itens-*`, `painel-abrir-mesa-*`, `painel-nova-mesa-*`, `painel-atalhos-mesas-*`, `painel-transferir-mesa-*`, `painel-juntar-mesas-*` (a 13 "reservada 20:50" na lista) e `painel-transferir-itens-*`;
-  - sem screenshot ainda: a janela "Nova reserva", "Sentar" e "Entrar na espera", a aba Espera e o painel com o cadeado Pro.
-- **Testes e cobertura:** 1801 testes no Vitest (`pnpm check` verde). O E2E novo ("mesas: reservar a mesa 8, chegar a hora, sentar a reserva e fechar a conta") passou em `desktop-1920` e `celular-390`, contra o `next start` na porta 3010. A cobertura ficou em 85,42/78,64/83,81/86,45 no geral: os mínimos sobem para 85/78/83/86; `lib/**` continua em 98/95/98/98.
+- **Testes e cobertura antes da revisão:** 1801 testes no Vitest (`pnpm check` verde). O E2E novo ("mesas: reservar a mesa 8, chegar a hora, sentar a reserva e fechar a conta") passou em `desktop-1920` e `celular-390`, contra o `next start` na porta 3010. A cobertura ficou em 85,42/78,64/83,81/86,45 no geral: os mínimos sobem para 85/78/83/86; `lib/**` continua em 98/95/98/98.
 
 ## Fase 8: QR na mesa
 
