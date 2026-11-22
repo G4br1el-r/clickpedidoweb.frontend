@@ -685,3 +685,37 @@ describe("transferir itens", () => {
     expect((await mesaDe(api, destino))?.status).toBe("livre")
   })
 })
+
+describe("marcar limpa", () => {
+  const limpezaDesde = new Date(AGORA.getTime() - 5 * 60_000).toISOString()
+
+  async function emLimpeza() {
+    const mesaId = await mesaNova(servidor(), 30)
+    await naBase((base) => {
+      base.mesas = base.mesas.map((mesa) => (mesa.id === mesaId ? { ...mesa, limpezaDesde } : mesa))
+    })
+    return mesaId
+  }
+
+  test("devolve a mesa e o desfazer; desfazer volta a limpeza com a hora de antes", async () => {
+    const mesaId = await emLimpeza()
+    const api = servidor()
+
+    const { mesa, desfazer } = await api.mesas.marcarLimpa(mesaId)
+    expect(mesa.limpezaDesde).toBeUndefined()
+    await api.mesas.desfazer(desfazer)
+
+    expect((await mesaDe(api, mesaId))?.limpezaDesde).toBe(limpezaDesde)
+  })
+
+  test("depois de abrir a mesa, desfazer a limpeza recusa", async () => {
+    const mesaId = await emLimpeza()
+    const api = servidor()
+    const { desfazer } = await api.mesas.marcarLimpa(mesaId)
+    await api.mesas.abrir(mesaId, { pessoas: 2, garcom: "Rafa" })
+
+    await expect(api.mesas.desfazer(desfazer)).rejects.toThrow(
+      "A mesa mudou depois disso. Desfaça pela comanda.",
+    )
+  })
+})

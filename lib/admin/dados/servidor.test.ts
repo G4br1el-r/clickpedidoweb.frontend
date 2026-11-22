@@ -1592,7 +1592,8 @@ describe("servidor de demonstração", () => {
         const mesa = await servidor().mesas.criar({ numero: 20 })
         await alterarGuardada(mesa.id, { limpezaDesde: AGORA.toISOString() })
         const api = servidor()
-        const limpa = await api.mesas.marcarLimpa(mesa.id)
+        // Fase 5 (Q46): devolve a mesa junto com o id do desfazer.
+        const { mesa: limpa } = await api.mesas.marcarLimpa(mesa.id)
         expect(limpa.limpezaDesde).toBeUndefined()
         expect(
           (await api.mesas.listar()).find((item) => item.id === mesa.id)?.limpezaDesde,

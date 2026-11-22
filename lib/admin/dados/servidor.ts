@@ -1891,8 +1891,24 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return mudarMesa(id, ({ bloqueio: _bloqueio, ...mesa }) => mesa)
       },
 
-      marcarLimpa(id: string) {
-        return mudarMesa(id, ({ limpezaDesde: _limpezaDesde, ...mesa }) => mesa)
+      /** A mesa saiu da limpeza. Dá para desfazer por 10 s (Q46). */
+      async marcarLimpa(id: string): Promise<{ mesa: Mesa; desfazer: string }> {
+        const { base, desfazer } = await mover((base) => {
+          if (!base.mesas.some((mesa) => mesa.id === id)) throw new Error("Mesa não encontrada")
+          return {
+            nova: {
+              ...base,
+              mesas: base.mesas.map((mesa) => {
+                if (mesa.id !== id) return mesa
+                const { limpezaDesde: _limpezaDesde, ...limpa } = mesa
+                return limpa
+              }),
+            },
+            mesas: [id],
+            pedidos: [],
+          }
+        })
+        return responder({ mesa: base.mesas.find((mesa) => mesa.id === id) as Mesa, desfazer })
       },
 
       async excluir(id: string): Promise<void> {
