@@ -44,11 +44,17 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type { Pedido } from "@/lib/admin/dados/tipos"
-import { contarPor, filtrarPedidos, totaisDaLista } from "@/lib/admin/regras/filtro-pedidos"
+import type { Motoboy, Pedido } from "@/lib/admin/dados/tipos"
+import {
+  contarPor,
+  filtrarPedidos,
+  SEM_MOTOBOY,
+  totaisDaLista,
+} from "@/lib/admin/regras/filtro-pedidos"
 import { formatarTelefone } from "@/lib/admin/regras/mensagens"
 import {
   rotuloCanal,
+  rotuloMotivo,
   rotuloOrigem,
   rotuloPagamento,
   rotuloPagamentoDoPedido,
@@ -173,7 +179,14 @@ function opcoesDe<K extends "status" | "tipo" | "pagamento">(
 }
 
 /** Tabela de pedidos com busca, filtros com contagem, ordenação e paginação, tudo no endereço. */
-export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
+export function ListaPedidos({
+  pedidos,
+  motoboys = [],
+}: {
+  pedidos: Pedido[]
+  /** Para dar nome ao motoboy na etiqueta do filtro. */
+  motoboys?: Motoboy[]
+}) {
   const [estado, setEstado] = useEstadoLista()
   const [, abrirPedido] = usePedidoAberto()
 
@@ -185,13 +198,68 @@ export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
         tipos: estado.canal,
         pagamentos: estado.pagamento,
         origens: estado.origem,
+        clientes: estado.cliente,
+        motivos: estado.motivo,
+        bairros: estado.bairro,
+        motoboys: estado.motoboy,
       }),
-    [pedidos, estado.busca, estado.status, estado.canal, estado.pagamento, estado.origem],
+    [
+      pedidos,
+      estado.busca,
+      estado.status,
+      estado.canal,
+      estado.pagamento,
+      estado.origem,
+      estado.cliente,
+      estado.motivo,
+      estado.bairro,
+      estado.motoboy,
+    ],
   )
   const totais = totaisDaLista(filtrados)
   const temFiltro =
     estado.busca !== "" ||
-    estado.status.length + estado.canal.length + estado.pagamento.length + estado.origem.length > 0
+    estado.status.length +
+      estado.canal.length +
+      estado.pagamento.length +
+      estado.origem.length +
+      estado.cliente.length +
+      estado.motivo.length +
+      estado.bairro.length +
+      estado.motoboy.length >
+      0
+  // Filtros que só chegam pelo endereço (das abas da visão geral): uma etiqueta para tirar cada um.
+  const etiquetas = [
+    ...estado.origem.map((origem) => ({
+      chave: `origem:${origem}`,
+      texto: `Origem: ${rotuloOrigem(origem)}`,
+      tirar: () => ({ origem: estado.origem.filter((outra) => outra !== origem) }),
+    })),
+    ...estado.cliente.map((telefone) => ({
+      chave: `cliente:${telefone}`,
+      texto: `Cliente: ${formatarTelefone(telefone)}`,
+      tirar: () => ({ cliente: estado.cliente.filter((outro) => outro !== telefone) }),
+    })),
+    ...estado.motivo.map((motivo) => ({
+      chave: `motivo:${motivo}`,
+      texto: `Motivo: ${rotuloMotivo(motivo === "nao-informado" ? undefined : motivo)}`,
+      tirar: () => ({ motivo: estado.motivo.filter((outro) => outro !== motivo) }),
+    })),
+    ...estado.bairro.map((bairro) => ({
+      chave: `bairro:${bairro}`,
+      texto: `Bairro: ${bairro}`,
+      tirar: () => ({ bairro: estado.bairro.filter((outro) => outro !== bairro) }),
+    })),
+    ...estado.motoboy.map((id) => ({
+      chave: `motoboy:${id}`,
+      texto: `Motoboy: ${
+        id === SEM_MOTOBOY
+          ? "Sem motoboy"
+          : (motoboys.find((motoboy) => motoboy.id === id)?.nome ?? id)
+      }`,
+      tirar: () => ({ motoboy: estado.motoboy.filter((outro) => outro !== id) }),
+    })),
+  ]
 
   const paginas = Math.max(1, Math.ceil(filtrados.length / POR_PAGINA))
   const ordenacao: SortingState = [{ id: estado.ordem, desc: estado.crescente !== "sim" }]
@@ -229,6 +297,10 @@ export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
       canal: null,
       pagamento: null,
       origem: null,
+      cliente: null,
+      motivo: null,
+      bairro: null,
+      motoboy: null,
       pagina: null,
     })
 
@@ -272,21 +344,16 @@ export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
               setEstado({ pagamento: valores as typeof estado.pagamento, pagina: null })
             }
           />
-          {estado.origem.map((origem) => (
+          {etiquetas.map((etiqueta) => (
             <Button
-              key={origem}
+              key={etiqueta.chave}
               type="button"
               variant="outline"
               size="sm"
-              aria-label={`Tirar o filtro Origem: ${rotuloOrigem(origem)}`}
-              onClick={() =>
-                setEstado({
-                  origem: estado.origem.filter((outra) => outra !== origem),
-                  pagina: null,
-                })
-              }
+              aria-label={`Tirar o filtro ${etiqueta.texto}`}
+              onClick={() => setEstado({ ...etiqueta.tirar(), pagina: null })}
             >
-              Origem: {rotuloOrigem(origem)}
+              {etiqueta.texto}
               <XIcon data-icon="inline-end" />
             </Button>
           ))}

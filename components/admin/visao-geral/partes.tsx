@@ -17,10 +17,13 @@ const porcentagem = new Intl.NumberFormat("pt-BR", {
 export function Secao({
   titulo,
   descricao,
+  acao,
   children,
 }: {
   titulo: string
   descricao?: ReactNode
+  /** Um botão no canto do título (ex.: baixar a tabela em CSV). */
+  acao?: ReactNode
   children: ReactNode
 }) {
   const id = useId()
@@ -30,7 +33,12 @@ export function Secao({
         <h2 id={id} className="text-[15px] font-semibold tracking-[-0.01em]">
           {titulo}
         </h2>
-        {descricao && <p className="text-[13px] text-muted-foreground">{descricao}</p>}
+        {(descricao || acao) && (
+          <div className="flex items-center gap-2">
+            {descricao && <p className="text-[13px] text-muted-foreground">{descricao}</p>}
+            {acao}
+          </div>
+        )}
       </div>
       {children}
     </section>
@@ -49,6 +57,10 @@ export function ListaDeFatias({
     percentual: number
     /** Leva para os pedidos daquela fatia. */
     href?: string
+    /** Troca a contagem de pedidos por outro texto (ex.: "4 un."). */
+    detalhe?: string
+    /** Quanto a barra enche, de 0 a 100, quando não é a própria parte (ex.: num ranking). */
+    barra?: number
   }[]
   vazio: string
 }) {
@@ -71,7 +83,7 @@ export function ListaDeFatias({
                 <span className="truncate font-medium">{item.nome}</span>
               )}
               <span className="text-xs text-muted-foreground sm:text-sm">
-                {plural(item.pedidos, "pedido", "pedidos")}
+                {item.detalhe ?? plural(item.pedidos, "pedido", "pedidos")}
               </span>
             </span>
             <span className="shrink-0 tabular-nums">{emReais(item.total)}</span>
@@ -81,7 +93,7 @@ export function ListaDeFatias({
           </div>
           <Progress
             className="h-1.5"
-            value={item.percentual}
+            value={item.barra ?? item.percentual}
             aria-label={`${item.nome}: ${Math.round(item.percentual)}%`}
           />
         </li>

@@ -4,6 +4,7 @@ import type {
   OrigemPedido,
   PagamentoConta,
   Pedido,
+  TaxasPagamento,
   TipoPedido,
 } from "../dados/tipos"
 import { formasDoPedido } from "./conta"
@@ -43,6 +44,12 @@ const MOTIVOS: Record<MotivoCancelamento, string> = {
 /** Os motivos de cancelamento, na ordem em que a tela mostra. */
 export const MOTIVOS_CANCELAMENTO = Object.keys(MOTIVOS) as MotivoCancelamento[]
 
+const TAXAS: Record<keyof TaxasPagamento, string> = {
+  pixOnline: "Pix online",
+  cartaoOnline: "Cartão online",
+  maquininha: "Cartão na maquininha",
+}
+
 export const rotuloCanal = (tipo: TipoPedido) => CANAIS[tipo]
 export const rotuloPagamento = (forma: FormaPagamento) => PAGAMENTOS[forma]
 /** Um pagamento da conta da mesa: no cartão, diz se foi crédito ou débito. */
@@ -66,3 +73,4 @@ export function rotuloPagamentoDoPedido(pedido: Pick<Pedido, "pagamento" | "paga
 export const rotuloOrigem = (origem: OrigemPedido) => ORIGENS[origem]
 export const rotuloMotivo = (motivo: MotivoCancelamento | undefined) =>
   motivo ? MOTIVOS[motivo] : "Não informado"
+export const rotuloTaxa = (forma: keyof TaxasPagamento) => TAXAS[forma]

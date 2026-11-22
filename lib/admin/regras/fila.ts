@@ -59,13 +59,16 @@ export function colunasDaFila(
   }))
 }
 
+/** A partir de quantos minutos desde a criação o pedido está atrasado (a fila fica vermelha). */
+export const MINUTOS_DE_ATRASO = 40
+
 /** Âmbar a partir de 25 minutos, vermelho a partir de 40; no salão, quem passou da hora. */
 export function urgencia(pedido: Pedido, agora: Date): Urgencia {
   if (pedido.agendamento) {
     return pedido.status === "recebido" && inicio(pedido) < agora.getTime() ? "atrasado" : "normal"
   }
   const minutos = (agora.getTime() - criado(pedido)) / 60_000
-  if (minutos >= 40) return "atrasado"
+  if (minutos >= MINUTOS_DE_ATRASO) return "atrasado"
   if (minutos >= 25) return "atencao"
   return "normal"
 }
