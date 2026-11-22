@@ -216,6 +216,8 @@ export type OpcoesServidor = {
   carregarCatalogo: () => Promise<CatalogoLoja>
   /** Espera simulada de rede, em ms. */
   espera?: number
+  /** Depois de cada gravação: avisa as outras abas (o `BroadcastChannel`, em `ao-vivo.ts`). */
+  aoGravar?: () => void
 }
 
 /** Gerador de ids novos com prefixo: prod-1a2b3c4d. */
@@ -668,13 +670,28 @@ function encerrar(antes: Pedido, momento: string): Pedido {
  * deste navegador. Na primeira vez gera 90 dias de pedidos; ao reabrir em outro dia,
  * completa os dias que faltam.
  */
-export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: OpcoesServidor) {
+export function criarServidor({
+  segmento,
+  carregarCatalogo,
+  espera = 250,
+  aoGravar,
+}: OpcoesServidor) {
   const chave = `clickpedido-admin-dados:${segmento}`
+  /**
+   * Muda a cada gravação, de qualquer aba. A cópia em memória vale enquanto a revisão guardada
+   * for a dela: outra aba gravou, a próxima leitura (ou gravação) relê a base.
+   */
+  const chaveRevisao = `${chave}:revisao`
   let carregando: Promise<BaseLoja> | undefined
+  let revisao: string | undefined
 
   async function salvar(base: BaseLoja) {
     const guardado: Guardado = { versao: VERSAO, geradoEm: new Date().toISOString(), base }
+    const nova = crypto.randomUUID()
     await set(chave, guardado)
+    await set(chaveRevisao, nova)
+    revisao = nova
+    aoGravar?.()
   }
 
   async function doZero(): Promise<BaseLoja> {
@@ -780,6 +797,12 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
   }
 
   async function carregar(): Promise<BaseLoja> {
+    // Outra aba gravou depois desta cópia: ela não vale mais.
+    const guardada = await get<string>(chaveRevisao)
+    if (guardada !== revisao) {
+      revisao = guardada
+      carregando = undefined
+    }
     return (
       carregando ??
       lembrar(
@@ -1440,6 +1463,11 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
   }
 
   return {
+    /** Outra aba avisou que gravou: a próxima leitura volta ao IndexedDB. */
+    esquecer() {
+      carregando = undefined
+    },
+
     async base(): Promise<BaseLoja> {
       return responder(await carregar())
     },
