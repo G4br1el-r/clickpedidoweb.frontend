@@ -520,3 +520,138 @@ describe("combos no pedido gerado", () => {
     for (const item of novo.itens) expect(item.produtosDasOpcoes).toEqual(["prod-bacon"])
   })
 })
+
+describe("comandas de mesa ao vivo", () => {
+  async function comandasAbertas() {
+    const pedidos = gerarPedidos({
+      catalogo: await carregarCatalogo("acougue"),
+      segmento: "acougue",
+      de: new Date(2026, 10, 13),
+      agora: AGORA,
+    })
+    return pedidos.filter(
+      (pedido) => pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status),
+    )
+  }
+
+  test("abre 8 comandas, nas mesas 1 a 8, com pessoas entre 1 e os lugares da mesa", async () => {
+    const catalogo = await carregarCatalogo("acougue")
+    const abertas = await comandasAbertas()
+    expect(abertas.map((pedido) => pedido.mesa?.id).sort()).toEqual([
+      "mesa-1",
+      "mesa-2",
+      "mesa-3",
+      "mesa-4",
+      "mesa-5",
+      "mesa-6",
+      "mesa-7",
+      "mesa-8",
+    ])
+    for (const pedido of abertas) {
+      const lugares = catalogo.mesas.find((mesa) => mesa.id === pedido.mesa?.id)?.lugares as number
+      expect(pedido.mesa?.pessoas).toBeGreaterThanOrEqual(1)
+      expect(pedido.mesa?.pessoas).toBeLessThanOrEqual(lugares)
+    }
+  })
+
+  test("o garçom vem dos garçons ativos da loja", async () => {
+    const abertas = await comandasAbertas()
+    for (const pedido of abertas) {
+      expect(["Lucas", "Paula", "Rafa", "Bia"]).toContain(pedido.mesa?.garcom)
+    }
+  })
+
+  test("a comanda mais antiga pediu a conta há 5 min; só ela", async () => {
+    const abertas = await comandasAbertas()
+    const comConta = abertas.filter((pedido) => pedido.contaPedidaEm)
+    expect(comConta).toHaveLength(1)
+    expect(comConta[0].criadoEm).toBe(new Date(2026, 10, 13, 18, 55).toISOString())
+    expect(comConta[0].contaPedidaEm).toBe(new Date(2026, 10, 13, 20, 25).toISOString())
+  })
+
+  test("exatamente uma comanda está para servir, desde 4 min atrás", async () => {
+    const abertas = await comandasAbertas()
+    const paraServir = abertas.filter((pedido) => pedido.servirDesde)
+    expect(paraServir).toHaveLength(1)
+    expect(paraServir[0].servirDesde).toBe(new Date(2026, 10, 13, 20, 26).toISOString())
+  })
+
+  test("só os garçons ativos da loja atendem as comandas", async () => {
+    const base = await carregarCatalogo("acougue")
+    const catalogo = {
+      ...base,
+      salao: {
+        ...base.salao,
+        garcons: [
+          { id: "g-1", nome: "Zeca", ativo: true },
+          { id: "g-2", nome: "Inativo", ativo: false },
+        ],
+      },
+    }
+    const pedidos = gerarPedidos({
+      catalogo,
+      segmento: "acougue",
+      de: new Date(2026, 10, 13),
+      agora: AGORA,
+    })
+    const comandas = pedidos.filter((pedido) => pedido.tipo === "mesa")
+    expect(comandas.length).toBeGreaterThan(0)
+    for (const pedido of comandas) expect(pedido.mesa?.garcom).toBe("Zeca")
+  })
+
+  test("sem garçons cadastrados, a comanda sai sem garçom", () => {
+    const pedidos = gerarPedidos({
+      catalogo: { ...catalogo(), mesas: catalogo().mesas },
+      segmento: "lanchonete",
+      de: new Date(2026, 10, 13),
+      agora: AGORA,
+    })
+    const comandas = pedidos.filter((pedido) => pedido.tipo === "mesa")
+    expect(comandas.length).toBeGreaterThan(0)
+    for (const pedido of comandas) expect(pedido.mesa).not.toHaveProperty("garcom")
+  })
+
+  test("com a mesa 1 bloqueada, nenhuma comanda é aberta nela", () => {
+    const base = catalogo()
+    const pedidos = gerarPedidos({
+      catalogo: {
+        ...base,
+        mesas: base.mesas.map((mesa) =>
+          mesa.id === "mesa-1" ? { ...mesa, bloqueio: { motivo: "Em manutenção" } } : mesa,
+        ),
+      },
+      segmento: "lanchonete",
+      de: new Date(2026, 10, 13),
+      agora: AGORA,
+    })
+    const comandas = pedidos.filter((pedido) => pedido.tipo === "mesa")
+    expect(comandas.length).toBeGreaterThan(0)
+    expect(comandas.filter((pedido) => pedido.mesa?.id === "mesa-1")).toEqual([])
+  })
+
+  test("a retirada ao vivo do açougue é sempre para pagar depois de pesar", async () => {
+    const pedidos = gerarPedidos({
+      catalogo: await carregarCatalogo("acougue"),
+      segmento: "acougue",
+      de: new Date(2026, 10, 13),
+      agora: AGORA,
+    })
+    const aoVivo = pedidos.find(
+      (pedido) => pedido.criadoEm === new Date(2026, 10, 13, 20, 25).toISOString(),
+    )
+    expect(aoVivo?.tipo).toBe("retirada")
+    expect(aoVivo?.pagamento).toBe("pagar-apos-pesagem")
+  })
+
+  test("nunca abre comanda na mesa bloqueada", async () => {
+    const catalogo = await carregarCatalogo("acougue")
+    const pedidos = gerarPedidos({
+      catalogo,
+      segmento: "acougue",
+      de: new Date(2026, 9, 1),
+      agora: AGORA,
+    })
+    expect(catalogo.mesas.find((mesa) => mesa.id === "mesa-20")?.bloqueio).toBeDefined()
+    expect(pedidos.filter((pedido) => pedido.mesa?.id === "mesa-20")).toEqual([])
+  })
+})

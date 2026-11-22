@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import type { Mesa } from "../../dados/tipos"
 import { pedidoDeTeste as pedido } from "../pedidos-de-teste"
 import { destaquesDoSegmento, type EntradaDestaques } from "./segmento"
 
@@ -105,11 +106,15 @@ describe("destaquesDoSegmento", () => {
         itens: [porQuilo],
       }),
     ]
-    const mesa = (numero: number, status: "livre" | "ocupada") => ({
+    const mesa = (numero: number, status: "livre" | "ocupada"): Mesa => ({
       id: `m${numero}`,
       numero,
       nome: `Mesa ${numero}`,
       status,
+      areaId: "area-salao",
+      lugares: 4,
+      forma: "quadrada",
+      posicao: { x: (numero - 1) * 2, y: 0 },
     })
     const mesas = [mesa(1, "ocupada"), mesa(2, "livre"), mesa(3, "ocupada")]
 

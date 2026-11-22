@@ -1,4 +1,4 @@
-import { addDays, endOfDay, isSameDay, startOfDay, subDays } from "date-fns"
+import { addDays, addMinutes, endOfDay, isSameDay, startOfDay, subDays } from "date-fns"
 import { del, get, set } from "idb-keyval"
 import { expediente, horariosLivres, INTERVALO_MIN } from "../regras/agenda"
 import {
@@ -10,6 +10,7 @@ import {
 } from "../regras/cardapio"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
+import { esquemaSalao } from "../regras/esquema-salao"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
 import { normalizar } from "../regras/filtro-pedidos"
 import { comEtapa } from "../regras/historico"
@@ -25,30 +26,38 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
+import { primeiraPosicaoLivre } from "../regras/salao"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearCustos } from "./custos-demo"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
-import type {
-  Bairro,
-  BaseLoja,
-  CatalogoLoja,
-  Categoria,
-  ConfigLoja,
-  ItemPedido,
-  Mesa,
-  MotivoCancelamento,
-  Motoboy,
-  MovimentoEstoque,
-  Pedido,
-  Produto,
-  StatusPedido,
-  TipoMovimento,
+import { type BaseLojaV4, migrarDaVersao4 } from "./migracao"
+import {
+  type Bairro,
+  type BaseLoja,
+  type CatalogoLoja,
+  type Categoria,
+  type ConfigLoja,
+  type ConfigSalao,
+  FORMAS_MESA,
+  type FormaMesa,
+  type ItemPedido,
+  type Mesa,
+  type MotivoCancelamento,
+  type Motoboy,
+  type MovimentoEstoque,
+  type Pedido,
+  type Produto,
+  type StatusPedido,
+  type TipoMovimento,
 } from "./tipos"
 
-/** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 4
+/**
+ * Sobe quando o formato guardado muda. A 4 do main (custos, histórico e clientes novos, sem o
+ * salão) ganha as mesas novas; qualquer outra, inclusive uma 4 que já tenha salão, é gerada de novo.
+ */
+const VERSAO = 5
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -146,9 +155,11 @@ function abrirMesas(base: BaseLoja): BaseLoja {
     ...base,
     mesas: base.mesas.map(({ pedidoAtivoId, clienteNome, ocupadaEm, ...mesa }) => {
       const comanda = abertas.get(mesa.id)
+      // Mesa ocupada deixa de estar em limpeza.
+      const { limpezaDesde: _limpezaDesde, ...semLimpeza } = mesa
       return comanda
         ? {
-            ...mesa,
+            ...semLimpeza,
             status: "ocupada",
             pedidoAtivoId: comanda.id,
             clienteNome: comanda.cliente.nome,
@@ -320,13 +331,25 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       agora,
     })
     const estoque = semearEstoque({ catalogo, segmento, agora })
-    const base = abrirMesas({
+    const aberta = abrirMesas({
       ...catalogo,
       produtos: estoque.produtos,
       // O controle começa hoje: o saldo inicial já desconta os pedidos em andamento.
       pedidos: pedidos.map(marcarEmAndamento),
       movimentosEstoque: estoque.movimentos,
+      reservas: [],
+      espera: [],
+      chamados: [],
     })
+    // A demonstração abre com uma mesa livre sendo limpa há 3 min.
+    const base = {
+      ...aberta,
+      mesas: aberta.mesas.map((mesa) =>
+        catalogo.salao.limpeza && mesa.id === "mesa-9" && mesa.status === "livre"
+          ? { ...mesa, limpezaDesde: addMinutes(agora, -3).toISOString() }
+          : mesa,
+      ),
+    }
     await salvar(base)
     return base
   }
@@ -351,9 +374,20 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const completa = abrirMesas({
       ...base,
       pedidos: [...anteriores, ...novos.map(marcarEmAndamento)],
+      reservas: base.reservas ?? [],
+      espera: base.espera ?? [],
+      chamados: base.chamados ?? [],
     })
     await salvar(completa)
     return completa
+  }
+
+  /** Versão 4 → 5: guarda a base migrada já, com o `geradoEm` de antes, e completa os dias que faltam. */
+  async function migrar(guardado: Guardado): Promise<BaseLoja> {
+    const base = migrarDaVersao4(guardado.base as unknown as BaseLojaV4)
+    const migrado: Guardado = { versao: VERSAO, geradoEm: guardado.geradoEm, base }
+    await set(chave, migrado)
+    return completar(migrado)
   }
 
   /** Guarda a leitura em andamento; se ela falhar, a próxima chamada tenta de novo. */
@@ -372,7 +406,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       lembrar(
         (async () => {
           const guardado = await get<Guardado>(chave)
-          return guardado?.versao === VERSAO ? completar(guardado) : doZero()
+          if (guardado?.versao === VERSAO) return completar(guardado)
+          if (guardado?.versao === 4 && !guardado.base.salao) return migrar(guardado)
+          return doZero()
         })(),
       )
     )
@@ -1132,12 +1168,46 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       },
     },
 
+    salao: {
+      async config(): Promise<ConfigSalao> {
+        return responder((await carregar()).salao)
+      },
+
+      /** Valida, impede tirar área que ainda tem mesas e guarda a configuração limpa. */
+      async salvar(config: ConfigSalao): Promise<ConfigSalao> {
+        const lida = esquemaSalao.safeParse(config)
+        if (!lida.success) throw new Error(lida.error.issues[0].message)
+        const base = await carregar()
+        const mantidas = new Set(lida.data.areas.map((area) => area.id))
+        const retirada = base.salao.areas.find(
+          (area) => !mantidas.has(area.id) && base.mesas.some((mesa) => mesa.areaId === area.id),
+        )
+        if (retirada) {
+          throw new Error(`Mova as mesas da área ${retirada.nome} antes de excluí-la.`)
+        }
+        await substituir({ ...base, salao: lida.data })
+        return responder(lida.data)
+      },
+    },
+
     mesas: {
       async listar(): Promise<Mesa[]> {
         return responder((await carregar()).mesas.toSorted((a, b) => a.numero - b.numero))
       },
 
-      async criar({ numero, nome }: { numero: number; nome?: string }): Promise<Mesa> {
+      async criar({
+        numero,
+        nome,
+        areaId,
+        lugares = 4,
+        forma = "quadrada",
+      }: {
+        numero: number
+        nome?: string
+        areaId?: string
+        lugares?: number
+        forma?: FormaMesa
+      }): Promise<Mesa> {
         if (!Number.isInteger(numero) || numero < 1 || numero > 999) {
           throw new Error("Informe o número da mesa.")
         }
@@ -1145,11 +1215,28 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (base.mesas.some((mesa) => mesa.numero === numero)) {
           throw new Error(`Já existe a mesa ${numero}.`)
         }
+        if (!Number.isInteger(lugares) || lugares < 1 || lugares > 20) {
+          throw new Error("Informe de 1 a 20 lugares.")
+        }
+        if (!FORMAS_MESA.includes(forma)) {
+          throw new Error("Escolha a forma da mesa.")
+        }
+        const area =
+          areaId !== undefined
+            ? base.salao.areas.find((item) => item.id === areaId)
+            : base.salao.areas.toSorted((a, b) => a.ordem - b.ordem)[0]
+        if (!area) throw new Error("Escolha uma área do salão.")
+        const posicao = primeiraPosicaoLivre(base.mesas, area.id, { forma, lugares })
+        if (!posicao) throw new Error("Não cabe mais mesa nessa área do mapa.")
         const mesa: Mesa = {
           id: novoId("mesa")(),
           numero,
           nome: nome?.trim().slice(0, 40) || `Mesa ${String(numero).padStart(2, "0")}`,
           status: "livre",
+          areaId: area.id,
+          lugares,
+          forma,
+          posicao,
         }
         await substituir({ ...base, mesas: [...base.mesas, mesa] })
         return responder(mesa)
@@ -1169,6 +1256,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const base = await carregar()
         const mesa = base.mesas.find((item) => item.id === lancamento.mesaId)
         if (!mesa) throw new Error("Mesa não encontrada")
+        if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
         if (lancamento.itens.length === 0) throw new Error("Inclua pelo menos um item.")
 
         const agora = new Date().toISOString()

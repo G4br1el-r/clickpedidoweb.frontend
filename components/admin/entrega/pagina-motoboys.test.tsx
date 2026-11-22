@@ -114,6 +114,12 @@ describe("PaginaMotoboys", () => {
   })
 
   test("excluir sai da lista e o desfazer do aviso traz o motoboy de volta", async () => {
+    // Quem tem entrega em andamento não sai: a demonstração pode ter uma com o Thiago.
+    const naRua = (await api().pedidos.listar({})).filter(
+      (pedido) =>
+        pedido.motoboyId === "moto-2" && !["concluido", "cancelado"].includes(pedido.status),
+    )
+    for (const pedido of naRua) await api().pedidos.cancelar(pedido.id, pedido.status)
     const usuario = await abrir()
     await usuario.click(linha("Thiago Neves").getByRole("button", { name: "Excluir Thiago Neves" }))
     await usuario.click(

@@ -1,3 +1,4 @@
+import { salaoDemo } from "@/lib/admin/dados/salao-demo"
 import type { CatalogoLoja, GrupoOpcao } from "@/lib/admin/dados/tipos"
 import { clientesDemo } from "@/lib/mock/admin/clientes"
 
@@ -2529,56 +2530,7 @@ export const catalogoLanchonete: CatalogoLoja = {
       grupos: [],
     },
   ],
-  mesas: [
-    {
-      id: "mesa-1",
-      numero: 1,
-      nome: "Mesa 01",
-      status: "livre",
-    },
-    {
-      id: "mesa-2",
-      numero: 2,
-      nome: "Mesa 02",
-      status: "livre",
-    },
-    {
-      id: "mesa-3",
-      numero: 3,
-      nome: "Mesa 03",
-      status: "livre",
-    },
-    {
-      id: "mesa-4",
-      numero: 4,
-      nome: "Mesa 04",
-      status: "livre",
-    },
-    {
-      id: "mesa-5",
-      numero: 5,
-      nome: "Mesa 05",
-      status: "livre",
-    },
-    {
-      id: "mesa-6",
-      numero: 6,
-      nome: "Mesa 06",
-      status: "livre",
-    },
-    {
-      id: "mesa-7",
-      numero: 7,
-      nome: "Mesa 07",
-      status: "livre",
-    },
-    {
-      id: "mesa-8",
-      numero: 8,
-      nome: "Mesa 08",
-      status: "livre",
-    },
-  ],
+  ...salaoDemo("lanchonete"),
   motoboys: [
     {
       id: "moto-1",

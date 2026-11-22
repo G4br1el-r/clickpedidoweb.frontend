@@ -6,7 +6,13 @@ import type { ReactNode } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { useSegmentoAtual } from "../segmento-atual"
 import { reiniciarServidores, servidorDo, usePedido } from "./consultas"
-import { useAlterarQuantidade, useLancarNaMesa } from "./consultas-mesas"
+import {
+  useAlterarQuantidade,
+  useConfigSalao,
+  useLancarNaMesa,
+  useMesas,
+  useSalvarConfigSalao,
+} from "./consultas-mesas"
 
 function envolver() {
   const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -28,6 +34,23 @@ afterEach(() => {
 })
 
 describe("consultas das mesas", () => {
+  test("salvar a configuração do salão atualiza a configuração e as mesas", async () => {
+    const api = servidorDo("pizzaria")
+    const inicial = await api.salao.config()
+    const { result } = renderHook(
+      () => ({ config: useConfigSalao(), mesas: useMesas(), salvar: useSalvarConfigSalao() }),
+      { wrapper: envolver() },
+    )
+    await waitFor(() => expect(result.current.config.data?.limpeza).toBe(inicial.limpeza))
+    await waitFor(() => expect(result.current.mesas.data).toBeDefined())
+    const mesasAntes = result.current.mesas.dataUpdatedAt
+
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 31))
+    await act(() => result.current.salvar.mutateAsync({ ...inicial, limpeza: !inicial.limpeza }))
+    await waitFor(() => expect(result.current.config.data?.limpeza).toBe(!inicial.limpeza))
+    await waitFor(() => expect(result.current.mesas.dataUpdatedAt).toBeGreaterThan(mesasAntes))
+  })
+
   test("lançar na mesa traz a comanda nova para quem a tem aberta", async () => {
     const api = servidorDo("pizzaria")
     const mesa = await api.mesas.criar({ numero: 81 })

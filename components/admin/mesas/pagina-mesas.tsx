@@ -120,7 +120,10 @@ export function PaginaMesas() {
     mesa.pedidoAtivoId ? comandas.get(mesa.pedidoAtivoId) : undefined
   const ocupadas = mesas?.filter((mesa) => mesa.status === "ocupada").length ?? 0
   const naCozinha =
-    mesas?.filter((mesa) => estadoDaMesa(mesa, comandaDa(mesa)).tom === "preparo").length ?? 0
+    mesas?.filter((mesa) => {
+      const status = comandaDa(mesa)?.status
+      return mesa.status === "ocupada" && (status === "recebido" || status === "em-preparo")
+    }).length ?? 0
   const aberta = mesas?.find((mesa) => mesa.id === abertaId) ?? null
 
   return (

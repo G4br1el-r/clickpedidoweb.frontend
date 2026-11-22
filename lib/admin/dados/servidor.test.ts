@@ -1,8 +1,9 @@
 import "fake-indexeddb/auto"
-import { clear, set } from "idb-keyval"
+import { clear, get, set } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { catalogoDeTeste } from "./catalogo-de-teste"
 import { carregarCatalogo } from "./catalogos"
+import type { BaseLojaV4 } from "./migracao"
 import {
   criarServidor,
   type NovoAgendamento,
@@ -10,7 +11,7 @@ import {
   type Servidor,
   type VendaPdv,
 } from "./servidor"
-import type { Pedido, StatusPedido } from "./tipos"
+import type { Mesa, Pedido, StatusPedido } from "./tipos"
 
 /** Sexta, 13/11/2026, 20:30 em São Paulo. */
 const AGORA = new Date(2026, 10, 13, 20, 30)
@@ -209,6 +210,106 @@ describe("servidor de demonstração", () => {
       expect(mesa?.status).toBe("ocupada")
       expect(mesa?.pedidoAtivoId).toBe(comanda.id)
     }
+  })
+
+  describe("demonstração com o salão cheio", () => {
+    const antes = (min: number) => new Date(AGORA.getTime() - min * 60_000).toISOString()
+
+    async function salaoCheio() {
+      const api = criarServidor({
+        segmento: "acougue",
+        carregarCatalogo: () => carregarCatalogo("acougue"),
+        espera: 0,
+      })
+      const mesas = await api.mesas.listar()
+      const base = await api.base()
+      return { mesas, base }
+    }
+
+    test("abre com 8 mesas ocupadas, cada uma com pessoas entre 1 e os lugares", async () => {
+      const { mesas, base } = await salaoCheio()
+      const ocupadas = mesas.filter((mesa) => mesa.status === "ocupada")
+      expect(ocupadas).toHaveLength(8)
+      for (const mesa of ocupadas) {
+        const comanda = base.pedidos.find((pedido) => pedido.id === mesa.pedidoAtivoId)
+        expect(comanda?.mesa?.pessoas).toBeGreaterThanOrEqual(1)
+        expect(comanda?.mesa?.pessoas).toBeLessThanOrEqual(mesa.lugares)
+      }
+    })
+
+    test("a comanda aberta há mais tempo já pediu a conta, 5 min atrás", async () => {
+      const { mesas, base } = await salaoCheio()
+      const comandas = mesas
+        .filter((mesa) => mesa.status === "ocupada")
+        .map((mesa) => base.pedidos.find((pedido) => pedido.id === mesa.pedidoAtivoId) as Pedido)
+      const maisAntiga = comandas.reduce((a, b) => (a.criadoEm < b.criadoEm ? a : b))
+      expect(maisAntiga.contaPedidaEm).toBe(antes(5))
+      expect(comandas.filter((comanda) => comanda.contaPedidaEm)).toHaveLength(1)
+    })
+
+    test("uma comanda está pronta para servir há 4 min", async () => {
+      const { base } = await salaoCheio()
+      const paraServir = base.pedidos.filter((pedido) => pedido.servirDesde)
+      expect(paraServir).toHaveLength(1)
+      expect(paraServir[0].servirDesde).toBe(antes(4))
+      expect(paraServir[0].status).toBe("pronto")
+      const { mesas } = await salaoCheio()
+      expect(mesas.find((mesa) => mesa.pedidoAtivoId === paraServir[0].id)?.status).toBe("ocupada")
+    })
+
+    test.each([
+      ["acougue" as const, new Date(2026, 10, 5, 20, 30)],
+      ["pizzaria" as const, new Date(2026, 10, 8, 20, 30)],
+    ])("em qualquer dia a promessa vale: %s em %s", async (segmento, dia) => {
+      vi.setSystemTime(dia)
+      const api = criarServidor({
+        segmento,
+        carregarCatalogo: () => carregarCatalogo(segmento),
+        espera: 0,
+      })
+      const mesas = await api.mesas.listar()
+      const base = await api.base()
+      const ocupadas = mesas.filter((mesa) => mesa.status === "ocupada")
+      expect(ocupadas).toHaveLength(8)
+      const comandas = ocupadas.map(
+        (mesa) => base.pedidos.find((pedido) => pedido.id === mesa.pedidoAtivoId) as Pedido,
+      )
+      const maisAntiga = comandas.reduce((a, b) => (a.criadoEm < b.criadoEm ? a : b))
+      expect(maisAntiga.contaPedidaEm).toBe(new Date(dia.getTime() - 5 * 60_000).toISOString())
+      const mesa9 = mesas.find((mesa) => mesa.id === "mesa-9")
+      expect(mesa9?.status).toBe("livre")
+      expect(mesa9?.limpezaDesde).toBe(new Date(dia.getTime() - 3 * 60_000).toISOString())
+    })
+
+    test("com a limpeza desligada no salão, a mesa 9 não fica em limpeza", async () => {
+      const api = criarServidor({
+        segmento: "acougue",
+        carregarCatalogo: async () => {
+          const catalogo = structuredClone(await carregarCatalogo("acougue"))
+          catalogo.salao.limpeza = false
+          return catalogo
+        },
+        espera: 0,
+      })
+      const mesa9 = (await api.mesas.listar()).find((mesa) => mesa.id === "mesa-9")
+      expect(mesa9?.status).toBe("livre")
+      expect(mesa9?.limpezaDesde).toBeUndefined()
+    })
+
+    test("a mesa 9 está em limpeza há 3 min; a 20 continua bloqueada e nunca recebe comanda", async () => {
+      const { mesas, base } = await salaoCheio()
+      const mesa9 = mesas.find((mesa) => mesa.id === "mesa-9")
+      expect(mesa9?.status).toBe("livre")
+      expect(mesa9?.limpezaDesde).toBe(antes(3))
+      const mesa20 = mesas.find((mesa) => mesa.id === "mesa-20")
+      expect(mesa20?.bloqueio).toEqual({ motivo: "Em manutenção" })
+      expect(mesa20?.status).toBe("livre")
+      expect(
+        base.pedidos.filter(
+          (pedido) => pedido.mesa?.id === "mesa-20" && EM_ANDAMENTO.includes(pedido.status),
+        ),
+      ).toEqual([])
+    })
   })
 
   test("ao reabrir em outro dia, completa os dias e encerra o que ficou aberto", async () => {
@@ -1161,6 +1262,43 @@ describe("servidor de demonstração", () => {
     })
   })
 
+  describe("salão", () => {
+    test("salvar a configuração guarda e devolve; a próxima leitura vê a mudança", async () => {
+      const api = servidor()
+      const atual = await api.salao.config()
+      expect(atual.areas).toEqual([{ id: "area-salao", nome: "Salão", ordem: 1 }])
+
+      const salva = await api.salao.salvar({
+        ...atual,
+        areas: [...atual.areas, { id: "area-varanda", nome: "  Varanda ", ordem: 2 }],
+        taxaServico: { ativa: true, percentual: 12 },
+      })
+      expect(salva.areas.map((area) => area.nome)).toEqual(["Salão", "Varanda"])
+      expect((await api.salao.config()).taxaServico).toEqual({ ativa: true, percentual: 12 })
+    })
+
+    test("configuração inválida é recusada com a primeira mensagem", async () => {
+      const api = servidor()
+      const atual = await api.salao.config()
+      await expect(
+        api.salao.salvar({ ...atual, taxaServico: { ativa: true, percentual: 21 } }),
+      ).rejects.toThrow("A taxa de serviço vai de 0% a 20%.")
+      expect((await api.salao.config()).taxaServico.percentual).toBe(10)
+    })
+
+    test("excluir uma área com mesas é recusado", async () => {
+      const api = servidor()
+      const atual = await api.salao.config()
+      await expect(
+        api.salao.salvar({
+          ...atual,
+          areas: [{ id: "area-varanda", nome: "Varanda", ordem: 1 }],
+        }),
+      ).rejects.toThrow("Mova as mesas da área Salão antes de excluí-la.")
+      expect((await api.salao.config()).areas.map((area) => area.id)).toEqual(["area-salao"])
+    })
+  })
+
   describe("mesas", () => {
     test("mesa nova com número único; a lista vem pelo número", async () => {
       const api = servidor()
@@ -1171,6 +1309,58 @@ describe("servidor de demonstração", () => {
       await expect(api.mesas.criar({ numero: 7 })).rejects.toThrow("Já existe a mesa 7.")
       await expect(api.mesas.criar({ numero: 0 })).rejects.toThrow("Informe o número da mesa.")
       expect((await api.mesas.criar({ numero: 8, nome: " Varanda " })).nome).toBe("Varanda")
+    })
+
+    test("mesa nova entra na primeira área, com 4 lugares, quadrada e na primeira posição livre", async () => {
+      const api = servidor()
+      const mesa = await api.mesas.criar({ numero: 30 })
+      const salao = await api.salao.config()
+      expect(mesa).toMatchObject({ areaId: salao.areas[0].id, lugares: 4, forma: "quadrada" })
+      // as mesas 1 e 2 do catálogo de teste estão em x 0 e 4: a primeira vaga é x 2
+      expect(mesa.posicao).toEqual({ x: 2, y: 0 })
+      expect(await api.mesas.criar({ numero: 31, lugares: 6, forma: "redonda" })).toMatchObject({
+        lugares: 6,
+        forma: "redonda",
+      })
+    })
+
+    test("lugares fora de 1 a 20, forma inválida e área que não existe são recusados", async () => {
+      await expect(servidor().mesas.criar({ numero: 31, lugares: 0 })).rejects.toThrow(
+        "Informe de 1 a 20 lugares.",
+      )
+      await expect(servidor().mesas.criar({ numero: 31, lugares: 21 })).rejects.toThrow(
+        "Informe de 1 a 20 lugares.",
+      )
+      await expect(servidor().mesas.criar({ numero: 31, areaId: "nada" })).rejects.toThrow(
+        "Escolha uma área do salão.",
+      )
+      await expect(servidor().mesas.criar({ numero: 31, areaId: "" })).rejects.toThrow(
+        "Escolha uma área do salão.",
+      )
+      await expect(
+        servidor().mesas.criar({ numero: 31, forma: "triangular" as never }),
+      ).rejects.toThrow("Escolha a forma da mesa.")
+    })
+
+    test("área sem espaço no mapa recusa a mesa nova", async () => {
+      const chave = "clickpedido-admin-dados:lanchonete"
+      const api = servidor()
+      const [modelo] = await api.mesas.listar()
+      const guardado = (await get(chave)) as { base: { mesas: Mesa[] } }
+      // 96 mesas 2 × 2 enchem a grade 24 × 16
+      guardado.base.mesas = Array.from({ length: 96 }, (_, i) => ({
+        ...modelo,
+        id: `cheia-${i}`,
+        numero: 100 + i,
+        areaId: "area-salao",
+        forma: "quadrada" as const,
+        lugares: 4,
+        posicao: { x: (i % 12) * 2, y: Math.floor(i / 12) * 2 },
+      }))
+      await set(chave, guardado)
+      await expect(servidor().mesas.criar({ numero: 300 })).rejects.toThrow(
+        "Não cabe mais mesa nessa área do mapa.",
+      )
     })
 
     test("só exclui mesa livre", async () => {
@@ -1188,6 +1378,50 @@ describe("servidor de demonstração", () => {
       await expect(api.mesas.excluir(ocupada.id)).rejects.toThrow(
         "Feche a conta antes de excluir a mesa.",
       )
+    })
+
+    /** Altera a mesa direto na base guardada, como se outra aba a tivesse bloqueado ou posto em limpeza. */
+    async function alterarGuardada(mesaId: string, mudanca: Partial<Mesa>) {
+      const chave = "clickpedido-admin-dados:lanchonete"
+      const guardado = (await get(chave)) as { base: { mesas: Mesa[] } }
+      guardado.base.mesas = guardado.base.mesas.map((mesa) =>
+        mesa.id === mesaId ? { ...mesa, ...mudanca } : mesa,
+      )
+      await set(chave, guardado)
+    }
+
+    test("mesa bloqueada não recebe comanda", async () => {
+      const mesa = await servidor().mesas.criar({ numero: 5 })
+      await alterarGuardada(mesa.id, { bloqueio: { motivo: "Em manutenção" } })
+      const api = servidor()
+      await expect(
+        api.mesas.lancar({
+          mesaId: mesa.id,
+          enviarParaCozinha: false,
+          itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+        }),
+      ).rejects.toThrow("A mesa 5 está bloqueada.")
+      expect((await api.mesas.listar()).find((item) => item.id === mesa.id)?.status).toBe("livre")
+    })
+
+    test("lançar numa mesa em limpeza ocupa a mesa e tira a limpeza; ao fechar a conta ela fica livre sem limpeza", async () => {
+      const mesa = await servidor().mesas.criar({ numero: 5 })
+      await alterarGuardada(mesa.id, {
+        limpezaDesde: new Date(AGORA.getTime() - 60_000).toISOString(),
+      })
+      const outra = servidor()
+      const comanda = await outra.mesas.lancar({
+        mesaId: mesa.id,
+        enviarParaCozinha: false,
+        itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+      })
+      const ocupada = (await outra.mesas.listar()).find((item) => item.id === mesa.id)
+      expect(ocupada?.status).toBe("ocupada")
+      expect(ocupada?.limpezaDesde).toBeUndefined()
+      await outra.mesas.fecharConta(comanda.id, "pix")
+      const liberada = (await outra.mesas.listar()).find((item) => item.id === mesa.id)
+      expect(liberada?.status).toBe("livre")
+      expect(liberada?.limpezaDesde).toBeUndefined()
     })
 
     const BACON = { "grp-x-burger-1": ["opc-x-burger-1-1"] }
@@ -1474,5 +1708,128 @@ describe("servidor de demonstração", () => {
 
     await api.restaurar()
     expect((await api.pedidos.buscar(novo.id))?.status).toBe("recebido")
+  })
+})
+
+describe("migração", () => {
+  const CHAVE = "clickpedido-admin-dados:lanchonete"
+
+  /** Base como o servidor da versão 4 do main a guardava (custos e clientes novos): sem salão, reservas, espera, chamados e campos novos das mesas. */
+  async function baseDaVersao4(): Promise<BaseLojaV4> {
+    await servidor().pedidos.listar()
+    const { base } = (await get(CHAVE)) as { base: Record<string, unknown> & { mesas: Mesa[] } }
+    const { salao, reservas, espera, chamados, ...resto } = base
+    return {
+      ...resto,
+      mesas: base.mesas.map(
+        ({ id, numero, nome, status, pedidoAtivoId, clienteNome, ocupadaEm }) => ({
+          id,
+          numero,
+          nome,
+          status,
+          pedidoAtivoId,
+          clienteNome,
+          ocupadaEm,
+        }),
+      ),
+    } as unknown as BaseLojaV4
+  }
+
+  test("base da versão 4 é migrada: mesmos pedidos, mesa ocupada com a mesma comanda e o mesmo total", async () => {
+    const antiga = await baseDaVersao4()
+    const ocupadaAntes = antiga.mesas.find((mesa) => mesa.status === "ocupada")
+    const comandaAntes = antiga.pedidos.find((pedido) => pedido.id === ocupadaAntes?.pedidoAtivoId)
+    expect(comandaAntes).toBeDefined()
+    await set(CHAVE, { versao: 4, geradoEm: AGORA.toISOString(), base: antiga })
+    const api = servidor()
+    const mesas = await api.mesas.listar()
+    expect(mesas.every((mesa) => mesa.areaId === "area-salao")).toBe(true)
+    const ocupada = mesas.find((mesa) => mesa.status === "ocupada")
+    expect(ocupada).toBeDefined()
+    expect(ocupada?.pedidoAtivoId).toBe(ocupadaAntes?.pedidoAtivoId)
+    const comandaDepois = (await api.base()).pedidos.find(
+      (pedido) => pedido.id === ocupada?.pedidoAtivoId,
+    )
+    expect(comandaDepois?.total).toBe(comandaAntes?.total)
+    const guardado = (await get(CHAVE)) as { versao: number; base: { pedidos: unknown[] } }
+    expect(guardado.base.pedidos).toHaveLength(antiga.pedidos.length)
+    expect(guardado.versao).toBe(5)
+  })
+
+  test("base da versão 4 que já tem salão (das mesas, antes do main) é recriada", async () => {
+    const atual = await servidor().base()
+    const semCusto = {
+      ...atual,
+      produtos: atual.produtos.map(({ custo, ...produto }) => produto),
+      pedidos: [],
+    }
+    await set(CHAVE, { versao: 4, geradoEm: AGORA.toISOString(), base: semCusto })
+
+    const base = await servidor().base()
+    expect(base.pedidos.length).toBeGreaterThan(0)
+    expect(base.produtos.some((produto) => produto.custo !== undefined)).toBe(true)
+    expect(((await get(CHAVE)) as { versao: number }).versao).toBe(5)
+  })
+
+  test("base da versão 3, de antes dos clientes novos do main, é recriada", async () => {
+    const antiga = await baseDaVersao4()
+    await set(CHAVE, { versao: 3, geradoEm: AGORA.toISOString(), base: { ...antiga, pedidos: [] } })
+
+    const base = await servidor().base()
+    expect(base.pedidos.length).toBeGreaterThan(0)
+    expect(base.salao).toBeDefined()
+    expect(((await get(CHAVE)) as { versao: number }).versao).toBe(5)
+  })
+
+  test("base da versão 4 guardada há 3 dias: migra, completa os dias que faltam e mantém os garçons", async () => {
+    const antiga = await baseDaVersao4()
+    const encerrados = antiga.pedidos.filter((pedido) => pedido.status === "concluido")
+    encerrados[0].tipo = "mesa"
+    encerrados[0].mesa = { id: "mesa-1", numero: 1, garcom: "Paula" }
+    encerrados[1].tipo = "mesa"
+    encerrados[1].mesa = { id: "mesa-2", numero: 2, garcom: "Bia" }
+    const garconsAntigos = [
+      ...new Set(antiga.pedidos.map((pedido) => pedido.mesa?.garcom?.trim()).filter(Boolean)),
+    ]
+    expect(garconsAntigos.length).toBeGreaterThan(0)
+    const tresDiasAntes = new Date(2026, 10, 10, 20, 30)
+    await set(CHAVE, { versao: 4, geradoEm: tresDiasAntes.toISOString(), base: antiga })
+
+    const api = servidor()
+    const pedidos = await api.pedidos.listar()
+    const guardado = (await get(CHAVE)) as { versao: number }
+    expect(guardado.versao).toBe(5)
+    // dias 11, 12 e 13 de novembro, na hora local
+    for (const dia of [11, 12, 13])
+      expect(pedidos.some((pedido) => new Date(pedido.criadoEm).getDate() === dia)).toBe(true)
+
+    const { nomes } = {
+      nomes: (await api.salao.config()).garcons.map((garcom) => garcom.nome).sort(),
+    }
+    expect(nomes).toEqual((garconsAntigos as string[]).toSorted())
+
+    const base = await api.base()
+    const ocupadas = (await api.mesas.listar()).filter((mesa) => mesa.status === "ocupada")
+    for (const mesa of ocupadas) {
+      const comanda = base.pedidos.find((pedido) => pedido.id === mesa.pedidoAtivoId)
+      expect(comanda?.mesa?.pessoas).toBeGreaterThanOrEqual(1)
+      expect(comanda?.mesa?.pessoas).toBeLessThanOrEqual(4)
+    }
+  })
+
+  test("depois de migrar uma base com 'Bia', 'bia ' e 'Bía', o salão ainda salva", async () => {
+    const antiga = await baseDaVersao4()
+    const [primeiro, segundo, terceiro] = antiga.pedidos
+    antiga.pedidos = [
+      { ...primeiro, mesa: { id: "mesa-1", numero: 1, garcom: "Bia" } },
+      { ...segundo, mesa: { id: "mesa-1", numero: 1, garcom: "bia " } },
+      { ...terceiro, mesa: { id: "mesa-1", numero: 1, garcom: "Bía" } },
+      ...antiga.pedidos.slice(3),
+    ]
+    await set(CHAVE, { versao: 4, geradoEm: AGORA.toISOString(), base: antiga })
+    const api = servidor()
+    const config = await api.salao.config()
+    expect(config.garcons).toEqual([{ id: "garcom-bia", nome: "Bia", ativo: true }])
+    await expect(api.salao.salvar(config)).resolves.toEqual(config)
   })
 })
