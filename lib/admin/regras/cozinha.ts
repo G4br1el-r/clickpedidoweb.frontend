@@ -21,7 +21,10 @@ const rodadaDo = (item: ItemPedido) => item.rodada ?? 1
  * lançada direto na mesa) não aparece.
  */
 export function itensDaCozinha(pedido: Pedido): { atuais: ItemPedido[]; anteriores: ItemPedido[] } {
-  const daCozinha = pedido.itens.filter((item) => item.vaiParaCozinha ?? pedido.enviarParaCozinha)
+  // O item que veio de outra mesa não é rodada desta cozinha.
+  const daCozinha = pedido.itens.filter(
+    (item) => !item.transferido && (item.vaiParaCozinha ?? pedido.enviarParaCozinha),
+  )
   const ultima = Math.max(0, ...daCozinha.map(rodadaDo))
   return {
     atuais: daCozinha.filter((item) => rodadaDo(item) === ultima),
@@ -35,10 +38,18 @@ export function itensDaCozinha(pedido: Pedido): { atuais: ItemPedido[]; anterior
  * preparo ou pronta. O item sem cozinha nunca conta. Tirar esse item exige motivo.
  */
 export function cozinhaJaPreparou(comanda: Pedido, item: ItemPedido): boolean {
+  // Veio de outra mesa: vale o que a cozinha de lá já tinha feito.
+  if (item.transferido) return item.transferido.preparado
   if (!(item.vaiParaCozinha ?? comanda.enviarParaCozinha)) return false
   const [atual] = itensDaCozinha(comanda).atuais
   if (atual && rodadaDo(item) < rodadaDo(atual)) return true
   return comanda.status === "em-preparo" || comanda.status === "pronto"
+}
+
+/** "Mesa 3", ou "Mesa 15 + 16" com as mesas juntadas. */
+export function rotuloDaMesa({ mesa }: Pick<Pedido, "mesa">): string {
+  return ["Mesa", [mesa?.numero, ...(mesa?.juntadas ?? []).map((item) => item.numero)].join(" + ")]
+    .join(" ")
 }
 
 const ultimaRodada = (pedido: Pedido) => Math.max(0, ...itensDaCozinha(pedido).atuais.map(rodadaDo))

@@ -58,6 +58,10 @@ export type TipoEventoComanda =
   | "couvert-removido"
   | "pre-conta"
   | "reaberta"
+  | "transferida"
+  | "juntada"
+  | "separada"
+  | "itens-transferidos"
 
 /** Cartão na maquininha: crédito ou débito é detalhe do pagamento, não forma nova. */
 export type CartaoPagamento = "credito" | "debito"
@@ -123,6 +127,11 @@ export type ItemPedido = {
   escolhas?: Record<string, string[]>
   /** Comanda: o item saiu de graça, com o motivo. Continua na conta, zerado. */
   cortesia?: { motivo: string }
+  /**
+   * Comanda: o item veio de outra mesa. A cozinha daqui não o vê como rodada; `preparado` diz
+   * se a cozinha já o tinha preparado lá (tirar pede motivo e vira perda).
+   */
+  transferido?: { daMesa: number; preparado: boolean }
 }
 
 export type EnderecoEntrega = {
@@ -145,7 +154,14 @@ export type Pedido = {
   status: StatusPedido
   cliente: { nome: string; telefone: string }
   endereco?: EnderecoEntrega
-  mesa?: { id: string; numero: number; garcom?: string; pessoas?: number }
+  mesa?: {
+    id: string
+    numero: number
+    garcom?: string
+    pessoas?: number
+    /** Mesas juntadas a esta, pelo número: elas ficam "Com a mesa X" enquanto a comanda está aberta. */
+    juntadas?: { id: string; numero: number }[]
+  }
   itens: ItemPedido[]
   subtotal: number
   desconto: number

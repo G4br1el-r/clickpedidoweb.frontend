@@ -1789,7 +1789,7 @@ Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilha
 - **Estoque (Q38):** transferir, juntar, separar e transferir itens gravam as comandas direto, sem `aplicarEstoque`: nenhum movimento novo. A venda continua no estoque uma vez só, agora na comanda onde o item está.
 - **Duas abas (ponto de atenção 2):** cada aba tem o seu servidor, com a base em memória. As movimentações e o desfazer **releem a base guardada** antes de mudar (`reler`), e partem do `pedidoId` que a tela mostrava, não da mesa: transferir a comanda que outra aba acabou de fechar recusa com "A comanda da mesa 3 não está mais aberta. Atualize a tela.", sem criar nem duplicar comanda. As outras operações continuam na base em memória (a sincronia entre abas é da Fase 8, com o `BroadcastChannel`).
 - **Desfazer (Q46, decorrência 2):** transferir, juntar, separar, transferir itens e marcar limpa devolvem, além do resultado, o id de uma **foto** que o servidor guarda em memória por **10 s**: as mesas e comandas envolvidas antes e depois. `desfazer(id)` relê a base; se as mesas e comandas da foto continuam iguais ao "depois", volta o "antes" (a comanda que a operação criou sai; a que ela tirou de Pedidos volta no lugar pelo id; a limpeza volta) e a foto some. Se algo mudou, recusa com "A mesa mudou depois disso. Desfaça pela comanda."; passado o prazo (ou já desfeita), "O tempo para desfazer acabou.". O desfazer volta o estado como era, sem evento: a movimentação some do histórico. A tela mostra o aviso com "Desfazer" por **6 s**.
-- **Cozinha (Q33):** o ticket e o cartão da Fila da comanda junta dizem "Mesa 15 + 16" (`rotuloDaMesa`).
+- **Cozinha (Q33):** o ticket da comanda junta diz "Mesa 15 + 16" (`rotuloDaMesa`).
 - **Grade e menu ⋯ (Q41):** "Juntada" volta ao filtro de estado (depois de "Pediu a conta"). O menu ⋯ da mesa aberta ganha "Transferir" e "Juntar mesas" e, com junção, "Separar"; a secundária oferece "Abrir comanda" (a da principal) e "Separar". Na gaveta, a descrição diz "Junto com a mesa 16", e a aba Itens ganha "Transferir itens". "Marcar limpa" (menu e gaveta) passa a avisar com "Desfazer".
 - **Demonstração:** a comanda mais nova do roteiro ao vivo senta na **mesa 15, junta com a 16** (as duas retangulares de 6 lugares da Varanda). Ela deixa de ocupar a mesa 8, que fica livre; as pessoas continuam sorteadas pelos lugares da principal. Sem sorteio novo: o resto da demonstração não muda, mas a ocupação passa a contar a 16 ("9/19 · 47%") e a grade tem 9 livres. Na virada do dia, a demonstração do dia novo também não senta ninguém nas secundárias de uma comanda que continuou aberta.
 
@@ -1838,7 +1838,7 @@ desfazer(id: string): Promise<void>
 - Mudar:
   - `lib/admin/dados/tipos.ts`, `servidor.ts`, `gerar-pedidos.ts` (e o teste), `consultas-mesas.ts` (e o teste);
   - `lib/admin/regras/cozinha.ts` (e o teste);
-  - `components/admin/mesas/{pagina-mesas,cartao-mesa,comanda-mesa,estado-grade}.tsx`, `components/admin/cozinha/ticket-cozinha.tsx`, `components/admin/fila/cartao-fila.tsx`;
+  - `components/admin/mesas/{pagina-mesas,cartao-mesa,comanda-mesa,estado-grade}.tsx` e `components/admin/cozinha/ticket-cozinha.tsx`;
   - `tests/admin.spec.ts`.
 
 ### Task 47 (Tarefa 47): "Mesa 15 + 16" e o item transferido na cozinha
@@ -1846,7 +1846,7 @@ desfazer(id: string): Promise<void>
 - [ ] Testes que falham em `cozinha.test.ts`:
   - `rotuloDaMesa`: "Mesa 3" sem junção, "Mesa 15 + 16" com uma, "Mesa 3 + 4 + 5" com duas;
   - o item com `transferido` não entra em `itensDaCozinha` e não muda a rodada atual; `cozinhaJaPreparou` dá `true` para `transferido.preparado` e `false` sem ele, qualquer que seja o status.
-- [ ] Teste que falha em `pagina-cozinha.test.tsx`: o ticket da comanda com `juntadas` diz "Mesa 15 + 16". O cartão da Fila passa a usar o mesmo rótulo.
+- [ ] Teste que falha em `pagina-cozinha.test.tsx`: o ticket da comanda com `juntadas` diz "Mesa 15 + 16".
 - [ ] Implementar (tipos novos em `tipos.ts`) e fazer o commit `feat(mesas): a cozinha mostra Mesa 15 + 16 e ignora o item transferido`.
 
 ### Task 48 (Tarefa 48): regras das movimentações
