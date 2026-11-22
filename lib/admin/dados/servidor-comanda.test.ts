@@ -325,6 +325,37 @@ describe("tirar e diminuir", () => {
     })
   })
 
+  test("tirar a rodada nova não desfaz a anterior: a comanda volta a pronta e a rodada 1 continua preparada", async () => {
+    const api = servidor()
+    const { mesaId, comanda, item } = await comRefri(api, true)
+    await api.pedidos.avancar(comanda.id, "em-preparo")
+    await api.mesas.marcarServido(comanda.id)
+    const comRodada2 = await api.mesas.lancar({
+      mesaId,
+      enviarParaCozinha: true,
+      itens: [{ produtoId: "refri", escolhas: {}, quantidade: 1 }],
+    })
+    expect(comRodada2.status).toBe("recebido")
+
+    const depois = await api.mesas.removerItem(comanda.id, comRodada2.itens[1].id)
+    expect(depois.status).toBe("pronto")
+    const naCozinha = await api.pedidos.listar({ status: ["recebido", "em-preparo"] })
+    expect(naCozinha.map((pedido) => pedido.id)).not.toContain(comanda.id)
+    await expect(api.mesas.removerItem(comanda.id, item.id)).rejects.toThrow(
+      "Diga o motivo para tirar o que a cozinha já preparou.",
+    )
+  })
+
+  test("tirar inteira a rodada pronta e não servida limpa o servir", async () => {
+    const api = servidor()
+    const { comanda, item } = await comRefri(api, true)
+    const pronta = await api.pedidos.avancar(comanda.id, "em-preparo")
+    expect(pronta.servirDesde).toBe(AGORA.toISOString())
+
+    const depois = await api.mesas.removerItem(comanda.id, item.id, { motivo: "Errou a mesa" })
+    expect(depois).not.toHaveProperty("servirDesde")
+  })
+
   test("diminuir o que não foi preparado devolve e não pede motivo", async () => {
     const api = servidor()
     const { comanda, item } = await comRefri(api, false)

@@ -3,6 +3,7 @@ import type { ItemPedido, Pedido, StatusPedido, TipoPedido } from "../dados/tipo
 import {
   colunasDaCozinha,
   cozinhaJaPreparou,
+  depoisDeTirar,
   type FiltroCozinha,
   itensDaCozinha,
   minutosNaCozinha,
@@ -69,6 +70,43 @@ describe("cozinhaJaPreparou", () => {
   })
 })
 
+describe("depoisDeTirar", () => {
+  const pizza = item("Pizza", 1, true)
+  const esfiha = item("Esfiha", 2, true)
+  const agua = item("Água", 3, false)
+
+  test("tirou a rodada que estava na cozinha: a comanda volta a pronta", () => {
+    const antes = pedido(1, "recebido", 5, "mesa", [pizza, esfiha])
+    const depois = depoisDeTirar(antes, { ...antes, itens: [pizza] })
+    expect(depois.status).toBe("pronto")
+    expect(cozinhaJaPreparou(depois, pizza)).toBe(true)
+    const emPreparo = pedido(1, "em-preparo", 5, "mesa", [pizza, esfiha, agua])
+    expect(depoisDeTirar(emPreparo, { ...emPreparo, itens: [agua] }).status).toBe("pronto")
+  })
+
+  test("a rodada da cozinha continua com algum item, ou saiu uma anterior: nada muda", () => {
+    const outra = { ...esfiha, id: "Esfiha 2" }
+    const antes = pedido(1, "recebido", 5, "mesa", [pizza, esfiha, outra])
+    const depois = { ...antes, itens: [pizza, outra] }
+    expect(depoisDeTirar(antes, depois)).toEqual(depois)
+    const tirouAnterior = { ...antes, itens: [esfiha, outra] }
+    expect(depoisDeTirar(antes, tirouAnterior)).toEqual(tirouAnterior)
+  })
+
+  test("sem nada pronto para servir, o servir sai; com a rodada anterior ainda na mesa, fica", () => {
+    const servirDesde = minutosAtras(3)
+    const pronta = { ...pedido(1, "pronto", 5, "mesa", [pizza, agua]), servirDesde }
+    expect(depoisDeTirar(pronta, { ...pronta, itens: [agua] })).not.toHaveProperty("servirDesde")
+    const comRodada2 = { ...pedido(1, "recebido", 5, "mesa", [pizza, esfiha]), servirDesde }
+    expect(depoisDeTirar(comRodada2, { ...comRodada2, itens: [esfiha] })).not.toHaveProperty(
+      "servirDesde",
+    )
+    expect(depoisDeTirar(comRodada2, { ...comRodada2, itens: [pizza] }).servirDesde).toBe(
+      servirDesde,
+    )
+  })
+})
+
 describe("itensDaCozinha", () => {
   test("pedido do site: tudo vai para a cozinha numa rodada só", () => {
     const { atuais, anteriores } = itensDaCozinha(
@@ -122,6 +160,17 @@ describe("colunasDaCozinha", () => {
       ["Preparando", [13]],
       ["Prontos", [14]],
     ])
+  })
+
+  test("a comanda conta os 15 min de pronta desde que a cozinha terminou, não desde a última mudança", () => {
+    const comanda = {
+      ...pedido(20, "pronto", 1, "mesa", [item("Pizza", 1, true)]),
+      eventos: [{ tipo: "pronta" as const, em: minutosAtras(20), texto: "A cozinha terminou" }],
+    }
+    const prontos = (pedidos: Pedido[]) =>
+      colunasDaCozinha(pedidos, "todos", AGORA)[2].pedidos.map((p) => p.id)
+    expect(prontos([comanda])).toEqual([])
+    expect(prontos([{ ...comanda, eventos: [] }])).toEqual([20])
   })
 
   test("filtros: mesas, entrega (sem retirada) e retirada", () => {

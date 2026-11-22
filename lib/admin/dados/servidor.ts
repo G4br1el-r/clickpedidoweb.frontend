@@ -9,7 +9,7 @@ import {
   sincronizarOpcoes,
   soltarOpcoesDe,
 } from "../regras/cardapio"
-import { cozinhaJaPreparou, itensDaCozinha } from "../regras/cozinha"
+import { cozinhaJaPreparou, depoisDeTirar, itensDaCozinha } from "../regras/cozinha"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
 import { esquemaSalao } from "../regras/esquema-salao"
@@ -553,7 +553,13 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (pedido.tipo !== "mesa" || !EM_ANDAMENTO.includes(pedido.status)) {
           throw new Error("Só a comanda aberta de uma mesa pode mudar.")
         }
-        return recalcular(mudar(pedido, (perda) => perdas.push(perda), base))
+        // Tirar a rodada da cozinha ou a que estava pronta acerta o status e o "Servir".
+        return recalcular(
+          depoisDeTirar(
+            pedido,
+            mudar(pedido, (perda) => perdas.push(perda), base),
+          ),
+        )
       },
       // O garçom não lança mais do que há.
       { conferir: true },
