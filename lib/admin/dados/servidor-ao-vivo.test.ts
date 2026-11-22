@@ -40,6 +40,26 @@ describe("duas abas sobre a mesma base", () => {
     expect(await numeros(aba())).toEqual([1, 2, 30, 31])
   })
 
+  test("A e B gravam quase juntas: as duas gravações ficam", async () => {
+    const a = aba()
+    const b = aba()
+    await a.mesas.listar()
+    await b.mesas.listar()
+
+    await Promise.all([a.mesas.criar({ numero: 30 }), b.mesas.criar({ numero: 31 })])
+
+    expect(await numeros(aba())).toEqual([1, 2, 30, 31])
+  })
+
+  test("na mesma aba, duas gravações juntas não se apagam", async () => {
+    const api = aba()
+    await api.mesas.listar()
+
+    await Promise.all([api.mesas.criar({ numero: 30 }), api.mesas.criar({ numero: 31 })])
+
+    expect(await numeros(aba())).toEqual([1, 2, 30, 31])
+  })
+
   test("a outra aba já lê o que foi gravado, sem recarregar", async () => {
     const a = aba()
     const b = aba()
@@ -64,6 +84,24 @@ describe("aviso e memória", () => {
     await api.mesas.criar({ numero: 30 })
 
     expect(await numeros(api)).toEqual([1, 2, 30])
+  })
+
+  test("com o localStorage bloqueado, a aba desatualizada não apaga o que a outra gravou", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("Bloqueado")
+    })
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("Bloqueado")
+    })
+    const a = aba()
+    const b = aba()
+    await a.mesas.listar()
+    await b.mesas.listar()
+
+    await a.mesas.criar({ numero: 30 })
+    await b.mesas.criar({ numero: 31 })
+
+    expect(await numeros(aba())).toEqual([1, 2, 30, 31])
   })
 
   test("aoGravar é chamado uma vez por gravação", async () => {

@@ -59,6 +59,7 @@ import { rotuloDoPagamento } from "../regras/rotulos"
 import { colide, posicaoValida, primeiraPosicaoLivre } from "../regras/salao"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
+import { exclusivo } from "./bloqueio"
 import { chamadosDemo } from "./chamados-demo"
 import { semearCustos } from "./custos-demo"
 import { semearEstoque } from "./estoque-demo"
@@ -718,12 +719,15 @@ export function criarServidor({
   let carregando: Promise<BaseLoja> | undefined
   let revisao: string | null = null
 
-  /** Sem `localStorage` (bloqueado no navegador), fica a cópia em memória, como antes. */
+  /**
+   * Sem `localStorage` (bloqueado no navegador), não dá para saber se outra aba gravou: cada
+   * leitura volta ao IndexedDB.
+   */
   function revisaoGuardada(): string | null {
     try {
       return localStorage.getItem(chaveRevisao)
     } catch {
-      return revisao
+      return crypto.randomUUID()
     }
   }
 
@@ -862,9 +866,33 @@ export function criarServidor({
     )
   }
 
+  /** A resposta é uma cópia: quem recebe não mexe na base. A espera simulada vem depois, fora da vez. */
   async function responder<T>(valor: T): Promise<T> {
-    if (espera > 0) await new Promise((pronto) => setTimeout(pronto, espera))
     return structuredClone(valor)
+  }
+
+  /**
+   * Cada chamada espera a vez (`exclusivo`): ler, mudar e gravar não se cruzam com a gravação de
+   * outra aba ou de outra chamada desta. Nenhuma chamada chama outra por aqui, então a vez não
+   * se prende nela mesma.
+   */
+  function naVez<A extends unknown[], R>(fazer: (...argumentos: A) => Promise<R>) {
+    return async (...argumentos: A): Promise<R> => {
+      const resultado = await exclusivo(chave, () => fazer(...argumentos))
+      if (espera > 0) await new Promise((pronto) => setTimeout(pronto, espera))
+      return resultado
+    }
+  }
+
+  function cadaUmNaVez<T extends object>(alvo: T): T {
+    return Object.fromEntries(
+      Object.entries(alvo).map(([nome, valor]) => [
+        nome,
+        typeof valor === "function"
+          ? naVez(valor as (...argumentos: unknown[]) => Promise<unknown>)
+          : cadaUmNaVez(valor as object),
+      ]),
+    ) as T
   }
 
   /** Altera um pedido, guarda e devolve a versão nova. */
@@ -1633,12 +1661,7 @@ export function criarServidor({
     return { base: final, desfazer }
   }
 
-  return {
-    /** Outra aba avisou que gravou: a próxima leitura volta ao IndexedDB. */
-    esquecer() {
-      carregando = undefined
-    },
-
+  const api = cadaUmNaVez({
     async base(): Promise<BaseLoja> {
       return responder(await carregar())
     },
@@ -3693,6 +3716,14 @@ export function criarServidor({
       await del(chave)
       await lembrar(doZero())
     },
+  })
+
+  return {
+    /** Outra aba avisou que gravou: a próxima leitura volta ao IndexedDB. */
+    esquecer() {
+      carregando = undefined
+    },
+    ...api,
   }
 }
 
