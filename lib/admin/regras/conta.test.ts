@@ -8,6 +8,7 @@ import {
   pagamentosDoPedido,
   pagoNoDiaSemTaxa,
   resumoDaConta,
+  saldoDepoisDe,
   taxaSobre,
   trocoDoPagamento,
   valorDosItens,
@@ -230,5 +231,20 @@ describe("trocoDoPagamento", () => {
     expect(trocoDoPagamento({ valor: 60, saldo: 50, recebido: 100 })).toBe(50)
     expect(trocoDoPagamento({ valor: 50, saldo: 50, recebido: 50 })).toBe(0)
     expect(trocoDoPagamento({ valor: 50, saldo: 50, recebido: 40 })).toBe(0)
+  })
+})
+
+describe("saldoDepoisDe", () => {
+  test("o saldo que ficou logo depois de cada pagamento, não o de agora", () => {
+    const em = "2026-11-13T23:30:00.000Z"
+    const paga = conta({
+      itens: [item("rodizio", 100)],
+      pagamentos: [
+        { id: "p1", forma: "pix", valor: 33.33, em },
+        { id: "p2", forma: "pix", valor: 33.33, em },
+      ],
+    })
+    expect(saldoDepoisDe(paga, "p1")).toBe(66.67)
+    expect(saldoDepoisDe(paga, "p2")).toBe(33.34)
   })
 })

@@ -3,7 +3,7 @@
 import { format } from "date-fns"
 import type { ReactNode, Ref } from "react"
 import type { Mesa, PagamentoConta, Pedido } from "@/lib/admin/dados/tipos"
-import { dividirIgualmente, resumoDaConta } from "@/lib/admin/regras/conta"
+import { dividirIgualmente, resumoDaConta, saldoDepoisDe } from "@/lib/admin/regras/conta"
 import { rotuloDoPagamento } from "@/lib/admin/regras/rotulos"
 import { emReais } from "@/lib/formato"
 
@@ -110,7 +110,7 @@ export function PreConta({
   )
 }
 
-/** Comprovante de 80 mm de um pagamento: forma, valor, recebido e troco, e o saldo que ficou. */
+/** Comprovante de 80 mm de um pagamento: forma, valor, recebido e troco, e o saldo que ficou depois dele. */
 export function Comprovante({
   pedido,
   mesa,
@@ -138,7 +138,7 @@ export function Comprovante({
       )}
       {pagamento.troco !== undefined && <Linha rotulo="Troco" valor={emReais(pagamento.troco)} />}
       <Traco />
-      <Linha rotulo="Saldo da conta" valor={emReais(resumoDaConta(pedido).saldo)} />
+      <Linha rotulo="Saldo da conta" valor={emReais(saldoDepoisDe(pedido, pagamento.id))} />
       <p className="text-center">Não é documento fiscal.</p>
     </Papel>
   )

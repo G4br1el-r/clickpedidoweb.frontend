@@ -101,6 +101,13 @@ export function resumoDaConta(conta: ContaDaMesa): ResumoConta {
   }
 }
 
+/** O saldo que ficou logo depois do pagamento (para o comprovante de um pagamento antigo). */
+export function saldoDepoisDe(conta: ContaDaMesa, pagamentoId: string): number {
+  const pagamentos = conta.pagamentos ?? []
+  const ate = pagamentos.findIndex((pagamento) => pagamento.id === pagamentoId)
+  return resumoDaConta({ ...conta, pagamentos: pagamentos.slice(0, ate + 1) }).saldo
+}
+
 /** O pedido com `subtotal` (itens), `desconto` (o da conta) e `total` refeitos pela conta. */
 export function comTotais(pedido: Pedido): Pedido {
   const { itens, descontos, total } = resumoDaConta(pedido)

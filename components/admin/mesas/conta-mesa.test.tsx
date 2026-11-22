@@ -425,6 +425,27 @@ describe("pré-conta e comprovante", () => {
       expect(texto).toContain(trecho)
     }
   })
+
+  test("o comprovante de um pagamento antigo mostra o saldo que ficou depois dele", () => {
+    const comOutro = {
+      ...conta,
+      pagamentos: [
+        ...(conta.pagamentos ?? []),
+        { id: "p2", forma: "pix" as const, valor: 10, em: agora.toISOString() },
+      ],
+    }
+    render(
+      <Comprovante
+        pedido={comOutro}
+        mesa={mesa}
+        loja="Pizzaria Teste"
+        pagamento={comOutro.pagamentos[0]}
+      />,
+    )
+    const texto = document.body.textContent?.replace(/ /g, " ") ?? ""
+    // 55,60 − 20 (e não − 30, o saldo de agora).
+    expect(texto).toContain("Saldo da contaR$ 35,60")
+  })
 })
 
 describe("ComandaMesa: imprimir e reabrir", () => {
