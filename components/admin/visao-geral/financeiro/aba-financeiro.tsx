@@ -74,7 +74,14 @@ export function AbaFinanceiro({
           <Indicador rotulo="Taxas de entrega" detalhe="Cobradas dos clientes">
             <Numero valor={regua.taxasEntrega} moeda />
           </Indicador>
-          <Indicador rotulo="Líquido" detalhe="Bruto − descontos + entrega">
+          <Indicador
+            rotulo="Líquido"
+            detalhe={
+              regua.couvert > 0
+                ? `Bruto − descontos + entrega + couvert de ${emReais(regua.couvert)}`
+                : "Bruto − descontos + entrega"
+            }
+          >
             <Numero valor={regua.liquido} moeda />
           </Indicador>
         </Regua>

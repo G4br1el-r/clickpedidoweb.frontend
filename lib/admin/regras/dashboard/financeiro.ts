@@ -1,5 +1,5 @@
 import type { Pedido, TaxasPagamento } from "../../dados/tipos"
-import { valorSemTaxa } from "../conta"
+import { resumoDaConta, valorSemTaxa } from "../conta"
 import type { Periodo } from "../periodo"
 import { ehValido, noPeriodo, porForma, reais } from "./comum"
 
@@ -9,15 +9,23 @@ const somar = (pedidos: Pedido[], valor: (pedido: Pedido) => number) =>
   reais(pedidos.reduce((total, pedido) => total + valor(pedido), 0))
 
 /**
- * Régua do Financeiro: do bruto (subtotal) ao líquido, com descontos e taxas de entrega. O
- * líquido fica sem a taxa de serviço das contas de mesa, que é dos garçons (Q34).
+ * Régua do Financeiro: do bruto (subtotal) ao líquido, com descontos, taxas de entrega e o
+ * couvert das mesas. Na conta de mesa, as cortesias e o desconto da conta também são descontos.
+ * O líquido fica sem a taxa de serviço, que é dos garçons (Q34).
  */
 export function reguaFinanceira(pedidos: Pedido[], periodo: Periodo) {
   const validos = noPeriodo(pedidos, periodo).filter(ehValido)
+  const contas = validos.map((pedido) => [pedido, resumoDaConta(pedido)] as const)
   return {
     bruto: somar(validos, (pedido) => pedido.subtotal),
-    descontos: somar(validos, (pedido) => pedido.desconto),
+    descontos: reais(
+      contas.reduce(
+        (total, [pedido, conta]) => total + pedido.desconto + conta.cortesias + conta.descontos,
+        0,
+      ),
+    ),
     taxasEntrega: somar(validos, (pedido) => pedido.taxaEntrega),
+    couvert: reais(contas.reduce((total, [, conta]) => total + conta.couvert, 0)),
     liquido: somar(validos, valorSemTaxa),
   }
 }

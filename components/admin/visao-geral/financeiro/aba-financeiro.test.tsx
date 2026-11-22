@@ -181,3 +181,27 @@ describe("AbaFinanceiro: taxa de serviço (Q34)", () => {
     expect(screen.queryByRole("region", { name: "Taxa de serviço" })).not.toBeInTheDocument()
   })
 })
+
+test("com couvert das mesas, o detalhe do líquido diz quanto entrou", () => {
+  const comCouvert = pedidoDeTeste(30, NO_PERIODO, 116, {
+    tipo: "mesa",
+    mesa: { id: "mesa-1", numero: 1, pessoas: 2 },
+    subtotal: 100,
+    couvert: { porPessoa: 8 },
+    itens: [
+      {
+        id: "30",
+        produtoId: "Pizza",
+        nome: "Pizza",
+        quantidade: 1,
+        precoUnitario: 100,
+        total: 100,
+        opcoes: [],
+      },
+    ],
+  })
+  renderizar({ pedidos: [...PEDIDOS, comCouvert] })
+  expect(fato(regiao("Do bruto ao líquido"), "Líquido")).toHaveTextContent(
+    "Bruto − descontos + entrega + couvert de R$ 16,00",
+  )
+})

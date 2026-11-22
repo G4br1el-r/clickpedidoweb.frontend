@@ -23,6 +23,7 @@ describe("reguaFinanceira", () => {
       bruto: 150,
       descontos: 10,
       taxasEntrega: 5,
+      couvert: 0,
       liquido: 145,
     })
   })
@@ -161,7 +162,39 @@ describe("taxa de serviço (Q34): é do garçom, e não da casa", () => {
       bruto: 130,
       descontos: 0,
       taxasEntrega: 0,
+      couvert: 0,
       liquido: 130,
+    })
+  })
+
+  test("na conta de mesa, cortesia e desconto da conta são descontos, e o couvert entra no líquido", () => {
+    // Pizza R$ 100 e refrigerante R$ 10 de cortesia; 10% de desconto sobre R$ 100 (R$ 10);
+    // taxa de 10% sobre R$ 90 (R$ 9); couvert de R$ 8 para 2 pessoas (R$ 16): R$ 115.
+    const conta = pedidoDeTeste(20, NO_PERIODO, 115, {
+      tipo: "mesa",
+      mesa: { id: "mesa-1", numero: 1, pessoas: 2 },
+      itens: [
+        pizza,
+        {
+          ...pizza,
+          id: "i2",
+          nome: "Refrigerante",
+          precoUnitario: 10,
+          total: 10,
+          cortesia: { motivo: "Aniversário" },
+        },
+      ],
+      subtotal: 110,
+      taxaServico: { percentual: 10 },
+      couvert: { porPessoa: 8 },
+      descontoConta: { modo: "percentual", valor: 10, motivo: "Cliente da casa" },
+    })
+    expect(reguaFinanceira([conta], PERIODO)).toEqual({
+      bruto: 110,
+      descontos: 20,
+      taxasEntrega: 0,
+      couvert: 16,
+      liquido: 106,
     })
   })
 
