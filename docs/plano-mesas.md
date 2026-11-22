@@ -10,7 +10,7 @@
 
 **Origem:** as decisões Q1 a Q52 da sessão de perguntas de 18 e 19/11/2026, registradas abaixo. Base anterior: Fase 8 de [plano-painel-admin.md](plano-painel-admin.md).
 
-**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. As Fases 1 a 4 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
+**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. A Fase 5 está na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4. As Fases 1 a 5 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
 
 ## Restrições gerais
 
@@ -1761,6 +1761,186 @@ Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilha
 2. **`lib/admin/regras/cozinha.ts`:** o rótulo "Mesa 3 + 4".
 3. **Componentes:** fluxos de transferir, juntar e transferir itens, e o aviso com "Desfazer".
 4. **E2E:** juntar duas mesas, ver na cozinha e desfazer.
+
+**Branch:** `claude/admin-mesas-fase-5`, empilhada sobre as Fases 1 a 4. O PR vai para `main` depois delas.
+
+**Decisões de detalhe desta fase** (decorrem de Q7, Q18, Q38, Q46 e da decorrência 2)
+
+- **Onde mora a junção:** na comanda da principal, em `Pedido.mesa.juntadas` (`{ id, numero }[]`, pelo número). A mesa secundária não tem comanda: fica `status: "livre"` sem `pedidoAtivoId`, e `abrirMesas` (que já refaz as mesas pelas comandas abertas) põe nela o `juntadaCom` da principal. É uma fonte só: quando a conta da principal fecha ou é cancelada, as secundárias voltam sozinhas. Com a limpeza ligada, fechar a conta põe a principal **e** as secundárias em Limpeza.
+- **A secundária aponta para a comanda da principal** (`comandaDa` procura também nas `juntadas`): lançar na mesa 16 (pelo Garçom) entra na comanda da 15; abrir, bloquear, excluir e mudar o número da 16 recusam como numa mesa aberta. Na grade, o cartão diz "Com a mesa 15", o toque e "Abrir comanda" abrem a gaveta da principal, e o filtro de garçom acha a secundária pelo garçom da principal.
+- **Só a principal com comanda junta:** juntar parte de uma comanda aberta (a mesa livre se abre antes). Recusa:
+  - a própria mesa ("Escolha outra mesa."), mesa bloqueada ("A mesa 20 está bloqueada."), mesa já junta a outra ("A mesa 16 já está junto com a mesa 15.") e mesa reservada dentro da antecedência ("A mesa 5 está reservada às 20:45."; juntar com confirmação fica para a Fase 7);
+  - secundária que já é principal de outras ("Separe as mesas da mesa 5 antes de juntar.") ou com desconto na conta ("Tire o desconto da mesa 5 antes de juntar.": os dois descontos não se somam);
+  - as duas com rodada na cozinha ("A cozinha está com rodadas das mesas 3 e 5. Junte depois que uma ficar pronta.").
+- **Como as contas se combinam ao juntar** (`juntarComandas`, pura, em `lib/admin/regras/movimentacoes.ts`):
+  - itens, cortesias e pagamentos da secundária passam para a principal com os mesmos ids (o pagamento por item continua batendo);
+  - as rodadas são mantidas e renumeradas: a que está na cozinha fica por último, para a cozinha continuar vendo só ela; sem nenhuma na cozinha, as da secundária vêm depois das da principal. O status é o da comanda que ficou por último. Cada item guarda o `vaiParaCozinha` que tinha (a comanda junta liga `enviarParaCozinha` se uma das duas ligava);
+  - as pessoas somam; `servirDesde` e `contaPedidaEm` ficam com a hora mais antiga das duas;
+  - **taxa e couvert passam a ser os da principal** (congelados na abertura dela), sobre a conta inteira, e o couvert multiplica as pessoas somadas. A taxa ou o couvert tirados na secundária deixam de valer. Se a conta junta ficasse menor que o já pago (a secundária pagou com taxa e a principal não tem), recusa com "A conta ficaria menor que o já pago. Estorne um pagamento antes.";
+  - o histórico da secundária entra no da principal, na ordem da hora, com o texto prefixado ("Mesa 5: Mesa aberta para 2 pessoas"), e a comanda da secundária **sai de Pedidos**: ela não foi cancelada, virou parte da principal. O evento `juntada` diz "Juntou a mesa 5: 2× Coca, 1× Pizza" (ou "Juntou a mesa 16", sem comanda).
+- **Separar:** solta todas as secundárias de uma vez (voltam livres); itens, pessoas e pagamentos ficam na principal. Evento `separada`: "Separou a mesa 16" ou "Separou as mesas 4 e 5". Sem junção, recusa "A mesa 3 não está junto com outra.".
+- **Transferir mesa:** leva a comanda para uma mesa livre (ou em Limpeza, que sai da limpeza). Recusa a própria mesa, a bloqueada, a aberta ("A mesa 7 já está aberta. Junte as mesas ou transfira os itens."), a secundária ("A mesa 16 está junto com a mesa 15.") e a comanda com junção ("Separe as mesas antes de transferir."). Mesa reservada dentro da antecedência pede `confirmarReserva` ("A mesa 7 está reservada às 20:45. Confirme para transferir."; a confirmação na tela chega com as reservas, na Fase 7). A mesa de origem fica livre, **sem** limpeza: como na Fase 4, só fechar a conta põe a mesa em limpeza. Evento `transferida`: "Transferida da mesa 3 para a mesa 7".
+- **Transferir itens:** escolhe os itens e a quantidade de cada um (1 a 3 de 3 unidades) e a mesa de destino (livre, em limpeza ou aberta; a secundária leva para a principal dela). Parte de uma linha divide a linha: a origem fica com o resto e o destino ganha uma linha nova, com o mesmo preço unitário. Na mesa livre, abre a comanda com o garçom da origem, 1 pessoa e a taxa e o couvert do salão de agora (é uma comanda nova). Recusa:
+  - o item pago por item ("Esse item já foi pago.") e o item da rodada que a cozinha ainda tem, em "recebido" ou "em preparo" ("A cozinha ainda está com Calabresa. Transfira quando ficar pronta."): a cozinha não muda a mesa de um ticket no meio do preparo;
+  - destino igual à origem ou do mesmo grupo de juntadas ("Escolha outra mesa."), bloqueado, ou reservado sem `confirmarReserva`;
+  - a origem que ficaria menor que o já pago, ou com o desconto acima dos itens (as mensagens da Fase 4).
+
+  O item que chega guarda `transferido: { daMesa, preparado }`: a cozinha do destino não o vê como rodada nova, e tirá-lo pede motivo (e vira perda) se ele já estava preparado na origem. Receber itens limpa o "Pediu a conta" do destino, como lançar (Q23). Eventos `itens-transferidos`: "Transferiu 1× Coca para a mesa 7" na origem e "Recebeu 1× Coca da mesa 3" no destino.
+- **Estoque (Q38):** transferir, juntar, separar e transferir itens gravam as comandas direto, sem `aplicarEstoque`: nenhum movimento novo. A venda continua no estoque uma vez só, agora na comanda onde o item está.
+- **Duas abas (ponto de atenção 2):** cada aba tem o seu servidor, com a base em memória. As movimentações e o desfazer **releem a base guardada** antes de mudar (`reler`), e partem do `pedidoId` que a tela mostrava, não da mesa: transferir a comanda que outra aba acabou de fechar recusa com "A comanda da mesa 3 não está mais aberta. Atualize a tela.", sem criar nem duplicar comanda. As outras operações continuam na base em memória (a sincronia entre abas é da Fase 8, com o `BroadcastChannel`).
+- **Desfazer (Q46, decorrência 2):** transferir, juntar, separar, transferir itens e marcar limpa devolvem, além do resultado, o id de uma **foto** que o servidor guarda em memória por **10 s**: as mesas e comandas envolvidas antes e depois. `desfazer(id)` relê a base; se as mesas e comandas da foto continuam iguais ao "depois", volta o "antes" (a comanda que a operação criou sai; a que ela tirou de Pedidos volta no lugar pelo id; a limpeza volta) e a foto some. Se algo mudou, recusa com "A mesa mudou depois disso. Desfaça pela comanda."; passado o prazo (ou já desfeita), "O tempo para desfazer acabou.". O desfazer volta o estado como era, sem evento: a movimentação some do histórico. A tela mostra o aviso com "Desfazer" por **6 s**.
+- **Cozinha (Q33):** o ticket e o cartão da Fila da comanda junta dizem "Mesa 15 + 16" (`rotuloDaMesa`).
+- **Grade e menu ⋯ (Q41):** "Juntada" volta ao filtro de estado (depois de "Pediu a conta"). O menu ⋯ da mesa aberta ganha "Transferir" e "Juntar mesas" e, com junção, "Separar"; a secundária oferece "Abrir comanda" (a da principal) e "Separar". Na gaveta, a descrição diz "Junto com a mesa 16", e a aba Itens ganha "Transferir itens". "Marcar limpa" (menu e gaveta) passa a avisar com "Desfazer".
+- **Demonstração:** a comanda mais nova do roteiro ao vivo senta na **mesa 15, junta com a 16** (as duas retangulares de 6 lugares da Varanda). Ela deixa de ocupar a mesa 8, que fica livre; as pessoas continuam sorteadas pelos lugares da principal. Sem sorteio novo: o resto da demonstração não muda, mas a ocupação passa a contar a 16 ("9/19 · 47%") e a grade tem 9 livres. Na virada do dia, a demonstração do dia novo também não senta ninguém nas secundárias de uma comanda que continuou aberta.
+
+**Interfaces que a Fase 5 entrega**
+
+```ts
+// lib/admin/dados/tipos.ts
+// Pedido.mesa ganha: juntadas?: { id: string; numero: number }[]
+// ItemPedido ganha: transferido?: { daMesa: number; preparado: boolean }
+// TipoEventoComanda ganha: "transferida" | "juntada" | "separada" | "itens-transferidos"
+
+// lib/admin/regras/cozinha.ts
+export function rotuloDaMesa(pedido: Pick<Pedido, "mesa">): string // "Mesa 15 + 16"
+// itensDaCozinha deixa de fora o item transferido; cozinhaJaPreparou lê `transferido.preparado`
+
+// lib/admin/regras/movimentacoes.ts
+export function numerosEmTexto(numeros: number[]): string // [4, 5, 6] → "4, 5 e 6"
+export function porQueNaoTransfere(comanda: Pedido, item: ItemPedido): string | null
+export function separarQuantidade(item: ItemPedido, quantidade: number, novoId: string): {
+  fica: ItemPedido | null
+  vai: ItemPedido
+}
+export function porQueNaoJunta(principal: Pedido, secundaria: Pedido): string | null
+export function juntarComandas(principal: Pedido, secundaria: Pedido): Pedido // sem o evento
+
+// servidor (api.mesas). Toda movimentação devolve `desfazer`: o id da foto.
+transferir(pedidoId, mesaDestinoId, { confirmarReserva?, por? }): Promise<{ comanda: Pedido; desfazer: string }>
+juntar(pedidoId, mesaIds: string[], { por? }): Promise<{ comanda: Pedido; desfazer: string }>
+separar(pedidoId, { por? }): Promise<{ comanda: Pedido; desfazer: string }>
+transferirItens(pedidoId, {
+  mesaDestinoId, itens: { itemId: string; quantidade: number }[], confirmarReserva?, por?
+}): Promise<{ comanda: Pedido; destino: Pedido; desfazer: string }>
+marcarLimpa(id): Promise<{ mesa: Mesa; desfazer: string }> // antes devolvia a mesa
+desfazer(id: string): Promise<void>
+
+// consultas-mesas: useTransferirMesa, useJuntarMesas, useSepararMesas, useTransferirItens, useDesfazer
+// components/admin/mesas/aviso-desfazer.ts: useAvisoComDesfazer() → (texto, desfazer) => void
+```
+
+**Arquivos**
+
+- Criar:
+  - `lib/admin/regras/movimentacoes.ts` e `movimentacoes.test.ts`;
+  - `lib/admin/dados/servidor-movimentacoes.test.ts` (os testes de servidor desta fase);
+  - `components/admin/mesas/aviso-desfazer.ts`, `transferir-mesa.tsx`, `juntar-mesas.tsx`, `transferir-itens.tsx` e `movimentacoes.test.tsx`.
+- Mudar:
+  - `lib/admin/dados/tipos.ts`, `servidor.ts`, `gerar-pedidos.ts` (e o teste), `consultas-mesas.ts` (e o teste);
+  - `lib/admin/regras/cozinha.ts` (e o teste);
+  - `components/admin/mesas/{pagina-mesas,cartao-mesa,comanda-mesa,estado-grade}.tsx`, `components/admin/cozinha/ticket-cozinha.tsx`, `components/admin/fila/cartao-fila.tsx`;
+  - `tests/admin.spec.ts`.
+
+### Task 47 (Tarefa 47): "Mesa 15 + 16" e o item transferido na cozinha
+
+- [ ] Testes que falham em `cozinha.test.ts`:
+  - `rotuloDaMesa`: "Mesa 3" sem junção, "Mesa 15 + 16" com uma, "Mesa 3 + 4 + 5" com duas;
+  - o item com `transferido` não entra em `itensDaCozinha` e não muda a rodada atual; `cozinhaJaPreparou` dá `true` para `transferido.preparado` e `false` sem ele, qualquer que seja o status.
+- [ ] Teste que falha em `pagina-cozinha.test.tsx`: o ticket da comanda com `juntadas` diz "Mesa 15 + 16". O cartão da Fila passa a usar o mesmo rótulo.
+- [ ] Implementar (tipos novos em `tipos.ts`) e fazer o commit `feat(mesas): a cozinha mostra Mesa 15 + 16 e ignora o item transferido`.
+
+### Task 48 (Tarefa 48): regras das movimentações
+
+- [ ] Testes que falham em `movimentacoes.test.ts`, um comportamento por vez:
+  - `numerosEmTexto`: "4", "4 e 5", "4, 5 e 6";
+  - `separarQuantidade`: 1 de 3 Cocas de R$ 6,00 → fica 2 (R$ 12,00) e vai 1 (R$ 6,00) com o id novo; 3 de 3 → não fica nada e vai a linha com o id dela;
+  - `porQueNaoTransfere`: o item pago por item, o da rodada em "recebido" e em "em preparo" recusam; o da rodada anterior, o da comanda pronta e o sem cozinha passam;
+  - `porQueNaoJunta`: secundária com junção, com desconto, e as duas na cozinha;
+  - `juntarComandas`: itens, pagamentos e pessoas somados; taxa e couvert da principal; a secundária na cozinha fica por último (rodadas 1 e 2 da principal, a 1 e a 2 da secundária viram 3 e 4, status "recebido"); a principal na cozinha fica por último (as da principal são renumeradas); `servirDesde` e `contaPedidaEm` mais antigos; eventos da secundária prefixados, na ordem da hora; `juntadas` pelo número; o `total` refeito (R$ 40,00 + R$ 20,00 com 10% e couvert de R$ 8,00 para 2 + 3 pessoas: R$ 106,00).
+- [ ] Implementar e fazer o commit `feat(mesas): regras de juntar comandas, dividir a linha e o que pode ser transferido`.
+
+### Task 49 (Tarefa 49): transferir a mesa e desfazer no servidor
+
+- [ ] Testes que falham em `servidor-movimentacoes.test.ts` (lanchonete de teste com Refri e Bacon no estoque, como em `servidor-comanda.test.ts`):
+  - transferir a comanda da mesa 30 para a 31: a comanda vai com os mesmos itens e total, a 31 fica ocupada, a 30 livre sem limpeza, o evento `transferida` com o garçom, e o estoque e o histórico do estoque não mudam;
+  - a 31 em limpeza sai da limpeza;
+  - recusas: a própria mesa, a bloqueada, a aberta, a inexistente e a comanda com junção (esta, montada direto na base guardada);
+  - reservada às 20:45 (agora 20:30) recusa sem `confirmarReserva` e transfere com ela;
+  - duas instâncias de `criarServidor` sobre o mesmo IndexedDB: a segunda fecha a conta, e a primeira (com a base em memória de antes) recusa a transferência com "A comanda da mesa 30 não está mais aberta. Atualize a tela.", sem comanda nova em Pedidos e com a 31 livre;
+  - desfazer em 9 s volta a comanda para a 30 (a 31 livre de novo, sem o evento); em 11 s recusa com "O tempo para desfazer acabou."; desfazer duas vezes recusa na segunda;
+  - desfazer depois de lançar na comanda recusa com "A mesa mudou depois disso. Desfaça pela comanda.";
+  - desfazer devolve a limpeza que a 31 tinha.
+- [ ] Implementar `reler`, `mover` (a foto) e `desfazer`. Commit `feat(mesas): transferir a mesa, com desfazer por 10 s e a base relida`.
+
+### Task 50 (Tarefa 50): juntar e separar no servidor
+
+- [ ] Testes que falham em `servidor-movimentacoes.test.ts`:
+  - juntar a 31 livre à 30 aberta: a 31 fica `livre` com `juntadaCom` da 30, sem `pedidoAtivoId`; a comanda ganha `juntadas` e o evento "Juntou a mesa 31";
+  - juntar a 31 aberta (2 Refris, 2 pessoas, um Pix de R$ 6,00) à 30 (1 X-Burger, 3 pessoas): a comanda da 31 sai de Pedidos, a da 30 fica com os 2 itens, 5 pessoas, o pagamento, o evento com os itens, e o estoque não muda;
+  - recusas das decisões, uma por teste;
+  - lançar na 31 junta entra na comanda da 30; abrir, bloquear e excluir a 31 recusam;
+  - fechar a conta da 30 libera as duas e põe as duas em Limpeza;
+  - separar: a 31 volta livre, os itens ficam na 30, evento "Separou a mesa 31"; sem junção recusa;
+  - desfazer o juntar devolve a comanda da 31 a Pedidos, com o mesmo id, e as duas comandas como eram;
+  - desfazer o separar junta de novo.
+- [ ] Implementar e fazer o commit `feat(mesas): juntar e separar mesas, com as contas somadas na principal`.
+
+### Task 51 (Tarefa 51): transferir itens no servidor
+
+- [ ] Testes que falham em `servidor-movimentacoes.test.ts`:
+  - transferir 1 de 3 Refris da 30 para a 31 livre: a 30 fica com 2 (R$ 12,00), a 31 abre com 1 (R$ 6,00), 1 pessoa e o garçom da 30, os eventos dos dois lados, e o estoque (2) não muda;
+  - transferir para a 32 aberta acrescenta na comanda dela e limpa o "Pediu a conta";
+  - transferir para a 31 secundária leva para a comanda da principal dela;
+  - o item preparado chega com `transferido: { daMesa: 30, preparado: true }`, e tirá-lo no destino sem motivo recusa; o Refri sem cozinha chega com `preparado: false` e sai sem motivo, devolvendo o estoque;
+  - recusas: sem itens, quantidade 0 ou acima da linha, o item na cozinha, o item pago, a mesma mesa, a bloqueada, a origem que ficaria menor que o já pago;
+  - desfazer devolve a linha inteira à 30 e tira a comanda criada na 31.
+- [ ] Implementar e fazer o commit `feat(mesas): transferir itens, com quantidade parcial`.
+
+### Task 52 (Tarefa 52): marcar limpa com desfazer
+
+- [ ] Testes que falham em `servidor-movimentacoes.test.ts`: marcar limpa devolve `{ mesa, desfazer }`; desfazer volta a limpeza com a hora de antes; abrir a mesa depois disso faz o desfazer recusar.
+- [ ] Mudar o teste antigo "marcar limpa tira a limpeza" de `servidor.test.ts`: o retorno passa a ser `{ mesa, desfazer }` (mudança planejada, Q46).
+- [ ] Implementar e fazer o commit `feat(mesas): marcar limpa também pode ser desfeito`.
+
+### Task 53 (Tarefa 53): demonstração com o par juntado
+
+- [ ] Testes que falham em `gerar-pedidos.test.ts`: a comanda mais nova do roteiro ao vivo senta na mesa 15 com `juntadas: [{ id: "mesa-16", numero: 16 }]`; as comandas abertas ficam nas mesas 1 a 7 e 15 (o teste antigo "nas mesas 1 a 8" muda, mudança planejada); `mesasOcupadas` com a 15 também deixa a 16 de fora.
+- [ ] Teste que falha em `servidor.test.ts`: a demonstração abre com a 16 juntada à 15; na virada do dia, com a comanda da 15 mexida, ninguém senta na 16.
+- [ ] Mudar os testes antigos de `pagina-mesas.test.tsx` que contam a demonstração: "8 ocupadas · 9 livres", ocupação "9/19 · 47%" e as pessoas, conferidas à mão (mudança planejada).
+- [ ] Implementar e fazer o commit `feat(mesas): a demonstração tem as mesas 15 e 16 juntas`.
+
+### Task 54 (Tarefa 54): hooks das movimentações
+
+- [ ] Testes que falham em `consultas-mesas.test.tsx`: `useTransferirMesa`, `useJuntarMesas`, `useSepararMesas` e `useTransferirItens` chegam ao servidor, guardam a comanda devolvida e invalidam as mesas; `useDesfazer` desfaz e invalida; `useMarcarLimpa` devolve o `desfazer`.
+- [ ] Implementar e fazer o commit `feat(mesas): hooks de transferir, juntar, separar e desfazer`.
+
+### Task 55 (Tarefa 55): grade, menu ⋯ e o aviso com Desfazer
+
+- [ ] Testes que falham em `movimentacoes.test.tsx` (pizzaria):
+  - a mesa 16 diz "Com a mesa 15"; tocar nela abre a gaveta da Mesa 15;
+  - o filtro de estado oferece "Juntada" e `?estado=juntada` mostra só a 16 (o teste antigo "não oferece Reservada nem Juntada" passa a esperar Juntada, mudança planejada);
+  - menu ⋯ da mesa 1 → "Transferir" → escolher a mesa 8 → "Transferir": o aviso "Mesa 1 transferida para a mesa 8." tem "Desfazer"; desfazer volta a comanda para a 1;
+  - menu ⋯ da mesa 1 → "Juntar mesas" → marcar a 8 → "Juntar": a 8 diz "Com a mesa 1"; "Separar" no menu solta;
+  - "Marcar limpa" na mesa 9 tem "Desfazer", e desfazer volta a Limpeza;
+  - o erro do servidor aparece no aviso.
+- [ ] Mudar a tabela do menu ⋯ em `cartao-mesa.test.tsx` (as ações novas, mudança planejada).
+- [ ] Implementar `aviso-desfazer.ts`, `transferir-mesa.tsx`, `juntar-mesas.tsx`, o cartão da secundária e os itens do menu. Commit `feat(mesas): transferir, juntar e separar pelo menu, com Desfazer`.
+
+### Task 56 (Tarefa 56): transferir itens na gaveta
+
+- [ ] Testes que falham em `movimentacoes.test.tsx`:
+  - a gaveta da 15 diz "Junto com a mesa 16";
+  - "Transferir itens" na mesa 60 (Água e 3 Sucos): escolher 1 Suco e a mesa 8, "Transferir": a 60 fica com 2 Sucos, a 8 abre com 1, o aviso tem "Desfazer";
+  - o item que a cozinha ainda tem aparece travado, com "Na cozinha";
+  - sem item ou sem mesa, "Transferir" diz o que falta.
+- [ ] Implementar `transferir-itens.tsx` e o botão. A gaveta deixa o clique no aviso passar sem fechar (`manterToastClicavel`). Commit `feat(mesas): transferir itens pela comanda`.
+
+### Task 57 (Tarefa 57): E2E e fechamento
+
+- [ ] Em `tests/admin.spec.ts`: na pizzaria, juntar a mesa 8 à mesa 1 pelo menu ⋯, lançar uma pizza na cozinha, ver "Mesa 1 + 8" na Cozinha, voltar, separar e desfazer pelo aviso. Rodar só ele, em `desktop-1920`.
+- [ ] `pnpm check`, mostrando a saída. `pnpm test:coverage` e subir os mínimos se a cobertura subiu.
+- [ ] Os screenshots ficam para a revisão.
+- [ ] Registrar a "Situação" no fim desta seção.
 
 ## Fase 6: mapa do salão
 
