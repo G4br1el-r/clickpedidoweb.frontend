@@ -1064,6 +1064,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     // No dinheiro, o que passa do saldo é troco.
     const valor = Math.min(pedido, saldo)
     const recebido = dinheiro ? (pagamento.recebido ?? pedido) : valor
+    if (!Number.isFinite(recebido) || !emCentavosExatos(recebido)) {
+      throw new Error("Informe um valor recebido válido.")
+    }
     if (recebido < pedido) throw new Error("O valor recebido é menor que o da parte.")
     const troco = trocoDoPagamento({ valor, saldo, recebido })
     const agora = new Date().toISOString()

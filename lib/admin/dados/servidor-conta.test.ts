@@ -763,3 +763,15 @@ describe("reabrir a conta paga antes da Fase 4", () => {
     expect(resumoDaConta(reaberta)).toMatchObject({ pago: 100, saldo: 0 })
   })
 })
+
+describe("valor recebido no dinheiro", () => {
+  test("com fração de centavo ou que não é número recusa", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    for (const recebido of [10.005, Number.NaN]) {
+      await expect(
+        api.mesas.pagar(comanda.id, { forma: "dinheiro", valor: 10, recebido }),
+      ).rejects.toThrow("Informe um valor recebido válido.")
+    }
+  })
+})
