@@ -465,6 +465,11 @@ export type ItemPedidoQr = {
 export type PedidoQr = {
   id: string
   mesaId: string
+  /**
+   * A comanda aberta da mesa na hora do pedido (`null` na mesa livre). Se ela mudou, o pedido é
+   * de outro cliente: não entra na conta de quem sentou depois.
+   */
+  comandaId: number | null
   itens: ItemPedidoQr[]
   /** O que a tela mostra: cada item com as opções e o total, no preço da hora do pedido. */
   resumo: {

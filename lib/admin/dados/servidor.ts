@@ -290,6 +290,36 @@ function abrirMesas(base: BaseLoja): BaseLoja {
 const reais = (valor: number) => Math.round(valor * 100) / 100
 
 /**
+ * O pedido do QR que aguardava e não vale mais vira recusado: o de um dia que passou, o da mesa
+ * que não existe mais e o da comanda que fechou, foi cancelada ou juntada a outra. Assim ele não
+ * entra na conta do próximo cliente.
+ */
+function vencerPedidosQr(base: BaseLoja, agora: Date): BaseLoja {
+  const lista = base.pedidosQr ?? []
+  if (!lista.some((pedido) => pedido.status === "aguardando")) return base
+  const hoje = startOfDay(agora)
+  const mesas = new Set(base.mesas.map((mesa) => mesa.id))
+  const abertas = new Set(
+    base.pedidos
+      .filter((pedido) => pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status))
+      .map((pedido) => pedido.id),
+  )
+  const venceu = (pedido: PedidoQr) =>
+    new Date(pedido.criadoEm) < hoje ||
+    !mesas.has(pedido.mesaId) ||
+    (pedido.comandaId !== null && !abertas.has(pedido.comandaId))
+  if (!lista.some((pedido) => pedido.status === "aguardando" && venceu(pedido))) return base
+  return {
+    ...base,
+    pedidosQr: lista.map((pedido) =>
+      pedido.status === "aguardando" && venceu(pedido)
+        ? { ...pedido, status: "recusado" as const, resolvidoEm: agora.toISOString() }
+        : pedido,
+    ),
+  }
+}
+
+/**
  * O pedido mais novo que a base já teve: o de maior id em Pedidos ou o que já saiu de lá (a
  * comanda juntada). O id e o número do pedido novo seguem dele, nunca do último da lista.
  */
@@ -824,8 +854,9 @@ export function criarServidor({
       }),
       agora,
     )
-    await salvar(completa)
-    return completa
+    const semVencidos = vencerPedidosQr(completa, agora)
+    await salvar(semVencidos)
+    return semVencidos
   }
 
   /** Versão 2 → 3: guarda a base migrada já, com o `geradoEm` de antes, e completa os dias que faltam. */
@@ -1289,8 +1320,9 @@ export function criarServidor({
 
   /** Troca a base inteira (já carregada) e guarda. */
   async function substituir(nova: BaseLoja) {
-    carregando = Promise.resolve(nova)
-    await salvar(nova)
+    const final = vencerPedidosQr(nova, new Date())
+    carregando = Promise.resolve(final)
+    await salvar(final)
   }
 
   /**
@@ -2412,6 +2444,7 @@ export function criarServidor({
         const pedido: PedidoQr = {
           id: novoId("pedido-qr")(),
           mesaId: mesa.id,
+          comandaId: aberta?.id ?? null,
           itens: limpos,
           resumo,
           total: reais(resumo.reduce((soma, item) => soma + item.total, 0)),
@@ -2479,6 +2512,10 @@ export function criarServidor({
       ): Promise<Pedido> {
         const base = await carregar()
         const pedido = aguardandoQr(base, id)
+        // Outra comanda na mesa: o pedido era de quem sentou antes.
+        if ((comandaDa(base, pedido.mesaId)?.id ?? null) !== pedido.comandaId) {
+          throw new Error("A mesa mudou depois desse pedido.")
+        }
         const { base: lancada, comanda } = lancarNa(
           base,
           {

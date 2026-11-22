@@ -303,6 +303,72 @@ describe("QR: o pedido do cliente", () => {
   })
 })
 
+describe("QR: o pedido aguardando é da comanda da hora", () => {
+  const umXBurger = [{ ...xBurger, quantidade: 1 }]
+
+  test("guarda a comanda da hora do pedido: nenhuma na mesa livre, a aberta na ocupada", async () => {
+    const api = servidor()
+    await ligarQr(api)
+    const livre = await mesaNova(api, 30)
+    const ocupada = await mesaNova(api, 31)
+    const comanda = await comComanda(api, ocupada)
+
+    expect((await api.qr.pedir(livre, umXBurger)).pedido?.comandaId).toBeNull()
+    expect((await api.qr.pedir(ocupada, umXBurger)).pedido?.comandaId).toBe(comanda.id)
+  })
+
+  test("a mesa abriu depois do pedido: aceitar recusa", async () => {
+    const api = servidor()
+    await ligarQr(api)
+    const mesaId = await mesaNova(api)
+    const { pedido } = await api.qr.pedir(mesaId, umXBurger)
+    await comComanda(api, mesaId)
+
+    await expect(api.pedidosQr.aceitar(pedido?.id as string, {})).rejects.toThrow(
+      "A mesa mudou depois desse pedido.",
+    )
+  })
+
+  test("a comanda cancelada ou paga leva junto o pedido que aguardava", async () => {
+    const api = servidor()
+    await ligarQr(api)
+    const cancelada = await mesaNova(api, 30)
+    const paga = await mesaNova(api, 31)
+    const primeira = await comComanda(api, cancelada)
+    const segunda = await comComanda(api, paga)
+    const { pedido: daCancelada } = await api.qr.pedir(cancelada, umXBurger)
+    const { pedido: daPaga } = await api.qr.pedir(paga, umXBurger)
+
+    await api.mesas.cancelarComanda(primeira.id, { motivo: "Desistiu" })
+    await api.mesas.fecharConta(segunda.id, "dinheiro")
+
+    expect(await api.pedidosQr.listar()).toEqual([])
+    const resolvidos = (await api.base()).pedidosQr ?? []
+    expect(resolvidos.map(({ id, status }) => ({ id, status }))).toEqual([
+      { id: daCancelada?.id, status: "recusado" },
+      { id: daPaga?.id, status: "recusado" },
+    ])
+    await expect(api.pedidosQr.aceitar(daCancelada?.id as string, {})).rejects.toThrow(
+      "Esse pedido já foi resolvido.",
+    )
+  })
+
+  test("na virada do dia, o pedido que aguardava de ontem vence", async () => {
+    const api = servidor()
+    await ligarQr(api)
+    const mesaId = await mesaNova(api)
+    const { pedido } = await api.qr.pedir(mesaId, umXBurger)
+    vi.setSystemTime(new Date(2026, 10, 14, 12, 0))
+
+    const outra = servidor()
+
+    expect(await outra.pedidosQr.listar()).toEqual([])
+    expect((await outra.base()).pedidosQr).toEqual([
+      expect.objectContaining({ id: pedido?.id, status: "recusado" }),
+    ])
+  })
+})
+
 describe("QR: demonstração e virada do dia", () => {
   /** O catálogo de teste com o QR ligado, como a demonstração. */
   function comQr() {
