@@ -1,7 +1,7 @@
 "use client"
 
 import { ShoppingBagIcon } from "lucide-react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import Image from "next/image"
 import { type ReactNode, useEffect, useRef, useState } from "react"
 import { type Config, type EstiloTituloSecao, useConfigEfetiva } from "@/lib/admin/config"
@@ -36,7 +36,10 @@ export function ImagemLoja({
   )
 }
 
-/** Bloco que entra com a animação escolhida; `indice` define a ordem da cascata. */
+/**
+ * Bloco que entra com a animação escolhida; `indice` define a ordem da cascata. Com reduzir
+ * movimento, já aparece no lugar.
+ */
 export function Entrada({
   indice = 0,
   alvo,
@@ -50,11 +53,12 @@ export function Entrada({
   children: ReactNode
 }) {
   const { entrada, velocidade } = useConfigEfetiva().animacoes
+  const semMovimento = useReducedMotion()
   return (
     <motion.div
       custom={indice}
       variants={variantesEntrada(entrada, velocidade)}
-      initial="escondido"
+      initial={semMovimento ? false : "escondido"}
       animate="visivel"
       data-alvo={alvo}
       className={cn("transform-gpu", className)}
