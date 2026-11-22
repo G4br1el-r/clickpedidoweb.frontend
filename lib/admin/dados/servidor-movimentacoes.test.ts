@@ -177,6 +177,18 @@ describe("transferir a mesa", () => {
     await expect(api.mesas.transferir(comanda.id, "mesa-99")).rejects.toThrow("Mesa não encontrada")
   })
 
+  test("recusa a mesa junta a outra, dizendo com qual", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api)
+    const { comanda: outra } = await aberta(api, 31)
+    const livre = await mesaNova(api, 32)
+    await api.mesas.juntar(outra.id, [livre])
+
+    await expect(api.mesas.transferir(comanda.id, livre)).rejects.toThrow(
+      "A mesa 32 está junto com a mesa 31.",
+    )
+  })
+
   test("a comanda com mesas juntadas separa antes de transferir", async () => {
     const api = servidor()
     const { comanda } = await aberta(api)

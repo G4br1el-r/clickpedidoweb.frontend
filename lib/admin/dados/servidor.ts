@@ -574,6 +574,10 @@ function mesaLivreParaReceber(
   const doGrupo = [origem.mesa?.id, ...(origem.mesa?.juntadas ?? []).map((item) => item.id)]
   if (doGrupo.includes(mesa.id)) throw new Error("Escolha outra mesa.")
   if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
+  if (mesa.juntadaCom) {
+    const principal = base.mesas.find((item) => item.id === mesa.juntadaCom)
+    throw new Error(`A mesa ${mesa.numero} está junto com a mesa ${principal?.numero}.`)
+  }
   if (comandaDa(base, mesa.id)) {
     throw new Error(`A mesa ${mesa.numero} já está aberta. Junte as mesas ou transfira os itens.`)
   }
