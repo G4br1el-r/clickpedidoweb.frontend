@@ -953,15 +953,26 @@ export function criarServidor({
     // juntas a ela) espera a limpeza.
     const contaFechada = novo.tipo === "mesa" && !antes.pagoEm && novo.pagoEm
     const usadas = [novo.mesa?.id, ...(novo.mesa?.juntadas ?? []).map((junta) => junta.id)]
+    // A conta paga também atende o "Pedir a conta" que estava aberto nessas mesas.
+    const comChamados = contaFechada
+      ? {
+          ...atualizada,
+          chamados: atualizada.chamados.map((chamado) =>
+            chamado.tipo === "conta" && !chamado.atendidoEm && usadas.includes(chamado.mesaId)
+              ? { ...chamado, atendidoEm: novo.pagoEm }
+              : chamado,
+          ),
+        }
+      : atualizada
     await substituir(
-      contaFechada && atualizada.salao.limpeza
+      contaFechada && comChamados.salao.limpeza
         ? {
-            ...atualizada,
-            mesas: atualizada.mesas.map((mesa) =>
+            ...comChamados,
+            mesas: comChamados.mesas.map((mesa) =>
               usadas.includes(mesa.id) ? { ...mesa, limpezaDesde: novo.pagoEm } : mesa,
             ),
           }
-        : atualizada,
+        : comChamados,
     )
     return responder(novo)
   }

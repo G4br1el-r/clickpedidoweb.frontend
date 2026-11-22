@@ -136,6 +136,23 @@ describe("QR: chamados", () => {
     })
   })
 
+  test("a conta paga atende sozinha o chamado de conta da mesa; o de garçom fica", async () => {
+    const api = servidor()
+    await ligarQr(api)
+    const mesaId = await mesaNova(api)
+    const comanda = await comComanda(api, mesaId)
+    const conta = await api.qr.chamar(mesaId, "conta")
+    const garcom = await api.qr.chamar(mesaId, "garcom")
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 36))
+
+    await api.mesas.fecharConta(comanda.id, "dinheiro")
+
+    expect(await api.chamados.listar()).toEqual([
+      { ...conta, atendidoEm: new Date(2026, 10, 13, 20, 36).toISOString() },
+      garcom,
+    ])
+  })
+
   test("atender grava a hora (o tempo de resposta); atender de novo recusa", async () => {
     const api = servidor()
     await ligarQr(api)
