@@ -1,18 +1,24 @@
 import type { Pedido, TaxasPagamento } from "../../dados/tipos"
+import { valorSemTaxa } from "../conta"
 import type { Periodo } from "../periodo"
-import { ehValido, fatias, noPeriodo, reais } from "./comum"
+import { ehValido, noPeriodo, porForma, reais } from "./comum"
+
+export { taxaDeServico } from "./comum"
 
 const somar = (pedidos: Pedido[], valor: (pedido: Pedido) => number) =>
   reais(pedidos.reduce((total, pedido) => total + valor(pedido), 0))
 
-/** Régua do Financeiro: do bruto (subtotal) ao líquido, com descontos e taxas de entrega. */
+/**
+ * Régua do Financeiro: do bruto (subtotal) ao líquido, com descontos e taxas de entrega. O
+ * líquido fica sem a taxa de serviço das contas de mesa, que é dos garçons (Q34).
+ */
 export function reguaFinanceira(pedidos: Pedido[], periodo: Periodo) {
   const validos = noPeriodo(pedidos, periodo).filter(ehValido)
   return {
     bruto: somar(validos, (pedido) => pedido.subtotal),
     descontos: somar(validos, (pedido) => pedido.desconto),
     taxasEntrega: somar(validos, (pedido) => pedido.taxaEntrega),
-    liquido: somar(validos, (pedido) => pedido.total),
+    liquido: somar(validos, valorSemTaxa),
   }
 }
 
@@ -84,9 +90,10 @@ export function taxasEstimadas(
   }
 }
 
-/** Formas de pagamento das vendas válidas do período, da que mais vendeu à que menos vendeu. */
+/**
+ * Formas de pagamento das vendas válidas do período, da que mais vendeu à que menos vendeu. A
+ * conta paga em mais de uma forma soma cada parte na sua; é o que entrou no caixa, com a taxa.
+ */
 export function formasDePagamento(pedidos: Pedido[], periodo: Periodo) {
-  return fatias(noPeriodo(pedidos, periodo).filter(ehValido), (pedido) => pedido.pagamento).map(
-    ({ valor, ...fatia }) => ({ forma: valor, ...fatia }),
-  )
+  return porForma(noPeriodo(pedidos, periodo).filter(ehValido))
 }

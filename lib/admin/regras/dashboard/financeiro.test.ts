@@ -5,6 +5,7 @@ import {
   descontosDoPdv,
   formasDePagamento,
   reguaFinanceira,
+  taxaDeServico,
   taxasEstimadas,
 } from "./financeiro"
 
@@ -120,5 +121,78 @@ describe("formasDePagamento", () => {
       ["pix", 1, 50, 29.41],
       ["cartao-na-entrega", 1, 20, 11.76],
     ])
+  })
+})
+
+describe("taxa de serviço (Q34): é do garçom, e não da casa", () => {
+  const pizza = {
+    id: "i1",
+    produtoId: "p",
+    nome: "Pizza",
+    quantidade: 1,
+    precoUnitario: 100,
+    opcoes: [],
+    total: 100,
+  }
+  /** Conta de mesa de R$ 110,00 (100 + 10% de taxa), paga em Pix em `paga` ou ainda aberta. */
+  const contaDeMesa = (id: number, criada: Date, paga?: Date) =>
+    pedidoDeTeste(id, criada, 110, {
+      tipo: "mesa",
+      mesa: { id: "mesa-1", numero: 1, pessoas: 2 },
+      itens: [pizza],
+      subtotal: 100,
+      taxaServico: { percentual: 10 },
+      ...(paga
+        ? {
+            pagoEm: paga.toISOString(),
+            pagamentos: [
+              { id: `p${id}`, forma: "pix" as const, valor: 110, em: paga.toISOString() },
+            ],
+          }
+        : { status: "pronto" as const, situacaoPagamento: "na-entrega" as const }),
+    })
+
+  test("o líquido da régua fica sem a taxa de serviço", () => {
+    const pedidos = [
+      contaDeMesa(20, NO_PERIODO, NO_PERIODO),
+      pedidoDeTeste(21, NO_PERIODO, 30, { subtotal: 30 }),
+    ]
+    expect(reguaFinanceira(pedidos, PERIODO)).toEqual({
+      bruto: 130,
+      descontos: 0,
+      taxasEntrega: 0,
+      liquido: 130,
+    })
+  })
+
+  test("a conta paga em duas formas soma cada parte na sua forma", () => {
+    const misto = pedidoDeTeste(20, NO_PERIODO, 110, {
+      tipo: "mesa",
+      pagamento: "dinheiro",
+      itens: [pizza],
+      taxaServico: { percentual: 10 },
+      pagoEm: new Date(2026, 10, 13, 20).toISOString(),
+      pagamentos: [
+        { id: "p1", forma: "pix", valor: 40, em: "" },
+        { id: "p2", forma: "dinheiro", valor: 70, em: "" },
+      ],
+    })
+    const formas = formasDePagamento([misto, pedidoDeTeste(21, NO_PERIODO, 30)], PERIODO)
+    expect(formas.map(({ forma, pedidos, total }) => [forma, pedidos, total])).toEqual([
+      ["pix", 2, 70],
+      ["dinheiro", 1, 70],
+    ])
+  })
+
+  test("soma a taxa das contas pagas no período, pelo dia do pagamento", () => {
+    const pedidos = [
+      // Aberta às 23:40 do dia 11 e paga às 00:10 do dia 12: entra no período.
+      contaDeMesa(30, new Date(2026, 10, 11, 23, 40), new Date(2026, 10, 12, 0, 10)),
+      contaDeMesa(31, NO_PERIODO, new Date(2026, 10, 13, 20)),
+      // Ainda aberta: a taxa não foi paga.
+      contaDeMesa(32, NO_PERIODO),
+    ]
+    expect(taxaDeServico(pedidos, PERIODO)).toBe(20)
+    expect(taxaDeServico(PEDIDOS_DE_TESTE, PERIODO)).toBe(0)
   })
 })
