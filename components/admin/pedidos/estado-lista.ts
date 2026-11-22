@@ -51,6 +51,10 @@ export const PARAMETROS_LISTA = {
   cliente: parseAsArrayOf(parseAsString).withDefault([]),
   /** Motivos de cancelamento, vindos da aba Operação. Etiqueta removível. */
   motivo: parseAsArrayOf(parseAsStringLiteral(MOTIVOS)).withDefault([]),
+  /** Bairros da entrega, vindos da aba Entrega. Etiqueta removível. */
+  bairro: parseAsArrayOf(parseAsString).withDefault([]),
+  /** Ids de motoboy (ou "sem-motoboy"), vindos da aba Entrega. Etiqueta removível. */
+  motoboy: parseAsArrayOf(parseAsString).withDefault([]),
   ordem: parseAsStringLiteral(COLUNAS).withDefault("criadoEm"),
   crescente: parseAsStringLiteral(["sim"] as const),
   pagina: parseAsInteger.withDefault(1),
