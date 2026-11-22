@@ -480,7 +480,10 @@ describe("PaginaFila", () => {
     usePreferenciasFila.setState({ somLigado: true, simular: true })
     renderizar(300)
 
-    expect(await screen.findByText("Chegou agora", {}, { timeout: 8000 })).toBeInTheDocument()
+    // A demonstração solta um pedido a cada 300 ms: com a máquina lenta, pode já ter chegado mais de um.
+    expect(
+      (await screen.findAllByText("Chegou agora", {}, { timeout: 8000 }))[0],
+    ).toBeInTheDocument()
     expect(tocadas).toHaveBeenCalled()
   })
 
@@ -594,7 +597,10 @@ describe("PaginaFila", () => {
     )
     usePreferenciasFila.setState({ notificar: true, simular: true })
     renderizar(300)
-    expect(await screen.findByText("Chegou agora", {}, { timeout: 8000 })).toBeInTheDocument()
+    // A demonstração solta um pedido a cada 300 ms: com a máquina lenta, pode já ter chegado mais de um.
+    expect(
+      (await screen.findAllByText("Chegou agora", {}, { timeout: 8000 }))[0],
+    ).toBeInTheDocument()
     expect(avisos).not.toHaveBeenCalled()
   })
 
@@ -604,7 +610,7 @@ describe("PaginaFila", () => {
     const limpar = vi.spyOn(globalThis, "clearTimeout")
     usePreferenciasFila.setState({ simular: true })
     const { unmount } = renderizar(300)
-    await screen.findByText("Chegou agora", {}, { timeout: 8000 })
+    await screen.findAllByText("Chegou agora", {}, { timeout: 8000 })
 
     // O destaque "Chegou agora" dura 10 s.
     const destaques = criar.mock.calls.flatMap((chamada, indice) =>
@@ -653,7 +659,7 @@ describe("PaginaFila", () => {
     usePreferenciasFila.setState({ simular: true })
     renderizar(400)
 
-    await screen.findByText("Chegou agora", {}, { timeout: 8000 })
+    await screen.findAllByText("Chegou agora", {}, { timeout: 8000 })
     // Para de chegar pedido e espera todos os que chegaram saírem.
     usePreferenciasFila.setState({ simular: false })
     const chegaram = async () =>
