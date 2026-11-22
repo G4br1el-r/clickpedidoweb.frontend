@@ -555,7 +555,7 @@ Situação: pronta em 13/11/2026.
 - **Fora da tela:** o pedido passa a guardar o horário de cada status, o produto ganha custo (com cópia na venda), o cancelamento ganha motivo, as Configurações ganham a taxa de cada forma de pagamento e o gerador de demonstração sobe para a versão 3.
 - **Etapas,** cada uma num PR: 1. Resumo; 2. Vendas; 3. Base de dados; 4. Produtos e Financeiro; 5. Operação e Clientes; 6. Entrega e abas do segmento; 7. CSV e impressão.
 
-Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 3 (Base de dados) prontas em 19/11/2026.
+Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 3 (Base de dados) prontas em 19/11/2026; etapa 4 (Produtos e Financeiro) pronta em 20/11/2026; etapa 5 (Operação e Clientes), etapa 6 (Entrega e abas do segmento) e etapa 7 (CSV e impressão) prontas em 21/11/2026.
 
 - **Etapa 1:**
   - abas Resumo, Vendas e Financeiro no endereço (`?aba=`), dentro do painel de cada aba para leitores de tela;
@@ -582,4 +582,48 @@ Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 
   - **um custo só,** no produto: o custo que ficava no estoque saiu, e a entrada de compra e a configuração do estoque passam a gravar o custo do produto;
   - nos pedidos em andamento gerados, o `atualizadoEm` continua o da criação (a Cozinha usa esse campo para os prontos recentes); o histórico tem as horas de cada etapa.
 - **Etapa 3, corrigido no caminho:** salvar o formulário do produto apagava o estoque e os dados do medicamento; agora eles ficam como estavam.
+- **Etapa 4:**
+  - aba Produtos (entre Vendas e Financeiro): régua com produtos vendidos, unidades (kg no açougue), margem e sem venda; ranking por R$ ou quantidade, com o caminho para os pedidos de cada produto (`?busca=`); categorias; curva ABC; margem por produto, com o aviso de quem ficou sem custo; adicionais e opções mais escolhidos; estoque, com o valor parado e em quantos dias cada produto acaba; o que não vendeu; e a tabela de todos os produtos;
+  - aba Financeiro completa: do bruto ao líquido (com os descontos do PDV), depois das taxas e do custo (taxas estimadas, líquido depois delas, margem bruta com a cobertura do custo e o que falta receber), formas de pagamento com o caminho para os pedidos e as taxas de cada forma, com o aviso da forma sem taxa e o link para configurar;
+  - regras em `lib/admin/regras/dashboard/produtos.ts` e `financeiro.ts`.
+- **Etapa 4, decidido no caminho:**
+  - a margem usa o total do item (com os adicionais, que não têm custo próprio) contra o custo do produto vezes a quantidade (no quilo, vezes o peso); a tela avisa;
+  - o faturamento por produto é o total do item como foi vendido, sem ratear o desconto do pedido; os descontos ficam no Financeiro;
+  - a barra do ranking se mede pelo primeiro colocado (com muitos produtos, a parte de cada um é pequena); a % ao lado continua sendo a parte no faturamento;
+  - o caminho de um produto para os pedidos usa a busca por nome, que também acha os produtos com nome parecido.
+- **Etapa 5:**
+  - aba Clientes (depois de Produtos): usa sempre os últimos 90 dias, numa busca própria, e o filtro de período dá lugar a "Últimos 90 dias, até hoje"; régua com clientes, novos, % que voltou e pedidos por cliente; melhores clientes levando aos pedidos de cada um; sumidos com o botão que abre o WhatsApp com a mensagem pronta, sem enviar nada sozinho;
+  - aba Operação (depois de Clientes): régua com % no prazo, tempo na loja, cancelados e o online que não foi pago; tempo por etapa com a média e os 9 em 10; atrasos por hora; cancelamentos por motivo (levando aos cancelados) e por canal; mesas e vendas por garçom; no salão, a pontualidade toma o lugar dos tempos da fila;
+  - Pedidos aceita `?cliente=` e `?motivo=` pelo endereço, como etiquetas removíveis;
+  - regras em `lib/admin/regras/dashboard/clientes.ts` e `operacao.ts`; `MINUTOS_DE_ATRASO` virou constante da fila.
+- **Etapa 5, decidido no caminho:**
+  - **no prazo** é abaixo dos 40 min da fila, contando o que depende da loja: a entrega até entregar; a retirada e a mesa até ficar pronto; pago online, a partir do pagamento;
+  - **novos** são os clientes cujo primeiro pedido caiu nos últimos 30 dias (com 90 dias de histórico, todos teriam o primeiro pedido nos 90 dias);
+  - o telefone da própria loja (PDV e mesa) não conta como cliente;
+  - **no salão**, a pontualidade mede o atraso para começar (adiantado conta como zero), a % que começou até 10 min depois da hora e a duração real contra a marcada;
+  - a **ocupação das mesas** ficou de fora: o painel não guarda quanto tempo cada mesa ficou ocupada além das comandas; no lugar, o tempo de mesa e o ticket por mesa.
+- **Etapa 5, a demonstração:** com 42 clientes pedindo sem parar, a aba Clientes não tinha sumido nem novo. O gerador agora faz 1 em 7 clientes sumir (não pede há 40 dias) e 1 em 9 começar há 20 dias; o pedido que sai deles vai para um cliente de uma vez só. VERSAO 4.
+- **Etapa 6:**
+  - aba Entrega (depois de Operação, só onde há motoboys): régua com entregas, taxas cobradas, ticket da entrega e tempo na rua (média e 9 em 10); por motoboy, com as entregas concluídas, o tempo na rua e as taxas, levando às entregas dele; por bairro, numa tabela com pedidos, faturamento, taxas, ticket e o tempo até entregar, levando aos pedidos do bairro;
+  - a aba do segmento, no fim da barra: **Agenda** no salão (ocupação da capacidade, horários de 30 min vagos hoje e amanhã, cancelamentos e os serviços mais agendados); **Farmácia** (o valor em risco nos lotes vencidos, em 30 e em 31 a 90 dias, receitas por canal com a situação, vendas por tipo de medicamento e o saldo de cada controlado); **Pesagem** no açougue (quilos vendidos, pesados, a diferença média entre o estimado e o pesado, quem espera a balança e as retiradas marcadas por dia);
+  - Pedidos aceita `?bairro=` e `?motoboy=` (com `sem-motoboy`) pelo endereço, como etiquetas removíveis; a etiqueta do motoboy mostra o nome;
+  - regras em `lib/admin/regras/dashboard/entrega.ts`, `salao.ts`, `farmacia.ts` e `acougue.ts`; a escrituração dos controlados (lançados mais as receitas aprovadas) virou a função `escrituracao`, usada também na página de Controlados.
+- **Etapa 6, decidido no caminho:**
+  - a Agenda conta pelo dia do atendimento, não pelo dia em que foi marcado; a ocupação são os minutos marcados (sem os cancelados) sobre os minutos abertos vezes a capacidade;
+  - o **valor em risco** usa o preço de venda: nem todo produto tem custo;
+  - as receitas contam pelo dia em que chegaram; os lotes, os controlados e quem espera a pesagem são o estado de hoje, sem ligar para o período;
+  - a entrega sem motoboy anotado entra junto, como "Sem motoboy", sempre por último;
+  - a aba Pesagem aparece onde há pagamento depois da pesagem (`pagarAposPesagem`), hoje só no açougue.
+- **Etapa 6, a conferir:** a foto da página rolada no celular-320 (`painel-visao-geral-abas-rolada-light`) oscila 1 vez em 6 por um pixel de rolagem; não tem relação com esta etapa.
+- **Etapa 7:**
+  - cada tabela das abas tem o botão **CSV**: o dia a dia (Vendas), todos os produtos (Produtos), o tempo por etapa (Operação), por bairro (Entrega), as receitas por canal e o saldo dos controlados (Farmácia). O arquivo sai para o Excel em português: `;`, vírgula decimal sem "R$", data dd/mm/aaaa, CRLF e UTF-8 com BOM, com o nome `<loja>-<aba>-<de>-a-<ate>.csv`;
+  - **Imprimir**, no cabeçalho da visão geral, leva só a aba aberta, com um cabeçalho (loja e aba, período e a hora em que saiu), sem botões nem as trocas de medida, e com as tabelas recolhidas abertas (`react-to-print`);
+  - o CSV é gerado por `lib/admin/regras/dashboard/csv.ts` (`gerarCsv` e `nomeDoCsv`), sem biblioteca nova; o botão e o contexto da aba aberta ficam em `components/admin/visao-geral/exportar.tsx`.
+- **Etapa 7, decidido no caminho:**
+  - na aba com mais de uma tabela (Farmácia), o nome da tabela entra no arquivo depois da aba, para um não sobrescrever o outro;
+  - as datas do nome do arquivo saem como aaaa-mm-dd, para os arquivos ficarem em ordem na pasta;
+  - dinheiro sai com 2 casas e sem separador de milhar, para o Excel ler como número; o produto vendido por quilo leva a unidade numa coluna à parte;
+  - na aba Clientes, o período do arquivo e da impressão são os 90 dias da aba;
+  - só as tabelas têm CSV; as listas com barra (motoboys, canais, melhores clientes) ficam na impressão.
+- **Etapa 7, a conferir:** a janela de impressão do navegador não abre no Playwright; a impressão está coberta pelo teste de componente (o cabeçalho e as tabelas abertas), não por E2E.
 - **Também mudou:** as fotos do Playwright escondem o selo de avisos do Next no modo dev (`tests/sem-avisos-do-next.css`), que aparecia mesmo com `devIndicators: false`.

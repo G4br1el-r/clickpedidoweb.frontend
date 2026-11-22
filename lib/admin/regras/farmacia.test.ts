@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest"
 import type { DadosMedicamento, Lote, MovimentoControlado, Produto, Receita } from "../dados/tipos"
 import {
   conferirReceita,
+  escrituracao,
   receitaExigida,
   saidasDaReceita,
   saldosControlados,
@@ -266,6 +267,61 @@ describe("saidasDaReceita", () => {
         paciente: "Bruno Carvalho",
         prescritor: "CRM 98314/SP",
       },
+    ])
+  })
+})
+
+describe("escrituracao", () => {
+  test("os movimentos lançados mais as saídas das receitas aprovadas, do mais novo ao mais antigo", () => {
+    const produtos: Produto[] = [
+      {
+        id: "clonazepam",
+        categoriaId: "cat-1",
+        nome: "Clonazepam",
+        descricao: "",
+        preco: 10,
+        ativo: true,
+        disponivel: true,
+        destaque: false,
+        oferta: false,
+        ordem: 1,
+        unidade: "un",
+        grupos: [],
+        medicamento: medicamento({ tarja: "preta", lista: "B1" }),
+      },
+    ]
+    const receita = (id: string): Receita => ({
+      id,
+      recebidaEm: "2026-11-13T19:00:00-03:00",
+      canal: "balcao",
+      paciente: { nome: "Bruno", telefone: "12938359086" },
+      prescritor: { nome: "Dra. Helena", conselho: "CRM", numero: "98314", uf: "SP" },
+      tipo: "notificacao-b",
+      emitidaEm: "2026-11-08",
+      itens: [{ produtoId: "clonazepam", quantidade: 2, posologia: "" }],
+    })
+    const entrada: MovimentoControlado = {
+      id: "m1",
+      produtoId: "clonazepam",
+      em: "2026-11-10T12:00:00.000Z",
+      tipo: "entrada",
+      quantidade: 30,
+      documento: "NF 1",
+    }
+    const decisoes = {
+      "rec-1": { situacao: "aprovada" as const, em: "2026-11-13T20:00:00.000Z", retida: true },
+      "rec-2": { situacao: "recusada" as const, em: "2026-11-13T20:10:00.000Z", motivo: "x" },
+    }
+    expect(
+      escrituracao(
+        [entrada],
+        [receita("rec-1"), receita("rec-2"), receita("rec-3")],
+        produtos,
+        decisoes,
+      ).map((movimento) => [movimento.id, movimento.quantidade]),
+    ).toEqual([
+      ["rec-1-clonazepam", 2],
+      ["m1", 30],
     ])
   })
 })
