@@ -33,6 +33,8 @@ export type OpcoesGeracao = {
   ultimo?: { id: number; numero: number; criadoEm?: string }
   /** Salão: atendimentos já marcados, que ocupam a agenda. */
   agendamentos?: Pedido[]
+  /** Mesas com comanda aberta de antes (a conta atravessou a virada do dia): ninguém senta nelas. */
+  mesasOcupadas?: string[]
 }
 
 /** Salão: a duração soma todos os serviços (60 min quando o serviço não diz). */
@@ -409,6 +411,7 @@ export function gerarPedidos({
   agora,
   ultimo,
   agendamentos,
+  mesasOcupadas,
 }: OpcoesGeracao): Pedido[] {
   const { loja } = catalogo
   const produtos = catalogo.produtos.filter((produto) => produto.ativo && produto.disponivel)
@@ -426,7 +429,7 @@ export function gerarPedidos({
   let id = ultimo?.id ?? 0
   let numero = ultimo?.numero ?? 0
   let mesDoNumero = ultimo?.criadoEm ? new Date(ultimo.criadoEm) : undefined
-  const mesasAbertas = new Set<string>()
+  const mesasAbertas = new Set<string>(mesasOcupadas)
   // Mesa bloqueada não recebe comanda; o garçom vem dos ativos da loja.
   const mesasUsaveis = catalogo.mesas.filter((item) => !item.bloqueio)
   const garcons = catalogo.salao.garcons.filter((item) => item.ativo)

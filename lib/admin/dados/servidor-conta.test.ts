@@ -1,9 +1,10 @@
 import "fake-indexeddb/auto"
 import { clear } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { pagoNoDiaSemTaxa, resumoDaConta } from "../regras/conta"
 import { catalogoDeTeste } from "./catalogo-de-teste"
 import { criarServidor, type ItemLancado } from "./servidor"
-import type { CatalogoLoja } from "./tipos"
+import type { CatalogoLoja, Pedido } from "./tipos"
 
 /** Sexta, 13/11/2026, 20:30 em São Paulo. */
 const AGORA = new Date(2026, 10, 13, 20, 30)
@@ -622,5 +623,27 @@ describe("conta com saldo zero", () => {
     await expect(api.mesas.fecharConta(comanda.id)).rejects.toThrow(
       "Escolha uma forma de pagamento válida.",
     )
+  })
+})
+
+describe("virada do dia", () => {
+  test("aberta às 23:40 com R$ 30,00 em Pix, segue aberta depois da recarga às 00:05 e fecha às 00:10 no dia novo", async () => {
+    vi.setSystemTime(new Date(2026, 10, 13, 23, 40))
+    const { comanda } = await contaDeCem(semTaxa())
+    await semTaxa().mesas.pagar(comanda.id, { forma: "pix", valor: 30 })
+
+    // Recarregar a página no dia seguinte: outra instância do servidor completa o dia.
+    vi.setSystemTime(new Date(2026, 10, 14, 0, 5))
+    const depois = semTaxa()
+    const aberta = await depois.pedidos.buscar(comanda.id)
+    expect(aberta).toMatchObject({ status: "pronto", situacaoPagamento: "na-entrega", total: 100 })
+    expect(aberta).not.toHaveProperty("pagoEm")
+    expect(resumoDaConta(aberta as Pedido).saldo).toBe(70)
+
+    vi.setSystemTime(new Date(2026, 10, 14, 0, 10))
+    const fechada = await depois.mesas.fecharConta(comanda.id, "dinheiro")
+    expect(fechada).toMatchObject({ status: "concluido", pagoEm: "2026-11-14T03:10:00.000Z" })
+    expect(pagoNoDiaSemTaxa(fechada, new Date(2026, 10, 14, 12, 0))).toBe(70)
+    expect(pagoNoDiaSemTaxa(fechada, new Date(2026, 10, 13, 12, 0))).toBe(30)
   })
 })

@@ -472,8 +472,30 @@ function aplicarEstoque(
   return atual
 }
 
-/** Pedido de um dia que já passou não fica aberto: entrega e comanda viram concluídas. */
-function encerrar(pedido: Pedido, momento: string): Pedido {
+/**
+ * Pedido de um dia que já passou não fica aberto: entrega e comanda viram concluídas. A conta de
+ * mesa só fecha recebendo: a comanda que alguém mexeu (tem histórico) continua aberta na virada
+ * do dia. Só a da demonstração, intocada, fecha sozinha, com o resto pago na forma dela.
+ */
+function encerrar(antes: Pedido, momento: string): Pedido {
+  const comandaAberta = antes.tipo === "mesa" && EM_ANDAMENTO.includes(antes.status)
+  if (comandaAberta && antes.eventos?.length) return antes
+  const { saldo } = resumoDaConta(antes)
+  const pedido: Pedido =
+    comandaAberta && antes.pagamentos?.length && saldo > 0
+      ? {
+          ...antes,
+          pagamentos: [
+            ...antes.pagamentos,
+            {
+              id: `pag-${antes.id}-resto`,
+              forma: antes.pagamento as PagamentoMesa,
+              valor: saldo,
+              em: momento,
+            },
+          ],
+        }
+      : antes
   if (pedido.status === "aguardando-pagamento") {
     return comEtapa(
       { ...pedido, status: "cancelado", situacaoPagamento: "cancelado", atualizadoEm: momento },
@@ -559,6 +581,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       agora,
       ...(ultimo ? { ultimo } : {}),
       agendamentos: anteriores,
+      mesasOcupadas: anteriores
+        .filter((pedido) => pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status))
+        .flatMap((pedido) => (pedido.mesa ? [pedido.mesa.id] : [])),
     })
     const completa = abrirMesas({
       ...base,
