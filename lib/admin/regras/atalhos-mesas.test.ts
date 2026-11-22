@@ -35,6 +35,8 @@ describe("lerTecla: limites e comandos", () => {
     ["n", { tipo: "nova-mesa" }],
     ["N", { tipo: "nova-mesa" }],
     ["?", { tipo: "ajuda" }],
+    ["m", { tipo: "alternar-vista" }],
+    ["M", { tipo: "alternar-vista" }],
   ])("%s dispara a ação e zera os dígitos", (key, acao) => {
     expect(lerTecla("12", tecla(key))).toEqual({ digitado: "", acao })
   })
@@ -44,7 +46,7 @@ describe("lerTecla: limites e comandos", () => {
     ["com modificador", { comModificador: true }],
     ["com janela aberta", { janelaAberta: true }],
   ])("%s, nenhuma tecla faz nada e os dígitos ficam", (_nome, extra) => {
-    for (const key of ["1", "Enter", "Escape", "/", "n", "N", "?"]) {
+    for (const key of ["1", "Enter", "Escape", "/", "n", "N", "?", "m", "M"]) {
       expect(lerTecla("12", tecla(key, extra))).toEqual({
         digitado: "12",
         acao: { tipo: "nenhuma" },
@@ -59,7 +61,7 @@ describe("lerTecla: limites e comandos", () => {
 
 describe("lerTecla: atalhos de uma tecla desligados (WCAG 2.1.4)", () => {
   it("nenhuma tecla de caractere faz nada, e o Enter não abre a mesa", () => {
-    for (const key of ["1", "/", "n", "N", "?", "Enter"]) {
+    for (const key of ["1", "/", "n", "N", "?", "m", "M", "Enter"]) {
       expect(lerTecla("12", { ...tecla(key), ligados: false })).toEqual({
         digitado: "12",
         acao: { tipo: "nenhuma" },
