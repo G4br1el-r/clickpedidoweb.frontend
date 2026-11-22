@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter } from "nuqs/adapters/testing"
@@ -58,11 +58,6 @@ async function abrir(endereco?: string) {
 
 const cartao = (numero: number) =>
   screen.findByRole("button", { name: new RegExp(`^Mesa ${numero}\\b`) })
-
-const menu = async (usuario: ReturnType<typeof userEvent.setup>, numero: number) => {
-  await usuario.click(await screen.findByRole("button", { name: `Ações da mesa ${numero}` }))
-  return within(await screen.findByRole("menu"))
-}
 
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["Date"] })
@@ -182,5 +177,130 @@ describe("Mesas: painel das reservas do dia", () => {
     await usuario.click(janela.getByRole("button", { name: "Salvar reserva" }))
 
     expect(await screen.findByText("A mesa 13 já tem reserva às 20:50.")).toBeInTheDocument()
+  })
+})
+
+async function abaEspera(usuario: ReturnType<typeof userEvent.setup>) {
+  const aqui = await painel()
+  await usuario.click(aqui.getByRole("tab", { name: /^Espera/ }))
+  return within(await aqui.findByRole("list", { name: "Lista de espera" }))
+}
+
+async function escolherGarcom(usuario: ReturnType<typeof userEvent.setup>, janela: typeof screen) {
+  await usuario.click(janela.getByRole("combobox", { name: "Garçom" }))
+  await usuario.click(await screen.findByRole("option", { name: "Rafa" }))
+}
+
+describe("Mesas: lista de espera", () => {
+  test("a fila mostra quem espera, há quanto tempo, a chamada e a mesa sugerida", async () => {
+    const usuario = await abrir()
+    expect((await painel()).getByRole("tab", { name: "Espera 3" })).toBeInTheDocument()
+    const fila = await abaEspera(usuario)
+    const [carlos, juliana, pedro] = fila.getAllByRole("listitem").map((item) => item.textContent)
+
+    expect(carlos).toMatch(/Carlos Mendes.*2 pessoas.*há 25 min.*chamado há 2 min.*Mesa 11 livre/)
+    expect(juliana).toMatch(/Juliana Rocha.*4 pessoas.*há 12 min.*Mesa 8 livre/)
+    expect(pedro).toMatch(/Pedro Alves.*5 pessoas.*há 5 min.*Mesa 10 livre/)
+  })
+
+  test("o tempo de espera corre sozinho", async () => {
+    vi.useFakeTimers({ toFake: ["Date", "setInterval", "clearInterval"] })
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 30))
+    const usuario = await abrir()
+    const fila = await abaEspera(usuario)
+    expect(fila.getAllByRole("listitem")[0]).toHaveTextContent("há 25 min")
+
+    act(() => {
+      vi.setSystemTime(new Date(2026, 10, 13, 20, 31))
+      vi.advanceTimersByTime(30_000)
+    })
+
+    expect(fila.getAllByRole("listitem")[0]).toHaveTextContent("há 26 min")
+  })
+
+  test("Chamar com telefone é um link para o WhatsApp, numa aba nova, e grava a chamada", async () => {
+    const usuario = await abrir()
+    const fila = await abaEspera(usuario)
+    const chamar = fila.getByRole("link", { name: "Chamar Pedro Alves" })
+
+    expect(chamar).toHaveAttribute(
+      "href",
+      "https://wa.me/5512996543210?text=Ol%C3%A1!%20Sua%20mesa%20na%20Casa%20da%20Pizza%20est%C3%A1%20pronta.%20Pode%20vir%2C%20estamos%20te%20esperando.",
+    )
+    expect(chamar).toHaveAttribute("target", "_blank")
+    chamar.addEventListener("click", (evento) => evento.preventDefault())
+    await usuario.click(chamar)
+
+    await waitFor(async () => {
+      const pedro = (await api().espera.listar()).find((entrada) => entrada.nome === "Pedro Alves")
+      expect(pedro?.chamadaEm).toBe(new Date(2026, 10, 13, 20, 30).toISOString())
+    })
+  })
+
+  test("Chamar sem telefone só grava a chamada", async () => {
+    const usuario = await abrir()
+    const fila = await abaEspera(usuario)
+    await usuario.click(fila.getByRole("button", { name: "Chamar Juliana Rocha" }))
+
+    await waitFor(() =>
+      expect(fila.getAllByRole("listitem")[1]).toHaveTextContent("chamado há 0 min"),
+    )
+  })
+
+  test("Entrar na espera diz o que falta e põe no fim da fila", async () => {
+    const usuario = await abrir()
+    await abaEspera(usuario)
+    await usuario.click((await painel()).getByRole("button", { name: "Entrar na espera" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Entrar na espera" }))
+    await usuario.click(janela.getByRole("button", { name: "Pôr na fila" }))
+    expect(janela.getByText("Informe o nome.")).toBeInTheDocument()
+    expect(janela.getByText("Informe de 1 a 99 pessoas.")).toBeInTheDocument()
+
+    await usuario.type(janela.getByRole("textbox", { name: "Nome" }), "Ana Lima")
+    await usuario.type(janela.getByRole("spinbutton", { name: "Pessoas" }), "2")
+    await usuario.click(janela.getByRole("button", { name: "Pôr na fila" }))
+
+    expect(await screen.findByText("Ana Lima entrou na espera.")).toBeInTheDocument()
+    const fila = await abaEspera(usuario)
+    await waitFor(() => expect(fila.getAllByRole("listitem").at(-1)).toHaveTextContent("Ana Lima"))
+  })
+
+  test("Desistiu tira da fila", async () => {
+    const usuario = await abrir()
+    const fila = await abaEspera(usuario)
+    await usuario.click(fila.getByRole("button", { name: "Mais ações de Juliana Rocha" }))
+    await usuario.click(
+      within(await screen.findByRole("menu")).getByRole("menuitem", { name: "Desistiu" }),
+    )
+
+    await waitFor(() => expect(fila.getAllByRole("listitem")).toHaveLength(2))
+  })
+
+  test("Sentar já vem com a mesa sugerida; senta e tira da fila", async () => {
+    const usuario = await abrir()
+    const fila = await abaEspera(usuario)
+    await usuario.click(fila.getByRole("button", { name: "Sentar Juliana Rocha" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Sentar Juliana Rocha" }))
+    expect(janela.getByRole("combobox", { name: "Mesa" })).toHaveTextContent("Mesa 8")
+    await escolherGarcom(usuario, janela as unknown as typeof screen)
+    await usuario.click(janela.getByRole("button", { name: "Sentar" }))
+
+    expect(await screen.findByText("Juliana Rocha na mesa 8.")).toBeInTheDocument()
+    await waitFor(async () => expect(await cartao(8)).toHaveTextContent("Juliana Rocha"))
+    await waitFor(() => expect(fila.getAllByRole("listitem")).toHaveLength(2))
+  })
+
+  test("Sentar a reserva abre a mesa dela", async () => {
+    const usuario = await abrir()
+    await usuario.click(
+      await (await painel()).findByRole("button", { name: "Sentar Marina Costa" }),
+    )
+    const janela = within(await screen.findByRole("dialog", { name: "Sentar Marina Costa" }))
+    expect(janela.getByRole("combobox", { name: "Mesa" })).toHaveTextContent("Mesa 13")
+    await escolherGarcom(usuario, janela as unknown as typeof screen)
+    await usuario.click(janela.getByRole("button", { name: "Sentar" }))
+
+    expect(await screen.findByText("Marina Costa na mesa 13.")).toBeInTheDocument()
+    await waitFor(async () => expect(await cartao(13)).toHaveTextContent("Marina Costa"))
   })
 })
