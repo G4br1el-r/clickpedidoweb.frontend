@@ -2466,7 +2466,10 @@ export function criarServidor({
         const mesa = mesaDoQr(base, mesaId)
         const agora = new Date()
         const comanda = comandaDa(base, mesa.id)
-        if (tipo === "conta" && !comanda) throw new Error("A mesa ainda não tem conta.")
+        // A comanda aberta ainda vazia também não tem o que pagar.
+        if (tipo === "conta" && !comanda?.itens.length) {
+          throw new Error("A mesa ainda não tem conta.")
+        }
         const pedidos =
           comanda && tipo === "conta"
             ? base.pedidos.map((pedido) =>

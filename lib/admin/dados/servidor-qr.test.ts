@@ -109,6 +109,15 @@ describe("QR: chamados", () => {
     await expect(api.qr.chamar(mesaId, "conta")).rejects.toThrow("A mesa ainda não tem conta.")
   })
 
+  test("pedir a conta com a comanda ainda vazia recusa com a mesma mensagem", async () => {
+    const api = servidor()
+    await ligarQr(api)
+    const mesaId = await mesaNova(api)
+    await api.mesas.abrir(mesaId, { pessoas: 2 })
+    await expect(api.qr.chamar(mesaId, "conta")).rejects.toThrow("A mesa ainda não tem conta.")
+    expect(await api.chamados.listar()).toEqual([])
+  })
+
   test("pedir a conta cria o chamado e marca Pediu a conta, pelo cliente", async () => {
     const api = servidor()
     await ligarQr(api)
