@@ -4,6 +4,7 @@ import NumberFlow from "@number-flow/react"
 import { format } from "date-fns"
 import {
   ConciergeBellIcon,
+  GiftIcon,
   LockOpenIcon,
   MinusIcon,
   PencilIcon,
@@ -35,6 +36,7 @@ import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useLoja, usePedido } from "@/lib/admin/dados/consultas"
 import {
   useAlterarQuantidade,
+  useDarCortesia,
   useDesbloquearMesa,
   useLiberarMesa,
   useMarcarLimpa,
@@ -48,6 +50,7 @@ import { cozinhaJaPreparou } from "@/lib/admin/regras/cozinha"
 import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { type EstadoMesa, estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { emReais, formatoMoeda } from "@/lib/formato"
+import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
 import { AbrirMesa } from "./abrir-mesa"
 import { AdicionarItens, useLancarNaComanda } from "./adicionar-itens"
@@ -56,6 +59,7 @@ import { ContaMesa } from "./conta-mesa"
 import { EditarItem } from "./editar-item"
 import { ConfirmarExclusaoMesa } from "./excluir-mesa"
 import { HistoricoComanda } from "./historico-comanda"
+import { MotivoConta } from "./motivo-conta"
 import { type ParteDaConta, ReceberConta } from "./receber-conta"
 import { TirarItem } from "./tirar-item"
 
@@ -175,6 +179,8 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   const por = useGarcom((estado) => estado.nome)
   const [editando, setEditando] = useState<ItemPedido | null>(null)
   const [cancelando, setCancelando] = useState(false)
+  const [cortesia, setCortesia] = useState<ItemPedido | null>(null)
+  const darCortesia = useDarCortesia()
   const conta = useRef<HTMLDivElement>(null)
   const imprimir = useReactToPrint({
     contentRef: conta,
@@ -302,7 +308,13 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                         <span className="text-xs italic">“{item.observacao}”</span>
                       )}
                       <span className="text-xs text-muted-foreground tabular-nums">
-                        {emReais(item.precoUnitario)} cada · {emReais(item.total)}
+                        {emReais(item.precoUnitario)} cada ·{" "}
+                        <span className={cn(item.cortesia && "line-through")}>
+                          {emReais(item.total)}
+                        </span>
+                        {item.cortesia && (
+                          <span className="font-medium text-foreground"> · Cortesia</span>
+                        )}
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
@@ -354,6 +366,18 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                       >
                         <PlusIcon />
                       </Button>
+                      {!item.cortesia && (
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          className="max-md:size-10"
+                          variant="ghost"
+                          aria-label="Cortesia"
+                          onClick={() => setCortesia(item)}
+                        >
+                          <GiftIcon />
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         size="icon-sm"
@@ -467,6 +491,25 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
         }}
       />
       <EditarItem pedido={pedido} item={editando} aoFechar={() => setEditando(null)} />
+      <MotivoConta
+        aberta={cortesia !== null}
+        titulo={`Cortesia: ${cortesia?.nome ?? ""}`}
+        descricao="O item fica na comanda, sem cobrar. Ele já foi consumido: o estoque não volta."
+        acao="Dar cortesia"
+        aoMudar={(aberta) => !aberta && setCortesia(null)}
+        aoConfirmar={(motivo) =>
+          darCortesia.mutateAsync(
+            { pedidoId: pedido.id, itemId: cortesia?.id ?? "", motivo, ...quem },
+            {
+              onSuccess: () => {
+                toast.success(`${cortesia?.nome} é cortesia.`)
+                setCortesia(null)
+              },
+              onError: aoErrar,
+            },
+          )
+        }
+      />
       <CancelarComanda
         mesa={mesa}
         comanda={pedido}

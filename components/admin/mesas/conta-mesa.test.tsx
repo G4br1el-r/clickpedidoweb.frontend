@@ -208,3 +208,71 @@ describe("ComandaMesa: a aba Conta", () => {
     expect(porItem.queryByRole("checkbox", { name: /Pizza/ })).not.toBeInTheDocument()
   })
 })
+
+describe("ComandaMesa: desconto, cortesia, taxa, couvert e estorno", () => {
+  const pergunta = (nome: string) => within(screen.getByRole("alertdialog", { name: nome }))
+
+  test("Desconto em reais com motivo muda o total; acima dos itens, o erro do servidor aparece", async () => {
+    await mesaComConta()
+    const { usuario, gaveta } = await abrirConta()
+    await usuario.click(gaveta.getByRole("button", { name: "Desconto" }))
+    const janela = pergunta("Desconto na conta da mesa 70")
+    await usuario.type(janela.getByRole("textbox", { name: "Valor do desconto" }), "50")
+    await usuario.type(janela.getByRole("textbox", { name: "Motivo" }), "Demora")
+    await usuario.click(janela.getByRole("button", { name: "Aplicar desconto" }))
+    expect(await screen.findByText("O desconto passa do valor dos itens.")).toBeInTheDocument()
+
+    await usuario.clear(janela.getByRole("textbox", { name: "Valor do desconto" }))
+    await usuario.type(janela.getByRole("textbox", { name: "Valor do desconto" }), "4")
+    await usuario.click(janela.getByRole("button", { name: "Aplicar desconto" }))
+    // 44 − 4 = 40, mais 4,00 de taxa e 16 de couvert.
+    await waitFor(() => expect(valorDe(gaveta, "Total")).toHaveTextContent("R$ 60,00"))
+    expect(valorDe(gaveta, "Desconto")).toHaveTextContent("− R$ 4,00")
+  })
+
+  test("Cortesia no item, com motivo: o item mostra Cortesia e a conta desconta", async () => {
+    await mesaComConta()
+    const { usuario, gaveta } = await abrirConta()
+    await usuario.click(gaveta.getByRole("tab", { name: "Itens" }))
+    const agua = within(gaveta.getByRole("listitem", { name: "Água" }))
+    await usuario.click(agua.getByRole("button", { name: "Cortesia" }))
+    const janela = pergunta("Cortesia: Água")
+    expect(janela.getByRole("button", { name: "Dar cortesia" })).toBeDisabled()
+    await usuario.type(janela.getByRole("textbox", { name: "Motivo" }), "Brinde da casa")
+    await usuario.click(janela.getByRole("button", { name: "Dar cortesia" }))
+    await waitFor(() =>
+      expect(gaveta.getByRole("listitem", { name: "Água" })).toHaveTextContent("Cortesia"),
+    )
+    await usuario.click(gaveta.getByRole("tab", { name: "Conta" }))
+    expect(valorDe(gaveta, "Cortesias")).toHaveTextContent("− R$ 4,00")
+  })
+
+  test("Tirar taxa e Tirar couvert pedem motivo e saem do resumo", async () => {
+    await mesaComConta()
+    const { usuario, gaveta } = await abrirConta()
+    await usuario.click(gaveta.getByRole("button", { name: "Tirar taxa" }))
+    const taxa = pergunta("Tirar a taxa de serviço?")
+    await usuario.type(taxa.getByRole("textbox", { name: "Motivo" }), "Cliente reclamou")
+    await usuario.click(taxa.getByRole("button", { name: "Tirar taxa" }))
+    await waitFor(() => expect(gaveta.queryByText("Taxa de serviço (10%)")).not.toBeInTheDocument())
+
+    await usuario.click(gaveta.getByRole("button", { name: "Tirar couvert" }))
+    const couvert = pergunta("Tirar o couvert?")
+    await usuario.type(couvert.getByRole("textbox", { name: "Motivo" }), "Sem música")
+    await usuario.click(couvert.getByRole("button", { name: "Tirar couvert" }))
+    await waitFor(() => expect(valorDe(gaveta, "Total")).toHaveTextContent("R$ 44,00"))
+  })
+
+  test("Estornar um pagamento pede motivo e devolve o saldo", async () => {
+    const { comanda } = await mesaComConta()
+    await api().mesas.pagar(comanda.id, { forma: "pix", valor: 10 })
+    const { usuario, gaveta } = await abrirConta()
+    const pagamento = within(await gaveta.findByRole("listitem", { name: /^Pix/ }))
+    await usuario.click(pagamento.getByRole("button", { name: "Estornar" }))
+    const janela = pergunta(nome("Estornar Pix de R$ 10,00?"))
+    await usuario.type(janela.getByRole("textbox", { name: "Motivo" }), "Não caiu")
+    await usuario.click(janela.getByRole("button", { name: "Estornar" }))
+    await waitFor(() => expect(valorDe(gaveta, "Saldo")).toHaveTextContent("R$ 64,40"))
+    expect(gaveta.queryByRole("list", { name: "Pagamentos" })).not.toBeInTheDocument()
+  })
+})

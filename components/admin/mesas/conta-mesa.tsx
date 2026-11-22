@@ -8,8 +8,14 @@ import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { usePedirConta } from "@/lib/admin/dados/consultas-mesas"
-import type { Mesa, Pedido } from "@/lib/admin/dados/tipos"
+import {
+  useDescontar,
+  useEstornarPagamento,
+  usePedirConta,
+  useTirarCouvert,
+  useTirarTaxa,
+} from "@/lib/admin/dados/consultas-mesas"
+import type { Mesa, PagamentoConta, Pedido } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
 import {
   dividirIgualmente,
@@ -21,6 +27,7 @@ import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { rotuloDoPagamento } from "@/lib/admin/regras/rotulos"
 import { emReais, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
+import { DescontoNaConta, MotivoConta } from "./motivo-conta"
 import type { ParteDaConta } from "./receber-conta"
 
 function Linha({
@@ -173,6 +180,22 @@ export function ContaMesa({
   const pagamentos = pedido.pagamentos ?? []
   const pessoas = pedido.mesa?.pessoas ?? 1
   const comItens = pedido.itens.length > 0
+  const [mudando, setMudando] = useState<"desconto" | "taxa" | "couvert" | null>(null)
+  const [estornando, setEstornando] = useState<PagamentoConta | null>(null)
+  const descontar = useDescontar()
+  const tirarTaxa = useTirarTaxa()
+  const tirarCouvert = useTirarCouvert()
+  const estornar = useEstornarPagamento()
+  const quem = autorDaAcao(por, pedido.mesa?.garcom)
+  // Fecha a janela quando o servidor aceita; se recusar, avisa e a janela continua aberta.
+  const comAviso = (sucesso: string, aoTerminar: () => void) => ({
+    onSuccess: () => {
+      toast.success(sucesso)
+      aoTerminar()
+    },
+    onError: (erro: Error) => toast.error(erro.message),
+  })
+  const fecharMudanca = () => setMudando(null)
 
   return (
     <>
@@ -192,13 +215,21 @@ export function ContaMesa({
             <Linha
               rotulo={`Taxa de serviço (${pedido.taxaServico.percentual.toLocaleString("pt-BR")}%)`}
               valor={emReais(resumo.taxa)}
-            />
+            >
+              <Button type="button" size="xs" variant="ghost" onClick={() => setMudando("taxa")}>
+                Tirar taxa
+              </Button>
+            </Linha>
           )}
           {pedido.couvert && !pedido.couvert.removido && (
             <Linha
               rotulo={`Couvert (${pessoas} × ${emReais(pedido.couvert.porPessoa)})`}
               valor={emReais(resumo.couvert)}
-            />
+            >
+              <Button type="button" size="xs" variant="ghost" onClick={() => setMudando("couvert")}>
+                Tirar couvert
+              </Button>
+            </Linha>
           )}
           <Linha rotulo="Total" valor={emReais(resumo.total)} forte />
           {resumo.pago > 0 && <Linha rotulo="Pago" valor={emReais(resumo.pago)} />}
@@ -210,8 +241,12 @@ export function ContaMesa({
         <Secao titulo="Pagamentos">
           <ul aria-label="Pagamentos" className="flex flex-col gap-2 text-sm">
             {pagamentos.map((pagamento) => (
-              <li key={pagamento.id} className="flex items-center justify-between gap-3">
-                <span>
+              <li
+                key={pagamento.id}
+                aria-label={`${rotuloDoPagamento(pagamento)} ${emReais(pagamento.valor)}`}
+                className="flex items-center gap-3"
+              >
+                <span className="flex-1">
                   {rotuloDoPagamento(pagamento)}
                   <span className="text-muted-foreground">
                     {" · "}
@@ -220,6 +255,15 @@ export function ContaMesa({
                   </span>
                 </span>
                 <span className="tabular-nums">{emReais(pagamento.valor)}</span>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
+                  className="text-destructive"
+                  onClick={() => setEstornando(pagamento)}
+                >
+                  Estornar
+                </Button>
               </li>
             ))}
           </ul>
@@ -261,12 +305,72 @@ export function ContaMesa({
           )
         )}
         {comItens && (
+          <Button type="button" variant="outline" onClick={() => setMudando("desconto")}>
+            Desconto
+          </Button>
+        )}
+        {comItens && (
           <Button type="button" variant="outline" className="text-destructive" onClick={aoCancelar}>
             <XIcon data-icon="inline-start" />
             Cancelar comanda
           </Button>
         )}
       </div>
+
+      <DescontoNaConta
+        aberta={mudando === "desconto"}
+        numero={mesa.numero}
+        aoMudar={(aberta) => !aberta && fecharMudanca()}
+        aoAplicar={(desconto) =>
+          descontar.mutateAsync(
+            { pedidoId: pedido.id, ...desconto, ...quem },
+            comAviso("Desconto aplicado.", fecharMudanca),
+          )
+        }
+      />
+      <MotivoConta
+        aberta={mudando === "taxa"}
+        titulo="Tirar a taxa de serviço?"
+        descricao="A taxa sai desta conta e fica no histórico, com o motivo."
+        acao="Tirar taxa"
+        aoMudar={(aberta) => !aberta && fecharMudanca()}
+        aoConfirmar={(motivo) =>
+          tirarTaxa.mutateAsync(
+            { pedidoId: pedido.id, motivo, ...quem },
+            comAviso("Taxa de serviço tirada.", fecharMudanca),
+          )
+        }
+      />
+      <MotivoConta
+        aberta={mudando === "couvert"}
+        titulo="Tirar o couvert?"
+        descricao="O couvert sai desta conta e fica no histórico, com o motivo."
+        acao="Tirar couvert"
+        aoMudar={(aberta) => !aberta && fecharMudanca()}
+        aoConfirmar={(motivo) =>
+          tirarCouvert.mutateAsync(
+            { pedidoId: pedido.id, motivo, ...quem },
+            comAviso("Couvert tirado.", fecharMudanca),
+          )
+        }
+      />
+      <MotivoConta
+        aberta={estornando !== null}
+        titulo={
+          estornando
+            ? `Estornar ${rotuloDoPagamento(estornando)} de ${emReais(estornando.valor)}?`
+            : ""
+        }
+        descricao="O pagamento sai da conta e o saldo volta. O estorno fica no histórico."
+        acao="Estornar"
+        aoMudar={(aberta) => !aberta && setEstornando(null)}
+        aoConfirmar={(motivo) =>
+          estornar.mutateAsync(
+            { pedidoId: pedido.id, pagamentoId: estornando?.id ?? "", motivo, ...quem },
+            comAviso("Pagamento estornado.", () => setEstornando(null)),
+          )
+        }
+      />
     </>
   )
 }
