@@ -4,7 +4,7 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { chaves, servidorDo } from "./consultas"
-import type { LancamentoMesa, PagamentoMesa, Retirada, Servidor } from "./servidor"
+import type { AberturaMesa, LancamentoMesa, PagamentoMesa, Retirada, Servidor } from "./servidor"
 import type { ConfigSalao, Pedido } from "./tipos"
 
 const chaveMesas = (segmento: SegmentoPainelId) => ["admin", segmento, "mesas"] as const
@@ -97,6 +97,52 @@ export function useMarcarLimpa() {
 
 export function useExcluirMesa() {
   return useMudancaNasMesas((servidor, id: string) => servidor.mesas.excluir(id))
+}
+
+export function useAbrirMesa() {
+  return useMudancaNasMesas(
+    (servidor, { mesaId, ...abertura }: AberturaMesa & { mesaId: string }) =>
+      servidor.mesas.abrir(mesaId, abertura),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useEditarItem() {
+  return useMudancaNasMesas(
+    (
+      servidor,
+      {
+        pedidoId,
+        itemId,
+        ...mudanca
+      }: { pedidoId: number; itemId: string } & Parameters<Servidor["mesas"]["editarItem"]>[2],
+    ) => servidor.mesas.editarItem(pedidoId, itemId, mudanca),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useCancelarComanda() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, ...motivo }: { pedidoId: number; motivo: string; por?: string }) =>
+      servidor.mesas.cancelarComanda(pedidoId, motivo),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useMarcarServido() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, por }: { pedidoId: number; por?: string }) =>
+      servidor.mesas.marcarServido(pedidoId, por),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function usePedirConta() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, por }: { pedidoId: number; por?: string }) =>
+      servidor.mesas.pedirConta(pedidoId, por),
+    { aoSucesso: guardarComanda },
+  )
 }
 
 export function useLancarNaMesa() {
