@@ -15,6 +15,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAgora } from "@/hooks/use-agora"
+import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useFila } from "@/lib/admin/dados/consultas"
 import { useConfigSalao, useMesas } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
@@ -51,6 +52,8 @@ export function PaginaMesas() {
   const [numeroAberto, setNumeroAberto] = useMesaAberta()
   const [vista, setVista] = useVista()
   const noMapa = vista === "mapa"
+  const telaGrande = useTelaGrande()
+  const [editandoMapa, setEditandoMapa] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [bloqueandoId, setBloqueandoId] = useState<string | null>(null)
   // O botão ⋯ que abriu Editar ou Bloquear: o foco volta a ele quando a janela fecha.
@@ -172,6 +175,7 @@ export function PaginaMesas() {
           size="sm"
           aria-label="Vista"
           value={vista}
+          disabled={editandoMapa}
           onValueChange={(nova) => nova && void setVista(nova as Vista)}
         >
           <ToggleGroupItem value="grade" className="px-3">
@@ -219,6 +223,9 @@ export function PaginaMesas() {
           areaId={filtros.area}
           aoMudarArea={(area) => void setFiltros({ area })}
           agora={agora}
+          podeEditar={telaGrande}
+          editando={editandoMapa}
+          aoMudarEdicao={setEditandoMapa}
           aoAbrir={abrirLinha}
           aoEditar={editarLinha}
           aoBloquear={bloquearLinha}
@@ -287,7 +294,7 @@ export function PaginaMesas() {
         aoAbrirMesa={abrirPeloNumero}
         aoNovaMesa={() => setNovaAberta(true)}
         aoAjuda={() => setAjudaAberta(true)}
-        aoAlternarVista={() => void setVista(noMapa ? "grade" : "mapa")}
+        aoAlternarVista={() => !editandoMapa && void setVista(noMapa ? "grade" : "mapa")}
       />
       <FolhaAtalhos aberta={ajudaAberta} aoMudar={setAjudaAberta} />
     </div>
