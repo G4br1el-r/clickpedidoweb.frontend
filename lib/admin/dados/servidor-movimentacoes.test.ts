@@ -412,6 +412,24 @@ describe("juntar e separar", () => {
     )
   })
 
+  test("a secundária que pagou com taxa não junta numa principal sem taxa: a conta ficaria menor que o pago", async () => {
+    const api = servidor()
+    // A principal abre sem taxa; depois o salão liga 10% e a 31 abre com ela.
+    const principal = await mesaNova(api, 30)
+    const comanda = await api.mesas.abrir(principal, { pessoas: 2, garcom: "Rafa" })
+    const salao = await api.salao.config()
+    await api.salao.salvar({ ...salao, taxaServico: { ativa: true, percentual: 10 } })
+    const { mesaId: outra, comanda: daOutra } = await aberta(api, 31)
+    // 2 Refris (R$ 12,00) + 10% = R$ 13,20; pagou R$ 13,00. Na principal, a conta seria R$ 12,00.
+    await api.mesas.pagar(daOutra.id, { forma: "pix", valor: 13 })
+
+    await expect(api.mesas.juntar(comanda.id, [outra])).rejects.toThrow(
+      "A conta ficaria menor que o já pago. Estorne um pagamento antes.",
+    )
+    // A comanda da 31 continua aberta, onde estava.
+    expect((await api.pedidos.buscar(daOutra.id))?.status).toBe("pronto")
+  })
+
   test("a secundária aponta para a principal: lançar nela entra na comanda junta; abrir, bloquear e excluir recusam", async () => {
     const api = servidor()
     const { comanda } = await aberta(api)
