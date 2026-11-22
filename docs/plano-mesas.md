@@ -1942,6 +1942,29 @@ desfazer(id: string): Promise<void>
 - [ ] Os screenshots ficam para a revisão.
 - [ ] Registrar a "Situação" no fim desta seção.
 
+Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4, antes da revisão. O PR sai depois que as Fases 1 a 4 estiverem no `main`.
+
+- **Mudou fora do plano:**
+  - o cartão da Fila continua dizendo "Mesa 15": só o ticket da Cozinha ganhou "Mesa 15 + 16" (o cartão da Fila não tinha teste de mesa para começar);
+  - a virada do dia com a comanda junta mexida não ganhou teste nem código: a demonstração do dia novo só senta nas primeiras mesas livres e nunca chega à 16 enquanto houver livre antes dela. Fica para depois;
+  - o teste "juntar que ficaria menor que o pago" entrou junto com o E2E, depois do código da Tarefa 50 (a regra já estava lá; o teste a fixa);
+  - na gaveta, o clique em "Desfazer" passa por cima dela (`manterToastClicavel`, como a sacola); no teste de componente o clique no aviso desliga a conferência de `pointer-events` do jsdom, que não lê o CSS do sonner.
+- **Testes antigos que mudaram (mudança de comportamento planejada):**
+  - "marcar limpa tira a limpeza" (`servidor.test.ts`): o retorno passa a ser `{ mesa, desfazer }` (Q46);
+  - "abre 8 comandas, nas mesas 1 a 8" (`gerar-pedidos.test.ts`) virou "nas mesas 1 a 7 e 15"; a lista das comandas de hoje da pizzaria troca a mesa 8 (2 pessoas, R$ 118,30) pela 15 (6 pessoas, R$ 150,30: 93 + 9,30 + 6 × 8);
+  - em `pagina-mesas.test.tsx`: "8 ocupadas · 9 livres", ocupação "9/19 · 47%" e 20 pessoas no salão (a demonstração tem a 16 junto com a 15); o filtro de estado volta a oferecer "Juntada" (o teste "não oferece Reservada nem Juntada" virou "não oferece Reservada");
+  - a tabela do menu ⋯ em `cartao-mesa.test.tsx` ganha "Transferir" e "Juntar mesas" na mesa aberta.
+- **Fica para depois:**
+  - a confirmação de reserva na tela (transferir e transferir itens já aceitam `confirmarReserva` no servidor) e juntar mesa reservada com confirmação, com as reservas (Fase 7);
+  - as outras operações continuam na base em memória da aba: duas abas mexendo na mesma comanda por fora das movimentações ainda podem se sobrescrever (Fase 8, `BroadcastChannel`);
+  - separar só uma das mesas juntadas; transferir a comanda com mesas juntadas (hoje pede para separar antes); transferir item que a cozinha ainda prepara;
+  - na gaveta, "Transferir", "Juntar" e "Separar" ficam só no menu ⋯ da grade.
+- **Screenshots** (para a revisão; nenhum foi atualizado aqui):
+  - mudam pela demonstração (a comanda da mesa 8 passou para a 15, com a 16 junta): `painel-mesas-*` (a 8 livre, a 15 ocupada, a 16 "Com a mesa 15", ocupação 9/19 · 47% e 20 pessoas), `painel-cozinha-*` (o ticket "Mesa 15 + 16"), `painel-fila-*` (o cartão da comanda diz "Mesa 15") e, por trás das janelas, `painel-abrir-mesa-*`, `painel-adicionar-itens-*`, `painel-atalhos-mesas-*`, `painel-nova-mesa-*` e `painel-configurar-salao-*`;
+  - mudam pela tela: `painel-comanda-*` e `painel-adicionar-itens-*` ("Transferir itens" ao lado de "Adicionar itens", na aba Itens); `painel-comanda-conta-*` e `painel-receber-conta-*` (aba Conta da mesa 2) só mudam se a grade aparecer por trás da gaveta;
+  - o resto da demonstração não muda: o sorteio é o mesmo.
+- **Testes e cobertura:** 1612 testes no Vitest (`pnpm check` verde). O E2E novo passou em `desktop-1920`, contra o `next start` na porta 3010; o E2E completo fica para a revisão. A cobertura ficou em 84,58/77,47/83,01/85,66 no geral: os mínimos subiram para 84/77/83/85; `lib/**` continua em 98/95/98/98.
+
 ## Fase 6: mapa do salão
 
 **Desenho:**
