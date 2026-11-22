@@ -174,12 +174,13 @@ export function ChamadosSalao({
         type="button"
         size="sm"
         variant={total > 0 ? "default" : "outline"}
-        aria-label={`Chamados, ${total} esperando`}
         onClick={() => setAberta(true)}
       >
         <BellRingIcon data-icon="inline-start" />
-        Chamados
-        <span className="rounded-full bg-background/20 px-1.5 text-xs tabular-nums">{total}</span>
+        {/* O nome lido começa pelo que se vê ("Chamados 1") e termina em "esperando". */}
+        Chamados{" "}
+        <span className="rounded-full bg-background/20 px-1.5 text-xs tabular-nums">{total}</span>{" "}
+        <span className="sr-only">esperando</span>
       </Button>
       <Sheet open={aberta} onOpenChange={setAberta}>
         <SheetContent className="w-full sm:max-w-md">
