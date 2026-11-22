@@ -233,7 +233,9 @@ for (const tema of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
     await page.goto("/admin/mesas?vista=mapa")
     const salao = page.getByRole("list", { name: "Mapa: Salão" })
-    await expect(salao.getByRole("button", { name: "Mesa 1" })).toBeVisible({ timeout: 15_000 })
+    await expect(salao.getByRole("button", { name: "Mesa 1", exact: true })).toBeVisible({
+      timeout: 15_000,
+    })
     await page.waitForLoadState("networkidle")
     await esperarAnimacoes(page)
     await expect(page).toHaveScreenshot(`painel-mapa-${tema}.png`, { fullPage: true })
@@ -243,7 +245,7 @@ for (const tema of ["light", "dark"] as const) {
     if (!(await editar.isVisible())) return
     await editar.click()
     // A mesa 1 vai para cima da 5: a foto mostra também a mesa marcada como erro.
-    await salao.getByRole("button", { name: "Mesa 1" }).focus()
+    await salao.getByRole("button", { name: "Mesa 1", exact: true }).focus()
     await page.keyboard.press("ArrowRight")
     await page.keyboard.press("Shift+ArrowDown")
     await esperarAnimacoes(page)
