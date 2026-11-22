@@ -4,7 +4,7 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { chaves, servidorDo } from "./consultas"
-import type { LancamentoMesa, PagamentoMesa, Servidor } from "./servidor"
+import type { AberturaMesa, LancamentoMesa, PagamentoMesa, Retirada, Servidor } from "./servidor"
 import type { ConfigSalao, Pedido } from "./tipos"
 
 const chaveMesas = (segmento: SegmentoPainelId) => ["admin", segmento, "mesas"] as const
@@ -99,6 +99,52 @@ export function useExcluirMesa() {
   return useMudancaNasMesas((servidor, id: string) => servidor.mesas.excluir(id))
 }
 
+export function useAbrirMesa() {
+  return useMudancaNasMesas(
+    (servidor, { mesaId, ...abertura }: AberturaMesa & { mesaId: string }) =>
+      servidor.mesas.abrir(mesaId, abertura),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useEditarItem() {
+  return useMudancaNasMesas(
+    (
+      servidor,
+      {
+        pedidoId,
+        itemId,
+        ...mudanca
+      }: { pedidoId: number; itemId: string } & Parameters<Servidor["mesas"]["editarItem"]>[2],
+    ) => servidor.mesas.editarItem(pedidoId, itemId, mudanca),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useCancelarComanda() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, ...motivo }: { pedidoId: number; motivo: string; por?: string }) =>
+      servidor.mesas.cancelarComanda(pedidoId, motivo),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useMarcarServido() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, por }: { pedidoId: number; por?: string }) =>
+      servidor.mesas.marcarServido(pedidoId, por),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function usePedirConta() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, por }: { pedidoId: number; por?: string }) =>
+      servidor.mesas.pedirConta(pedidoId, por),
+    { aoSucesso: guardarComanda },
+  )
+}
+
 export function useLancarNaMesa() {
   return useMudancaNasMesas(
     (servidor, lancamento: LancamentoMesa) => servidor.mesas.lancar(lancamento),
@@ -110,8 +156,13 @@ export function useAlterarQuantidade() {
   return useMudancaNasMesas(
     (
       servidor,
-      { pedidoId, itemId, quantidade }: { pedidoId: number; itemId: string; quantidade: number },
-    ) => servidor.mesas.alterarQuantidade(pedidoId, itemId, quantidade),
+      {
+        pedidoId,
+        itemId,
+        quantidade,
+        ...retirada
+      }: { pedidoId: number; itemId: string; quantidade: number } & Retirada,
+    ) => servidor.mesas.alterarQuantidade(pedidoId, itemId, quantidade, retirada),
     {
       previsao: {
         pedidoId: ({ pedidoId }) => pedidoId,
@@ -135,8 +186,10 @@ export function useAlterarQuantidade() {
 
 export function useRemoverItem() {
   return useMudancaNasMesas(
-    (servidor, { pedidoId, itemId }: { pedidoId: number; itemId: string }) =>
-      servidor.mesas.removerItem(pedidoId, itemId),
+    (
+      servidor,
+      { pedidoId, itemId, ...retirada }: { pedidoId: number; itemId: string } & Retirada,
+    ) => servidor.mesas.removerItem(pedidoId, itemId, retirada),
     {
       previsao: {
         pedidoId: ({ pedidoId }) => pedidoId,

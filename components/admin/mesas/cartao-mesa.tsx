@@ -2,6 +2,7 @@
 
 import NumberFlow from "@number-flow/react"
 import {
+  ConciergeBellIcon,
   EllipsisIcon,
   LockIcon,
   LockOpenIcon,
@@ -19,8 +20,13 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { useDesbloquearMesa, useMarcarLimpa } from "@/lib/admin/dados/consultas-mesas"
-import type { Mesa } from "@/lib/admin/dados/tipos"
+import {
+  useDesbloquearMesa,
+  useMarcarLimpa,
+  useMarcarServido,
+} from "@/lib/admin/dados/consultas-mesas"
+import type { Mesa, Pedido } from "@/lib/admin/dados/tipos"
+import { useGarcom } from "@/lib/admin/garcom"
 import { tempoDesde } from "@/lib/admin/regras/alertas-mesa"
 import type { MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
 import { type EstadoMesa, nomePadraoDaMesa } from "@/lib/admin/regras/mesas"
@@ -41,7 +47,7 @@ function resumoSemComanda(mesa: Mesa, estado: EstadoMesa, agora: Date | null) {
   return plural(mesa.lugares, "lugar", "lugares")
 }
 
-type AcaoMesa = "abrir" | "limpa" | "desbloquear" | "editar" | "bloquear" | "excluir"
+type AcaoMesa = "abrir" | "servido" | "limpa" | "desbloquear" | "editar" | "bloquear" | "excluir"
 
 /** O que o menu ⋯ oferece em cada estado (decisões de detalhe da Fase 2). */
 const ACOES: Record<EstadoMesa, AcaoMesa[]> = {
@@ -50,7 +56,7 @@ const ACOES: Record<EstadoMesa, AcaoMesa[]> = {
   limpeza: ["limpa", "editar", "bloquear", "excluir"],
   ocupada: ["abrir", "editar"],
   "na-cozinha": ["abrir", "editar"],
-  servir: ["abrir", "editar"],
+  servir: ["servido", "abrir", "editar"],
   "conta-pedida": ["abrir", "editar"],
   bloqueada: ["desbloquear", "editar", "excluir"],
   // Na Fase 5, abre a comanda da principal.
@@ -66,12 +72,15 @@ type Acoes = {
 
 function MenuMesa({
   mesa,
+  comanda,
   estado,
   aoAbrir,
   aoEditar,
   aoBloquear,
-}: Acoes & { mesa: Mesa; estado: EstadoMesa }) {
+}: Acoes & { mesa: Mesa; comanda: Pedido | undefined; estado: EstadoMesa }) {
   const marcarLimpa = useMarcarLimpa()
+  const servir = useMarcarServido()
+  const por = useGarcom((atual) => atual.nome)
   const desbloquear = useDesbloquearMesa()
   const [excluindo, setExcluindo] = useState(false)
   // Em estado, não em ref: a pergunta de excluir lê o botão ao renderizar.
@@ -82,6 +91,24 @@ function MenuMesa({
       <DropdownMenuItem key="abrir" onSelect={aoAbrir}>
         <ReceiptTextIcon />
         Abrir comanda
+      </DropdownMenuItem>
+    ),
+    servido: (
+      <DropdownMenuItem
+        key="servido"
+        onSelect={() =>
+          comanda &&
+          servir.mutate(
+            { pedidoId: comanda.id, ...(por.trim() ? { por } : {}) },
+            {
+              onSuccess: () => toast.success(`Mesa ${mesa.numero} servida.`),
+              onError: aoErrar,
+            },
+          )
+        }
+      >
+        <ConciergeBellIcon />
+        Marcar servido
       </DropdownMenuItem>
     ),
     limpa: (
@@ -272,6 +299,7 @@ export function CartaoMesa({
       </button>
       <MenuMesa
         mesa={mesa}
+        comanda={comanda}
         estado={estado.estado}
         aoAbrir={aoAbrir}
         aoEditar={aoEditar}

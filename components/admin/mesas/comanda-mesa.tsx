@@ -4,32 +4,25 @@ import NumberFlow from "@number-flow/react"
 import { format } from "date-fns"
 import {
   BanknoteIcon,
+  ConciergeBellIcon,
   CreditCardIcon,
+  HandCoinsIcon,
   LockOpenIcon,
   MinusIcon,
+  PencilIcon,
   PlusIcon,
   PrinterIcon,
   QrCodeIcon,
   ReceiptIcon,
   SprayCanIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import Link from "next/link"
 import { useRef, useState } from "react"
 import { NumericFormat } from "react-number-format"
 import { useReactToPrint } from "react-to-print"
 import { toast } from "sonner"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -52,26 +45,36 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useLoja, usePedido } from "@/lib/admin/dados/consultas"
 import {
   useAlterarQuantidade,
   useDesbloquearMesa,
   useFecharConta,
-  useLancarNaMesa,
   useLiberarMesa,
   useMarcarLimpa,
+  useMarcarServido,
+  usePedirConta,
   useRemoverItem,
 } from "@/lib/admin/dados/consultas-mesas"
 import type { PagamentoMesa } from "@/lib/admin/dados/servidor"
 import type { ItemPedido, Mesa, Pedido } from "@/lib/admin/dados/tipos"
+import { useGarcom } from "@/lib/admin/garcom"
 import { cozinhaJaPreparou } from "@/lib/admin/regras/cozinha"
+import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { type EstadoMesa, estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
-import { emReais, formatoMoeda } from "@/lib/formato"
+import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
+import { AbrirMesa } from "./abrir-mesa"
+import { AdicionarItens, useLancarNaComanda } from "./adicionar-itens"
+import { CancelarComanda } from "./cancelar-comanda"
+import { EditarItem } from "./editar-item"
 import { ConfirmarExclusaoMesa } from "./excluir-mesa"
+import { HistoricoComanda } from "./historico-comanda"
+import { TirarItem } from "./tirar-item"
 
 const PAGAMENTOS: { valor: PagamentoMesa; rotulo: string; icone: typeof BanknoteIcon }[] = [
   { valor: "dinheiro", rotulo: "Dinheiro", icone: BanknoteIcon },
@@ -126,28 +129,24 @@ function ContaImpressa({
   )
 }
 
-function ItemAvulso({ mesaId }: { mesaId: string }) {
+function ItemAvulso({ mesa, comanda }: { mesa: Mesa; comanda: Pedido }) {
   const [nome, setNome] = useState("")
   const [valor, setValor] = useState<number | undefined>()
-  const lancar = useLancarNaMesa()
+  const naComanda = useLancarNaComanda(mesa, comanda)
   return (
     <form
       className="grid grid-cols-[1fr_7rem_auto] items-end gap-2"
       onSubmit={(evento) => {
         evento.preventDefault()
         if (!nome.trim() || !valor) return toast.error("Informe o nome e o valor do item.")
-        lancar.mutate(
+        naComanda.lancar(
           {
-            mesaId,
             enviarParaCozinha: false,
             itens: [{ avulso: { nome, preco: valor }, quantidade: 1 }],
           },
-          {
-            onSuccess: () => {
-              setNome("")
-              setValor(undefined)
-            },
-            onError: (erro) => toast.error(erro.message),
+          () => {
+            setNome("")
+            setValor(undefined)
           },
         )
       }}
@@ -180,7 +179,7 @@ function ItemAvulso({ mesaId }: { mesaId: string }) {
         type="submit"
         variant="outline"
         aria-label="Incluir item avulso"
-        disabled={lancar.isPending}
+        disabled={naComanda.enviando}
       >
         <PlusIcon />
       </Button>
@@ -265,12 +264,88 @@ function FecharConta({
   )
 }
 
+/** Aba Conta: o resumo da comanda e as ações sobre ela. Pagamentos e divisão chegam na Fase 4. */
+function ContaComanda({
+  mesa,
+  pedido,
+  aoCancelar,
+}: {
+  mesa: Mesa
+  pedido: Pedido
+  aoCancelar: () => void
+}) {
+  const quantidade = pedido.itens.reduce((soma, item) => soma + item.quantidade, 0)
+  const pedirConta = usePedirConta()
+  const por = useGarcom((estado) => estado.nome)
+  return (
+    <>
+      <dl className="flex flex-col gap-2 text-sm">
+        <div className="flex justify-between">
+          <dt className="text-muted-foreground">Itens</dt>
+          <dd className="tabular-nums">
+            {plural(quantidade, "item", "itens")} · {emReais(pedido.subtotal)}
+          </dd>
+        </div>
+        {pedido.mesa?.pessoas !== undefined && (
+          <div className="flex justify-between">
+            <dt className="text-muted-foreground">Pessoas</dt>
+            <dd className="tabular-nums">{pedido.mesa.pessoas}</dd>
+          </div>
+        )}
+      </dl>
+      {pedido.contaPedidaEm ? (
+        <p className="text-sm text-muted-foreground">
+          Pediu a conta às {format(new Date(pedido.contaPedidaEm), "HH:mm")}.
+        </p>
+      ) : (
+        // A comanda vazia ainda não tem conta para pedir.
+        pedido.itens.length > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            className="self-start"
+            disabled={pedirConta.isPending}
+            onClick={() =>
+              pedirConta.mutate(
+                { pedidoId: pedido.id, ...autorDaAcao(por, pedido.mesa?.garcom) },
+                {
+                  onSuccess: () => toast.success(`Mesa ${mesa.numero} pediu a conta.`),
+                  onError: (erro) => toast.error(erro.message),
+                },
+              )
+            }
+          >
+            <HandCoinsIcon data-icon="inline-start" />
+            Pediu a conta
+          </Button>
+        )
+      )}
+      {pedido.itens.length > 0 && (
+        <Button
+          type="button"
+          variant="outline"
+          className="self-start text-destructive"
+          onClick={aoCancelar}
+        >
+          <XIcon data-icon="inline-start" />
+          Cancelar comanda
+        </Button>
+      )}
+    </>
+  )
+}
+
 function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFechar: () => void }) {
   const { data: loja } = useLoja()
   const alterar = useAlterarQuantidade()
   const remover = useRemoverItem()
   const liberar = useLiberarMesa()
   const [fechando, setFechando] = useState(false)
+  const [adicionando, setAdicionando] = useState(false)
+  const servir = useMarcarServido()
+  const por = useGarcom((estado) => estado.nome)
+  const [editando, setEditando] = useState<ItemPedido | null>(null)
+  const [cancelando, setCancelando] = useState(false)
   const conta = useRef<HTMLDivElement>(null)
   const imprimir = useReactToPrint({
     contentRef: conta,
@@ -280,19 +355,39 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   })
   const vazia = pedido.itens.length === 0
   const aoErrar = (erro: Error) => toast.error(erro.message)
-  // Item que a cozinha já preparou: tirar ou diminuir pergunta antes.
-  const [confirmando, setConfirmando] = useState<{ item: ItemPedido; tirar: () => void } | null>(
-    null,
-  )
-  const comConfirmacao = (item: ItemPedido, tirar: () => void) =>
-    cozinhaJaPreparou(pedido, item) ? setConfirmando({ item, tirar }) : tirar()
-  const diminuir = (item: ItemPedido) =>
-    alterar.mutate(
-      { pedidoId: pedido.id, itemId: item.id, quantidade: item.quantidade - 1 },
+  // Quem assina no histórico: o nome do aparelho ou, sem ele, o garçom da comanda.
+  const quem = autorDaAcao(por, pedido.mesa?.garcom)
+  // Item que a cozinha já preparou: tirar ou diminuir pergunta o motivo antes.
+  const [confirmando, setConfirmando] = useState<{
+    item: ItemPedido
+    /** "Menos um" tira 1; "Remover", o item todo. */
+    quantidade?: number
+    tirar: (motivo?: string) => Promise<unknown>
+  } | null>(null)
+  const comConfirmacao = (
+    item: ItemPedido,
+    tirar: (motivo?: string) => Promise<unknown>,
+    quantidade?: number,
+  ) =>
+    cozinhaJaPreparou(pedido, item)
+      ? setConfirmando({ item, tirar, ...(quantidade ? { quantidade } : {}) })
+      : tirar().catch(() => {})
+  const diminuir = (item: ItemPedido, motivo?: string) =>
+    alterar.mutateAsync(
+      {
+        pedidoId: pedido.id,
+        itemId: item.id,
+        quantidade: item.quantidade - 1,
+        ...(motivo ? { motivo } : {}),
+        ...quem,
+      },
       { onError: aoErrar },
     )
-  const tirar = (item: ItemPedido) =>
-    remover.mutate({ pedidoId: pedido.id, itemId: item.id }, { onError: aoErrar })
+  const tirar = (item: ItemPedido, motivo?: string) =>
+    remover.mutateAsync(
+      { pedidoId: pedido.id, itemId: item.id, ...(motivo ? { motivo } : {}), ...quem },
+      { onError: aoErrar },
+    )
   const semMovimento = useReducedMotion()
   const estado = estadoDaMesa(mesa, pedido)
 
@@ -305,6 +400,27 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
             <Traco tom={estado.tom} />
             {estado.rotulo}
           </span>
+          {pedido.servirDesde && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="ml-auto"
+              disabled={servir.isPending}
+              onClick={() =>
+                servir.mutate(
+                  { pedidoId: pedido.id, ...quem },
+                  {
+                    onSuccess: () => toast.success(`Mesa ${mesa.numero} servida.`),
+                    onError: aoErrar,
+                  },
+                )
+              }
+            >
+              <ConciergeBellIcon data-icon="inline-start" />
+              Marcar servido
+            </Button>
+          )}
         </div>
         <SheetDescription>
           {[
@@ -317,89 +433,131 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
         </SheetDescription>
       </SheetHeader>
 
-      <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
-        {vazia ? (
-          <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-balance text-muted-foreground">
-            A comanda está vazia. Libere a mesa ou lance itens pelo Garçom.
-          </p>
-        ) : (
-          <ul
-            aria-label="Itens da comanda"
-            className="-mt-2 flex flex-col divide-y divide-border/70 border-b border-border/70"
-          >
-            <AnimatePresence initial={false}>
-              {pedido.itens.map((item) => (
-                <motion.li
-                  key={item.id}
-                  aria-label={item.nome}
-                  layout={semMovimento ? false : "position"}
-                  initial={semMovimento ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                  transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="flex items-start gap-3 py-3"
-                >
-                  <div className="flex min-w-0 flex-1 flex-col text-sm">
-                    <span className="font-medium">{item.nome}</span>
-                    {item.opcoes.length > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        {item.opcoes.join(" · ")}
+      <Tabs defaultValue="itens" className="min-h-0 flex-1 gap-0">
+        <TabsList className="mx-4 mt-3 grid w-auto grid-cols-3">
+          <TabsTrigger value="itens">Itens</TabsTrigger>
+          <TabsTrigger value="conta">Conta</TabsTrigger>
+          <TabsTrigger value="historico">Histórico</TabsTrigger>
+        </TabsList>
+        <TabsContent value="itens" className="flex flex-col gap-5 overflow-y-auto p-4">
+          {vazia ? (
+            <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-balance text-muted-foreground">
+              A comanda está vazia. Adicione itens ou libere a mesa.
+            </p>
+          ) : (
+            <ul
+              aria-label="Itens da comanda"
+              className="-mt-2 flex flex-col divide-y divide-border/70 border-b border-border/70"
+            >
+              <AnimatePresence initial={false}>
+                {pedido.itens.map((item) => (
+                  <motion.li
+                    key={item.id}
+                    aria-label={item.nome}
+                    layout={semMovimento ? false : "position"}
+                    initial={semMovimento ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                    transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                    className="flex items-start gap-3 py-3"
+                  >
+                    <div className="flex min-w-0 flex-1 flex-col text-sm">
+                      <span className="font-medium">{item.nome}</span>
+                      {item.opcoes.length > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {item.opcoes.join(" · ")}
+                        </span>
+                      )}
+                      {item.observacao && (
+                        <span className="text-xs italic">“{item.observacao}”</span>
+                      )}
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {emReais(item.precoUnitario)} cada · {emReais(item.total)}
                       </span>
-                    )}
-                    {item.observacao && <span className="text-xs italic">“{item.observacao}”</span>}
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {emReais(item.precoUnitario)} cada · {emReais(item.total)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      className="max-md:size-10"
-                      variant="outline"
-                      aria-label="Menos um"
-                      disabled={item.quantidade <= 1}
-                      onClick={() => comConfirmacao(item, () => diminuir(item))}
-                    >
-                      <MinusIcon />
-                    </Button>
-                    <span className="w-7 text-center text-sm font-medium tabular-nums">
-                      {item.quantidade}
-                    </span>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      className="max-md:size-10"
-                      variant="outline"
-                      aria-label="Mais um"
-                      disabled={item.quantidade >= 999}
-                      onClick={() =>
-                        alterar.mutate(
-                          { pedidoId: pedido.id, itemId: item.id, quantidade: item.quantidade + 1 },
-                          { onError: aoErrar },
-                        )
-                      }
-                    >
-                      <PlusIcon />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      className="max-md:size-10"
-                      variant="ghost"
-                      aria-label="Remover"
-                      onClick={() => comConfirmacao(item, () => tirar(item))}
-                    >
-                      <Trash2Icon />
-                    </Button>
-                  </div>
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </ul>
-        )}
-        <ItemAvulso mesaId={mesa.id} />
-      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {/* Depois que a cozinha preparou, só tirando (com motivo) e lançando de novo. */}
+                      {!cozinhaJaPreparou(pedido, item) && (
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          className="max-md:size-10"
+                          variant="ghost"
+                          aria-label="Editar"
+                          onClick={() => setEditando(item)}
+                        >
+                          <PencilIcon />
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        className="max-md:size-10"
+                        variant="outline"
+                        aria-label="Menos um"
+                        disabled={item.quantidade <= 1}
+                        onClick={() => comConfirmacao(item, (motivo) => diminuir(item, motivo), 1)}
+                      >
+                        <MinusIcon />
+                      </Button>
+                      <span className="w-7 text-center text-sm font-medium tabular-nums">
+                        {item.quantidade}
+                      </span>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        className="max-md:size-10"
+                        variant="outline"
+                        aria-label="Mais um"
+                        disabled={item.quantidade >= 999 || cozinhaJaPreparou(pedido, item)}
+                        onClick={() =>
+                          alterar.mutate(
+                            {
+                              pedidoId: pedido.id,
+                              itemId: item.id,
+                              quantidade: item.quantidade + 1,
+                              ...quem,
+                            },
+                            { onError: aoErrar },
+                          )
+                        }
+                      >
+                        <PlusIcon />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        className="max-md:size-10"
+                        variant="ghost"
+                        aria-label="Remover"
+                        onClick={() => comConfirmacao(item, (motivo) => tirar(item, motivo))}
+                      >
+                        <Trash2Icon />
+                      </Button>
+                    </div>
+                  </motion.li>
+                ))}
+              </AnimatePresence>
+            </ul>
+          )}
+          <Button
+            type="button"
+            variant="outline"
+            className="self-start"
+            onClick={() => setAdicionando(true)}
+          >
+            <PlusIcon data-icon="inline-start" />
+            Adicionar itens
+          </Button>
+          <ItemAvulso mesa={mesa} comanda={pedido} />
+        </TabsContent>
+        <TabsContent value="conta" className="flex flex-col gap-5 overflow-y-auto p-4">
+          <ContaComanda mesa={mesa} pedido={pedido} aoCancelar={() => setCancelando(true)} />
+        </TabsContent>
+        <TabsContent value="historico" className="flex flex-col gap-5 overflow-y-auto p-4">
+          <HistoricoComanda pedido={pedido} />
+        </TabsContent>
+      </Tabs>
 
       <SheetFooter className="gap-3 border-t border-border/70">
         {/* O total fica sempre à vista, junto das ações que fecham a mesa. */}
@@ -458,29 +616,24 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
       </SheetFooter>
 
       <ContaImpressa pedido={pedido} mesa={mesa} loja={loja?.nome} ref={conta} />
-      <AlertDialog
-        open={confirmando !== null}
-        onOpenChange={(aberto) => !aberto && setConfirmando(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Tirar {confirmando?.item.nome} da comanda?</AlertDialogTitle>
-            <AlertDialogDescription>A cozinha já preparou.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Voltar</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => {
-                confirmando?.tirar()
-                setConfirmando(null)
-              }}
-            >
-              Tirar da comanda
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <TirarItem
+        item={confirmando?.item ?? null}
+        {...(confirmando?.quantidade ? { quantidade: confirmando.quantidade } : {})}
+        aoMudar={(aberto) => !aberto && setConfirmando(null)}
+        aoTirar={async (motivo) => {
+          await confirmando?.tirar(motivo)
+          setConfirmando(null)
+        }}
+      />
+      <EditarItem pedido={pedido} item={editando} aoFechar={() => setEditando(null)} />
+      <CancelarComanda
+        mesa={mesa}
+        comanda={pedido}
+        aberta={cancelando}
+        aoMudar={setCancelando}
+        aoCancelar={aoFechar}
+      />
+      <AdicionarItens mesa={mesa} comanda={pedido} aberta={adicionando} aoMudar={setAdicionando} />
       <FecharConta
         pedido={pedido}
         mesa={mesa}
@@ -541,17 +694,14 @@ function AcaoSemComanda({ mesa, estado }: { mesa: Mesa; estado: EstadoMesa }) {
           <SprayCanIcon data-icon="inline-start" />
           Marcar limpa
         </Button>
+        {/* Quem chega antes da limpeza também senta: abrir tira a mesa da limpeza. */}
+        <div className="mt-3 border-t border-border/70 pt-4">
+          <AbrirMesa mesa={mesa} />
+        </div>
       </>
     )
   }
-  return (
-    <>
-      <p>A comanda abre quando o garçom lança o primeiro item.</p>
-      <Button asChild variant="outline" className="self-start">
-        <Link href="/admin/garcom">Abrir o Garçom</Link>
-      </Button>
-    </>
-  )
+  return <AbrirMesa mesa={mesa} />
 }
 
 function MesaSemComanda({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void }) {
@@ -612,7 +762,7 @@ export function ComandaMesa({ mesa, aoFechar }: { mesa: Mesa | null; aoFechar: (
     <Sheet open={mesa !== null} onOpenChange={(aberto) => !aberto && aoFechar()}>
       <SheetContent
         side={telaGrande ? "right" : "bottom"}
-        className="gap-0 data-[side=bottom]:max-h-[92dvh] data-[side=right]:w-full data-[side=right]:sm:max-w-md"
+        className="gap-0 data-[side=bottom]:max-h-[92dvh] data-[side=right]:w-full data-[side=right]:sm:max-w-lg data-[side=right]:xl:max-w-xl"
       >
         {mesa && <ConteudoComanda key={mesa.id} mesa={mesa} aoFechar={aoFechar} />}
       </SheetContent>

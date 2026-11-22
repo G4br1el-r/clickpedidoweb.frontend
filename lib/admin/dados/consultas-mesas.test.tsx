@@ -7,15 +7,21 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { useSegmentoAtual } from "../segmento-atual"
 import { reiniciarServidores, servidorDo, usePedido } from "./consultas"
 import {
+  useAbrirMesa,
   useAlterarQuantidade,
   useBloquearMesa,
+  useCancelarComanda,
   useConfigSalao,
   useCriarMesa,
   useDesbloquearMesa,
+  useEditarItem,
   useEditarMesa,
   useLancarNaMesa,
   useMarcarLimpa,
+  useMarcarServido,
   useMesas,
+  usePedirConta,
+  useRemoverItem,
   useSalvarConfigSalao,
 } from "./consultas-mesas"
 import type { Mesa } from "./tipos"
@@ -111,6 +117,36 @@ describe("consultas das mesas", () => {
     expect(result.current.comanda.data?.total).toBe(12)
   })
 
+  test("diminuir o que a cozinha preparou repassa o motivo e quem tirou", async () => {
+    const api = servidorDo("pizzaria")
+    const mesa = await api.mesas.criar({ numero: 84 })
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [{ avulso: { nome: "Pizza", preco: 40 }, quantidade: 2 }],
+    })
+    await api.pedidos.avancar(comanda.id, "recebido")
+    const [pizza] = comanda.itens
+    const { result } = renderHook(() => useAlterarQuantidade(), { wrapper: envolver() })
+
+    const depois = await act(() =>
+      result.current.mutateAsync({
+        pedidoId: comanda.id,
+        itemId: pizza.id,
+        quantidade: 1,
+        motivo: "Queimou",
+        por: "Bia",
+      }),
+    )
+    expect(depois.itens[0].quantidade).toBe(1)
+    expect(depois.eventos?.at(-1)).toMatchObject({
+      tipo: "item-removido",
+      texto: "Tirou 1× Pizza",
+      motivo: "Queimou",
+      por: "Bia",
+    })
+  })
+
   test("editar, bloquear, desbloquear e marcar limpa chegam ao servidor e atualizam as mesas", async () => {
     const api = servidorDo("pizzaria")
     const mesa = await api.mesas.criar({ numero: 82 })
@@ -178,5 +214,77 @@ describe("consultas das mesas", () => {
     )
     const criada = (await api.mesas.listar()).find((mesa) => mesa.numero === 83)
     expect(criada).toMatchObject({ areaId: area.id, lugares: 8, forma: "retangular" })
+  })
+
+  test("abrir, editar, servir, pedir a conta, tirar com motivo e cancelar chegam ao servidor e à comanda aberta", async () => {
+    const api = servidorDo("pizzaria")
+    const mesa = await api.mesas.criar({ numero: 82 })
+    const { result } = renderHook(
+      () => ({
+        mesas: useMesas(),
+        abrir: useAbrirMesa(),
+        editar: useEditarItem(),
+        servir: useMarcarServido(),
+        pedirConta: usePedirConta(),
+        remover: useRemoverItem(),
+        cancelar: useCancelarComanda(),
+      }),
+      { wrapper: envolver() },
+    )
+    await waitFor(() => expect(result.current.mesas.data).toBeDefined())
+
+    const aberta = await act(() =>
+      result.current.abrir.mutateAsync({ mesaId: mesa.id, pessoas: 2, garcom: "Bia" }),
+    )
+    await waitFor(() =>
+      expect(result.current.mesas.data?.find((item) => item.id === mesa.id)?.status).toBe(
+        "ocupada",
+      ),
+    )
+    const { result: comanda } = renderHook(() => usePedido(aberta.id), { wrapper: envolver() })
+    await waitFor(() => expect(comanda.current.data?.mesa?.pessoas).toBe(2))
+
+    const lancada = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [
+        { avulso: { nome: "Pizza", preco: 40 }, quantidade: 1 },
+        { avulso: { nome: "Água", preco: 4 }, quantidade: 1 },
+      ],
+    })
+    const [pizza, agua] = lancada.itens
+    const editada = await act(() =>
+      result.current.editar.mutateAsync({
+        pedidoId: aberta.id,
+        itemId: agua.id,
+        observacao: "Com gelo",
+      }),
+    )
+    expect(editada.itens[1].observacao).toBe("Com gelo")
+
+    await api.pedidos.avancar(aberta.id, "recebido")
+    await api.pedidos.avancar(aberta.id, "em-preparo")
+    expect(
+      (await act(() => result.current.servir.mutateAsync({ pedidoId: aberta.id }))).servirDesde,
+    ).toBeUndefined()
+    expect(
+      (await act(() => result.current.pedirConta.mutateAsync({ pedidoId: aberta.id })))
+        .contaPedidaEm,
+    ).toBe(new Date(2026, 10, 13, 20, 30).toISOString())
+    const semPizza = await act(() =>
+      result.current.remover.mutateAsync({
+        pedidoId: aberta.id,
+        itemId: pizza.id,
+        motivo: "Queimou",
+      }),
+    )
+    expect(semPizza.eventos?.at(-1)).toMatchObject({ tipo: "item-removido", motivo: "Queimou" })
+
+    await act(() =>
+      result.current.cancelar.mutateAsync({ pedidoId: aberta.id, motivo: "Cliente foi embora" }),
+    )
+    await waitFor(() =>
+      expect(result.current.mesas.data?.find((item) => item.id === mesa.id)?.status).toBe("livre"),
+    )
   })
 })

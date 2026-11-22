@@ -1,7 +1,7 @@
 "use client"
 
-import { ArmchairIcon, SearchXIcon } from "lucide-react"
-import { useState } from "react"
+import { ArmchairIcon, KeyboardIcon, SearchXIcon } from "lucide-react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -17,6 +17,8 @@ import { useAgora } from "@/hooks/use-agora"
 import { useFila } from "@/lib/admin/dados/consultas"
 import { useConfigSalao, useMesas } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
+import { useGarcomCarregado } from "@/lib/admin/garcom"
+import { usePreferenciasMesasCarregadas } from "@/lib/admin/preferencias-mesas"
 import { alertasDaMesa } from "@/lib/admin/regras/alertas-mesa"
 import { filtrarMesas, type MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
@@ -27,7 +29,7 @@ import { BloquearMesa } from "./bloquear-mesa"
 import { CartaoMesa } from "./cartao-mesa"
 import { ComandaMesa } from "./comanda-mesa"
 import { ConfigurarSalao } from "./configurar-salao"
-import { LIMPAR_GRADE, useEstadoGrade } from "./estado-grade"
+import { LIMPAR_GRADE, useEstadoGrade, useMesaAberta } from "./estado-grade"
 import { FiltrosMesas } from "./filtros-mesas"
 import { FormularioMesa } from "./formulario-mesa"
 import { NovaMesa } from "./nova-mesa"
@@ -37,12 +39,14 @@ const GRADE = "grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-co
 
 /** Mesas do salão: a grade por área, na ordem das áreas, e a comanda de cada mesa. */
 export function PaginaMesas() {
+  usePreferenciasMesasCarregadas()
+  useGarcomCarregado()
   const { data: mesas } = useMesas(4_000)
   const { data: salao } = useConfigSalao()
   const { data: fila } = useFila()
   const agora = useAgora(30_000)
   const [filtros, setFiltros] = useEstadoGrade()
-  const [abertaId, setAbertaId] = useState<string | null>(null)
+  const [numeroAberto, setNumeroAberto] = useMesaAberta()
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [bloqueandoId, setBloqueandoId] = useState<string | null>(null)
   // O botão ⋯ que abriu Editar ou Bloquear: o foco volta a ele quando a janela fecha.
@@ -61,13 +65,18 @@ export function PaginaMesas() {
       const status = comandaDa(mesa)?.status
       return mesa.status === "ocupada" && (status === "recebido" || status === "em-preparo")
     }).length ?? 0
-  const aberta = mesas?.find((mesa) => mesa.id === abertaId) ?? null
+  // Número que não existe no endereço não abre nada, e sai do endereço.
+  const aberta = mesas?.find((mesa) => mesa.numero === numeroAberto) ?? null
+  const semMesa = mesas !== undefined && numeroAberto !== null && aberta === null
+  useEffect(() => {
+    if (semMesa) void setNumeroAberto(null)
+  }, [semMesa, setNumeroAberto])
   const editando = mesas?.find((mesa) => mesa.id === editandoId)
   const bloqueando = mesas?.find((mesa) => mesa.id === bloqueandoId)
 
   function abrirPeloNumero(numero: number) {
     const mesa = mesas?.find((candidata) => candidata.numero === numero)
-    if (mesa) setAbertaId(mesa.id)
+    if (mesa) void setNumeroAberto(mesa.numero)
     else toast.error(`Não existe a mesa ${numero}.`)
   }
 
@@ -117,6 +126,17 @@ export function PaginaMesas() {
         }
         acoes={
           <>
+            {/* A folha abre também pelo botão: quem desligou os atalhos de uma tecla perde o "?". */}
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              aria-label="Atalhos do teclado"
+              title="Atalhos do teclado"
+              onClick={() => setAjudaAberta(true)}
+            >
+              <KeyboardIcon />
+            </Button>
             <ConfigurarSalao salao={salao} />
             <NovaMesa aberta={novaAberta} aoMudar={setNovaAberta} />
           </>
@@ -186,7 +206,7 @@ export function PaginaMesas() {
                     <CartaoMesa
                       {...linha}
                       agora={agora}
-                      aoAbrir={() => setAbertaId(linha.mesa.id)}
+                      aoAbrir={() => void setNumeroAberto(linha.mesa.numero)}
                       aoEditar={(gatilho) => {
                         setGatilhoMenu(gatilho)
                         setEditandoId(linha.mesa.id)
@@ -219,7 +239,7 @@ export function PaginaMesas() {
           focoAoFechar={gatilhoMenu}
         />
       )}
-      <ComandaMesa mesa={aberta} aoFechar={() => setAbertaId(null)} />
+      <ComandaMesa mesa={aberta} aoFechar={() => void setNumeroAberto(null)} />
       <AtalhosMesas
         aoAbrirMesa={abrirPeloNumero}
         aoNovaMesa={() => setNovaAberta(true)}

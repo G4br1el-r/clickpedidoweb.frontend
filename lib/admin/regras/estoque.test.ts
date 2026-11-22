@@ -6,6 +6,7 @@ import {
   errosDoMovimento,
   numeroComSinal,
   resumoDoEstoque,
+  rotuloDoMovimento,
   saldoDepois,
   situacaoEstoque,
 } from "./estoque"
@@ -143,5 +144,16 @@ describe("quantidades na tela", () => {
     expect(numeroComSinal(-2)).toBe("−2")
     expect(numeroComSinal(-0.5)).toBe("−0,5")
     expect(numeroComSinal(0)).toBe("0")
+  })
+})
+
+describe("rotuloDoMovimento", () => {
+  test.each([
+    ["perda", "Perda"],
+    ["devolucao", "Devolução"],
+    ["venda", "Venda"],
+    ["saida", "Saída"],
+  ] as const)("%s se lê %s", (tipo, rotulo) => {
+    expect(rotuloDoMovimento(tipo)).toBe(rotulo)
   })
 })

@@ -40,6 +40,26 @@ export type OrigemPedido = "site" | "pdv" | "garcom" | "painel"
 /** Uma mudança de etapa do pedido: para onde foi e quando. */
 export type EtapaDoPedido = { status: StatusPedido; em: string }
 
+export type TipoEventoComanda =
+  | "aberta"
+  | "rodada"
+  | "item-editado"
+  | "item-removido"
+  | "cancelada"
+  | "pronta"
+  | "servida"
+  | "conta-pedida"
+
+/** Uma linha do histórico da comanda: o que houve, quando, quem fez e o texto pronto. */
+export type EventoComanda = {
+  tipo: TipoEventoComanda
+  em: string
+  /** O garçom: o escolhido ao abrir ou o nome guardado no aparelho. */
+  por?: string
+  texto: string
+  motivo?: string
+}
+
 export type ItemPedido = {
   id: string
   /** `null` para item avulso, lançado sem produto do cardápio. */
@@ -69,6 +89,8 @@ export type ItemPedido = {
   vaiParaCozinha?: boolean
   /** Comanda: quando o garçom lançou o item. */
   lancadoEm?: string
+  /** Comanda: as opções escolhidas (grupo → ids), para editar o item depois. */
+  escolhas?: Record<string, string[]>
 }
 
 export type EnderecoEntrega = {
@@ -125,6 +147,10 @@ export type Pedido = {
   contaPedidaEm?: string
   /** Mesa: desde quando há item pronto esperando para ser servido. */
   servirDesde?: string
+  /** Comanda: o histórico, do mais antigo para o mais novo. Sem o campo, nada registrado. */
+  eventos?: EventoComanda[]
+  /** Comanda cancelada: o motivo escrito (`motivoCancelamento` fica "outro"). */
+  detalheCancelamento?: string
 }
 
 export type Categoria = {
@@ -204,7 +230,15 @@ export type ControleEstoque = {
   esgotadoPeloEstoque?: boolean
 }
 
-export type TipoMovimento = "entrada" | "saida" | "contagem" | "venda" | "devolucao" | "pesagem"
+export type TipoMovimento =
+  | "entrada"
+  | "saida"
+  | "contagem"
+  | "venda"
+  | "devolucao"
+  | "pesagem"
+  /** Item da comanda tirado depois de a cozinha preparar: não volta ao estoque. */
+  | "perda"
 
 /** Uma linha do histórico do estoque geral. `quantidade` tem sinal: entra positivo, sai negativo. */
 export type MovimentoEstoque = {

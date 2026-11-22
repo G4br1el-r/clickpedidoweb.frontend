@@ -158,14 +158,14 @@ describe("CartaoMesa", () => {
     )
   })
 
-  // A tabela do menu ⋯ nas decisões de detalhe da Fase 2.
+  // A tabela do menu ⋯ nas decisões de detalhe da Fase 2; a Fase 3 põe "Marcar servido" em Servir.
   test.each<[EstadoMesa, string[]]>([
     ["livre", ["Abrir comanda", "Editar", "Bloquear", "Excluir"]],
     ["reservada", ["Abrir comanda", "Editar", "Bloquear", "Excluir"]],
     ["limpeza", ["Marcar limpa", "Editar", "Bloquear", "Excluir"]],
     ["ocupada", ["Abrir comanda", "Editar"]],
     ["na-cozinha", ["Abrir comanda", "Editar"]],
-    ["servir", ["Abrir comanda", "Editar"]],
+    ["servir", ["Marcar servido", "Abrir comanda", "Editar"]],
     ["conta-pedida", ["Abrir comanda", "Editar"]],
     ["bloqueada", ["Desbloquear", "Editar", "Excluir"]],
     ["juntada", ["Abrir comanda"]],

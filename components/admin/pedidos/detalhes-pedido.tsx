@@ -3,6 +3,7 @@
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { BikeIcon, MapPinIcon, MessageCircleIcon, PhoneIcon, PrinterIcon } from "lucide-react"
+import Link from "next/link"
 import { type ReactNode, useState } from "react"
 import { toast } from "sonner"
 import {
@@ -190,7 +191,10 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
         <CaminhoPedido pedido={pedido} />
         {pedido.status === "cancelado" && (
           <p className="text-sm text-muted-foreground">
-            Motivo: {rotuloMotivo(pedido.motivoCancelamento)}
+            Motivo:{" "}
+            {[rotuloMotivo(pedido.motivoCancelamento), pedido.detalheCancelamento]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         )}
         <div className="flex items-center gap-2 pt-1">
@@ -418,7 +422,19 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
               Marcar como pago
             </Button>
           ))}
-        {!encerrado && (
+        {/* A comanda aberta se cancela em Mesas: motivo escrito, perda no estoque e histórico (Q36). */}
+        {!encerrado && pedido.tipo === "mesa" && pedido.mesa && (
+          <p className="order-last w-full text-center text-xs text-muted-foreground sm:basis-full">
+            Cancele pela tela de Mesas.{" "}
+            <Link
+              href={`/admin/mesas?mesa=${pedido.mesa.numero}`}
+              className="font-medium text-foreground underline underline-offset-4"
+            >
+              Abrir a mesa {pedido.mesa.numero}
+            </Link>
+          </p>
+        )}
+        {!encerrado && !(pedido.tipo === "mesa" && pedido.mesa) && (
           <ConfirmarCancelamento
             numero={pedido.numero}
             aoConfirmar={(motivo) =>

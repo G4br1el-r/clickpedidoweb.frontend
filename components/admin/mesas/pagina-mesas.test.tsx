@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
+import { usePreferenciasMesas } from "@/lib/admin/preferencias-mesas"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { FormularioMesa } from "./formulario-mesa"
 import { PaginaMesas } from "./pagina-mesas"
@@ -84,7 +85,18 @@ async function abrir(endereco?: string, aoMudarUrl?: OnUrlUpdateFunction) {
   )
   // A grade tem uma lista por área; o Salão é a primeira da demonstração. Com filtro no
   // endereço o Salão pode sumir, e então vale a barra de filtros, que aparece com a grade.
-  if (endereco) await screen.findByRole("searchbox", { name: "Buscar mesa" }, { timeout: 8000 })
+  // Com ?mesa= a gaveta abre por cima e esconde o resto: vale ela, ou a grade se não abrir.
+  if (endereco?.includes("mesa=")) {
+    await waitFor(
+      () => {
+        if (!screen.queryByRole("dialog") && !screen.queryByRole("searchbox")) {
+          throw new Error("A tela ainda não carregou")
+        }
+      },
+      { timeout: 8000 },
+    )
+  } else if (endereco)
+    await screen.findByRole("searchbox", { name: "Buscar mesa" }, { timeout: 8000 })
   else await screen.findByRole("list", { name: "Salão" }, { timeout: 8000 })
   return usuario
 }
@@ -101,6 +113,8 @@ beforeEach(async () => {
   reiniciarServidores()
   imprimir.mockClear()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
+  localStorage.clear()
+  usePreferenciasMesas.setState(usePreferenciasMesas.getInitialState(), true)
 })
 
 afterEach(() => {
@@ -109,8 +123,8 @@ afterEach(() => {
 })
 
 describe("PaginaMesas", () => {
-  // A Fase 3 (Q23) inverte isto de propósito: rodada nova passa a limpar o "Pediu a conta".
-  test("o resumo conta a rodada na cozinha pelo status da comanda, mesmo com a conta pedida", async () => {
+  // Fase 3 (Q23): a rodada nova limpa o "Pediu a conta", e a mesa volta para Na cozinha.
+  test("a rodada lançada depois de pedir a conta limpa o pedido e entra no resumo da cozinha", async () => {
     // Na demonstração, as mesas 6, 7 e 8 têm rodada na cozinha; a mesa 1 já pediu a conta.
     const [mesas, base] = await Promise.all([api().mesas.listar(), api().base()])
     const contaPedida = mesas.find((mesa) => mesa.numero === 1)
@@ -126,7 +140,7 @@ describe("PaginaMesas", () => {
     await api().pedidos.avancar(nova.id, nova.status)
     await abrir()
 
-    expect(await cartao(1)).toHaveAccessibleDescription(/^Pediu a conta/)
+    expect(await cartao(1)).toHaveAccessibleDescription(/^Na cozinha/)
     expect(await screen.findByText(/4 com rodada na cozinha/)).toBeInTheDocument()
   })
 
@@ -236,7 +250,8 @@ describe("PaginaMesas", () => {
     expect(total()).toHaveTextContent("R$ 16,50")
   })
 
-  test("tirar ou diminuir o que a cozinha já preparou pede confirmação", async () => {
+  // Fase 3 (Q10, Q38): a confirmação passa a pedir o motivo, que vai para a perda no estoque.
+  test("tirar ou diminuir o que a cozinha já preparou pede confirmação com motivo", async () => {
     const mesa = await mesaOcupada()
     const comAPizza = await api().mesas.lancar({
       mesaId: mesa.id,
@@ -252,17 +267,15 @@ describe("PaginaMesas", () => {
     // Voltar não mexe na comanda.
     await usuario.click(pizza().getByRole("button", { name: "Remover" }))
     const pergunta = within(screen.getByRole("alertdialog", { name: "Tirar Pizza da comanda?" }))
-    expect(pergunta.getByText("A cozinha já preparou.")).toBeInTheDocument()
+    expect(pergunta.getByText(/A cozinha já preparou/)).toBeInTheDocument()
+    expect(pergunta.getByRole("button", { name: "Tirar da comanda" })).toBeDisabled()
     await usuario.click(pergunta.getByRole("button", { name: "Voltar" }))
     expect(total()).toHaveTextContent("R$ 93,50")
 
     await usuario.click(pizza().getByRole("button", { name: "Menos um" }))
-    await usuario.click(
-      within(screen.getByRole("alertdialog", { name: "Tirar Pizza da comanda?" })).getByRole(
-        "button",
-        { name: "Tirar da comanda" },
-      ),
-    )
+    const motivo = within(screen.getByRole("alertdialog", { name: "Tirar 1 Pizza?" }))
+    await usuario.type(motivo.getByRole("textbox", { name: "Motivo" }), "Caiu no chão")
+    await usuario.click(motivo.getByRole("button", { name: "Tirar da comanda" }))
     await waitFor(() => expect(total()).toHaveTextContent("R$ 53,50"))
 
     // O que não foi para a cozinha sai direto, sem perguntar.
@@ -383,6 +396,63 @@ describe("PaginaMesas", () => {
     )
     expect(await screen.findByText("Mesa 60 excluída.")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /^Mesa 60\b/ })).not.toBeInTheDocument()
+  })
+})
+
+describe("PaginaMesas: a comanda no endereço e as abas", () => {
+  test("clicar na mesa 60 grava ?mesa=60, e fechar a gaveta tira o parâmetro", async () => {
+    await mesaOcupada()
+    const aoMudarUrl = vi.fn()
+    const usuario = await abrir(undefined, aoMudarUrl)
+    await usuario.click(await cartao(60))
+    expect(await screen.findByRole("dialog", { name: /^Mesa 60/ })).toBeInTheDocument()
+    expect(aoMudarUrl).toHaveBeenLastCalledWith(
+      expect.objectContaining({ queryString: "?mesa=60" }),
+    )
+
+    await usuario.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(aoMudarUrl).toHaveBeenLastCalledWith(expect.objectContaining({ queryString: "" }))
+  })
+
+  test("o endereço ?mesa=60 abre a gaveta da mesa 60", async () => {
+    await mesaOcupada()
+    await abrir("?mesa=60")
+    expect(await screen.findByRole("dialog", { name: /^Mesa 60/ })).toBeInTheDocument()
+  })
+
+  test("a mesa que não existe no endereço não abre nada, e o endereço esquece o número", async () => {
+    const aoMudarUrl = vi.fn()
+    await abrir("?mesa=999", aoMudarUrl)
+    expect(await screen.findByRole("list", { name: "Salão" })).toBeInTheDocument()
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(aoMudarUrl).toHaveBeenLastCalledWith(expect.objectContaining({ queryString: "" })),
+    )
+  })
+
+  test("a comanda tem as abas Itens, Conta e Histórico e começa em Itens", async () => {
+    await mesaOcupada()
+    const usuario = await abrir()
+    await usuario.click(await cartao(60))
+    const abas = comanda().getAllByRole("tab")
+    expect(abas.map((aba) => aba.textContent)).toEqual(["Itens", "Conta", "Histórico"])
+    expect(comanda().getByRole("tab", { name: "Itens" })).toHaveAttribute("aria-selected", "true")
+    expect(comanda().getByRole("tabpanel", { name: "Itens" })).toContainElement(
+      comanda().getByRole("list", { name: "Itens da comanda" }),
+    )
+  })
+
+  test("o atalho do número também grava ?mesa=", async () => {
+    await mesaOcupada()
+    const aoMudarUrl = vi.fn()
+    const usuario = await abrir(undefined, aoMudarUrl)
+    await cartao(60)
+    await usuario.keyboard("60{Enter}")
+    expect(await screen.findByRole("dialog", { name: /^Mesa 60/ })).toBeInTheDocument()
+    expect(aoMudarUrl).toHaveBeenLastCalledWith(
+      expect.objectContaining({ queryString: "?mesa=60" }),
+    )
   })
 })
 
@@ -639,14 +709,14 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
 
   test("o erro do servidor ao editar aparece no aviso e a janela continua aberta", async () => {
     const usuario = await abrir()
-    await usuario.click((await menu(usuario, 3)).getByRole("menuitem", { name: "Editar" }))
-    const janela = within(await screen.findByRole("dialog", { name: "Editar mesa 3" }))
+    await usuario.click((await menu(usuario, 12)).getByRole("menuitem", { name: "Editar" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Editar mesa 12" }))
     await usuario.clear(janela.getByRole("spinbutton", { name: "Número" }))
     await usuario.type(janela.getByRole("spinbutton", { name: "Número" }), "4")
     await usuario.click(janela.getByRole("button", { name: "Salvar" }))
 
     expect(await screen.findByText("Já existe a mesa 4.")).toBeInTheDocument()
-    expect(screen.getByRole("dialog", { name: "Editar mesa 3" })).toBeInTheDocument()
+    expect(screen.getByRole("dialog", { name: "Editar mesa 12" })).toBeInTheDocument()
   })
 
   test("Bloquear pergunta o motivo (opcional) e deixa o cartão Bloqueada com o motivo", async () => {
@@ -711,6 +781,26 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
     const itens = await menu(usuario, 6)
     expect(itens.getByRole("menuitem", { name: "Editar" })).toBeInTheDocument()
     expect(itens.queryByRole("menuitem", { name: "Bloquear" })).not.toBeInTheDocument()
+  })
+
+  test("Editar a mesa ocupada trava o Número e diz por quê; na mesa livre 12 o número muda", async () => {
+    const usuario = await abrir()
+    await usuario.click((await menu(usuario, 6)).getByRole("menuitem", { name: "Editar" }))
+    const ocupada = within(await screen.findByRole("dialog", { name: "Editar mesa 6" }))
+    const numero = ocupada.getByRole("spinbutton", { name: "Número" })
+    expect(numero).toBeDisabled()
+    expect(numero).toHaveAccessibleDescription("Feche a conta antes de mudar o número da mesa.")
+    await usuario.keyboard("{Escape}")
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Editar mesa 6" })).not.toBeInTheDocument(),
+    )
+
+    await usuario.click((await menu(usuario, 12)).getByRole("menuitem", { name: "Editar" }))
+    const livre = within(await screen.findByRole("dialog", { name: "Editar mesa 12" }))
+    expect(livre.getByRole("spinbutton", { name: "Número" })).toBeEnabled()
+    expect(
+      livre.queryByText("Feche a conta antes de mudar o número da mesa."),
+    ).not.toBeInTheDocument()
   })
 
   test("Editar: o campo Nome fica vazio no nome padrão e preenchido no nome próprio", async () => {
@@ -805,6 +895,23 @@ describe("PaginaMesas: nova mesa, editar e bloquear", () => {
       await usuario.keyboard("?")
       const folha = await screen.findByRole("dialog", { name: "Atalhos do teclado" })
       expect(within(folha).getByText("Abrir a mesa pelo número")).toBeInTheDocument()
+    })
+
+    test("o botão Atalhos do teclado abre a folha; desligar os de uma tecla faz o n não abrir Nova mesa", async () => {
+      const usuario = await abrir()
+      await usuario.click(screen.getByRole("button", { name: "Atalhos do teclado" }))
+      const folha = within(await screen.findByRole("dialog", { name: "Atalhos do teclado" }))
+      const interruptor = folha.getByRole("switch", { name: "Atalhos de uma tecla" })
+      expect(interruptor).toBeChecked()
+      await usuario.click(interruptor)
+      expect(interruptor).not.toBeChecked()
+      await usuario.keyboard("{Escape}")
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+
+      await usuario.keyboard("n")
+      await usuario.keyboard("?")
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+      expect(usePreferenciasMesas.getState().atalhosLigados).toBe(false)
     })
 
     test("com uma janela aberta, os atalhos não disparam", async () => {

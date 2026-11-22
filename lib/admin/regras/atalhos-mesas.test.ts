@@ -56,3 +56,21 @@ describe("lerTecla: limites e comandos", () => {
     expect(lerTecla("12", tecla("a"))).toEqual({ digitado: "12", acao: { tipo: "nenhuma" } })
   })
 })
+
+describe("lerTecla: atalhos de uma tecla desligados (WCAG 2.1.4)", () => {
+  it("nenhuma tecla de caractere faz nada, e o Enter não abre a mesa", () => {
+    for (const key of ["1", "/", "n", "N", "?", "Enter"]) {
+      expect(lerTecla("12", { ...tecla(key), ligados: false })).toEqual({
+        digitado: "12",
+        acao: { tipo: "nenhuma" },
+      })
+    }
+  })
+
+  it("o Escape ainda zera os dígitos", () => {
+    expect(lerTecla("12", { ...tecla("Escape"), ligados: false })).toEqual({
+      digitado: "",
+      acao: { tipo: "nenhuma" },
+    })
+  })
+})

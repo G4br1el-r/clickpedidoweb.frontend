@@ -10,6 +10,8 @@ export type TeclaApertada = {
   emCampo: boolean
   comModificador: boolean
   janelaAberta: boolean
+  /** Falso: os atalhos de uma tecla estão desligados neste aparelho (WCAG 2.1.4). Padrão: ligados. */
+  ligados?: boolean
 }
 
 const MAX_DIGITOS = 3
@@ -29,6 +31,9 @@ export function lerTecla(
   const nenhuma: AcaoAtalho = { tipo: "nenhuma" }
   if (tecla.emCampo || tecla.comModificador || tecla.janelaAberta) {
     return { digitado, acao: nenhuma }
+  }
+  if (tecla.ligados === false) {
+    return { digitado: tecla.key === "Escape" ? "" : digitado, acao: nenhuma }
   }
   if (tecla.key === "Enter") {
     if (digitado === "") return { digitado, acao: nenhuma }

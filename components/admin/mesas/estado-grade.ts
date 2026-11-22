@@ -1,6 +1,12 @@
 "use client"
 
-import { parseAsString, parseAsStringLiteral, useQueryStates } from "nuqs"
+import {
+  parseAsInteger,
+  parseAsString,
+  parseAsStringLiteral,
+  useQueryState,
+  useQueryStates,
+} from "nuqs"
 import type { FiltroEstadoMesa, OrdemMesas } from "@/lib/admin/regras/filtro-mesas"
 
 /**
@@ -47,3 +53,8 @@ export const LIMPAR_GRADE = {
   atencao: null,
   ordem: null,
 } satisfies Record<keyof typeof PARAMETROS_GRADE, null>
+
+/** A mesa com a gaveta aberta, pelo número (`?mesa=3`). Sem a mesa, o parâmetro some. */
+export function useMesaAberta() {
+  return useQueryState("mesa", parseAsInteger)
+}

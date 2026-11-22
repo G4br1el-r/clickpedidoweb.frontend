@@ -10,7 +10,7 @@
 
 **Origem:** as decisões Q1 a Q52 da sessão de perguntas de 18 e 19/11/2026, registradas abaixo. Base anterior: Fase 8 de [plano-painel-admin.md](plano-painel-admin.md).
 
-**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. As Fases 1 e 2 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
+**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 está em andamento na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. As Fases 1, 2 e 3 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
 
 ## Restrições gerais
 
@@ -1175,6 +1175,259 @@ Situação: pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilha
    - adicionar itens pelo seletor compartilhado (o Garçom continua passando nos testes dele);
    - motivo obrigatório, histórico e marcar servido.
 4. **E2E:** abrir mesa, adicionar itens, a cozinha prepara, marcar servido e pedir a conta.
+
+**Branch:** `claude/admin-mesas-fase-3`, empilhada sobre as Fases 1 e 2. O PR vai para `main` depois delas.
+
+**Decisões de detalhe desta fase** (decorrem de Q6, Q10, Q12, Q15, Q22, Q23, Q28, Q29, Q36 e Q38)
+
+- **Item preparado:** é o item que foi para a cozinha e é de uma rodada anterior à última rodada da cozinha, ou da última rodada com a comanda em preparo ou pronta. É a mesma leitura da tela da cozinha, que mostra as rodadas anteriores como já servidas. O item lançado sem cozinha (bebida pronta) nunca conta como preparado: sai devolvendo o estoque, sem motivo. A regra mora em `cozinhaJaPreparou` (`lib/admin/regras/cozinha.ts`), que passa a contar as rodadas anteriores. Tirar inteira a rodada que está na cozinha devolve a comanda a "pronto" (`depoisDeTirar`): a rodada anterior continua preparada e não volta para "A fazer". Sem nada pronto na mesa, o `servirDesde` sai. Na cozinha, a comanda conta os 15 min de "Prontos" desde o evento `pronta`, e não desde a última mudança.
+- **Abrir mesa:**
+  - `mesas.abrir` cria a comanda vazia (status "pronto", sem cozinha), com `mesa.pessoas` e `mesa.garcom`;
+  - pessoas de 1 a 99 ("Informe de 1 a 99 pessoas.");
+  - com garçons ativos no salão, o garçom é obrigatório ("Escolha o garçom.") e tem que ser um deles ("Esse garçom não está na lista do salão."). Sem garçom nenhum cadastrado, fica sem garçom;
+  - mesa bloqueada recusa ("A mesa 20 está bloqueada."), mesa ocupada recusa ("A mesa 5 já está aberta."), e a mesa em limpeza abre (como no lançamento, a limpeza sai);
+  - mesa com reserva marcada dentro da antecedência pede `confirmarReserva` ("A mesa 3 está reservada às 20:00. Confirme para abrir."). A tela só ganha essa confirmação na Fase 7, quando as reservas existirem;
+  - mais pessoas que lugares não recusa: a tela avisa "A mesa 3 tem 4 lugares.".
+- **Lançar:**
+  - "Adicionar itens" na comanda usa o seletor e a bandeja do Garçom, extraídos para `components/admin/garcom/montar-rodada.tsx`. Os botões continuam "Enviar para a cozinha" e "Lançar na mesa" (os nomes de hoje, que o Garçom e os testes já usam);
+  - o lançamento vai com o garçom da comanda;
+  - lançar numa mesa com a conta pedida limpa `contaPedidaEm`, a tela avisa "A mesa 1 tinha pedido a conta e voltou para Ocupada." e a mesa volta ao estado do lançamento (Na cozinha ou Ocupada). Vale também para o item avulso;
+  - **lançar na mesa livre (pelo Garçom) abre a mesa com as regras de abrir** (decidido na revisão): grava o evento `aberta` com o garçom, `pessoas: 1`, recusa garçom fora da lista quando o salão tem garçons ("Esse garçom não está na lista do salão.", sem diferenciar acento e maiúscula) e recusa a mesa reservada dentro da antecedência ("A mesa 3 está reservada. Abra pela tela de Mesas."). Sem nome, continua lançando sem garçom;
+  - sem `por`, o evento da rodada leva o garçom do lançamento.
+- **Editar item (Q29):** troca a observação e, no item do cardápio, as opções (o preço é refeito no servidor). As escolhas passam a ser guardadas no item (`ItemPedido.escolhas`) para a janela abrir marcada. Item já preparado recusa: "A cozinha já preparou Calabresa. Tire com motivo e lance de novo.". Item sem escolhas guardadas (lançado antes desta fase) só troca a observação.
+- **Tirar e diminuir (Q10, Q38):**
+  - item preparado só sai com motivo ("Diga o motivo para tirar o que a cozinha já preparou."), aparado e cortado em 140;
+  - diminuir um item preparado é tirar parte dele, com a mesma regra;
+  - item preparado não aumenta: "A cozinha já preparou Calabresa. Lance de novo para pedir mais.";
+  - no estoque, o item não preparado devolve (movimento "devolucao", como hoje). O preparado não volta: a venda é desfeita e o mesmo tanto sai como **perda**, com o motivo. São dois movimentos com o saldo igual ao de antes, para o histórico do estoque continuar somando certo.
+- **Cancelar comanda (Q36):** comanda vazia continua saindo por "Liberar mesa". Com itens, "Cancelar comanda" exige motivo, deixa a comanda cancelada com `motivoCancelamento: "outro"` e o texto em `detalheCancelamento`, aplica o estoque item a item (preparado vira perda) e libera a mesa sem passar pela limpeza. Em Pedidos, o detalhe mostra "Motivo: Outro · Cliente foi embora". A comanda aberta não se cancela por Pedidos: o painel troca "Cancelar pedido" por "Cancele pela tela de Mesas." com o link "Abrir a mesa 5", e o servidor recusa `pedidos.cancelar` na comanda de mesa (decidido na revisão: é o caminho mais simples, e a regra de Q36 fica num lugar só).
+- **Servir:** a cozinha, ao marcar pronta uma comanda de mesa, preenche `servirDesde` (se já houver, fica o mais antigo). "Marcar servido" limpa o campo. Fica no topo da comanda e no menu ⋯ da mesa em "Servir".
+- **Pediu a conta:** "Pediu a conta" na aba Conta grava `contaPedidaEm` (se já houver, fica o primeiro). Lançar depois limpa.
+- **Histórico (Q10):** `Pedido.eventos`, do mais antigo para o mais novo, com `tipo`, `em`, `por` (opcional) e `texto` pronto. Nesta fase:
+
+  | Tipo            | Texto                                            |
+  | --------------- | ------------------------------------------------ |
+  | `aberta`        | "Mesa aberta para 4 pessoas"                     |
+  | `rodada`        | "Rodada 2 para a cozinha: 2× Calabresa, 1× Coca" |
+  |                 | "Rodada 3 lançada na mesa: 1× Água"              |
+  | `item-editado`  | "Calabresa: Sem cebola · Borda: Catupiry"        |
+  | `item-removido` | "Tirou 1× Calabresa" (com `motivo` no preparado) |
+  | `cancelada`     | "Comanda cancelada" (com `motivo`)               |
+  | `pronta`        | "A cozinha terminou a rodada 2"                  |
+  | `servida`       | "Rodada servida"                                 |
+  | `conta-pedida`  | "Pediu a conta"                                  |
+
+  O `por` é o garçom escolhido ao abrir (no evento `aberta`) e, nas outras ações da tela de Mesas, o nome guardado neste aparelho (`useGarcom`) e, sem ele, o garçom da comanda (`autorDaAcao`). A comanda antiga, sem `eventos`, mostra "Sem histórico registrado.".
+- **Abas e endereço (Q28):** a gaveta ganha as abas Itens / Conta / Histórico. O rodapé com o total, "Imprimir conta" e "Fechar conta" fica fora das abas, à vista. Nesta fase a aba Conta mostra os itens somados, o total, "Pediu a conta" e "Cancelar comanda". A mesa aberta vai para o endereço pelo número (`?mesa=3`), com nuqs. Número que não existe no endereço não abre nada.
+- **Garçons:**
+  - no Garçom, "Seu nome" continua um campo de texto (o nome fica no aparelho), agora com os garçons ativos do salão em botões logo abaixo, que preenchem o campo (um `datalist` mudaria o papel do campo para combobox e quebraria os testes do Garçom);
+  - em "Abrir mesa", o garçom é um Select com os garçons ativos, já marcado com o nome deste aparelho quando ele está na lista.
+- **Pendências da Fase 2:**
+  - o esquema do salão recusa dois garçons com o mesmo nome, sem diferenciar acento e maiúscula: "Já existe o garçom Rafa.";
+  - editar a mesa ocupada deixa o campo Número travado, com o aviso "Feche a conta antes de mudar o número da mesa." (o servidor já recusa);
+  - os atalhos de uma tecla (`/`, `N`, `?` e os dígitos com Enter) podem ser desligados neste aparelho, pelo interruptor "Atalhos de uma tecla" na folha de atalhos (WCAG 2.1.4). A folha passa a abrir também pelo botão "Atalhos do teclado" no cabeçalho, para quem desligou o `?`. A preferência fica em `lib/admin/preferencias-mesas.ts` (zustand com `persist`, como `preferencias-fila.ts`).
+
+**Interfaces que a Fase 3 entrega**
+
+```ts
+// lib/admin/dados/tipos.ts
+export type TipoMovimento = "entrada" | "saida" | "contagem" | "venda" | "devolucao" | "pesagem" | "perda"
+export type TipoEventoComanda =
+  | "aberta" | "rodada" | "item-editado" | "item-removido" | "cancelada"
+  | "pronta" | "servida" | "conta-pedida"
+export type EventoComanda = { tipo: TipoEventoComanda; em: string; por?: string; texto: string; motivo?: string }
+// Pedido ganha: eventos?: EventoComanda[]; detalheCancelamento?: string
+// ItemPedido ganha: escolhas?: Record<string, string[]>
+
+// lib/admin/regras/estoque.ts
+export function rotuloDoMovimento(tipo: TipoMovimento): string // "Perda"
+
+// lib/admin/regras/historico.ts
+export function comEvento(pedido: Pedido, evento: EventoComanda): Pedido
+export function itensEmTexto(itens: Pick<ItemPedido, "quantidade" | "nome">[]): string // "2× Calabresa, 1× Coca"
+
+// lib/admin/regras/atalhos-mesas.ts
+// TeclaApertada ganha `ligados?: boolean` (padrão true). Desligados, só o Escape faz algo.
+
+// servidor (api.mesas):
+abrir(mesaId, { pessoas, garcom?, clienteNome?, confirmarReserva?, por? }): Promise<Pedido>
+editarItem(pedidoId, itemId, { observacao?, escolhas?, por? }): Promise<Pedido>
+alterarQuantidade(pedidoId, itemId, quantidade, { motivo?, por? } = {}): Promise<Pedido>
+removerItem(pedidoId, itemId, { motivo?, por? } = {}): Promise<Pedido>
+cancelarComanda(pedidoId, { motivo, por? }): Promise<Pedido>
+marcarServido(pedidoId, por?): Promise<Pedido>
+pedirConta(pedidoId, por?): Promise<Pedido>
+// LancamentoMesa ganha `por?`. pedidos.avancar preenche servirDesde na comanda de mesa que fica pronta.
+
+// consultas-mesas: useAbrirMesa, useEditarItem, useCancelarComanda, useMarcarServido, usePedirConta;
+//                  useAlterarQuantidade e useRemoverItem passam a aceitar motivo
+// components/admin/garcom/montar-rodada.tsx: useRodada() (itens, incluir, tocar no produto) e <Bandeja>
+// components/admin/mesas/estado-grade.ts: useMesaAberta() (?mesa=, nuqs)
+// lib/admin/preferencias-mesas.ts: usePreferenciasMesas({ atalhosLigados })
+```
+
+**Arquivos**
+
+- Criar:
+  - `lib/admin/dados/servidor-comanda.test.ts` (os testes de servidor desta fase);
+  - `lib/admin/preferencias-mesas.ts` e `.test.ts`;
+  - `components/admin/garcom/montar-rodada.tsx`;
+  - `components/admin/mesas/abrir-mesa.tsx`, `adicionar-itens.tsx`, `tirar-item.tsx` (motivo), `historico-comanda.tsx`;
+  - `components/admin/mesas/comanda-mesa.test.tsx`.
+- Mudar:
+  - `lib/admin/dados/tipos.ts`, `servidor.ts`, `consultas-mesas.ts` e `consultas-mesas.test.tsx`;
+  - `lib/admin/regras/{cozinha,estoque,historico,atalhos-mesas,esquema-salao}.ts` e os seus testes;
+  - `components/admin/mesas/{comanda-mesa,pagina-mesas,cartao-mesa,formulario-mesa,atalhos-mesas,estado-grade}.tsx`;
+  - `components/admin/garcom/pagina-garcom.tsx`, `components/admin/estoque/janelas-estoque.tsx`, `components/admin/pdv/janela-opcoes.tsx` (valores iniciais) e `components/admin/pedidos/detalhes-pedido.tsx`;
+  - `tests/admin.spec.ts`.
+
+### Task 22 (Tarefa 22): pendências da Fase 2
+
+- [ ] Teste que falha em `esquema-salao.test.ts`: "Rafa" e "rafa" (e "Bia" e "Biá") são recusados com "Já existe o garçom Rafa.", no caminho do segundo. Implementar no `superRefine`, como o das áreas. Commit `fix(mesas): o salão recusa dois garçons com o mesmo nome`.
+- [ ] Teste que falha em `pagina-mesas.test.tsx`: "Editar" na mesa ocupada 5 mostra o campo Número desabilitado e o aviso "Feche a conta antes de mudar o número da mesa.". Na mesa livre o campo continua editável. Commit `fix(mesas): o número da mesa ocupada fica travado ao editar`.
+- [ ] Testes que falham:
+  - `atalhos-mesas.test.ts`: com `ligados: false`, "1", "/", "n", "?" e "Enter" não fazem nada, e "Escape" ainda zera os dígitos;
+  - `preferencias-mesas.test.ts`: começa ligado, desligar grava no `localStorage` e volta pelo `rehydrate`;
+  - `pagina-mesas.test.tsx`: o botão "Atalhos do teclado" abre a folha; desligar "Atalhos de uma tecla" faz o "n" não abrir Nova mesa.
+- [ ] Implementar e fazer o commit `feat(mesas): desligar os atalhos de uma tecla (WCAG 2.1.4)`.
+
+### Task 23 (Tarefa 23): perda no estoque, eventos e item preparado
+
+- [ ] Testes que falham:
+  - `estoque.test.ts`: `rotuloDoMovimento` dá "Perda", "Devolução" e "Venda". A janela do histórico do estoque passa a ler daqui;
+  - `historico.test.ts`: `comEvento` acrescenta no fim sem mudar o resto, e cria a lista na comanda sem `eventos`; `itensEmTexto` dá "2× Calabresa, 1× Coca" e "" para a lista vazia;
+  - `cozinha.test.ts`: o item da rodada 1, com a rodada 2 na cozinha em "recebido", conta como preparado; o da rodada 2 não; o item sem cozinha nunca conta.
+- [ ] Implementar (tipos novos em `tipos.ts`) e fazer o commit `feat(mesas): perda no estoque, eventos da comanda e item preparado por rodada`.
+
+### Task 24 (Tarefa 24): abrir mesa e lançar no servidor
+
+**Entrega:** `mesas.abrir`, o evento das rodadas e a conta pedida limpa ao lançar.
+
+- [ ] Testes que falham em `servidor-comanda.test.ts` (lanchonete de teste com os garçons "Rafa" e "Bia", e "Lucas" inativo):
+  - abrir a mesa 1 para 3 pessoas com Rafa: comanda vazia, mesa ocupada, `mesa: { numero: 1, garcom: "Rafa", pessoas: 3 }`, cliente "Ana" quando informado, e o evento `{ tipo: "aberta", por: "Rafa", texto: "Mesa aberta para 3 pessoas" }`;
+  - 0, 100 e 2,5 pessoas: "Informe de 1 a 99 pessoas.";
+  - sem garçom: "Escolha o garçom."; Lucas (inativo) e "Zé": "Esse garçom não está na lista do salão."; sem nenhum garçom no salão, abre sem garçom;
+  - mesa bloqueada, ocupada e inexistente recusam com as mensagens das decisões;
+  - mesa com reserva marcada às 20:45 (agora 20:30, antecedência 30) recusa sem `confirmarReserva` e abre com ela. A reserva entra direto na base guardada, porque a Fase 7 ainda não tem a operação;
+  - 5 pessoas numa mesa de 4 lugares abre;
+  - lançar grava o evento `rodada` com o texto da cozinha ou da mesa, e o `por`;
+  - lançar numa comanda com `contaPedidaEm` limpa o campo.
+- [ ] Implementar e fazer o commit `feat(mesas): abrir a mesa com pessoas e garçom; a rodada entra no histórico`.
+
+### Task 25 (Tarefa 25): editar, tirar e cancelar no servidor
+
+- [ ] Testes que falham em `servidor-comanda.test.ts`, com Refri (5 un) e Bacon (10 un) no estoque, como em `servidor-estoque.test.ts`:
+  - editar a observação e as opções do X-Burger refaz o preço e grava `item-editado`; as escolhas ficam no item;
+  - editar item preparado: recusa com a mensagem das decisões;
+  - tirar o Refri não preparado devolve o estoque (5), sem motivo, com o evento `item-removido` "Tirou 2× Refri lata";
+  - tirar o Refri preparado sem motivo recusa; com "Caiu no chão" tira, o saldo continua 3, e o histórico do estoque ganha `devolucao` +2 e `perda` −2 com o motivo; o evento leva o motivo;
+  - diminuir o preparado de 2 para 1 pede motivo e perde 1; aumentar o preparado recusa;
+  - cancelar comanda sem motivo recusa; com motivo, a comanda fica cancelada com `detalheCancelamento`, o não preparado volta, o preparado vira perda, a mesa fica livre e sem limpeza, e o evento `cancelada` leva o motivo;
+  - cancelar a comanda vazia recusa: "A comanda está vazia. Libere a mesa.".
+- [ ] Implementar e fazer o commit `feat(mesas): editar item, tirar com motivo e cancelar a comanda, com a perda no estoque`.
+
+### Task 26 (Tarefa 26): servir e pedir a conta no servidor
+
+- [ ] Testes que falham em `servidor-comanda.test.ts`:
+  - a cozinha marca pronta a comanda de mesa: `servirDesde` vira a hora, com o evento `pronta` "A cozinha terminou a rodada 2". Pronta de novo, com `servirDesde` já preenchido, fica o mais antigo. Pedido de entrega pronto não ganha o campo;
+  - "marcar servido" limpa `servirDesde` e grava `servida`; sem nada a servir, recusa "Não há nada para servir.";
+  - "pedir a conta" grava `contaPedidaEm` e `conta-pedida`; pedir de novo mantém a primeira hora;
+  - as duas operações recusam a comanda que não está aberta.
+- [ ] Implementar e fazer o commit `feat(mesas): a cozinha avisa o que servir; marcar servido e pedir a conta`.
+
+### Task 27 (Tarefa 27): hooks da comanda
+
+- [ ] Testes que falham em `consultas-mesas.test.tsx`: `useAbrirMesa`, `useEditarItem`, `useCancelarComanda`, `useMarcarServido` e `usePedirConta` chegam ao servidor, guardam a comanda devolvida e invalidam as mesas; `useRemoverItem` e `useAlterarQuantidade` repassam o motivo.
+- [ ] Implementar e fazer o commit `feat(mesas): hooks de abrir, editar, cancelar, servir e pedir a conta`.
+
+### Task 28 (Tarefa 28): seletor e bandeja compartilhados
+
+- [ ] Extrair a bandeja e a montagem da rodada (`useRodada`: itens, incluir com aviso, tocar no produto, janela de opções) de `pagina-garcom.tsx` para `components/admin/garcom/montar-rodada.tsx`, sem mudar o comportamento: os testes de `pagina-garcom.test.tsx` cobrem e continuam verdes, sem mudar.
+- [ ] Teste que falha em `pagina-garcom.test.tsx`: o campo "Seu nome" sugere os garçons ativos do salão (Lucas, Paula, Rafa e Bia na pizzaria). Implementar com botões abaixo do campo (grupo "Garçons do salão").
+- [ ] Commits `refactor(garcom): bandeja e rodada num componente compartilhado` e `feat(garcom): "Seu nome" sugere os garçons do salão`.
+
+### Task 29 (Tarefa 29): abas da comanda e a mesa no endereço
+
+- [ ] Testes que falham em `pagina-mesas.test.tsx`:
+  - clicar na mesa 60 grava `?mesa=60`; fechar a gaveta tira o parâmetro;
+  - o endereço `?mesa=60` abre a gaveta da mesa 60; `?mesa=999` não abre nada;
+  - a comanda tem as abas Itens, Conta e Histórico, e começa em Itens;
+  - os atalhos (número + Enter) também gravam `?mesa=`.
+- [ ] Implementar `useMesaAberta` em `estado-grade.ts` e as abas em `comanda-mesa.tsx`, com o rodapé fora das abas.
+- [ ] Commit `feat(mesas): comanda com abas e a mesa aberta no endereço`.
+
+### Task 30 (Tarefa 30): abrir mesa e adicionar itens na tela
+
+- [ ] Testes que falham em `comanda-mesa.test.tsx` (pizzaria):
+  - a gaveta da mesa livre 11 pergunta pessoas, garçom e cliente; com 3 pessoas e Bia, a mesa abre, a gaveta mostra a comanda vazia e o cartão fica "Ocupada" com "3 pessoas";
+  - 3 pessoas na mesa 11 (2 lugares) mostram "A mesa 11 tem 2 lugares." e deixam abrir;
+  - sem garçom, o botão "Abrir mesa" fica desabilitado;
+  - "Adicionar itens" abre o catálogo com a bandeja; um produto e "Enviar para a cozinha" lançam a rodada, que aparece em Itens, e a mesa fica "Na cozinha";
+  - adicionar itens na mesa 1 (pediu a conta) avisa "A mesa 1 tinha pedido a conta e voltou para Ocupada.".
+- [ ] Implementar `abrir-mesa.tsx` e `adicionar-itens.tsx`. Sai o convite "Abrir o Garçom" da gaveta da mesa livre; o teste antigo que procurava esse link na mesa 20 e na 9 continua valendo (ele confere a ausência).
+- [ ] Commit `feat(mesas): abrir a mesa e adicionar itens pela comanda`.
+
+### Task 31 (Tarefa 31): editar, tirar com motivo e cancelar na tela
+
+- [ ] Testes que falham em `comanda-mesa.test.tsx`:
+  - "Editar" no item não preparado abre a janela com a observação; salvar mostra a observação nova;
+  - o item preparado não tem "Editar" nem "Mais um";
+  - "Remover" no preparado pede o motivo; "Tirar da comanda" fica desabilitado sem motivo; com "Caiu no chão", o item sai;
+  - "Cancelar comanda" (aba Conta) pede o motivo; ao confirmar, a mesa fica livre.
+- [ ] Mudar o teste antigo "tirar ou diminuir o que a cozinha já preparou pede confirmação" de `pagina-mesas.test.tsx`: a confirmação passa a pedir o motivo (mudança planejada, Q10).
+- [ ] Teste que falha em `detalhes-pedido`: a comanda cancelada mostra "Motivo: Outro · Cliente foi embora".
+- [ ] Implementar `tirar-item.tsx`, o editar com `JanelaOpcoes` (que ganha valores iniciais e o botão "Salvar") e o cancelar. Commit `feat(mesas): editar item, tirar com motivo e cancelar a comanda pela tela`.
+
+### Task 32 (Tarefa 32): servir, pedir a conta e histórico na tela
+
+- [ ] Testes que falham:
+  - a comanda da mesa em "Servir" mostra "Marcar servido"; ao marcar, o estado vira o seguinte e o botão some;
+  - o menu ⋯ da mesa em "Servir" tem "Marcar servido";
+  - "Pediu a conta" na aba Conta deixa o cartão "Pediu a conta";
+  - a aba Histórico lista os eventos com hora e garçom ("20:30 · Mesa aberta para 3 pessoas · Bia"), do mais novo para o mais antigo, e "Sem histórico registrado." na comanda antiga;
+  - a cozinha (`pagina-cozinha.test.tsx`): marcar pronto o ticket de mesa deixa a comanda com `servirDesde`.
+- [ ] Mudar o teste antigo "o resumo conta a rodada na cozinha pelo status da comanda, mesmo com a conta pedida": com a Fase 3, a rodada nova limpa o "Pediu a conta" (Q23), e o cartão da mesa 1 passa a dizer "Na cozinha".
+- [ ] Implementar `historico-comanda.tsx`, os botões e o item do menu. Commit `feat(mesas): marcar servido, pedir a conta e histórico da comanda`.
+
+### Task 33 (Tarefa 33): E2E e fechamento
+
+- [ ] Em `tests/admin.spec.ts`: abrir a mesa 11 com 2 pessoas, adicionar uma pizza e enviar para a cozinha, a cozinha inicia e marca pronto, a mesa fica "Servir", marcar servido, pedir a conta e ver "Pediu a conta" no cartão.
+- [ ] `pnpm check`, mostrando a saída. `pnpm test:coverage` e subir os mínimos se a cobertura subiu.
+- [ ] `pnpm test:e2e:rapido`, revisando os screenshots que mudaram (`painel-mesas-*` pelo botão de atalhos no cabeçalho, `painel-comanda-*` pelas abas).
+- [ ] Registrar a "Situação" no fim desta seção.
+
+Situação: pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. O PR sai depois que as Fases 1 e 2 estiverem no `main`.
+
+- **O que a revisão pegou** (cada correção com o teste vermelho antes):
+  - tirar a rodada nova (ainda na cozinha) fazia a rodada anterior, já preparada, voltar a "não preparada": ela reaparecia em "A fazer" e saía sem motivo, devolvendo o estoque. Agora a comanda volta a "pronto" quando a rodada da cozinha sai inteira (`depoisDeTirar`), o "Servir" sai quando não sobra nada pronto, e a cozinha conta os 15 min de "Prontos" desde o evento `pronta`. Vale também para base antiga, sem marca nova no item;
+  - em Pedidos, "Cancelar pedido" cancelava a comanda aberta sem motivo escrito, sem perda e sem evento. Escolhi o caminho mais simples: o painel mostra "Cancele pela tela de Mesas." com o link "Abrir a mesa 5", e o servidor recusa;
+  - "Menos um", "Remover", o item avulso e o Garçom gravavam eventos sem quem fez. Agora as ações assinam com o nome do aparelho ou o garçom da comanda (`autorDaAcao`), e o servidor usa o `garcom` do lançamento quando falta `por`;
+  - o item avulso limpava "Pediu a conta" sem o aviso. Ele passa pelo mesmo lançamento do "Adicionar itens" (`useLancarNaComanda`);
+  - "Editar" não trocava as opções (Q29): a `JanelaOpcoes` abre marcada, com "Salvar";
+  - lançar pelo Garçom em mesa livre abria sem as regras de abrir mesa (ver "Lançar" nas decisões);
+  - menores: a mesa em limpeza com reserva abria sem confirmação; `abrir` não aceitava `por`; a conferência do "Abrir mesa" estava no componente (foi para `conferirAbertura`, e o botão diz o que falta ao tentar abrir); o campo Garçom aparecia vazio sem garçons; o cliente aceitava 60 letras e o servidor 80; a mesa em Limpeza não oferecia "Abrir mesa"; as janelas de motivo abriam com o foco no "Voltar", e "Tirar" fechava antes da resposta, perdendo o motivo em erro; o "Menos um" perguntava "Tirar Pizza da comanda?"; "Pediu a conta" aparecia na comanda vazia; `servirDesde` sobrava depois de tirar a rodada pronta; a gaveta continuava estreita no desktop; o botão do garçom no Garçom não marcava "rafa"; o histórico usava o índice invertido como chave; `?mesa=999` ficava no endereço.
+- **Mudou fora do plano:**
+  - a conta pedida limpa ao lançar entrou na Tarefa 24 (e não na 32), junto com o teste antigo que a fixava;
+  - a confirmação com motivo do item preparado entrou na Tarefa 25, para o commit do servidor continuar verde;
+  - "Seu nome" no Garçom usa botões, não `datalist` (ver as decisões);
+  - "Abrir mesa" valida ao enviar, com a mensagem no campo, em vez de deixar o botão desabilitado sem dizer por quê;
+  - os testes de `comanda-mesa.test.tsx` têm 15 s de limite: cada um monta a tela inteira.
+- **Testes antigos que mudaram (mudança de comportamento planejada):**
+  - "o resumo conta a rodada na cozinha… mesmo com a conta pedida" virou "a rodada lançada depois de pedir a conta limpa o pedido" (Q23);
+  - "tirar ou diminuir o que a cozinha já preparou pede confirmação" passa a digitar o motivo (Q10, Q38) e, no "Menos um", procura o título "Tirar 1 Pizza?";
+  - "sem pessoas ou sem garçom, Abrir mesa fica desabilitado" virou "Abrir mesa diz o que falta e não abre";
+  - "o erro do servidor ao editar" usa a mesa livre 12, porque a 3 está ocupada e o número dela agora trava;
+  - a tabela do menu ⋯ em `cartao-mesa.test.tsx` ganha "Marcar servido" em Servir.
+  - Os testes do Garçom continuam passando sem mudança: os nomes usados (Rafa) estão na lista do salão.
+- **Fica para depois:**
+  - a confirmação de reserva na tela, com as reservas (Fase 7). Até lá, o Garçom recusa a mesa reservada e manda abrir pela tela de Mesas;
+  - "Imprimir conta" ainda não marca "Pediu a conta": entra com a pré-conta (Fase 4);
+  - aumentar a quantidade de um item não preparado não entra no histórico.
+- **Screenshots:**
+  - mudaram nas 11 telas: `painel-mesas-*` (botão "Atalhos do teclado"), `painel-comanda-*` (abas, "Adicionar itens", gaveta mais larga, "Mais um" desabilitado no que a cozinha preparou), `painel-nova-mesa-*` e `painel-configurar-salao-*` no celular (o cabeçalho novo por trás da janela) e `painel-garcom-*` (os garçons abaixo de "Seu nome");
+  - entraram `painel-abrir-mesa-*`, `painel-adicionar-itens-*` e `painel-atalhos-mesas-*`;
+  - todas as diferenças foram revisadas (claro e escuro, celular e desktop, e uma amostra de cada tamanho) antes de atualizar.
+- **Testes e cobertura:** 1444 testes no Vitest e 450 no E2E rápido (`celular-390` e `desktop-1920`, 28 pulados, nenhuma falha). A cobertura ficou em 83,38/75,78/81,92/84,44 no geral: os mínimos continuam 83/75/81/84, e `lib/**` em 98/94/98/98.
 
 ## Fase 4: conta
 

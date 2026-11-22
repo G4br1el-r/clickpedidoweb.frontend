@@ -946,3 +946,71 @@ test("mesas: bloquear uma mesa livre com um motivo e desbloquear", async ({ page
   await expect(page.getByText("Mesa 11 desbloqueada.")).toBeVisible()
   await expect(mesa).not.toContainText("Bloqueada")
 })
+
+test("mesas: abrir a mesa, adicionar itens, a cozinha prepara, marcar servido e pedir a conta", async ({
+  page,
+}) => {
+  test.setTimeout(90_000)
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+
+  // Mesas: a mesa 11, livre, abre pela gaveta com pessoas e garçom.
+  await page.goto("/admin/mesas?mesa=11")
+  const gaveta = page.getByRole("dialog", { name: "Mesa 11" })
+  await gaveta.getByRole("spinbutton", { name: "Pessoas" }).fill("2", { timeout: 15_000 })
+  await gaveta.getByRole("combobox", { name: "Garçom" }).click()
+  await page.getByRole("option", { name: "Bia" }).click()
+  await gaveta.getByRole("textbox", { name: "Cliente (opcional)" }).fill("Carla")
+  await gaveta.getByRole("button", { name: "Abrir mesa" }).click()
+  await expect(page.getByText("Mesa 11 aberta.")).toBeVisible()
+
+  // Adicionar itens: um produto sem opções, direto para a cozinha.
+  await gaveta.getByRole("button", { name: "Adicionar itens" }).click()
+  const adicionar = page.getByRole("dialog", { name: "Adicionar itens · Mesa 11" })
+  await adicionar
+    .getByRole("button", { name: /^Adicionar .*\d$/ })
+    .first()
+    .click()
+  const bandeja = adicionar.getByRole("region", { name: "Bandeja" })
+  await expect(bandeja.getByRole("listitem")).toHaveCount(1)
+  await verificarAcessibilidade(page)
+  await bandeja.getByRole("button", { name: "Enviar para a cozinha" }).click()
+  await expect(page.getByText("Mesa 11: enviado para a cozinha.")).toBeVisible()
+  await expect(
+    gaveta.getByRole("list", { name: "Itens da comanda" }).getByRole("listitem"),
+  ).toHaveCount(1)
+
+  // Cozinha: a rodada vai para o preparo e fica pronta.
+  await page.goto("/admin/cozinha")
+  const naColuna = (coluna: string) =>
+    page
+      .getByRole("region", { name: new RegExp(`^${coluna}`) })
+      .getByRole("article", { name: /^Mesa 11 ·/ })
+  await expect(naColuna("A fazer")).toContainText("Garçom: Bia", { timeout: 15_000 })
+  await naColuna("A fazer").getByRole("button", { name: "Iniciar preparo" }).click()
+  const abaPreparando = page.getByRole("tab", { name: /Preparando/ })
+  if (await abaPreparando.isVisible()) await abaPreparando.click()
+  await naColuna("Preparando").getByRole("button", { name: "Marcar pronto" }).click()
+  const abaProntos = page.getByRole("tab", { name: /Prontos/ })
+  if (await abaProntos.isVisible()) await abaProntos.click()
+  await expect(naColuna("Prontos")).toContainText("Servir na mesa")
+
+  // Mesas: a mesa está em Servir; marcar servido e pedir a conta.
+  await page.goto("/admin/mesas")
+  const mesa = page.getByRole("button", { name: "Mesa 11", exact: true })
+  await expect(mesa).toContainText("Servir", { timeout: 15_000 })
+  await mesa.click()
+  await expect(page).toHaveURL(/mesa=11/)
+  await gaveta.getByRole("button", { name: "Marcar servido" }).click()
+  await expect(page.getByText("Mesa 11 servida.")).toBeVisible()
+  await gaveta.getByRole("tab", { name: "Conta" }).click()
+  await gaveta.getByRole("button", { name: "Pediu a conta" }).click()
+  await expect(page.getByText("Mesa 11 pediu a conta.")).toBeVisible()
+  await gaveta.getByRole("tab", { name: "Histórico" }).click()
+  await expect(gaveta.getByRole("list", { name: "Histórico da comanda" })).toContainText(
+    "Mesa aberta para 2 pessoas · Bia",
+  )
+  await verificarAcessibilidade(page)
+  await page.keyboard.press("Escape")
+  await expect(page).not.toHaveURL(/mesa=11/)
+  await expect(mesa).toContainText("Pediu a conta")
+})
