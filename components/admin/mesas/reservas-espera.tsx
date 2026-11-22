@@ -12,6 +12,16 @@ import {
 } from "lucide-react"
 import { useState } from "react"
 import { toast } from "sonner"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -34,6 +44,8 @@ import type { ConfigSalao, EntradaEspera, Mesa, Reserva } from "@/lib/admin/dado
 import { tempoDesde } from "@/lib/admin/regras/alertas-mesa"
 import {
   chamadaPeloWhatsApp,
+  porQueNaoSenta,
+  reservaAtiva,
   statusDaReserva,
   sugerirMesa,
   sugestoesDaEspera,
@@ -42,6 +54,7 @@ import { FUNCOES_PRO_SALAO } from "@/lib/admin/regras/salao"
 import { emReais, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { SeloPro } from "../campos"
+import { devolverFocoA } from "./devolver-foco"
 import { EntrarNaEspera } from "./entrar-na-espera"
 import { FormularioReserva } from "./formulario-reserva"
 import { type QuemSenta, Sentar } from "./sentar"
@@ -52,6 +65,57 @@ const ROTULO_STATUS: Record<Exclude<Reserva["status"], "marcada">, string> = {
   cancelada: "Cancelada",
 }
 
+/** A janela que abre por um botão e devolve o foco a ele ao fechar. */
+type Gatilho = HTMLElement | null
+
+/** A pergunta antes de cancelar: a mesa da reserva fica livre. */
+function ConfirmarCancelamento({
+  reserva,
+  mesas,
+  aoMudar,
+  focoAoFechar,
+}: {
+  reserva: Reserva | null
+  mesas: Mesa[]
+  aoMudar: (aberta: boolean) => void
+  focoAoFechar: Gatilho
+}) {
+  const cancelar = useCancelarReserva()
+  const mesa = mesas.find((item) => item.id === reserva?.mesaId)
+  return (
+    <AlertDialog open={reserva !== null} onOpenChange={aoMudar}>
+      <AlertDialogContent onCloseAutoFocus={devolverFocoA(focoAoFechar)}>
+        {reserva && (
+          <>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Cancelar a reserva de {reserva.nome}?</AlertDialogTitle>
+              <AlertDialogDescription>
+                {mesa
+                  ? `A mesa ${mesa.numero} deixa de estar reservada.`
+                  : "Ela fica na lista como cancelada."}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>Voltar</AlertDialogCancel>
+              <AlertDialogAction
+                variant="destructive"
+                onClick={() =>
+                  cancelar.mutate(reserva.id, {
+                    onSuccess: () => toast.success(`Reserva de ${reserva.nome} cancelada.`),
+                    onError: (erro) => toast.error(erro.message),
+                  })
+                }
+              >
+                Cancelar reserva
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </>
+        )}
+      </AlertDialogContent>
+    </AlertDialog>
+  )
+}
+
 /** Uma reserva do dia: hora, nome, pessoas, mesa e, nas marcadas, as ações. */
 function LinhaReserva({
   reserva,
@@ -59,20 +123,22 @@ function LinhaReserva({
   salao,
   agora,
   aoEditar,
+  aoCancelar,
   aoSentar,
 }: {
   reserva: Reserva
   mesas: Mesa[]
   salao: ConfigSalao
   agora: Date | null
-  aoEditar: () => void
-  aoSentar: () => void
+  aoEditar: (gatilho: Gatilho) => void
+  aoCancelar: (gatilho: Gatilho) => void
+  aoSentar: (gatilho: Gatilho) => void
 }) {
   const naoCompareceu = useNaoCompareceu()
-  const cancelar = useCancelarReserva()
+  // O ⋯ recebe o foco de volta quando Editar ou a pergunta de Cancelar fecham.
+  const [mais, setMais] = useState<HTMLButtonElement | null>(null)
   const status = agora ? statusDaReserva(reserva, agora, salao.reservas) : reserva.status
   const mesa = mesas.find((item) => item.id === reserva.mesaId)
-  const aoErrar = (erro: Error) => toast.error(erro.message)
   return (
     <li className="flex items-start gap-3 py-2.5">
       <span className="w-11 shrink-0 pt-px text-sm font-semibold tabular-nums">
@@ -99,13 +165,14 @@ function LinhaReserva({
             size="sm"
             variant="outline"
             aria-label={`Sentar ${reserva.nome}`}
-            onClick={aoSentar}
+            onClick={(evento) => aoSentar(evento.currentTarget)}
           >
             Sentar
           </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
+                ref={setMais}
                 type="button"
                 size="icon-sm"
                 variant="ghost"
@@ -115,7 +182,7 @@ function LinhaReserva({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem onSelect={aoEditar}>
+              <DropdownMenuItem onSelect={() => aoEditar(mais)}>
                 <PencilIcon />
                 Editar
               </DropdownMenuItem>
@@ -123,22 +190,14 @@ function LinhaReserva({
                 onSelect={() =>
                   naoCompareceu.mutate(reserva.id, {
                     onSuccess: () => toast.success(`${reserva.nome} não compareceu.`),
-                    onError: aoErrar,
+                    onError: (erro) => toast.error(erro.message),
                   })
                 }
               >
                 <UserXIcon />
                 Não compareceu
               </DropdownMenuItem>
-              <DropdownMenuItem
-                variant="destructive"
-                onSelect={() =>
-                  cancelar.mutate(reserva.id, {
-                    onSuccess: () => toast.success(`Reserva de ${reserva.nome} cancelada.`),
-                    onError: aoErrar,
-                  })
-                }
-              >
+              <DropdownMenuItem variant="destructive" onSelect={() => aoCancelar(mais)}>
                 <XIcon />
                 Cancelar reserva
               </DropdownMenuItem>
@@ -162,7 +221,7 @@ function LinhaEspera({
   sugestao: Mesa | undefined
   agora: Date | null
   loja: string
-  aoSentar: () => void
+  aoSentar: (gatilho: Gatilho) => void
 }) {
   const chamar = useChamarDaEspera()
   const desistir = useDesistirDaEspera()
@@ -175,11 +234,11 @@ function LinhaEspera({
         <span className="text-xs text-muted-foreground tabular-nums">
           {plural(entrada.pessoas, "pessoa", "pessoas")}
           {agora && <> · há {tempoDesde(entrada.chegouEm, agora)}</>}
-          {agora && entrada.chamadaEm && <> · chamado há {tempoDesde(entrada.chamadaEm, agora)}</>}
+          {agora && entrada.chamadaEm && <> · chamada há {tempoDesde(entrada.chamadaEm, agora)}</>}
         </span>
         {sugestao && <span className="text-xs">Mesa {sugestao.numero} livre</span>}
       </span>
-      <span className="flex items-center gap-1">
+      <span className="flex flex-wrap items-center gap-1">
         {entrada.telefone ? (
           // Abre a conversa com a mensagem pronta: quem envia é a pessoa, no WhatsApp.
           <Button asChild size="sm" variant="outline">
@@ -210,36 +269,26 @@ function LinhaEspera({
           size="sm"
           variant="outline"
           aria-label={`Sentar ${entrada.nome}`}
-          onClick={aoSentar}
+          onClick={(evento) => aoSentar(evento.currentTarget)}
         >
           Sentar
         </Button>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              size="icon-sm"
-              variant="ghost"
-              aria-label={`Mais ações de ${entrada.nome}`}
-            >
-              <EllipsisIcon />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              variant="destructive"
-              onSelect={() =>
-                desistir.mutate(entrada.id, {
-                  onSuccess: () => toast.success(`${entrada.nome} saiu da espera.`),
-                  onError: aoErrar,
-                })
-              }
-            >
-              <UserXIcon />
-              Desistiu
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          aria-label={`${entrada.nome} desistiu`}
+          disabled={desistir.isPending}
+          onClick={() =>
+            desistir.mutate(entrada.id, {
+              onSuccess: () => toast.success(`${entrada.nome} saiu da espera.`),
+              onError: aoErrar,
+            })
+          }
+        >
+          <UserXIcon data-icon="inline-start" />
+          Desistiu
+        </Button>
       </span>
     </li>
   )
@@ -247,9 +296,28 @@ function LinhaEspera({
 
 const CAIXA = "flex min-w-0 flex-col gap-3 rounded-xl bg-foreground/[0.03] p-4"
 
-/** Com a função Pro desligada (Q32): o cadeado, o preço e o caminho para ligar. */
-function ReservasPro({ aoConfigurar }: { aoConfigurar: () => void }) {
+/**
+ * Com a função Pro desligada (Q32): o cadeado, o preço e o caminho para ligar. As reservas
+ * marcadas antes de desligar continuam segurando a mesa (o servidor não confere o plano): o bloco
+ * lista as ativas e deixa cancelar, para nenhuma mesa ficar presa sem caminho na tela.
+ */
+function ReservasPro({
+  mesas,
+  salao,
+  aoConfigurar,
+}: {
+  mesas: Mesa[]
+  salao: ConfigSalao
+  aoConfigurar: () => void
+}) {
   const { nome, preco } = FUNCOES_PRO_SALAO.reservas
+  const { data: reservas = [] } = useReservas(4_000)
+  const agora = useAgora(30_000)
+  const [cancelando, setCancelando] = useState<Reserva | null>(null)
+  const [gatilho, setGatilho] = useState<Gatilho>(null)
+  const ativas = agora
+    ? reservas.filter((reserva) => reservaAtiva(reserva, agora, salao.reservas))
+    : []
   return (
     <section aria-labelledby="titulo-reservas-espera" className={CAIXA}>
       <div className="flex items-center gap-2">
@@ -271,6 +339,50 @@ function ReservasPro({ aoConfigurar }: { aoConfigurar: () => void }) {
       >
         Abrir Configurar salão
       </Button>
+      {ativas.length > 0 && (
+        <>
+          <p className="text-sm text-muted-foreground">
+            As reservas marcadas antes de desligar continuam segurando a mesa:
+          </p>
+          <ul aria-label="Reservas ativas" className="flex flex-col divide-y divide-border/70">
+            {ativas.map((reserva) => {
+              const mesa = mesas.find((item) => item.id === reserva.mesaId)
+              return (
+                <li key={reserva.id} className="flex items-center gap-3 py-2">
+                  <span className="w-11 shrink-0 text-sm font-semibold tabular-nums">
+                    {format(new Date(reserva.inicio), "HH:mm")}
+                  </span>
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="truncate text-sm font-medium">{reserva.nome}</span>
+                    <span className="text-xs text-muted-foreground">
+                      {plural(reserva.pessoas, "pessoa", "pessoas")} ·{" "}
+                      {mesa ? `Mesa ${mesa.numero}` : "Sem mesa"}
+                    </span>
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    aria-label={`Cancelar a reserva de ${reserva.nome}`}
+                    onClick={(evento) => {
+                      setGatilho(evento.currentTarget)
+                      setCancelando(reserva)
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                </li>
+              )
+            })}
+          </ul>
+        </>
+      )}
+      <ConfirmarCancelamento
+        reserva={cancelando}
+        mesas={mesas}
+        aoMudar={(aberta) => !aberta && setCancelando(null)}
+        focoAoFechar={gatilho}
+      />
     </section>
   )
 }
@@ -285,7 +397,9 @@ export function PainelReservas({
   salao: ConfigSalao
   aoConfigurar: () => void
 }) {
-  if (!salao.funcoes.reservas) return <ReservasPro aoConfigurar={aoConfigurar} />
+  if (!salao.funcoes.reservas) {
+    return <ReservasPro mesas={mesas} salao={salao} aoConfigurar={aoConfigurar} />
+  }
   return <Painel mesas={mesas} salao={salao} />
 }
 
@@ -298,7 +412,14 @@ function Painel({ mesas, salao }: { mesas: Mesa[]; salao: ConfigSalao }) {
   const [nova, setNova] = useState(false)
   const [entrando, setEntrando] = useState(false)
   const [editando, setEditando] = useState<Reserva | null>(null)
+  const [cancelando, setCancelando] = useState<Reserva | null>(null)
   const [sentando, setSentando] = useState<QuemSenta | null>(null)
+  // Quem abriu a janela aberta agora: o foco volta para ele quando ela fecha.
+  const [gatilho, setGatilho] = useState<Gatilho>(null)
+  const abrirCom = (elemento: Gatilho, abrir: () => void) => {
+    setGatilho(elemento)
+    abrir()
+  }
   const marcadas = (reservas ?? []).filter(
     (reserva) => agora && statusDaReserva(reserva, agora, salao.reservas) === "marcada",
   ).length
@@ -306,16 +427,20 @@ function Painel({ mesas, salao }: { mesas: Mesa[]; salao: ConfigSalao }) {
   const sugestoes = quando
     ? sugestoesDaEspera(espera ?? [], mesas, reservas ?? [], quando)
     : new Map<string, Mesa>()
+  // A mesa da reserva só vem escolhida se ainda recebe; senão, a sugestão (a janela diz o porquê).
   const sentarReserva = (reserva: Reserva) =>
     setSentando({
       tipo: "reserva",
       reserva,
       mesaId:
-        reserva.mesaId ??
-        (quando
-          ? sugerirMesa(reserva.pessoas, mesas, reservas ?? [], { ...quando, ignorar: reserva.id })
-              ?.id
-          : undefined),
+        reserva.mesaId && !porQueNaoSenta(reserva.mesaId, mesas)
+          ? reserva.mesaId
+          : quando
+            ? sugerirMesa(reserva.pessoas, mesas, reservas ?? [], {
+                ...quando,
+                ignorar: reserva.id,
+              })?.id
+            : undefined,
     })
   return (
     <section aria-labelledby="titulo-reservas-espera" className={CAIXA}>
@@ -337,7 +462,7 @@ function Painel({ mesas, salao }: { mesas: Mesa[]; salao: ConfigSalao }) {
             size="sm"
             variant="outline"
             className="self-start"
-            onClick={() => setNova(true)}
+            onClick={(evento) => abrirCom(evento.currentTarget, () => setNova(true))}
           >
             <CalendarPlusIcon data-icon="inline-start" />
             Nova reserva
@@ -353,8 +478,9 @@ function Painel({ mesas, salao }: { mesas: Mesa[]; salao: ConfigSalao }) {
                   mesas={mesas}
                   salao={salao}
                   agora={agora}
-                  aoEditar={() => setEditando(reserva)}
-                  aoSentar={() => sentarReserva(reserva)}
+                  aoEditar={(elemento) => abrirCom(elemento, () => setEditando(reserva))}
+                  aoCancelar={(elemento) => abrirCom(elemento, () => setCancelando(reserva))}
+                  aoSentar={(elemento) => abrirCom(elemento, () => sentarReserva(reserva))}
                 />
               ))}
             </ul>
@@ -366,7 +492,7 @@ function Painel({ mesas, salao }: { mesas: Mesa[]; salao: ConfigSalao }) {
             size="sm"
             variant="outline"
             className="self-start"
-            onClick={() => setEntrando(true)}
+            onClick={(evento) => abrirCom(evento.currentTarget, () => setEntrando(true))}
           >
             <UserPlusIcon data-icon="inline-start" />
             Entrar na espera
@@ -384,7 +510,11 @@ function Painel({ mesas, salao }: { mesas: Mesa[]; salao: ConfigSalao }) {
                     sugestao={sugestao}
                     agora={agora}
                     loja={loja?.nome ?? ""}
-                    aoSentar={() => setSentando({ tipo: "espera", entrada, mesaId: sugestao?.id })}
+                    aoSentar={(elemento) =>
+                      abrirCom(elemento, () =>
+                        setSentando({ tipo: "espera", entrada, mesaId: sugestao?.id }),
+                      )
+                    }
                   />
                 )
               })}
@@ -392,15 +522,26 @@ function Painel({ mesas, salao }: { mesas: Mesa[]; salao: ConfigSalao }) {
           )}
         </TabsContent>
       </Tabs>
-      <FormularioReserva aberto={nova} aoMudar={setNova} />
+      <FormularioReserva aberto={nova} aoMudar={setNova} focoAoFechar={gatilho} />
       <FormularioReserva
         key={editando?.id}
         reserva={editando ?? undefined}
         aberto={editando !== null}
         aoMudar={(aberto) => !aberto && setEditando(null)}
+        focoAoFechar={gatilho}
       />
-      <EntrarNaEspera aberto={entrando} aoMudar={setEntrando} />
-      <Sentar quem={sentando} aoMudar={(aberto) => !aberto && setSentando(null)} />
+      <ConfirmarCancelamento
+        reserva={cancelando}
+        mesas={mesas}
+        aoMudar={(aberta) => !aberta && setCancelando(null)}
+        focoAoFechar={gatilho}
+      />
+      <EntrarNaEspera aberto={entrando} aoMudar={setEntrando} focoAoFechar={gatilho} />
+      <Sentar
+        quem={sentando}
+        aoMudar={(aberto) => !aberto && setSentando(null)}
+        focoAoFechar={gatilho}
+      />
     </section>
   )
 }

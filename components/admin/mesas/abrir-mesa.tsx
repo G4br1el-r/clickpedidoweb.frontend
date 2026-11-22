@@ -29,7 +29,10 @@ export function AbrirMesa({ mesa }: { mesa: Mesa }) {
   const doAparelho = useGarcom((estado) => estado.nome)
   const abrir = useAbrirMesa()
   const sentar = useSentarReserva()
-  const reserva = useReservaDaVez()(mesa)
+  const reservaDa = useReservaDaVez()
+  const reserva = reservaDa(mesa)
+  // Com duas na janela, sentar a primeira pede a confirmação da outra, como no servidor.
+  const outra = reserva ? reservaDa(mesa, reserva.id) : undefined
   const garcons = salao?.garcons.filter((garcom) => garcom.ativo).map((item) => item.nome) ?? []
   const [pessoas, setPessoas] = useState("")
   const [escolhido, setEscolhido] = useState<string | null>(null)
@@ -72,6 +75,7 @@ export function AbrirMesa({ mesa }: { mesa: Mesa }) {
       }}
     >
       {reserva && <AvisoReserva reserva={reserva} />}
+      {outra && <AvisoReserva reserva={outra} />}
       <FieldGroup>
         <div className="grid grid-cols-2 gap-3">
           <Field data-invalid={Boolean(erros.pessoas)}>
@@ -150,7 +154,13 @@ export function AbrirMesa({ mesa }: { mesa: Mesa }) {
               setTentouSentar(true)
               if (conferida.erros.garcom) return
               sentar.mutate(
-                { id: reserva.id, mesaId: mesa.id, ...(garcom ? { garcom } : {}), ...por },
+                {
+                  id: reserva.id,
+                  mesaId: mesa.id,
+                  ...(garcom ? { garcom } : {}),
+                  ...(outra ? { confirmarReserva: true } : {}),
+                  ...por,
+                },
                 {
                   onSuccess: () => toast.success(`${reserva.nome} na mesa ${mesa.numero}.`),
                   onError: (erro) => toast.error(erro.message),

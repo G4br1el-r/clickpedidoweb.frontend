@@ -123,6 +123,45 @@ describe("Mesas: confirmar a reserva ao abrir", () => {
     expect(comanda?.mesa).toMatchObject({ garcom: "Bia", pessoas: 2 })
   })
 
+  test("com outra reserva na janela, Sentar a primeira avisa a outra e confirma", async () => {
+    const salao = await api().salao.config()
+    await api().salao.salvar({ ...salao, reservas: { antecedenciaMin: 180, toleranciaMin: 15 } })
+    await api().reservas.criar({
+      nome: "Bruno Dias",
+      inicio: new Date(2026, 10, 13, 22, 50).toISOString(),
+      pessoas: 2,
+      mesaId: "mesa-13",
+    })
+    const usuario = await abrir("?mesa=13")
+    const gaveta = within(await screen.findByRole("dialog", { name: "Mesa 13" }))
+    expect(
+      await gaveta.findByText("Reservada às 22:50 para Bruno Dias, 2 pessoas."),
+    ).toBeInTheDocument()
+    await usuario.click(await gaveta.findByRole("combobox", { name: "Garçom" }))
+    await usuario.click(await screen.findByRole("option", { name: "Bia" }))
+    await usuario.click(gaveta.getByRole("button", { name: "Sentar Marina Costa" }))
+
+    expect(await screen.findByText("Marina Costa na mesa 13.")).toBeInTheDocument()
+  })
+
+  test("logo depois da meia-noite, a reserva das 23:50 ainda avisa na gaveta", async () => {
+    vi.setSystemTime(new Date(2026, 10, 13, 23, 40))
+    await api().reservas.criar({
+      nome: "Ana Lima",
+      inicio: new Date(2026, 10, 13, 23, 50).toISOString(),
+      pessoas: 2,
+      mesaId: "mesa-12",
+    })
+    vi.setSystemTime(new Date(2026, 10, 14, 0, 1))
+    await abrir("?mesa=12")
+    const gaveta = within(await screen.findByRole("dialog", { name: "Mesa 12" }))
+
+    expect(
+      await gaveta.findByText("Reservada às 23:50 para Ana Lima, 2 pessoas."),
+    ).toBeInTheDocument()
+    expect(gaveta.getByRole("button", { name: "Abrir mesmo assim" })).toBeInTheDocument()
+  })
+
   test("a mesa livre sem reserva continua com Abrir mesa", async () => {
     await abrir("?mesa=12")
     const gaveta = within(await screen.findByRole("dialog", { name: "Mesa 12" }))

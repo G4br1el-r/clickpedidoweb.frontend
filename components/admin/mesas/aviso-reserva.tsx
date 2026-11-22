@@ -11,14 +11,24 @@ import { plural } from "@/lib/formato"
 /**
  * A reserva que segura a mesa agora, para a tela pedir a confirmação antes de abrir, transferir
  * ou juntar. Só vale na mesa sem comanda: a aberta (ou junta a outra) já está ocupada.
+ * `ignorar`: a reserva que está sentando, que não pede confirmação para ela mesma (como o
+ * servidor, que procura outra reserva da vez sem ela).
  */
-export function useReservaDaVez(): (mesa: Mesa | undefined) => Reserva | undefined {
+export function useReservaDaVez(): (
+  mesa: Mesa | undefined,
+  ignorar?: string,
+) => Reserva | undefined {
   const { data: reservas } = useReservas()
   const { data: salao } = useConfigSalao()
   const agora = useAgora(30_000)
-  return (mesa) =>
+  return (mesa, ignorar) =>
     mesa && salao && agora && mesa.status === "livre" && !mesa.juntadaCom
-      ? reservaDaMesa(mesa, reservas ?? [], agora, salao.reservas)
+      ? reservaDaMesa(
+          mesa,
+          (reservas ?? []).filter((reserva) => reserva.id !== ignorar),
+          agora,
+          salao.reservas,
+        )
       : undefined
 }
 

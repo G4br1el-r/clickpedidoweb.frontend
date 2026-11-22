@@ -32,6 +32,7 @@ import {
 import type { Reserva } from "@/lib/admin/dados/tipos"
 import { conferirReserva, type ErrosReserva, sugerirMesa } from "@/lib/admin/regras/reservas"
 import { plural } from "@/lib/formato"
+import { devolverFocoA } from "./devolver-foco"
 
 const SEM_MESA = "sem-mesa"
 
@@ -216,14 +217,17 @@ export function FormularioReserva({
   reserva,
   aberto,
   aoMudar,
+  focoAoFechar,
 }: {
   reserva?: Reserva
   aberto: boolean
   aoMudar: (aberto: boolean) => void
+  /** Para onde o foco volta quando a janela fecha (o botão ou o ⋯ que a abriu). */
+  focoAoFechar?: HTMLElement | null
 }) {
   return (
     <Dialog open={aberto} onOpenChange={aoMudar}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" onCloseAutoFocus={devolverFocoA(focoAoFechar)}>
         {aberto && <Campos reserva={reserva} aoFechar={() => aoMudar(false)} />}
       </DialogContent>
     </Dialog>

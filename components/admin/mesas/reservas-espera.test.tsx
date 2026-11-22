@@ -148,6 +148,12 @@ describe("Mesas: painel das reservas do dia", () => {
     await usuario.click(
       (await acoes("Marina Costa")).getByRole("menuitem", { name: "Cancelar reserva" }),
     )
+    // Cancelar pergunta antes: a mesa da reserva fica livre.
+    const pergunta = within(
+      await screen.findByRole("alertdialog", { name: "Cancelar a reserva de Marina Costa?" }),
+    )
+    expect(pergunta.getByText("A mesa 13 deixa de estar reservada.")).toBeInTheDocument()
+    await usuario.click(pergunta.getByRole("button", { name: "Cancelar reserva" }))
 
     const reservas = (await painel()).getByRole("list", { name: "Reservas de hoje" })
     await waitFor(() => {
@@ -198,7 +204,7 @@ describe("Mesas: lista de espera", () => {
     const fila = await abaEspera(usuario)
     const [carlos, juliana, pedro] = fila.getAllByRole("listitem").map((item) => item.textContent)
 
-    expect(carlos).toMatch(/Carlos Mendes.*2 pessoas.*há 25 min.*chamado há 2 min.*Mesa 11 livre/)
+    expect(carlos).toMatch(/Carlos Mendes.*2 pessoas.*há 25 min.*chamada há 2 min.*Mesa 11 livre/)
     expect(juliana).toMatch(/Juliana Rocha.*4 pessoas.*há 12 min.*Mesa 8 livre/)
     expect(pedro).toMatch(/Pedro Alves.*5 pessoas.*há 5 min.*Mesa 10 livre/)
   })
@@ -243,7 +249,7 @@ describe("Mesas: lista de espera", () => {
     await usuario.click(fila.getByRole("button", { name: "Chamar Juliana Rocha" }))
 
     await waitFor(() =>
-      expect(fila.getAllByRole("listitem")[1]).toHaveTextContent("chamado há 0 min"),
+      expect(fila.getAllByRole("listitem")[1]).toHaveTextContent("chamada há 0 min"),
     )
   })
 
@@ -265,13 +271,10 @@ describe("Mesas: lista de espera", () => {
     await waitFor(() => expect(fila.getAllByRole("listitem").at(-1)).toHaveTextContent("Ana Lima"))
   })
 
-  test("Desistiu tira da fila", async () => {
+  test("Desistiu, à vista entre as ações, tira da fila", async () => {
     const usuario = await abrir()
     const fila = await abaEspera(usuario)
-    await usuario.click(fila.getByRole("button", { name: "Mais ações de Juliana Rocha" }))
-    await usuario.click(
-      within(await screen.findByRole("menu")).getByRole("menuitem", { name: "Desistiu" }),
-    )
+    await usuario.click(fila.getByRole("button", { name: "Juliana Rocha desistiu" }))
 
     await waitFor(() => expect(fila.getAllByRole("listitem")).toHaveLength(2))
   })
@@ -305,7 +308,144 @@ describe("Mesas: lista de espera", () => {
   })
 })
 
+describe("Mesas: sentar quando a mesa da reserva não pode abrir", () => {
+  test("a mesa da reserva aberta por outro: avisa e já vem com a sugestão", async () => {
+    await api().mesas.abrir("mesa-13", { pessoas: 2, garcom: "Rafa", confirmarReserva: true })
+    const usuario = await abrir()
+    await usuario.click(
+      await (await painel()).findByRole("button", { name: "Sentar Marina Costa" }),
+    )
+    const janela = within(await screen.findByRole("dialog", { name: "Sentar Marina Costa" }))
+
+    expect(janela.getByText("A mesa 13 está ocupada.")).toBeInTheDocument()
+    expect(janela.getByRole("combobox", { name: "Mesa" })).toHaveTextContent(/^Mesa 11\b/)
+    await escolherGarcom(usuario, janela as unknown as typeof screen)
+    await usuario.click(janela.getByRole("button", { name: "Sentar" }))
+    expect(await screen.findByText("Marina Costa na mesa 11.")).toBeInTheDocument()
+  })
+
+  test("a mesa da reserva excluída: avisa; sem mesa que caiba, pede a mesa", async () => {
+    // 30 pessoas: nenhuma mesa da pizzaria cabe, e a sugestão fica vazia.
+    const grande = await api().mesas.criar({ numero: 60, lugares: 20 })
+    await api().reservas.criar({
+      nome: "Ana Lima",
+      inicio: new Date(2026, 10, 13, 20, 45).toISOString(),
+      pessoas: 30,
+      mesaId: grande.id,
+    })
+    vi.setSystemTime(new Date(2026, 10, 13, 21, 1))
+    await api().mesas.excluir(grande.id)
+    const usuario = await abrir()
+    await usuario.click(await (await painel()).findByRole("button", { name: "Sentar Ana Lima" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Sentar Ana Lima" }))
+
+    expect(janela.getByText("A mesa da reserva foi excluída.")).toBeInTheDocument()
+    await escolherGarcom(usuario, janela as unknown as typeof screen)
+    await usuario.click(janela.getByRole("button", { name: "Sentar" }))
+    expect(janela.getByText("Escolha a mesa.")).toBeInTheDocument()
+    expect(janela.getByRole("combobox", { name: "Mesa" })).toHaveAttribute("aria-invalid", "true")
+  })
+
+  test("a lista mostra os lugares, e mais pessoas que lugares só avisa", async () => {
+    const usuario = await abrir()
+    const fila = await abaEspera(usuario)
+    await usuario.click(fila.getByRole("button", { name: "Sentar Pedro Alves" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Sentar Pedro Alves" }))
+    await usuario.click(janela.getByRole("combobox", { name: "Mesa" }))
+    await usuario.click(await screen.findByRole("option", { name: "Mesa 8 · 4 lugares" }))
+
+    expect(janela.getByText("A mesa 8 tem 4 lugares.")).toBeInTheDocument()
+  })
+
+  test("com duas reservas na janela da mesma mesa, sentar a primeira confirma a outra", async () => {
+    const salao = await api().salao.config()
+    await api().salao.salvar({ ...salao, reservas: { antecedenciaMin: 180, toleranciaMin: 15 } })
+    const reserva = (nome: string, hora: number, minuto: number) =>
+      api().reservas.criar({
+        nome,
+        inicio: new Date(2026, 10, 13, hora, minuto).toISOString(),
+        pessoas: 2,
+        mesaId: "mesa-8",
+      })
+    await reserva("Ana Lima", 20, 45)
+    await reserva("Bruno Dias", 22, 50)
+    const usuario = await abrir()
+    await usuario.click(await (await painel()).findByRole("button", { name: "Sentar Ana Lima" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Sentar Ana Lima" }))
+
+    expect(janela.getByText("Reservada às 22:50 para Bruno Dias, 2 pessoas.")).toBeInTheDocument()
+    await escolherGarcom(usuario, janela as unknown as typeof screen)
+    await usuario.click(janela.getByRole("button", { name: "Sentar mesmo assim" }))
+    expect(await screen.findByText("Ana Lima na mesa 8.")).toBeInTheDocument()
+  })
+})
+
+describe("Mesas: o foco volta para quem abriu a janela", () => {
+  const fecharComEsc = async (usuario: ReturnType<typeof userEvent.setup>, nome: string) => {
+    await screen.findByRole("dialog", { name: nome })
+    await usuario.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+  }
+
+  test("Nova reserva e Sentar devolvem o foco ao botão", async () => {
+    const usuario = await abrir()
+    const aqui = await painel()
+    const nova = aqui.getByRole("button", { name: "Nova reserva" })
+    nova.focus()
+    await usuario.keyboard("{Enter}")
+    await fecharComEsc(usuario, "Nova reserva")
+    expect(nova).toHaveFocus()
+
+    const sentar = await aqui.findByRole("button", { name: "Sentar Marina Costa" })
+    sentar.focus()
+    await usuario.keyboard("{Enter}")
+    await fecharComEsc(usuario, "Sentar Marina Costa")
+    expect(sentar).toHaveFocus()
+  })
+
+  test("Editar pelo ⋯ devolve o foco ao ⋯", async () => {
+    const usuario = await abrir()
+    const mais = await (await painel()).findByRole("button", {
+      name: "Mais ações da reserva de Marina Costa",
+    })
+    await usuario.click(mais)
+    await usuario.click(
+      within(await screen.findByRole("menu")).getByRole("menuitem", { name: "Editar" }),
+    )
+    await fecharComEsc(usuario, "Editar reserva")
+    expect(mais).toHaveFocus()
+  })
+
+  test("Entrar na espera devolve o foco ao botão", async () => {
+    const usuario = await abrir()
+    await abaEspera(usuario)
+    const entrar = (await painel()).getByRole("button", { name: "Entrar na espera" })
+    entrar.focus()
+    await usuario.keyboard("{Enter}")
+    await fecharComEsc(usuario, "Entrar na espera")
+    expect(entrar).toHaveFocus()
+  })
+})
+
 describe("Mesas: reservas é Pro", () => {
+  test("desligada com reservas ativas, o bloco lista e deixa cancelar, e a mesa solta", async () => {
+    await api().reservas.listar()
+    const salao = await api().salao.config()
+    await api().salao.salvar({ ...salao, funcoes: { ...salao.funcoes, reservas: false } })
+    const usuario = await abrir()
+    const aqui = await painel()
+    const ativas = await aqui.findByRole("list", { name: "Reservas ativas" })
+    await waitFor(() => expect(linhas(ativas)).toHaveLength(2))
+    expect(linhas(ativas)[0]).toMatch(/20:50.*Marina Costa.*2 pessoas.*Mesa 13/)
+
+    await usuario.click(aqui.getByRole("button", { name: "Cancelar a reserva de Marina Costa" }))
+    const pergunta = within(await screen.findByRole("alertdialog"))
+    await usuario.click(pergunta.getByRole("button", { name: "Cancelar reserva" }))
+
+    expect(await screen.findByText("Reserva de Marina Costa cancelada.")).toBeInTheDocument()
+    await waitFor(async () => expect(await cartao(13)).not.toHaveAccessibleDescription(/Reservada/))
+  })
+
   test("com a função desligada, o painel mostra o cadeado, o preço e leva a Configurar salão", async () => {
     const salao = await api().salao.config()
     await api().salao.salvar({ ...salao, funcoes: { ...salao.funcoes, reservas: false } })

@@ -15,6 +15,7 @@ import { Field, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field
 import { Input } from "@/components/ui/input"
 import { useEntrarNaEspera } from "@/lib/admin/dados/consultas-mesas"
 import { conferirEspera } from "@/lib/admin/regras/reservas"
+import { devolverFocoA } from "./devolver-foco"
 
 function Campos({ aoFechar }: { aoFechar: () => void }) {
   const entrar = useEntrarNaEspera()
@@ -108,13 +109,16 @@ function Campos({ aoFechar }: { aoFechar: () => void }) {
 export function EntrarNaEspera({
   aberto,
   aoMudar,
+  focoAoFechar,
 }: {
   aberto: boolean
   aoMudar: (aberto: boolean) => void
+  /** Para onde o foco volta quando a janela fecha (o botão que a abriu). */
+  focoAoFechar?: HTMLElement | null
 }) {
   return (
     <Dialog open={aberto} onOpenChange={aoMudar}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent className="sm:max-w-sm" onCloseAutoFocus={devolverFocoA(focoAoFechar)}>
         {aberto && <Campos aoFechar={() => aoMudar(false)} />}
       </DialogContent>
     </Dialog>

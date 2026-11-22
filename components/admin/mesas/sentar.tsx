@@ -11,7 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldError, FieldLabel } from "@/components/ui/field"
+import { Field, FieldDescription, FieldError, FieldLabel } from "@/components/ui/field"
 import {
   Select,
   SelectContent,
@@ -25,22 +25,21 @@ import {
   useSentarDaEspera,
   useSentarReserva,
 } from "@/lib/admin/dados/consultas-mesas"
-import type { EntradaEspera, Mesa, Reserva } from "@/lib/admin/dados/tipos"
+import type { EntradaEspera, Reserva } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
-import { garcomDoAparelho } from "@/lib/admin/regras/abrir-mesa"
+import { conferirAbertura, garcomDoAparelho } from "@/lib/admin/regras/abrir-mesa"
+import { porQueNaoSenta } from "@/lib/admin/regras/reservas"
 import { plural } from "@/lib/formato"
-import { AvisoReserva, nomeNaLista, useReservaDaVez } from "./aviso-reserva"
+import { AvisoReserva, rotuloDaReserva, useReservaDaVez } from "./aviso-reserva"
+import { devolverFocoA } from "./devolver-foco"
 
 /** Quem vai sentar: a reserva que chegou ou alguém da espera, com a mesa que já vem escolhida. */
 export type QuemSenta =
   | { tipo: "reserva"; reserva: Reserva; mesaId?: string }
   | { tipo: "espera"; entrada: EntradaEspera; mesaId?: string }
 
-/** A mesa que pode abrir agora: sem comanda, sem bloqueio e sem estar junto de outra. */
-const podeAbrir = (mesa: Mesa) => mesa.status === "livre" && !mesa.bloqueio && !mesa.juntadaCom
-
 function Campos({ quem, aoFechar }: { quem: QuemSenta; aoFechar: () => void }) {
-  const { data: mesas = [] } = useMesas()
+  const { data: mesas } = useMesas()
   const { data: salao } = useConfigSalao()
   const doAparelho = useGarcom((estado) => estado.nome)
   const reservaDa = useReservaDaVez()
@@ -52,12 +51,22 @@ function Campos({ quem, aoFechar }: { quem: QuemSenta; aoFechar: () => void }) {
   const [tentou, setTentou] = useState(false)
   const garcom = escolhido ?? garcomDoAparelho(garcons, doAparelho)
   const { nome, pessoas } = quem.tipo === "reserva" ? quem.reserva : quem.entrada
-  const mesa = mesas.find((item) => item.id === mesaId)
-  // Outra reserva da vez na mesa escolhida pede confirmação; a própria, não.
-  const daVez = reservaDa(mesa)
-  const outra = quem.tipo === "reserva" && daVez?.id === quem.reserva.id ? undefined : daVez
+  const propria = quem.tipo === "reserva" ? quem.reserva.id : undefined
+  // A lista traz só as mesas que recebem agora: livres (mesmo em limpeza), sem bloqueio e soltas.
+  const abertas = (mesas ?? []).filter((item) => !porQueNaoSenta(item.id, mesas ?? []))
+  const mesa = abertas.find((item) => item.id === mesaId)
+  // A mesa da reserva que não pode abrir (ocupada, juntada, bloqueada, excluída) diz o porquê.
+  const semAMesaDela =
+    mesas && quem.tipo === "reserva" && quem.reserva.mesaId
+      ? porQueNaoSenta(quem.reserva.mesaId, mesas)
+      : undefined
+  // Outra reserva da vez na mesa escolhida pede confirmação; a própria, não (como o servidor).
+  const outra = reservaDa(mesa, propria)
+  const lugares = mesa
+    ? conferirAbertura({ mesa, pessoas: String(pessoas), garcom, garcons }).aviso
+    : undefined
   const erros = {
-    mesa: tentou && !mesaId ? "Escolha a mesa." : null,
+    mesa: tentou && !mesa ? "Escolha a mesa." : null,
     garcom: tentou && garcons.length > 0 && !garcom ? "Escolha o garçom." : null,
   }
   const pendente = sentarReserva.isPending || sentarEspera.isPending
@@ -93,25 +102,36 @@ function Campos({ quem, aoFechar }: { quem: QuemSenta; aoFechar: () => void }) {
           A mesa abre para {plural(pessoas, "pessoa", "pessoas")}, no nome de {nome}.
         </DialogDescription>
       </DialogHeader>
+      {semAMesaDela && (
+        <p className="rounded-lg bg-(--tom-espera)/10 px-3 py-2 text-sm">{semAMesaDela}</p>
+      )}
       <div className="grid grid-cols-2 gap-3">
         <Field data-invalid={Boolean(erros.mesa)}>
           <FieldLabel htmlFor="sentar-mesa">Mesa</FieldLabel>
-          <Select value={mesaId} onValueChange={setMesaId}>
+          <Select value={mesa ? mesaId : ""} onValueChange={setMesaId}>
             <SelectTrigger
               id="sentar-mesa"
               aria-label="Mesa"
               aria-invalid={Boolean(erros.mesa)}
-              aria-describedby={erros.mesa ? "sentar-mesa-erro" : undefined}
+              aria-describedby={
+                [erros.mesa ? "sentar-mesa-erro" : null, lugares ? "sentar-mesa-aviso" : null]
+                  .filter(Boolean)
+                  .join(" ") || undefined
+              }
               className="w-full"
             >
               <SelectValue placeholder="Escolha" />
             </SelectTrigger>
             <SelectContent>
-              {mesas.filter(podeAbrir).map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {nomeNaLista(item, reservaDa(item))}
-                </SelectItem>
-              ))}
+              {abertas.map((item) => {
+                const reserva = reservaDa(item, propria)
+                return (
+                  <SelectItem key={item.id} value={item.id}>
+                    Mesa {item.numero} · {plural(item.lugares, "lugar", "lugares")}
+                    {reserva && ` · ${rotuloDaReserva(reserva)}`}
+                  </SelectItem>
+                )
+              })}
             </SelectContent>
           </Select>
           {erros.mesa && <FieldError id="sentar-mesa-erro">{erros.mesa}</FieldError>}
@@ -141,6 +161,12 @@ function Campos({ quem, aoFechar }: { quem: QuemSenta; aoFechar: () => void }) {
           </Field>
         )}
       </div>
+      {/* Mais pessoas que lugares só avisa (Q17), como em Abrir mesa. */}
+      {lugares && (
+        <FieldDescription id="sentar-mesa-aviso" className="-mt-2">
+          {lugares}
+        </FieldDescription>
+      )}
       {outra && <AvisoReserva reserva={outra} />}
       <DialogFooter>
         <Button type="submit" disabled={pendente}>
@@ -155,13 +181,16 @@ function Campos({ quem, aoFechar }: { quem: QuemSenta; aoFechar: () => void }) {
 export function Sentar({
   quem,
   aoMudar,
+  focoAoFechar,
 }: {
   quem: QuemSenta | null
   aoMudar: (aberto: boolean) => void
+  /** Para onde o foco volta quando a janela fecha (o botão que a abriu). */
+  focoAoFechar?: HTMLElement | null
 }) {
   return (
     <Dialog open={quem !== null} onOpenChange={aoMudar}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-md" onCloseAutoFocus={devolverFocoA(focoAoFechar)}>
         {quem && <Campos quem={quem} aoFechar={() => aoMudar(false)} />}
       </DialogContent>
     </Dialog>
