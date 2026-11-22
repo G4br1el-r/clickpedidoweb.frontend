@@ -104,6 +104,9 @@ describe("Chamados", () => {
     await usuario.click(within(chamado).getByRole("button", { name: "Atender a mesa 1" }))
 
     expect(await within(lista).findByText("Nenhum chamado agora.")).toBeInTheDocument()
+    expect(
+      screen.getByRole("button", { name: "Chamados, 0 esperando", hidden: true }),
+    ).toBeInTheDocument()
     expect((await api().chamados.listar())[0].atendidoEm).toBe(
       new Date(2026, 10, 13, 20, 30).toISOString(),
     )
@@ -164,7 +167,9 @@ describe("Chamados", () => {
     expect(tocadas).not.toHaveBeenCalled()
   })
 
-  test("com o QR desligado, fica o QR na mesa com o cadeado Pro", async () => {
+  test("com o QR desligado e nada esperando, fica só o QR na mesa com o cadeado Pro", async () => {
+    const [chamado] = await api().chamados.listar()
+    await api().chamados.atender(chamado.id)
     const salao = await api().salao.config()
     await api().salao.salvar({ ...salao, funcoes: { ...salao.funcoes, qr: false } })
     const usuario = userEvent.setup()
@@ -177,6 +182,25 @@ describe("Chamados", () => {
     await usuario.click(within(explicacao).getByRole("button", { name: "Abrir Configurar salão" }))
     expect(await screen.findByRole("dialog", { name: "Configurar salão" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /^Chamados/ })).not.toBeInTheDocument()
+  })
+
+  test("com o QR desligado, o que já chegou continua atendível, junto com o cadeado", async () => {
+    await api().qr.pedir("mesa-11", [agua])
+    const salao = await api().salao.config()
+    await api().salao.salvar({ ...salao, funcoes: { ...salao.funcoes, qr: false } })
+    const usuario = userEvent.setup()
+    renderizar()
+
+    expect(await screen.findByRole("button", { name: "QR na mesa Pro" })).toBeInTheDocument()
+    const mesa1 = await screen.findByRole("button", { name: "Mesa 1" })
+    expect(within(mesa1).getByText("Chamou o garçom")).toBeInTheDocument()
+    await usuario.click(await screen.findByRole("button", { name: "Chamados, 2 esperando" }))
+    const lista = await screen.findByRole("dialog", { name: "Chamados" })
+    await usuario.click(within(lista).getByRole("button", { name: "Atender a mesa 1" }))
+    await usuario.click(within(lista).getByRole("button", { name: "Recusar o pedido da mesa 11" }))
+
+    expect(await within(lista).findByText("Nenhum chamado agora.")).toBeInTheDocument()
+    expect(within(lista).queryByRole("button", { name: "Folha de QR" })).not.toBeInTheDocument()
   })
 })
 

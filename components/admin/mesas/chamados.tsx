@@ -129,24 +129,24 @@ export function ChamadosSalao({
       : null,
   )
 
-  if (!salao.funcoes.qr) {
-    return (
-      <>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          aria-label="QR na mesa Pro"
-          onClick={() => setProAberta(true)}
-        >
-          <QrCodeIcon data-icon="inline-start" />
-          QR na mesa
-          <SeloPro liberada={false} />
-        </Button>
-        <QrPro aberta={proAberta} aoMudar={setProAberta} aoConfigurar={aoConfigurar} />
-      </>
-    )
-  }
+  const cadeado = !salao.funcoes.qr && (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        aria-label="QR na mesa Pro"
+        onClick={() => setProAberta(true)}
+      >
+        <QrCodeIcon data-icon="inline-start" />
+        QR na mesa
+        <SeloPro liberada={false} />
+      </Button>
+      <QrPro aberta={proAberta} aoMudar={setProAberta} aoConfigurar={aoConfigurar} />
+    </>
+  )
+  // QR desligado e nada esperando: só o cadeado (a lista aberta fica até fechar).
+  if (cadeado && total === 0 && !aberta) return cadeado
 
   const numero = (mesaId: string) => mesas.find((mesa) => mesa.id === mesaId)?.numero
   const ha = (momento: string) => (agora ? ` · há ${tempoDesde(momento, agora)}` : "")
@@ -162,6 +162,7 @@ export function ChamadosSalao({
 
   return (
     <>
+      {cadeado}
       <Button
         type="button"
         size="sm"
@@ -294,7 +295,7 @@ export function ChamadosSalao({
               </ul>
             )}
           </div>
-          {rodape && <SheetFooter>{rodape}</SheetFooter>}
+          {rodape && salao.funcoes.qr && <SheetFooter>{rodape}</SheetFooter>}
         </SheetContent>
       </Sheet>
     </>

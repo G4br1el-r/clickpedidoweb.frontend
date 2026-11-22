@@ -65,8 +65,9 @@ export function PaginaMesas() {
   const { data: loja } = useLoja()
   const { data: reservas } = useReservas(4_000)
   const qrLigado = salao?.funcoes.qr ?? false
-  const { data: chamados } = useChamados(4_000, { ativo: qrLigado })
-  const { data: pedidosQr } = usePedidosQr(4_000, { ativo: qrLigado })
+  // Com o QR desligado, o que já chegou continua atendível: as consultas ficam ligadas.
+  const { data: chamados } = useChamados(4_000)
+  const { data: pedidosQr } = usePedidosQr(4_000)
   const agora = useAgora(30_000)
   const [filtros, setFiltros] = useEstadoGrade()
   const [numeroAberto, setNumeroAberto] = useMesaAberta()
@@ -145,12 +146,10 @@ export function PaginaMesas() {
       mesa,
       comanda,
       reserva,
-      selo: qrLigado
-        ? seloDaMesa(
-            chamados?.filter((chamado) => chamado.mesaId === mesa.id),
-            pedidosQr?.filter((pedido) => pedido.mesaId === mesa.id),
-          )
-        : null,
+      selo: seloDaMesa(
+        chamados?.filter((chamado) => chamado.mesaId === mesa.id),
+        pedidosQr?.filter((pedido) => pedido.mesaId === mesa.id),
+      ),
       estado: estadoDaMesa(mesa, comanda, {
         ...(principal ? { principal } : {}),
         ...(reserva && agora
