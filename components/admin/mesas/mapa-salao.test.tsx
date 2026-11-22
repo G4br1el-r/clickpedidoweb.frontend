@@ -67,10 +67,18 @@ async function abrir(inicial?: string) {
 
 const api = () => servidorDo("pizzaria")
 const mapa = (area: string) => screen.findByRole("list", { name: `Mapa: ${area}` })
-const numeros = (lista: HTMLElement) =>
-  within(lista)
-    .getAllByRole("button", { name: /^Mesa \d+$/ })
-    .map((botao) => Number(botao.textContent?.match(/\d+/)?.[0]))
+/** Os números das mesas da lista, na ordem da página, lidos do nome falado ("Mesa 3"). */
+function numeros(lista: HTMLElement) {
+  const lidos: number[] = []
+  within(lista).getAllByRole("button", {
+    name: (nome) => {
+      const numero = /^Mesa (\d+)$/.exec(nome)?.[1]
+      if (numero) lidos.push(Number(numero))
+      return numero !== undefined
+    },
+  })
+  return lidos
+}
 
 beforeEach(async () => {
   vi.useFakeTimers({ toFake: ["Date"] })

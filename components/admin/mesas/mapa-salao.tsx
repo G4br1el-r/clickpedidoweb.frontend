@@ -109,7 +109,11 @@ function MesaNoMapa({
   return (
     <li
       ref={arraste.setNodeRef}
-      className={cn("relative p-1.5", arraste.isDragging && "z-10 opacity-90")}
+      className={cn(
+        // A mesa que está sendo movida fica por cima das outras.
+        "relative p-1.5 focus-within:z-10",
+        arraste.isDragging && "z-10 opacity-90",
+      )}
       style={{
         gridColumn: `${posicao.x + 1} / span ${largura}`,
         gridRow: `${posicao.y + 1} / span ${altura}`,
@@ -127,7 +131,7 @@ function MesaNoMapa({
           evento.preventDefault()
           aoMover(direcao, evento.shiftKey ? 4 : 1)
         }}
-        aria-label={`Mesa ${mesa.numero}`}
+        aria-labelledby={`mapa-${mesa.id}`}
         aria-describedby={`mapa-${mesa.id}-detalhes`}
         data-alerta={alerta?.tipo}
         className={cn(
@@ -145,16 +149,14 @@ function MesaNoMapa({
           sobreOutra && "ring-2 ring-destructive",
         )}
       >
-        <span className="text-[15px] leading-none font-semibold">{mesa.numero}</span>
-        <span
-          className={cn(
-            "flex max-w-full items-center gap-1 text-[11px] leading-tight font-medium",
-            !ocupada && "text-muted-foreground",
-          )}
-        >
-          <Traco tom={estado.tom} className="h-2.5" />
-          <span className="truncate">{estado.rotulo}</span>
+        {/* O nome é o da grade ("Mesa 3"); na planta só cabe o número. */}
+        <span id={`mapa-${mesa.id}`} className="sr-only">
+          Mesa {mesa.numero}
         </span>
+        <span aria-hidden="true" className="-mt-3.5 text-[15px] leading-none font-semibold">
+          {mesa.numero}
+        </span>
+
         <span id={`mapa-${mesa.id}-detalhes`} className="sr-only">
           {editando
             ? [descreverPosicao(posicao), sobreOutra ? "sobre outra mesa" : null]
@@ -163,6 +165,18 @@ function MesaNoMapa({
             : descricaoDaMesa(linha, agora)}
         </span>
       </button>
+      {/* O estado fica por cima do botão, fora dele: dentro, o texto visível não caberia no nome
+          "Mesa 3" (a descrição falada já começa pelo estado). */}
+      <span
+        aria-hidden="true"
+        className={cn(
+          "pointer-events-none absolute inset-x-2 top-1/2 mt-1 flex items-center justify-center gap-1 text-[11px] leading-tight font-medium",
+          !ocupada && "text-muted-foreground",
+        )}
+      >
+        <Traco tom={estado.tom} className="h-2.5" />
+        <span className="truncate">{estado.rotulo}</span>
+      </span>
       {!editando && (
         <MenuMesa
           mesa={mesa}
@@ -366,7 +380,13 @@ export function MapaSalao({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <TabsList aria-label="Áreas">
           {comMesa.map((area) => (
-            <TabsTrigger key={area.id} value={area.id} disabled={editando}>
+            // Texto da aba inativa mais forte: o padrão não passa no contraste sobre o fundo cinza.
+            <TabsTrigger
+              key={area.id}
+              value={area.id}
+              disabled={editando}
+              className="text-foreground/80 dark:text-foreground/80"
+            >
               {area.nome}
             </TabsTrigger>
           ))}
