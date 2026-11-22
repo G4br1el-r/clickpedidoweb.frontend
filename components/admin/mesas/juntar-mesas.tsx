@@ -107,14 +107,17 @@ function Campos({
                   }
                 />
                 <Label htmlFor={`juntar-${outra.id}`} className="font-normal">
-                  Mesa {outra.numero}{" "}
-                  <span className="text-muted-foreground">
-                    ·{" "}
-                    {outra.status === "ocupada"
-                      ? "aberta"
-                      : reserva
-                        ? rotuloDaReserva(reserva)
-                        : "livre"}
+                  {/* Um texto só: "reservada 20:50" quebra a linha sem separar "Mesa" do número. */}
+                  <span>
+                    <span className="whitespace-nowrap">Mesa {outra.numero}</span>{" "}
+                    <span className="text-muted-foreground">
+                      ·{" "}
+                      {outra.status === "ocupada"
+                        ? "aberta"
+                        : reserva
+                          ? rotuloDaReserva(reserva)
+                          : "livre"}
+                    </span>
                   </span>
                 </Label>
               </li>

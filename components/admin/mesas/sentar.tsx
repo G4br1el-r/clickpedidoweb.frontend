@@ -105,7 +105,8 @@ function Campos({ quem, aoFechar }: { quem: QuemSenta; aoFechar: () => void }) {
       {semAMesaDela && (
         <p className="rounded-lg bg-(--tom-espera)/10 px-3 py-2 text-sm">{semAMesaDela}</p>
       )}
-      <div className="grid grid-cols-2 gap-3">
+      {/* Um campo por linha: "Mesa 13 · 2 lugares · reservada 20:50" não cabe em meia janela. */}
+      <div className="grid gap-3">
         <Field data-invalid={Boolean(erros.mesa)}>
           <FieldLabel htmlFor="sentar-mesa">Mesa</FieldLabel>
           <Select value={mesa ? mesaId : ""} onValueChange={setMesaId}>

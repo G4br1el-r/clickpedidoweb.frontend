@@ -75,8 +75,10 @@ export function FiltrosMesas({
   const escolher = (valor: string) => (valor === TODOS ? null : valor)
 
   return (
-    <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
-      <InputGroup className="lg:max-w-xs">
+    // Pela largura da coluna da grade (com o painel de reservas ao lado, ela encolhe): a busca só
+    // vai para o lado dos filtros quando cabem todos na mesma linha.
+    <div className="flex flex-col gap-2 @5xl:flex-row @5xl:items-center">
+      <InputGroup className="@5xl:max-w-xs">
         <InputGroupAddon>
           <SearchIcon />
         </InputGroupAddon>

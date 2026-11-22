@@ -41,8 +41,9 @@ import { NovaMesa } from "./nova-mesa"
 import { NumerosSalao } from "./numeros-salao"
 import { PainelReservas } from "./reservas-espera"
 
-// Com o painel de reservas ao lado (xl), a grade fica com 4 colunas até a tela larga.
-const GRADE = "grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 2xl:grid-cols-5"
+// As colunas seguem a largura que sobra para a grade (com o painel de reservas ao lado, a partir de
+// 1280 px, ela encolhe): o cartão fica com uns 185 px ou mais, sem cortar o nome nem a reserva.
+const GRADE = "grid grid-cols-2 gap-2.5 @xl:grid-cols-3 @min-[52rem]:grid-cols-4 @5xl:grid-cols-5"
 
 /** Mesas do salão: a grade por área, na ordem das áreas, e a comanda de cada mesa. */
 export function PaginaMesas() {
@@ -204,7 +205,7 @@ export function PaginaMesas() {
             <PainelReservas mesas={mesas} salao={salao} aoConfigurar={() => setSalaoAberto(true)} />
           </aside>
         )}
-        <div className="flex min-w-0 flex-col gap-5 xl:col-start-1 xl:row-start-1">
+        <div className="@container flex min-w-0 flex-col gap-5 xl:col-start-1 xl:row-start-1">
           {mesas && salao && mesas.length > 0 && (
             <ToggleGroup
               type="single"
