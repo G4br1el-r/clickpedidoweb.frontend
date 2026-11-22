@@ -325,6 +325,43 @@ test("cozinha: o resumo de produção destaca os tickets e a Exibição muda o q
   await expect(page.getByRole("dialog", { name: "Atalhos do teclado" })).toBeVisible()
 })
 
+test("cozinha: o Histórico acha o ticket, mostra a linha do tempo e refaz", async ({
+  page,
+}, info) => {
+  const celular = (info.project.use.viewport?.width ?? 0) < 1024
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha?aba=historico")
+  const historico = celular
+    ? page.getByRole("list", { name: "Histórico" })
+    : page.getByRole("table", { name: "Histórico" })
+  await expect(historico).toBeVisible({ timeout: 15_000 })
+  await verificarAcessibilidade(page)
+  await esperarAnimacoes(page)
+  // A tela visível: os filtros e o começo da lista (a lista inteira é maior que a tela).
+  await page.mouse.move(0, 0)
+  await expect(page).toHaveScreenshot("cozinha-historico.png")
+
+  // A retirada #1407 já ficou pronta: dá para refazer.
+  await page.getByRole("searchbox", { name: "Buscar no histórico" }).fill("1407")
+  await page.getByRole("button", { name: /Retirada · #1407/ }).click()
+  const detalhe = page.getByRole("dialog", { name: /^Retirada · #1407/ })
+  await expect(detalhe.getByRole("list", { name: "Linha do tempo" })).toContainText("Pronto")
+  await esperarAnimacoes(page)
+  await expect(detalhe).toHaveScreenshot("cozinha-historico-detalhe.png")
+
+  await detalhe.getByRole("button", { name: "Refazer…" }).click()
+  const janela = page.getByRole("dialog", { name: /^Refazer Retirada · #1407/ })
+  await janela.getByRole("radio", { name: "Caiu" }).click()
+  await esperarAnimacoes(page)
+  await expect(janela).toHaveScreenshot("cozinha-refazer.png")
+  await janela.getByRole("button", { name: "Refazer" }).click()
+  await expect(page.getByText("Retirada · #1407: refazer na cozinha.")).toBeVisible()
+
+  await page.getByRole("tab", { name: "Quadro" }).click()
+  const refeito = page.getByRole("article", { name: "Retirada · #1407 · refazer" })
+  await expect(refeito).toContainText("Refazer · Caiu")
+})
+
 test("praças: o Forno e a Montagem fazem a sua parte, e a expedição vê pronto", async ({
   page,
 }, info) => {

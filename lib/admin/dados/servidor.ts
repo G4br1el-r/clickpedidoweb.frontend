@@ -40,6 +40,7 @@ import {
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
 import { marcarVia } from "../regras/pracas"
+import { entregarRefazer, type PedidoDeRefazer, refazer } from "../regras/refazer"
 import { etapasDoCaminho, proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearEstoque } from "./estoque-demo"
@@ -717,7 +718,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             criado >= inicio &&
             criado <= fim &&
             (!status || status.includes(pedido.status)) &&
-            (!naCozinha || naMaoDaCozinha(pedido)) &&
+            (!naCozinha || naMaoDaCozinha(pedido) || ticketsDaCozinha([pedido]).length > 0) &&
             (!concluidosEm ||
               (pedido.status === "concluido" &&
                 isSameDay(new Date(pedido.atualizadoEm), concluidosEm)))
@@ -1237,13 +1238,15 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     /** Cada ticket da cozinha é uma rodada de um pedido; o pedido acompanha as rodadas. */
     cozinha: {
       /** `de`: a etapa que a tela mostrava no ticket. */
-      avancar(id: number, rodada: number, de: StatusTicket) {
-        return alterar(id, (pedido) => avancarRodada(pedido, rodada, de, new Date().toISOString()))
+      avancar(id: number, rodada: number, de: StatusTicket, refazer?: number) {
+        return alterar(id, (pedido) =>
+          avancarRodada(pedido, rodada, de, new Date().toISOString(), refazer),
+        )
       },
 
       /** Desfaz a última etapa do ticket: o pronto volta a preparar, o preparo volta a fazer. */
-      voltar(id: number, rodada: number, de: StatusTicket) {
-        return alterar(id, (pedido) => voltarRodada(pedido, rodada, de))
+      voltar(id: number, rodada: number, de: StatusTicket, refazer?: number) {
+        return alterar(id, (pedido) => voltarRodada(pedido, rodada, de, refazer))
       },
 
       /** Risca (ou desrisca) um item. Riscar num ticket de A fazer já começa a rodada. */
@@ -1257,18 +1260,31 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       },
 
       /** O garçom levou a rodada pronta à mesa. */
-      servir(id: number, rodada: number) {
-        return alterar(id, (pedido) => servirRodada(pedido, rodada, new Date().toISOString()))
+      servir(id: number, rodada: number, refazer?: number) {
+        return alterar(id, (pedido) =>
+          servirRodada(pedido, rodada, new Date().toISOString(), refazer),
+        )
+      },
+
+      /** Refaz parte de uma rodada: vira um ticket novo; a conta e o status não mudam. */
+      refazer(id: number, entrada: PedidoDeRefazer) {
+        return alterar(id, (pedido) => refazer(pedido, entrada, new Date()))
+      },
+
+      /** Entrega e retirada: a cozinha entregou o que refez. */
+      entregarRefazer(id: number, numero: number) {
+        return alterar(id, (pedido) => entregarRefazer(pedido, numero, new Date().toISOString()))
       },
 
       /** A praça terminou a parte dela na rodada. Com a última, a rodada fica pronta. */
-      prontoNaPraca(id: number, rodada: number, pracaId: string) {
+      prontoNaPraca(id: number, rodada: number, pracaId: string, refazer?: number) {
         return alterar(id, (pedido, base) =>
           prontoNaPraca(
             pedido,
             rodada,
             { pracaId, produtos: base.produtos, pracas: base.loja.pracas ?? [] },
             new Date().toISOString(),
+            refazer,
           ),
         )
       },

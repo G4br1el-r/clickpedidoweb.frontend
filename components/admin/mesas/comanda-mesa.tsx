@@ -322,12 +322,14 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
             {prontas.map((ticket) => (
               <li
                 key={ticket.id}
-                aria-label={`${ticket.rodada}ª rodada pronta`}
+                aria-label={`${ticket.rodada}ª rodada pronta${ticket.refazer ? " · refazer" : ""}`}
                 className="flex items-center gap-3 rounded-lg bg-(--tom-pronto)/[0.08] py-2 pr-2 pl-3"
               >
                 <Traco tom="pronto" />
                 <span className="flex min-w-0 flex-1 flex-col text-sm">
-                  <span className="font-semibold">{ticket.rodada}ª rodada pronta</span>
+                  <span className="font-semibold">
+                    {ticket.rodada}ª rodada pronta{ticket.refazer ? " · refazer" : ""}
+                  </span>
                   <span className="truncate text-[13px] text-muted-foreground">
                     {ticket.itens.map((item) => `${item.quantidade}× ${item.nome}`).join(", ")}
                   </span>
@@ -336,7 +338,10 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                   type="button"
                   size="sm"
                   onClick={() =>
-                    servir.mutate({ id: pedido.id, rodada: ticket.rodada }, { onError: aoErrar })
+                    servir.mutate(
+                      { id: pedido.id, rodada: ticket.rodada, refazer: ticket.refazer?.numero },
+                      { onError: aoErrar },
+                    )
                   }
                 >
                   Servido

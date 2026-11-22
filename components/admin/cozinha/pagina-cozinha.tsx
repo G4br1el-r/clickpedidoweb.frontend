@@ -35,6 +35,7 @@ import {
   useAvisarSobreRodada,
   useCozinha,
   useDarCiente,
+  useEntregarRefazer,
   useLoja,
   usePriorizarPedido,
   useProntoNaPraca,
@@ -74,6 +75,8 @@ import { Traco } from "../traco"
 import { AjustesCozinha } from "./ajustes-cozinha"
 import { AtalhosCozinha } from "./atalhos-cozinha"
 import { ESCALA_DO_QUADRO, ExibicaoCozinha } from "./exibicao-cozinha"
+import { HistoricoCozinha } from "./historico-cozinha"
+import { JanelaRefazer } from "./janela-refazer"
 import { MaisTarde } from "./mais-tarde"
 import { ResumoProducao } from "./resumo-producao"
 import { nomeDoTicket, TicketCozinha } from "./ticket-cozinha"
@@ -82,7 +85,13 @@ import { useAtalhosDaCozinha } from "./use-atalhos-da-cozinha"
 import { useSonsDaCozinha } from "./use-sons-da-cozinha"
 import { useViasDaCozinha } from "./use-vias-da-cozinha"
 
-const ABAS = ["quadro", "ajustes"] as const
+const ABAS = ["quadro", "historico", "ajustes"] as const
+
+const NOME_DA_ABA: Record<(typeof ABAS)[number], string> = {
+  quadro: "Quadro",
+  historico: "Histórico",
+  ajustes: "Ajustes",
+}
 
 const FILTROS: { valor: FiltroCozinha; rotulo: string }[] = [
   { valor: "todos", rotulo: "Todos" },
@@ -123,6 +132,8 @@ function Coluna({
   aoEsgotar,
   destacados,
   compacto,
+  aoRefazer,
+  aoEntregar,
   comTitulo,
 }: {
   coluna: ColunaCozinha
@@ -145,6 +156,8 @@ function Coluna({
   /** Com um produto tocado no resumo: os tickets dele. Os outros ficam apagados. */
   destacados: Set<string> | null
   compacto: boolean
+  aoRefazer: (ticket: Ticket) => void
+  aoEntregar: (ticket: Ticket) => void
   comTitulo: boolean
 }) {
   return (
@@ -188,6 +201,8 @@ function Coluna({
               aoEsgotar={aoEsgotar}
               apagado={destacados ? !destacados.has(ticket.id) : false}
               compacto={compacto}
+              aoRefazer={() => aoRefazer(ticket)}
+              aoEntregar={() => aoEntregar(ticket)}
             />
           ))}
         </AnimatePresence>
@@ -238,6 +253,7 @@ export function PaginaCozinha({
     ? { pracaId: pracaAtual.id, produtos: produtos ?? [], pracas }
     : undefined
   const prontoNaPraca = useProntoNaPraca()
+  const entregar = useEntregarRefazer()
   const imprimirVias = usePreferenciasFila((estado) => estado.imprimirVias)
   const vias = useFilaDeVias()
   useSonsDaCozinha(pedidos, tempos, tique, visao, pracaAtual?.tocaSom === false)
@@ -249,6 +265,7 @@ export function PaginaCozinha({
   const compacto = usePreferenciasFila((estado) => estado.compacto)
   const [resumoAberto, setResumoAberto] = useState(false)
   const [ajudaAberta, setAjudaAberta] = useState(false)
+  const [refazendo, setRefazendo] = useState<Ticket | null>(null)
   // A última ação com Desfazer ainda na tela: o Z do teclado desfaz.
   const ultimoDesfazer = useRef<{ id: string | number; desfazer: () => void } | null>(null)
   const [destaque, setDestaque] = useState<string | null>(null)
@@ -275,7 +292,7 @@ export function PaginaCozinha({
     },
     aoPriorizar: (id) => {
       const ticket = doQuadro(id)
-      if (ticket) aoPriorizar(ticket, !ticket.pedido.prioridade)
+      if (ticket && !ticket.refazer) aoPriorizar(ticket, !ticket.pedido.prioridade)
     },
     aoAjuda: () => setAjudaAberta(true),
     aoDesfazer: () => {
@@ -340,7 +357,12 @@ export function PaginaCozinha({
   const avisar = (ticket: Ticket, para: StatusTicket, desfazer: () => void) =>
     comDesfazer(`${nomeDoTicket(ticket)} foi para ${NOME_DA_COLUNA[para]}.`, desfazer)
   const aoAvancar = (ticket: Ticket) => {
-    const mudanca = { id: ticket.pedido.id, rodada: ticket.rodada, de: ticket.status }
+    const mudanca = {
+      id: ticket.pedido.id,
+      rodada: ticket.rodada,
+      de: ticket.status,
+      refazer: ticket.refazer?.numero,
+    }
     const para: StatusTicket = ticket.status === "recebido" ? "em-preparo" : "pronto"
     avancar.mutate(mudanca, {
       onError: aoErrar,
@@ -354,7 +376,12 @@ export function PaginaCozinha({
       { onError: (erro) => toast.error(erro.message) },
     )
   const aoVoltar = (ticket: Ticket) => {
-    const mudanca = { id: ticket.pedido.id, rodada: ticket.rodada, de: ticket.status }
+    const mudanca = {
+      id: ticket.pedido.id,
+      rodada: ticket.rodada,
+      de: ticket.status,
+      refazer: ticket.refazer?.numero,
+    }
     const para: StatusTicket = ticket.status === "pronto" ? "em-preparo" : "recebido"
     voltar.mutate(mudanca, {
       onError: aoErrar,
@@ -365,7 +392,7 @@ export function PaginaCozinha({
   const aoProntoNaPraca = (ticket: Ticket) => {
     if (!visao || !pracaAtual) return
     prontoNaPraca.mutate(
-      { id: ticket.pedido.id, rodada: ticket.rodada, visao },
+      { id: ticket.pedido.id, rodada: ticket.rodada, visao, refazer: ticket.refazer?.numero },
       {
         onError: aoErrar,
         onSuccess: () => toast(`${nomeDoTicket(ticket)}: ${pracaAtual.nome} pronto.`),
@@ -395,6 +422,14 @@ export function PaginaCozinha({
           ),
       },
     )
+  /** O refazer da entrega ou da retirada foi entregue: sai do quadro. */
+  const aoEntregar = (ticket: Ticket) => {
+    if (!ticket.refazer) return
+    entregar.mutate(
+      { id: ticket.pedido.id, numero: ticket.refazer.numero },
+      { onError: aoErrar, onSuccess: () => toast(`${nomeDoTicket(ticket)}: entregue.`) },
+    )
+  }
   /** Voltou: o produto esgotado volta ao cardápio. */
   const aoVoltarAoCardapio = (produto: { id: string; nome: string }) =>
     alternarProduto.mutate(
@@ -458,13 +493,17 @@ export function PaginaCozinha({
               value={valor}
               className="text-foreground/80 dark:text-foreground/80"
             >
-              {valor === "quadro" ? "Quadro" : "Ajustes"}
+              {NOME_DA_ABA[valor]}
             </TabsTrigger>
           ))}
         </TabsList>
 
         {vias.elemento}
         <AtalhosCozinha aberta={ajudaAberta} aoMudar={setAjudaAberta} />
+        {refazendo && <JanelaRefazer ticket={refazendo} aoFechar={() => setRefazendo(null)} />}
+        <TabsContent value="historico">
+          <HistoricoCozinha aoReimprimir={aoReimprimir} aoRefazer={setRefazendo} />
+        </TabsContent>
         <TabsContent value="ajustes">
           <AjustesCozinha />
         </TabsContent>
@@ -600,6 +639,8 @@ export function PaginaCozinha({
                       aoEsgotar={aoEsgotar}
                       destacados={destacados}
                       compacto={compacto}
+                      aoRefazer={setRefazendo}
+                      aoEntregar={aoEntregar}
                       comTitulo
                     />
                   ))}
@@ -641,6 +682,8 @@ export function PaginaCozinha({
                         aoEsgotar={aoEsgotar}
                         destacados={destacados}
                         compacto={compacto}
+                        aoRefazer={setRefazendo}
+                        aoEntregar={aoEntregar}
                         comTitulo={false}
                       />
                     </TabsContent>

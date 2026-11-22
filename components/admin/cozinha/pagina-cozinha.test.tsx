@@ -1188,3 +1188,282 @@ describe("PaginaCozinha: atalhos do teclado", () => {
     expect(screen.queryByRole("dialog", { name: "Atalhos do teclado" })).not.toBeInTheDocument()
   })
 })
+
+describe("PaginaCozinha: refazer", () => {
+  /** Mesa com a rodada já pronta na cozinha. */
+  async function mesaPronta(numero: number) {
+    const { produto, comanda } = await comandaNaMesa(numero, 2)
+    await api().cozinha.avancar(comanda.id, 1, "recebido")
+    const pronta = await api().cozinha.avancar(comanda.id, 1, "em-preparo")
+    return { produto, comanda: pronta }
+  }
+
+  test("o refazer entra no topo de A fazer, marcado com o motivo, e anda como os outros", async () => {
+    telaGrande()
+    const { comanda } = await mesaPronta(71)
+    await api().cozinha.refazer(comanda.id, {
+      rodada: 1,
+      itens: [{ itemId: comanda.itens[0].id, quantidade: 1 }],
+      motivo: "caiu",
+    })
+    const usuario = userEvent.setup()
+    renderizar()
+
+    const aFazer = await coluna("A fazer")
+    const [primeiro] = aFazer.getAllByRole("article")
+    expect(primeiro).toHaveAccessibleName(/^Mesa 71 · #\d+ · refazer$/)
+    expect(within(primeiro).getByText("Refazer · Caiu")).toBeInTheDocument()
+
+    await usuario.click(within(primeiro).getByRole("button", { name: "Iniciar preparo" }))
+    await waitFor(async () =>
+      expect(
+        (await api().pedidos.buscar(comanda.id))?.refacoes?.[0].itens[0].iniciadoEm,
+      ).toBeDefined(),
+    )
+
+    // O menu volta o refazer para A fazer, como os outros.
+    const preparando = await (await coluna("Preparando")).findByRole("article", {
+      name: /^Mesa 71 · #\d+ · refazer$/,
+    })
+    await usuario.click(within(preparando).getByRole("button", { name: "Mais ações" }))
+    await usuario.click(await screen.findByRole("menuitem", { name: "Voltar para A fazer" }))
+    await waitFor(async () =>
+      expect(
+        (await api().pedidos.buscar(comanda.id))?.refacoes?.[0].itens[0].iniciadoEm,
+      ).toBeUndefined(),
+    )
+  })
+
+  test("Refazer… no ticket pronto: escolhe itens, quantidade e motivo, e o refazer vai para A fazer", async () => {
+    telaGrande()
+    const { produto, comanda } = await mesaPronta(72)
+    const usuario = userEvent.setup()
+    renderizar()
+    const pronto = await (await coluna("Prontos")).findByRole("article", { name: /^Mesa 72 ·/ })
+    await usuario.click(within(pronto).getByRole("button", { name: "Mais ações" }))
+    await usuario.click(await screen.findByRole("menuitem", { name: "Refazer…" }))
+
+    const janela = within(await screen.findByRole("dialog", { name: /^Refazer Mesa 72/ }))
+    expect(janela.getByRole("checkbox", { name: `2× ${produto.nome}` })).toBeChecked()
+    const quantidade = janela.getByRole("spinbutton", { name: `Quantidade de ${produto.nome}` })
+    expect(quantidade).toHaveValue(2)
+    await usuario.click(janela.getByRole("button", { name: "Refazer" }))
+    expect(await janela.findByText("Escolha o motivo.")).toBeInTheDocument()
+
+    await usuario.clear(quantidade)
+    await usuario.type(quantidade, "1")
+    await usuario.click(janela.getByRole("radio", { name: "Caiu" }))
+    await usuario.click(janela.getByRole("button", { name: "Refazer" }))
+
+    expect(await screen.findByText(/^Mesa 72 · #\d+: refazer na cozinha\.$/)).toBeInTheDocument()
+    await waitFor(async () =>
+      expect((await api().pedidos.buscar(comanda.id))?.refacoes).toMatchObject([
+        { motivo: "caiu", itens: [{ nome: produto.nome, quantidade: 1 }] },
+      ]),
+    )
+    expect(
+      await (await coluna("A fazer")).findByRole("article", { name: /^Mesa 72 · #\d+ · refazer$/ }),
+    ).toBeInTheDocument()
+  })
+  test("na praça, o refazer fica pronto só na parte dela; o menu não tem Prioridade; a via diz REFAZER", async () => {
+    telaGrande()
+    const lista = await api().produtos.listar()
+    const calzone = lista.find(
+      (produto) =>
+        produto.categoriaId === "cat-calzones" && produto.grupos.length === 0 && produto.disponivel,
+    ) as Produto
+    const mesa = await api().mesas.criar({ numero: 77 })
+    const comanda = await api().mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [{ produtoId: calzone.id, escolhas: {}, quantidade: 1 }],
+    })
+    await api().cozinha.avancar(comanda.id, 1, "recebido")
+    await api().cozinha.avancar(comanda.id, 1, "em-preparo")
+    await api().cozinha.refazer(comanda.id, {
+      rodada: 1,
+      itens: [{ itemId: comanda.itens[0].id, quantidade: 1 }],
+      motivo: "errado",
+    })
+    await api().cozinha.avancar(comanda.id, 1, "recebido", 1)
+    usePreferenciasFila.setState({ praca: "praca-forno" })
+    const usuario = userEvent.setup()
+    renderizar()
+
+    const refazer = await (await coluna("Preparando")).findByRole("article", {
+      name: /^Mesa 77 · #\d+ · refazer$/,
+    })
+    await usuario.click(within(refazer).getByRole("button", { name: "Mais ações" }))
+    expect(screen.queryByRole("menuitemcheckbox", { name: "Prioridade" })).not.toBeInTheDocument()
+    await usuario.click(await screen.findByRole("menuitem", { name: "Reimprimir via" }))
+    await waitFor(() => expect(impressas).toHaveLength(1))
+    expect(impressas[0]).toContain("REFAZER")
+
+    await usuario.click(within(refazer).getByRole("button", { name: "Marcar pronto · Forno" }))
+    await waitFor(async () =>
+      expect(
+        (await api().pedidos.buscar(comanda.id))?.refacoes?.[0].itens[0].feitoEm,
+      ).toBeDefined(),
+    )
+  })
+
+  test("o atalho P não mexe na prioridade do pedido a partir do refazer", async () => {
+    telaGrande()
+    const { comanda } = await mesaPronta(78)
+    await api().cozinha.refazer(comanda.id, {
+      rodada: 1,
+      itens: [{ itemId: comanda.itens[0].id, quantidade: 1 }],
+      motivo: "caiu",
+    })
+    const usuario = userEvent.setup()
+    renderizar()
+    const [refeito] = (await coluna("A fazer")).getAllByRole("article")
+    act(() => refeito.focus())
+    await usuario.keyboard("p")
+    await esperar(300)
+    expect((await api().pedidos.buscar(comanda.id))?.prioridade).toBeFalsy()
+  })
+
+  test("o refazer da entrega que já saiu fica pronto e sai com Entregue", async () => {
+    telaGrande()
+    const [saiu] = await api().pedidos.listar({ status: ["saiu-para-entrega"] })
+    const [item] = saiu.itens.filter((linha) => linha.vaiParaCozinha ?? saiu.enviarParaCozinha)
+    await api().cozinha.refazer(saiu.id, {
+      rodada: 1,
+      itens: [{ itemId: item.id, quantidade: 1 }],
+      motivo: "errado",
+    })
+    await api().cozinha.riscar(saiu.id, `${item.id}~r1`, true)
+    const usuario = userEvent.setup()
+    renderizar()
+
+    const pronto = await (await coluna("Prontos")).findByRole("article", {
+      name: new RegExp(`^Entrega · #${saiu.numero} · refazer$`),
+    })
+    await usuario.click(within(pronto).getByRole("button", { name: "Entregue" }))
+    await waitFor(async () =>
+      expect((await api().pedidos.buscar(saiu.id))?.refacoes?.[0].entregueEm).toBeDefined(),
+    )
+  })
+})
+
+describe("PaginaCozinha: histórico", () => {
+  /** Mesa com a rodada pronta às 20:10 e servida às 20:15. */
+  async function mesaServida(numero: number) {
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 0))
+    const { comanda } = await comandaNaMesa(numero, 1)
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 2))
+    await api().cozinha.avancar(comanda.id, 1, "recebido")
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 10))
+    await api().cozinha.avancar(comanda.id, 1, "em-preparo")
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 15))
+    await api().cozinha.servir(comanda.id, 1)
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 30))
+    return comanda
+  }
+
+  async function abrirHistorico(usuario: ReturnType<typeof userEvent.setup>) {
+    await usuario.click(await screen.findByRole("tab", { name: "Histórico" }))
+    await screen.findByRole("table", { name: "Histórico" }, { timeout: 8000 })
+    // A tabela some enquanto a busca não acha nada: cada passo procura a de agora.
+    return () => within(screen.getByRole("table", { name: "Histórico" }))
+  }
+
+  test("a lista de hoje acha pela busca, e a linha abre a linha do tempo", async () => {
+    telaGrande()
+    const comanda = await mesaServida(73)
+    const usuario = userEvent.setup()
+    renderizar()
+    const tabela = await abrirHistorico(usuario)
+    expect(tabela().getAllByRole("row").length).toBeGreaterThan(3)
+
+    await usuario.type(screen.getByRole("searchbox", { name: "Buscar no histórico" }), "mesa 73")
+    await waitFor(() => expect(tabela().getAllByRole("row")).toHaveLength(2))
+    const linha = tabela().getByRole("row", { name: new RegExp(`Mesa 73 · #${comanda.numero}`) })
+    expect(linha).toHaveTextContent("20:00")
+    expect(linha).toHaveTextContent("10 min")
+    expect(linha).toHaveTextContent("Servido")
+
+    await usuario.click(within(linha).getByRole("button", { name: /^Mesa 73 · #/ }))
+    const detalhe = within(
+      await screen.findByRole("dialog", { name: `Mesa 73 · #${comanda.numero}` }),
+    )
+    const passos = within(detalhe.getByRole("list", { name: "Linha do tempo" }))
+      .getAllByRole("listitem")
+      .map((passo) => passo.textContent)
+    expect(passos).toEqual([
+      "Chegou20:00",
+      "Iniciou20:022 min",
+      "Pronto20:108 min",
+      "Servido20:155 min",
+    ])
+  })
+  test("do detalhe: Reimprimir via imprime na hora, e Refazer… abre a janela com o texto do Outro", async () => {
+    telaGrande()
+    const comanda = await mesaServida(74)
+    const usuario = userEvent.setup()
+    renderizar()
+    const tabela = await abrirHistorico(usuario)
+    await usuario.type(screen.getByRole("searchbox", { name: "Buscar no histórico" }), "mesa 74")
+    await waitFor(() => expect(tabela().getAllByRole("row")).toHaveLength(2))
+    await usuario.click(tabela().getByRole("button", { name: /^Mesa 74 · #/ }))
+    const detalhe = within(await screen.findByRole("dialog", { name: /^Mesa 74/ }))
+
+    await usuario.click(detalhe.getByRole("button", { name: "Reimprimir via" }))
+    await waitFor(() => expect(impressas).toHaveLength(1))
+    expect(impressas[0]).toContain("Mesa 74")
+
+    await usuario.click(detalhe.getByRole("button", { name: "Refazer…" }))
+    const janela = within(await screen.findByRole("dialog", { name: /^Refazer Mesa 74/ }))
+    await usuario.click(janela.getByRole("radio", { name: "Outro" }))
+    await usuario.type(janela.getByRole("textbox", { name: "O que aconteceu (opcional)" }), "frio")
+    await usuario.click(janela.getByRole("button", { name: "Refazer" }))
+    await waitFor(async () =>
+      expect((await api().pedidos.buscar(comanda.id))?.refacoes).toMatchObject([
+        { motivo: "outro", texto: "frio" },
+      ]),
+    )
+  })
+
+  test("Ontem mostra o dia anterior só para ler; a situação Cancelados deixa só os cancelados", async () => {
+    telaGrande()
+    const { comanda } = await comandaNaMesa(75)
+    await api().pedidos.cancelar(comanda.id, "recebido")
+    const usuario = userEvent.setup()
+    renderizar()
+    const tabela = await abrirHistorico(usuario)
+    await usuario.click(screen.getByRole("button", { name: "Ontem" }))
+    expect(screen.getByRole("button", { name: /^Escolher dia/ })).toHaveTextContent("12/11/2026")
+    await waitFor(() => expect(tabela().getAllByRole("row").length).toBeGreaterThan(5))
+    const [primeiro] = tabela().getAllByRole("button")
+    await usuario.click(primeiro)
+    const detalhe = within(await screen.findByRole("dialog"))
+    expect(detalhe.getByRole("button", { name: "Reimprimir via" })).toBeInTheDocument()
+    expect(detalhe.queryByRole("button", { name: "Refazer…" })).not.toBeInTheDocument()
+    await usuario.keyboard("{Escape}")
+
+    await usuario.click(screen.getByRole("button", { name: "Hoje" }))
+    await usuario.click(screen.getByRole("combobox", { name: "Situação" }))
+    await usuario.click(await screen.findByRole("option", { name: "Cancelados" }))
+    await waitFor(() => {
+      const linhas = tabela().getAllByRole("row").slice(1)
+      expect(linhas.length).toBeGreaterThan(0)
+      for (const linha of linhas) expect(linha).toHaveTextContent("Cancelado")
+      expect(tabela().getByRole("button", { name: /^Mesa 75 · #/ })).toBeInTheDocument()
+    })
+  })
+  test("no celular, cartões em lista, e o detalhe abre numa gaveta", async () => {
+    const comanda = await mesaServida(76)
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("tab", { name: "Histórico" }))
+    const lista = within(await screen.findByRole("list", { name: "Histórico" }, { timeout: 8000 }))
+    await usuario.click(
+      lista.getByRole("button", { name: new RegExp(`Mesa 76 · #${comanda.numero}`) }),
+    )
+    const gaveta = within(
+      await screen.findByRole("dialog", { name: `Mesa 76 · #${comanda.numero}` }),
+    )
+    expect(gaveta.getByRole("list", { name: "Linha do tempo" })).toHaveTextContent("Servido")
+  })
+})

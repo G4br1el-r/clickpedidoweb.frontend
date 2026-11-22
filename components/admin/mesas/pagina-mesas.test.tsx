@@ -154,6 +154,35 @@ describe("PaginaMesas", () => {
     await waitFor(() => expect(comanda().getByText("Ocupada")).toBeInTheDocument())
   })
 
+  test("o refazer pronto aparece na comanda marcado, e o Servido serve só ele", async () => {
+    const mesa = await mesaOcupada()
+    const comAPizza = await api().mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [{ avulso: { nome: "Pizza", preco: 40 }, quantidade: 1 }],
+    })
+    await api().cozinha.avancar(comAPizza.id, 2, "recebido")
+    await api().cozinha.avancar(comAPizza.id, 2, "em-preparo")
+    await api().cozinha.servir(comAPizza.id, 2)
+    const pizza = comAPizza.itens[2]
+    await api().cozinha.refazer(comAPizza.id, {
+      rodada: 2,
+      itens: [{ itemId: pizza.id, quantidade: 1 }],
+      motivo: "caiu",
+    })
+    await api().cozinha.riscar(comAPizza.id, `${pizza.id}~r1`, true)
+    const usuario = await abrir()
+
+    await usuario.click(await cartao(60))
+    const refeita = within(comanda().getByRole("listitem", { name: "2ª rodada pronta · refazer" }))
+    await usuario.click(refeita.getByRole("button", { name: "Servido" }))
+    await waitFor(async () =>
+      expect(
+        (await api().pedidos.buscar(comAPizza.id))?.refacoes?.[0].itens[0].servidoEm,
+      ).toBeDefined(),
+    )
+  })
+
   test("a chave de alerta sonoro liga o som neste aparelho", async () => {
     usePreferenciasFila.setState(usePreferenciasFila.getInitialState(), true)
     const usuario = await abrir()

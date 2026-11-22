@@ -427,3 +427,27 @@ A fase sai em dois commits, com revisão entre eles: **5a** (praças, expediçã
   - na praça, o Enter no ticket em preparo faz o "Marcar pronto · Forno";
   - o Z vale enquanto o aviso com Desfazer está na tela;
   - os números não riscam item de pedido cancelado, como o clique.
+
+## Fase 6: histórico e refazer
+
+**Desenho**
+
+- **O que entra no Histórico:** cada rodada que foi para a cozinha e chegou no dia escolhido, inclusive as que já saíram, as canceladas e as que ainda estão no quadro ("No quadro"). A venda de balcão que não passou pela cozinha fica de fora.
+- **Lista:** no desktop, tabela com a chegada, o ticket, o resumo dos itens, o tempo até ficar pronto (âmbar quando passou do atraso) e como terminou: Servido, Saiu para entrega, Retirado, Entregue, Cancelado, Pronto ou No quadro, mais a marca Refeito. No celular, cartões.
+- **Linha do tempo:** chegou, iniciou, cada praça pronta (o último item dela riscado), pronto e saiu, com a duração de cada passo; os avisos com o ciente e os refazer ligados ao ticket; os itens com as opções. Abre num painel à direita no desktop e numa gaveta no celular.
+- **Dia:** atalhos Hoje e Ontem e um calendário dos 90 dias. O dia fica no endereço (`?aba=historico&dia=2026-11-13`).
+- **Busca e filtros:** a busca entende número ("1410", "#1410"), mesa ("mesa 5") e nome do cliente, sem acento nem maiúscula. Filtro de tipo (Todos, Mesas, Entrega, Retirada) e de situação (Todos, Atrasados, Cancelados, Refeitos).
+- **Refazer guardado à parte:** o pedido ganha `refacoes`, cada uma com número, rodada, motivo, texto, hora e as cópias dos itens escolhidos, com os próprios horários de preparo. A cozinha mostra cada refazer como um ticket ("pedido:rodada:rN"), que inicia, risca, avança, volta e sai como os outros. Os itens, o total, o pagamento, o cupom e o status do pedido não mudam.
+- **De onde se refaz:** no detalhe do Histórico e no menu "⋯" do ticket em Prontos. A janela tem os itens com a quantidade (de fábrica, tudo) e o motivo: Errado, Caiu, Reclamação ou Outro, com texto curto opcional.
+- **Quando pode:** só o ticket de hoje que já ficou pronto ou já saiu, de pedido não cancelado. Em A fazer e Preparando corrige-se com voltar ou desriscar. Nos dias anteriores, o Histórico só mostra e reimprime.
+- **No quadro:** o ticket entra em A fazer marcado **REFAZER · Caiu**, no topo da coluna como prioridade, toca o alerta de novo e imprime a via com "REFAZER" (com as vias ligadas). Mostra só os itens escolhidos e segue as praças.
+- **Saída de Prontos:** na mesa, o garçom toca Servido (o Garçom e Mesas mostram "Pronto para servir"). Na entrega e na retirada, sai pelo tempo de segurança dos Ajustes ou pelo botão **Entregue** no ticket.
+- **Reimprimir** no Histórico: a via da praça do aparelho, ou uma por praça em "Todas", de qualquer dia, sem depender da chave de imprimir as vias.
+- **Dados da demo:** refazer e cancelamento depois de iniciado entram no gerador na Fase 7. O Histórico abre com os 90 dias que já existem.
+
+**Fronteiras de teste**
+
+1. **Regras:** os tickets do dia, com busca, filtros e como terminou; a linha do tempo (etapas, praças, durações); a validação do refazer (só hoje, já pronto, itens e quantidade, motivo); o refazer como ticket da cozinha (iniciar, riscar, avançar, voltar, servir, entregar) sem mudar status, itens e total do pedido.
+2. **Servidor:** criar o refazer e mexer no ticket dele; o pedido original fica igual.
+3. **Tela:** aba Histórico (lista, dia, busca, filtros), detalhe com linha do tempo e Reimprimir, janela de refazer no Histórico e no menu do ticket em Prontos, ticket REFAZER no quadro, Servido no Garçom e Entregue em Prontos.
+4. **E2E e screenshots:** pizzaria: abrir o Histórico, buscar, abrir a linha do tempo, refazer com motivo Caiu e ver o ticket REFAZER em A fazer; screenshots revisados do Histórico (desktop e celular), do detalhe e da janela de refazer.

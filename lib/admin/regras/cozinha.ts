@@ -3,8 +3,10 @@ import type {
   AvisoCozinha,
   ItemPedido,
   MensagemCozinha,
+  MotivoRefazer,
   Pedido,
   Prazo,
+  Refacao,
   StatusPedido,
   TemposCozinha,
   TipoMensagemCozinha,
@@ -236,6 +238,8 @@ export type TicketCozinha = {
   agendadoPara?: string
   /** Na tela de uma praça: o que falta nas outras praças do mesmo ticket. */
   outras?: OutraPraca[]
+  /** O ticket é um refazer: os itens são as cópias guardadas em `pedido.refacoes`. */
+  refazer?: { numero: number; motivo: MotivoRefazer; texto?: string }
 }
 
 const pendentes = (pedido: Pedido) =>
@@ -247,7 +251,7 @@ export const naMaoDaCozinha = (pedido: Pedido) =>
   (pedido.status === "cancelado" && pendentes(pedido).some((aviso) => aviso.tipo === "cancelado"))
 
 /** O estado da rodada sai dos itens: nenhum iniciado, algum iniciado, todos riscados. */
-function statusDaRodada(itens: ItemPedido[]): StatusTicket {
+export function statusDaRodada(itens: ItemPedido[]): StatusTicket {
   if (itens.every((item) => item.feitoEm)) return "pronto"
   return itens.some((item) => item.iniciadoEm) ? "em-preparo" : "recebido"
 }
@@ -262,43 +266,68 @@ const agendadoDosItens = (itens: ItemPedido[]) => {
  * O que o garçom já serviu saiu da cozinha.
  */
 export function ticketsDaCozinha(pedidos: Pedido[]): TicketCozinha[] {
-  const naCozinha = pedidos.filter(
-    (pedido) => pedido.tipo !== "atendimento" && naMaoDaCozinha(pedido),
+  const daCozinha = pedidos.filter((pedido) => pedido.tipo !== "atendimento")
+  return daCozinha.flatMap((pedido) => [
+    ...(naMaoDaCozinha(pedido) ? rodadasNaCozinha(pedido) : []),
+    ...refacoesNaCozinha(pedido),
+  ])
+}
+
+/** O refazer ainda está com a cozinha: não foi entregue nem servido. */
+const refacaoAberta = (refacao: Refacao) =>
+  !refacao.entregueEm && !refacao.itens.every((item) => item.servidoEm)
+
+/** Cada refazer aberto do pedido, como um ticket próprio ("pedido:rodada:rN"). */
+function refacoesNaCozinha(pedido: Pedido): TicketCozinha[] {
+  if (pedido.status === "cancelado") return []
+  return (pedido.refacoes ?? []).filter(refacaoAberta).map((refacao) => ({
+    id: `${pedido.id}:${refacao.rodada}:r${refacao.numero}`,
+    pedido,
+    rodada: refacao.rodada,
+    status: statusDaRodada(refacao.itens),
+    itens: refacao.itens,
+    chegouEm: refacao.em,
+    avisos: [],
+    refazer: {
+      numero: refacao.numero,
+      motivo: refacao.motivo,
+      ...(refacao.texto ? { texto: refacao.texto } : {}),
+    },
+  }))
+}
+
+/** As rodadas do pedido que estão na cozinha. */
+function rodadasNaCozinha(pedido: Pedido): TicketCozinha[] {
+  const daCozinha = pedido.itens.filter(
+    (item) => (item.vaiParaCozinha ?? pedido.enviarParaCozinha) && !item.servidoEm,
   )
-  return naCozinha.flatMap((pedido) => {
-    const daCozinha = pedido.itens.filter(
-      (item) => (item.vaiParaCozinha ?? pedido.enviarParaCozinha) && !item.servidoEm,
-    )
-    const avisos = pendentes(pedido)
-    // A rodada que ficou sem itens continua na tela enquanto houver alteração sem ciente.
-    const rodadas = [
-      ...new Set([
-        ...daCozinha.map(rodadaDo),
-        ...avisos.flatMap((aviso) => (aviso.rodada ? [aviso.rodada] : [])),
-      ]),
-    ].sort((a, b) => a - b)
-    return rodadas.map((rodada) => {
-      const itens = daCozinha.filter((item) => rodadaDo(item) === rodada)
-      const daRodada = avisos.filter(
-        (aviso) => aviso.tipo === "cancelado" || aviso.rodada === rodada,
-      )
-      return {
-        id: `${pedido.id}:${rodada}`,
-        pedido,
-        rodada,
-        status:
-          itens.length > 0
-            ? statusDaRodada(itens)
-            : (daRodada.find((aviso) => aviso.etapa)?.etapa ?? "recebido"),
-        itens,
-        chegouEm:
-          itens.length > 0
-            ? (itens.find((item) => item.lancadoEm)?.lancadoEm ?? pedido.criadoEm)
-            : (daRodada[0]?.em ?? pedido.criadoEm),
-        avisos: daRodada,
-        ...agendadoDosItens(itens),
-      }
-    })
+  const avisos = pendentes(pedido)
+  // A rodada que ficou sem itens continua na tela enquanto houver alteração sem ciente.
+  const rodadas = [
+    ...new Set([
+      ...daCozinha.map(rodadaDo),
+      ...avisos.flatMap((aviso) => (aviso.rodada ? [aviso.rodada] : [])),
+    ]),
+  ].sort((a, b) => a - b)
+  return rodadas.map((rodada) => {
+    const itens = daCozinha.filter((item) => rodadaDo(item) === rodada)
+    const daRodada = avisos.filter((aviso) => aviso.tipo === "cancelado" || aviso.rodada === rodada)
+    return {
+      id: `${pedido.id}:${rodada}`,
+      pedido,
+      rodada,
+      status:
+        itens.length > 0
+          ? statusDaRodada(itens)
+          : (daRodada.find((aviso) => aviso.etapa)?.etapa ?? "recebido"),
+      itens,
+      chegouEm:
+        itens.length > 0
+          ? (itens.find((item) => item.lancadoEm)?.lancadoEm ?? pedido.criadoEm)
+          : (daRodada[0]?.em ?? pedido.criadoEm),
+      avisos: daRodada,
+      ...agendadoDosItens(itens),
+    }
   })
 }
 
@@ -309,8 +338,9 @@ const ORDEM_DO_TICKET: StatusTicket[] = ["recebido", "em-preparo", "pronto"]
  * em Novo, e ela só fica pronta quando todas as rodadas estão prontas.
  */
 export function statusPelasRodadas(pedido: Pedido): StatusTicket | null {
+  // O refazer não muda o status do pedido.
   const status = ticketsDaCozinha([pedido])
-    .filter((ticket) => ticket.itens.length > 0)
+    .filter((ticket) => ticket.itens.length > 0 && !ticket.refazer)
     .map((ticket) => ORDEM_DO_TICKET.indexOf(ticket.status))
   return status.length > 0 ? ORDEM_DO_TICKET[Math.min(...status)] : null
 }
@@ -333,25 +363,44 @@ export function darCiente(pedido: Pedido, avisoId: string, agora: string): Pedid
   }
 }
 
+/** O ticket da rodada (ou do refazer `refazer` dela) na cozinha. */
+const ticketDaRodada = (pedido: Pedido, rodada: number, refazer?: number) =>
+  ticketsDaCozinha([pedido]).find(
+    (ticket) => ticket.rodada === rodada && ticket.refazer?.numero === refazer,
+  )
+
 /** O ticket da rodada, na etapa que a tela mostrava; se outra aba mudou, recusa. */
-function ticketDo(pedido: Pedido, rodada: number, de: StatusTicket) {
+function ticketDo(pedido: Pedido, rodada: number, de: StatusTicket, refazer?: number) {
   conferirAtivo(pedido)
-  const ticket = ticketsDaCozinha([pedido]).find((item) => item.rodada === rodada)
+  const ticket = ticketDaRodada(pedido, rodada, refazer)
   if (!ticket) throw new Error("Esta rodada não está na cozinha.")
   if (ticket.status !== de) throw new Error("Este ticket já mudou de etapa. Atualize a tela.")
   return ticket
 }
 
-/** Muda os itens da rodada e põe o pedido no status da rodada mais atrás. */
+/**
+ * Muda os itens da rodada (ou do refazer) e põe o pedido no status da rodada mais atrás.
+ * O refazer não conta para o status.
+ */
 function mudarItensDaRodada(
   pedido: Pedido,
   daRodada: ItemPedido[],
   mudar: (item: ItemPedido) => ItemPedido,
 ): Pedido {
   const ids = new Set(daRodada.map((item) => item.id))
+  const trocar = (itens: ItemPedido[]) =>
+    itens.map((item) => (ids.has(item.id) ? mudar(item) : item))
   const mudado = {
     ...pedido,
-    itens: pedido.itens.map((item) => (ids.has(item.id) ? mudar(item) : item)),
+    itens: trocar(pedido.itens),
+    ...(pedido.refacoes
+      ? {
+          refacoes: pedido.refacoes.map((refacao) => ({
+            ...refacao,
+            itens: trocar(refacao.itens),
+          })),
+        }
+      : {}),
   }
   return { ...mudado, status: statusPelasRodadas(mudado) ?? pedido.status }
 }
@@ -362,8 +411,9 @@ export function avancarRodada(
   rodada: number,
   de: StatusTicket,
   agora: string,
+  refazer?: number,
 ): Pedido {
-  const ticket = ticketDo(pedido, rodada, de)
+  const ticket = ticketDo(pedido, rodada, de, refazer)
   if (de === "pronto") throw new Error("Este ticket não tem próxima etapa")
   return mudarItensDaRodada(pedido, ticket.itens, (item) =>
     de === "recebido"
@@ -373,8 +423,13 @@ export function avancarRodada(
 }
 
 /** A rodada volta uma etapa: o pronto volta a preparar, o preparo volta a fazer. */
-export function voltarRodada(pedido: Pedido, rodada: number, de: StatusTicket): Pedido {
-  const ticket = ticketDo(pedido, rodada, de)
+export function voltarRodada(
+  pedido: Pedido,
+  rodada: number,
+  de: StatusTicket,
+  refazer?: number,
+): Pedido {
+  const ticket = ticketDo(pedido, rodada, de, refazer)
   if (de === "recebido") throw new Error("Este ticket não tem etapa anterior")
   return mudarItensDaRodada(pedido, ticket.itens, ({ feitoEm, iniciadoEm, ...item }) =>
     de === "pronto" ? { ...item, iniciadoEm } : item,
@@ -404,9 +459,10 @@ export function prontoNaPraca(
   rodada: number,
   visao: VisaoDePraca,
   agora: string,
+  refazer?: number,
 ): Pedido {
   conferirAtivo(pedido)
-  const ticket = ticketsDaCozinha([pedido]).find((item) => item.rodada === rodada)
+  const ticket = ticketDaRodada(pedido, rodada, refazer)
   const daqui = (item: ItemPedido) =>
     pracaDoItem(item, visao.produtos, visao.pracas) === visao.pracaId
   if (!ticket?.itens.some(daqui)) throw new Error("Esta praça não tem itens nesta rodada.")
@@ -418,9 +474,14 @@ export function prontoNaPraca(
 }
 
 /** O garçom levou a rodada pronta à mesa: ela sai da cozinha. */
-export function servirRodada(pedido: Pedido, rodada: number, agora: string): Pedido {
+export function servirRodada(
+  pedido: Pedido,
+  rodada: number,
+  agora: string,
+  refazer?: number,
+): Pedido {
   conferirAtivo(pedido)
-  const ticket = ticketsDaCozinha([pedido]).find((item) => item.rodada === rodada)
+  const ticket = ticketDaRodada(pedido, rodada, refazer)
   if (!ticket || ticket.itens.length === 0) throw new Error("Esta rodada não está na cozinha.")
   if (ticket.status !== "pronto") throw new Error("Esta rodada ainda não está pronta.")
   return mudarItensDaRodada(pedido, ticket.itens, (item) => ({ ...item, servidoEm: agora }))
@@ -506,6 +567,10 @@ export function chavesDeQuemServe(pedidos: Pedido[], quem: QuemServe): Set<strin
   return new Set([...prontos, ...mensagens])
 }
 
+/** O ticket vai para o topo da coluna: o pedido tem prioridade, ou é um refazer. */
+export const temPrioridade = (ticket: TicketCozinha) =>
+  Boolean(ticket.pedido.prioridade || ticket.refazer)
+
 const PASSA_NO_FILTRO: Record<FiltroCozinha, (pedido: Pedido) => boolean> = {
   todos: () => true,
   mesas: (pedido) => pedido.tipo === "mesa",
@@ -533,8 +598,8 @@ export function colunasDaCozinha(
       .filter((ticket) => ticket.status === status)
       .sort(
         (a, b) =>
-          // Prioridade primeiro; depois, quem começou a contar antes.
-          Number(Boolean(b.pedido.prioridade)) - Number(Boolean(a.pedido.prioridade)) ||
+          // Prioridade (e refazer, que tem cliente esperando) primeiro; depois, quem começou antes.
+          Number(temPrioridade(b)) - Number(temPrioridade(a)) ||
           comecaEm(a, tempos) - comecaEm(b, tempos),
       )
   const naTela = (ticket: TicketCozinha) => naTelaDaCozinha(ticket, agora, tempos)

@@ -8,6 +8,7 @@ import {
   MessageSquareIcon,
   MoreHorizontalIcon,
   PrinterIcon,
+  RotateCcwIcon,
   Undo2Icon,
   ZapIcon,
 } from "lucide-react"
@@ -42,6 +43,7 @@ import {
   urgenciaNaCozinha,
 } from "@/lib/admin/regras/cozinha"
 import type { Urgencia } from "@/lib/admin/regras/fila"
+import { NOME_DO_MOTIVO } from "@/lib/admin/regras/refazer"
 import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
 
@@ -142,8 +144,8 @@ function Itens({
 }
 
 /** "Mesa 5 · #12", e a rodada quando não é a primeira: "Mesa 5 · #12 · 2ª rodada". */
-export const nomeDoTicket = ({ pedido, rodada }: Ticket) =>
-  `${origem(pedido)} · #${pedido.numero}${rodada > 1 ? ` · ${rodada}ª rodada` : ""}`
+export const nomeDoTicket = ({ pedido, rodada, refazer }: Ticket) =>
+  `${origem(pedido)} · #${pedido.numero}${rodada > 1 ? ` · ${rodada}ª rodada` : ""}${refazer ? " · refazer" : ""}`
 
 /** Ticket da cozinha: uma rodada, com origem, cronômetro, o que preparar e a próxima etapa. */
 export function TicketCozinha({
@@ -164,6 +166,8 @@ export function TicketCozinha({
   aoEsgotar,
   apagado = false,
   compacto = false,
+  aoRefazer,
+  aoEntregar,
 }: {
   ticket: Ticket
   agora: Date
@@ -190,6 +194,10 @@ export function TicketCozinha({
   apagado?: boolean
   /** Exibição compacta: sem cliente e garçom, com menos espaço. */
   compacto?: boolean
+  /** Ticket pronto: abre a janela de refazer. */
+  aoRefazer?: () => void
+  /** Refazer pronto da entrega ou da retirada: a cozinha entrega e ele sai do quadro. */
+  aoEntregar?: () => void
 }) {
   const semMovimento = useReducedMotion()
   const { pedido, rodada, itens } = ticket
@@ -232,7 +240,7 @@ export function TicketCozinha({
         "outline-none focus-visible:ring-2 focus-visible:ring-ring",
         ANEL_URGENCIA[nivel],
         // Prioridade é o que exige o olho agora: o laranja de atenção, só no anel e no ícone.
-        pedido.prioridade && !cancelado && "ring-2 ring-(--atencao)/60",
+        (pedido.prioridade || ticket.refazer) && !cancelado && "ring-2 ring-(--atencao)/60",
         cancelado && "ring-2 ring-(--tom-cancelado)/45",
       )}
     >
@@ -242,7 +250,16 @@ export function TicketCozinha({
           Cancelado
         </span>
       )}
-      {pedido.prioridade && !cancelado && (
+      {ticket.refazer && !cancelado && (
+        <span className="-mb-1.5 flex items-center gap-1 text-[13px] font-semibold">
+          <RotateCcwIcon className="size-3.5 text-(--atencao)" aria-hidden="true" />
+          Refazer · {NOME_DO_MOTIVO[ticket.refazer.motivo]}
+          {ticket.refazer.texto && (
+            <span className="font-normal text-muted-foreground">: {ticket.refazer.texto}</span>
+          )}
+        </span>
+      )}
+      {pedido.prioridade && !ticket.refazer && !cancelado && (
         <span className="-mb-1.5 flex items-center gap-1 text-[13px] font-semibold">
           <ZapIcon className="size-3.5 fill-current text-(--atencao)" aria-hidden="true" />
           Prioridade
@@ -284,16 +301,25 @@ export function TicketCozinha({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="min-w-52">
-                <DropdownMenuCheckboxItem
-                  checked={Boolean(pedido.prioridade)}
-                  onCheckedChange={(marcada) => aoPriorizar(marcada === true)}
-                >
-                  Prioridade
-                </DropdownMenuCheckboxItem>
+                {/* O refazer já vai para o topo: a prioridade é do pedido, não dele. */}
+                {!ticket.refazer && (
+                  <DropdownMenuCheckboxItem
+                    checked={Boolean(pedido.prioridade)}
+                    onCheckedChange={(marcada) => aoPriorizar(marcada === true)}
+                  >
+                    Prioridade
+                  </DropdownMenuCheckboxItem>
+                )}
                 {ticket.status !== "recebido" && (
                   <DropdownMenuItem onSelect={aoVoltar}>
                     <Undo2Icon />
                     {ticket.status === "pronto" ? "Voltar para Preparando" : "Voltar para A fazer"}
+                  </DropdownMenuItem>
+                )}
+                {aoRefazer && pronto && !ticket.refazer && (
+                  <DropdownMenuItem onSelect={aoRefazer}>
+                    <RotateCcwIcon />
+                    Refazer…
                   </DropdownMenuItem>
                 )}
                 {itens.length > 0 && (
@@ -424,7 +450,17 @@ export function TicketCozinha({
           >
             Ciente
           </Button>
-        ) : itens.length === 0 ? null : pronto ? (
+        ) : itens.length === 0 ? null : pronto && ticket.refazer && pedido.tipo !== "mesa" ? (
+          <Button
+            type="button"
+            size="lg"
+            className="h-11 w-full text-[15px]"
+            disabled={ocupado}
+            onClick={aoEntregar}
+          >
+            Entregue
+          </Button>
+        ) : pronto ? (
           <span className="flex items-center gap-2 text-sm font-medium">
             <Traco tom={aguardando ? "preparo" : "pronto"} />
             {aguardando ? `Aguardando ${aguardando}` : DEPOIS_DE_PRONTO[pedido.tipo]}

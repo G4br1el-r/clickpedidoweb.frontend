@@ -238,6 +238,30 @@ describe("vias da cozinha", () => {
     expect(viasAImprimir([entrega()], opcoes("todas", { pracas: [] }))).toEqual([])
   })
 
+  test("o refazer tem via própria, mesmo com a via da rodada já impressa", () => {
+    const pronta = entrega(["p1", "p2", "p3", "p4"])
+    const refeita: Pedido = {
+      ...pronta,
+      status: "saiu-para-entrega",
+      viasImpressas: ["1:forno"],
+      refacoes: [
+        {
+          numero: 1,
+          rodada: 1,
+          motivo: "caiu",
+          em: atras(1),
+          itens: [{ ...pronta.itens[0], id: "p1~r1", iniciadoEm: undefined, feitoEm: undefined }],
+        },
+      ],
+    }
+    expect(resumo(viasAImprimir([refeita], opcoes("todas")))).toEqual([
+      ["50:1:r1:forno", "Forno", ["p1~r1"]],
+    ])
+    expect(
+      viasAImprimir([{ ...refeita, viasImpressas: ["1:forno", "1:r1:forno"] }], opcoes("todas")),
+    ).toEqual([])
+  })
+
   test("marcar a via diz se ela é nova; a repetida não muda o pedido", () => {
     const primeira = marcarVia(entrega(), "1:forno")
     expect(primeira.nova).toBe(true)

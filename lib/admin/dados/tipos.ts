@@ -79,6 +79,27 @@ export type AvisoCozinha = {
   itens?: { nome: string; quantidade: number }[]
 }
 
+/** Por que a cozinha refez. */
+export type MotivoRefazer = "errado" | "caiu" | "reclamacao" | "outro"
+
+/**
+ * Um refazer: as cópias dos itens escolhidos de uma rodada, com os próprios horários de
+ * preparo. Vira um ticket da cozinha; não entra nos itens, no total nem no status do pedido.
+ */
+export type Refacao = {
+  /** 1, 2, 3… dentro do pedido. */
+  numero: number
+  /** A rodada que foi refeita. */
+  rodada: number
+  motivo: MotivoRefazer
+  /** No motivo "outro", o que aconteceu. */
+  texto?: string
+  em: string
+  itens: ItemPedido[]
+  /** Entrega e retirada: a cozinha entregou o que refez. */
+  entregueEm?: string
+}
+
 /** As mensagens rápidas que a cozinha manda para o salão ou o caixa. */
 export type TipoMensagemCozinha = "atraso" | "substituicao" | "duvida"
 
@@ -134,6 +155,8 @@ export type Pedido = {
   etapas?: Partial<Record<StatusPedido, string>>
   /** O que a cozinha mandou dizer ao salão ou ao caixa. */
   mensagensCozinha?: MensagemCozinha[]
+  /** Cozinha: o que foi refeito (errado, caiu, reclamação). Fica fora dos itens e da conta. */
+  refacoes?: Refacao[]
   /** Vias da cozinha já impressas: "rodada:praça". Outro aparelho não imprime de novo. */
   viasImpressas?: string[]
   impressoEm?: string

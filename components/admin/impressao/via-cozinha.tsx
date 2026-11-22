@@ -3,6 +3,7 @@
 import { format } from "date-fns"
 import { type Ref, useEffect, useEffectEvent, useState } from "react"
 import type { ViaDaCozinha } from "@/lib/admin/regras/pracas"
+import { NOME_DO_MOTIVO } from "@/lib/admin/regras/refazer"
 import { useImpressora } from "./cupom"
 
 const origem = (via: ViaDaCozinha) => {
@@ -24,6 +25,11 @@ export function ViaCozinha({ via, area }: { via: ViaDaCozinha; area: Ref<HTMLDiv
         data-via=""
         className="flex flex-col gap-2 p-2 font-mono text-base text-black"
       >
+        {via.ticket.refazer && (
+          <p className="text-xl font-bold">
+            REFAZER · {NOME_DO_MOTIVO[via.ticket.refazer.motivo].toLocaleUpperCase("pt-BR")}
+          </p>
+        )}
         <p className="text-lg font-bold">
           {origem(via)} · {rodada > 1 ? `${rodada}ª rodada · ` : ""}
           {via.praca.nome.toLocaleUpperCase("pt-BR")}

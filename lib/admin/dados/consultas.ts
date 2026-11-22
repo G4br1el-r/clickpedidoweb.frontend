@@ -13,6 +13,7 @@ import {
   voltarRodada,
 } from "../regras/cozinha"
 import type { VisaoDePraca } from "../regras/pracas"
+import { entregarRefazer, type PedidoDeRefazer, refazer } from "../regras/refazer"
 import { proximoStatus } from "../regras/status"
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
@@ -203,21 +204,21 @@ const ouIgual =
   }
 
 /** `de`: a etapa que o ticket mostrava. Se outra tela já mudou, o servidor recusa. */
-type MudancaDeTicket = { id: number; rodada: number; de: StatusTicket }
+type MudancaDeTicket = { id: number; rodada: number; de: StatusTicket; refazer?: number }
 
 export function useAvancarTicket() {
   return useMutacaoDePedido<MudancaDeTicket>(
-    (servidor, { id, rodada, de }) => servidor.cozinha.avancar(id, rodada, de),
-    ouIgual((pedido, { rodada, de }) =>
-      avancarRodada(pedido, rodada, de, new Date().toISOString()),
+    (servidor, { id, rodada, de, refazer }) => servidor.cozinha.avancar(id, rodada, de, refazer),
+    ouIgual((pedido, { rodada, de, refazer }) =>
+      avancarRodada(pedido, rodada, de, new Date().toISOString(), refazer),
     ),
   )
 }
 
 export function useVoltarTicket() {
   return useMutacaoDePedido<MudancaDeTicket>(
-    (servidor, { id, rodada, de }) => servidor.cozinha.voltar(id, rodada, de),
-    ouIgual((pedido, { rodada, de }) => voltarRodada(pedido, rodada, de)),
+    (servidor, { id, rodada, de, refazer }) => servidor.cozinha.voltar(id, rodada, de, refazer),
+    ouIgual((pedido, { rodada, de, refazer }) => voltarRodada(pedido, rodada, de, refazer)),
   )
 }
 
@@ -232,10 +233,16 @@ export function useRiscarItem() {
 
 /** A praça terminou a parte dela na rodada; com a última, a rodada fica pronta. */
 export function useProntoNaPraca() {
-  return useMutacaoDePedido<{ id: number; rodada: number; visao: VisaoDePraca }>(
-    (servidor, { id, rodada, visao }) => servidor.cozinha.prontoNaPraca(id, rodada, visao.pracaId),
-    ouIgual((pedido, { rodada, visao }) =>
-      prontoNaPraca(pedido, rodada, visao, new Date().toISOString()),
+  return useMutacaoDePedido<{
+    id: number
+    rodada: number
+    visao: VisaoDePraca
+    refazer?: number
+  }>(
+    (servidor, { id, rodada, visao, refazer }) =>
+      servidor.cozinha.prontoNaPraca(id, rodada, visao.pracaId, refazer),
+    ouIgual((pedido, { rodada, visao, refazer }) =>
+      prontoNaPraca(pedido, rodada, visao, new Date().toISOString(), refazer),
     ),
   )
 }
@@ -250,9 +257,27 @@ export function useDarCiente() {
 
 /** O garçom levou a rodada pronta à mesa: ela sai da cozinha e do salão. */
 export function useServirRodada() {
-  return useMutacaoDePedido<{ id: number; rodada: number }>(
-    (servidor, { id, rodada }) => servidor.cozinha.servir(id, rodada),
-    ouIgual((pedido, { rodada }) => servirRodada(pedido, rodada, new Date().toISOString())),
+  return useMutacaoDePedido<{ id: number; rodada: number; refazer?: number }>(
+    (servidor, { id, rodada, refazer }) => servidor.cozinha.servir(id, rodada, refazer),
+    ouIgual((pedido, { rodada, refazer }) =>
+      servirRodada(pedido, rodada, new Date().toISOString(), refazer),
+    ),
+  )
+}
+
+/** A cozinha refaz parte de uma rodada: vira um ticket novo em A fazer. */
+export function useRefazer() {
+  return useMutacaoDePedido<{ id: number; entrada: PedidoDeRefazer }>(
+    (servidor, { id, entrada }) => servidor.cozinha.refazer(id, entrada),
+    ouIgual((pedido, { entrada }) => refazer(pedido, entrada, new Date())),
+  )
+}
+
+/** Entrega e retirada: a cozinha entregou o que refez; o ticket sai do quadro. */
+export function useEntregarRefazer() {
+  return useMutacaoDePedido<{ id: number; numero: number }>(
+    (servidor, { id, numero }) => servidor.cozinha.entregarRefazer(id, numero),
+    ouIgual((pedido, { numero }) => entregarRefazer(pedido, numero, new Date().toISOString())),
   )
 }
 

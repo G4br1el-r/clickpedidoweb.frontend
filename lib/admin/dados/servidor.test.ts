@@ -1423,6 +1423,68 @@ describe("cozinha", () => {
     ).rejects.toThrow("Escolha um horário mais tarde, ainda hoje.")
   })
 
+  test("refazer: o ticket novo anda e sai com o Servido; a comanda não muda", async () => {
+    const api = servidor()
+    const mesa = await api.mesas.criar({ numero: 7 })
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [LANCHE],
+    })
+    await api.cozinha.avancar(comanda.id, 1, "recebido")
+    const pronta = await api.cozinha.avancar(comanda.id, 1, "em-preparo")
+    const [lanche] = pronta.itens
+
+    const refeita = await api.cozinha.refazer(comanda.id, {
+      rodada: 1,
+      itens: [{ itemId: lanche.id, quantidade: 1 }],
+      motivo: "caiu",
+    })
+    expect(estados(refeita)).toEqual([
+      [1, "pronto"],
+      [1, "recebido"],
+    ])
+    const andou = await api.cozinha.avancar(comanda.id, 1, "recebido", 1)
+    expect(estados(andou)).toEqual([
+      [1, "pronto"],
+      [1, "em-preparo"],
+    ])
+    await api.cozinha.voltar(comanda.id, 1, "em-preparo", 1)
+    await api.cozinha.riscar(comanda.id, `${lanche.id}~r1`, true)
+    const servida = await api.cozinha.servir(comanda.id, 1, 1)
+    expect(estados(servida)).toEqual([[1, "pronto"]])
+    expect(servida.itens).toEqual(pronta.itens)
+    expect(servida.total).toBe(pronta.total)
+    expect(servida.status).toBe(pronta.status)
+  })
+
+  test("refazer da entrega que já saiu: volta para a cozinha e sai com o Entregue", async () => {
+    const api = servidor()
+    const [saiu] = await api.pedidos.listar({ status: ["saiu-para-entrega"] })
+    const hoje = { ...saiu }
+    const cozinha = await api.pedidos.listar({ naCozinha: true })
+    expect(cozinha.some((pedido) => pedido.id === hoje.id)).toBe(false)
+    const [item] = hoje.itens.filter(
+      (doPedido) => doPedido.vaiParaCozinha ?? hoje.enviarParaCozinha,
+    )
+
+    await api.cozinha.refazer(hoje.id, {
+      rodada: 1,
+      itens: [{ itemId: item.id, quantidade: 1 }],
+      motivo: "reclamacao",
+    })
+    expect(
+      (await api.pedidos.listar({ naCozinha: true })).some((pedido) => pedido.id === hoje.id),
+    ).toBe(true)
+    await api.cozinha.riscar(hoje.id, `${item.id}~r1`, true)
+    const entregue = await api.cozinha.entregarRefazer(hoje.id, 1)
+    expect(entregue.refacoes?.[0].entregueEm).toBeDefined()
+    expect(entregue.status).toBe("saiu-para-entrega")
+    expect(
+      (await api.pedidos.listar({ naCozinha: true })).some((pedido) => pedido.id === hoje.id),
+    ).toBe(false)
+  })
+
   /** Mesa 5 com duas rodadas na cozinha, lançadas às 20:30 e às 20:32. */
   async function mesaComDuasRodadas() {
     const api = servidor()

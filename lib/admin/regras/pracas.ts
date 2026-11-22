@@ -61,6 +61,10 @@ export function ticketNaPraca(
   return { ...ticket, itens: daqui, status: statusDosItens(daqui), outras }
 }
 
+/** A rodada na chave da via: "2", ou "2:r1" no refazer (que tem via própria). */
+const rodadaDaVia = (ticket: TicketCozinha) =>
+  ticket.refazer ? `${ticket.rodada}:r${ticket.refazer.numero}` : `${ticket.rodada}`
+
 /** Uma via da cozinha a imprimir: a rodada de um pedido, numa praça. */
 export type ViaDaCozinha = {
   /** "pedido:rodada:praça". */
@@ -104,7 +108,7 @@ export function viasAImprimir(
           pracas.length === 0
             ? ticket.itens
             : (ticketNaPraca(ticket, { pracaId: praca.id, produtos, pracas })?.itens ?? [])
-        const impressa = `${ticket.rodada}:${praca.id}`
+        const impressa = `${rodadaDaVia(ticket)}:${praca.id}`
         if (itens.length === 0 || ticket.pedido.viasImpressas?.includes(impressa)) return []
         return [
           {
@@ -137,7 +141,7 @@ export function viasDoTicket(
 ): ViaDaCozinha[] {
   const { produtos, pracas, pracaDoAparelho } = opcoes
   const via = (praca: { id: string; nome: string }, itens: ItemPedido[]): ViaDaCozinha => ({
-    chave: `${ticket.pedido.id}:${ticket.rodada}:${praca.id}`,
+    chave: `${ticket.pedido.id}:${rodadaDaVia(ticket)}:${praca.id}`,
     ticket,
     praca: { id: praca.id, nome: praca.nome },
     itens,

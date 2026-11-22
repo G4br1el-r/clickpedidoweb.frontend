@@ -167,4 +167,27 @@ describe("ProntosParaServir", () => {
     await within(await faixa()).findByRole("listitem", { name: /^Mesa 75/ })
     expect(tocar).toHaveBeenCalled()
   })
+  test("o refazer pronto aparece marcado, e o Servido tira só ele", async () => {
+    const comanda = await rodadaPronta(72)
+    await api().cozinha.servir(comanda.id, 1)
+    await api().cozinha.refazer(comanda.id, {
+      rodada: 1,
+      itens: [{ itemId: comanda.itens[0].id, quantidade: 1 }],
+      motivo: "caiu",
+    })
+    await api().cozinha.riscar(comanda.id, `${comanda.itens[0].id}~r1`, true)
+    const usuario = userEvent.setup()
+    renderizar()
+
+    const refeito = await within(await faixa()).findByRole("listitem", {
+      name: "Mesa 72 · refazer",
+    })
+    expect(refeito).toHaveTextContent("1× Batata")
+    await usuario.click(within(refeito).getByRole("button", { name: "Servido" }))
+    await waitFor(async () =>
+      expect(
+        (await api().pedidos.buscar(comanda.id))?.refacoes?.[0].itens[0].servidoEm,
+      ).toBeDefined(),
+    )
+  })
 })

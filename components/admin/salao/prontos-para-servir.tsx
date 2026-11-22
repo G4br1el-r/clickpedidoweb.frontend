@@ -76,7 +76,7 @@ export function ProntosParaServir({ intervalo }: { intervalo?: number }) {
           )
         })}
         {prontos.map((ticket) => {
-          const nome = nomeDaMesa(ticket.pedido.mesa?.numero, ticket.rodada)
+          const nome = `${nomeDaMesa(ticket.pedido.mesa?.numero, ticket.rodada)}${ticket.refazer ? " · refazer" : ""}`
           return (
             <li
               key={ticket.id}
@@ -94,7 +94,11 @@ export function ProntosParaServir({ intervalo }: { intervalo?: number }) {
                 size="sm"
                 onClick={() =>
                   servir.mutate(
-                    { id: ticket.pedido.id, rodada: ticket.rodada },
+                    {
+                      id: ticket.pedido.id,
+                      rodada: ticket.rodada,
+                      refazer: ticket.refazer?.numero,
+                    },
                     { onError: aoErrar },
                   )
                 }
