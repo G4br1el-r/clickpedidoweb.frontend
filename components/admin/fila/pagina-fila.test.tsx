@@ -249,6 +249,14 @@ describe("PaginaFila", () => {
     )
   })
 
+  test("a comanda da mesa 15, com a 16 junta, diz Mesa 15 + 16", async () => {
+    telaGrande()
+    renderizar()
+    await coluna("Novos")
+
+    expect(await screen.findByText("Mesa 15 + 16")).toBeInTheDocument()
+  })
+
   test("Detalhes abre o painel do pedido", async () => {
     telaGrande()
     const usuario = userEvent.setup()
