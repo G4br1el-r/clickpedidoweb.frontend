@@ -453,6 +453,33 @@ export type Chamado = {
   atendidoEm?: string
 }
 
+/** Item que o cliente pede pela vitrine da mesa: do cardápio, com as opções escolhidas. */
+export type ItemPedidoQr = {
+  produtoId: string
+  escolhas: Record<string, string[]>
+  quantidade: number
+  observacao?: string
+}
+
+/** Pedido do cliente pelo QR, aguardando o garçom aceitar (com `qr.aceite: "garcom"`). */
+export type PedidoQr = {
+  id: string
+  mesaId: string
+  itens: ItemPedidoQr[]
+  /** O que a tela mostra: cada item com as opções e o total, no preço da hora do pedido. */
+  resumo: {
+    nome: string
+    quantidade: number
+    opcoes: string[]
+    observacao?: string
+    total: number
+  }[]
+  total: number
+  criadoEm: string
+  status: "aguardando" | "aceito" | "recusado"
+  resolvidoEm?: string
+}
+
 export type Motoboy = { id: string; nome: string; telefone: string; ativo: boolean }
 
 export type Bairro = { id: string; cidade: string; nome: string; taxa: number; ativo: boolean }
@@ -531,6 +558,8 @@ export type BaseLoja = CatalogoLoja & {
   reservas: Reserva[]
   espera: EntradaEspera[]
   chamados: Chamado[]
+  /** Pedidos dos clientes pelo QR. Sem o campo (base de antes da Fase 8), nenhum. */
+  pedidosQr?: PedidoQr[]
   /**
    * O pedido mais novo que já saiu de Pedidos (a comanda juntada a outra). O id e o número dele
    * não voltam a ser usados: os itens e o estoque continuam apontando para ele.
