@@ -2630,3 +2630,26 @@ export function useAoVivo(): void // esquece o servidor e invalida ["admin", seg
 - [ ] `pnpm check`, mostrando a saída. `pnpm test:coverage` e subir os mínimos se a cobertura subiu.
 - [ ] Os screenshots ficam para a revisão.
 - [ ] Registrar a "Situação" no fim desta seção.
+
+Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-8`, empilhada sobre a Fase 7, antes da revisão e sem os screenshots.
+
+- **Mudou fora do plano:**
+  - a revisão da base ficou no `localStorage`, não no IndexedDB (commit `fix(mesas): a revisão da base fica no localStorage`): a leitura a mais no IndexedDB a cada consulta atrasava as respostas e 4 testes de tela antigos (categorias, estoque, fila e loja) liam a lista antes da hora;
+  - `MesaNaGrade` ganhou `selo?: string | null` (de `seloDaMesa`, em `regras/chamados.ts`) em vez de levar os chamados e os pedidos; o mapa lê o selo só na descrição falada (a mesa do mapa não ganhou o selo visível);
+  - `qr.mesa` devolve a comanda inteira (`comanda: Pedido | null`), e a vitrine calcula a conta com `resumoDaConta`;
+  - o chamado não se repete enquanto o do mesmo tipo está aberto **hoje** (o aberto de ontem não segura o de hoje);
+  - "Simular cliente na mesa" ficou na gaveta da mesa (livre e aberta), não no menu ⋯;
+  - a folha de QR imprime também a URL de cada mesa, em letra pequena, embaixo do QR (reserva para quem não lê QR; o teste confere a URL pelo texto);
+  - na vitrine, cada produto tem o botão "Adicionar …" à parte (o E2E pegou o `label-content-name-mismatch` da linha inteira como botão);
+  - "Atendimento de chamado" só aparece em "Ver mais" com o QR ligado.
+- **Testes antigos que mudaram (mudança planejada):**
+  - `configurar-salao.test.tsx`: "o QR não aparece, e reservas, QR e funções voltam iguais…" virou "reservas, QR e funções voltam iguais no que é salvo sem mexer neles" (o QR entrou no painel);
+  - `pagina-mesas.test.tsx`: "a faixa Números do salão…" confere também "Atendimento de chamado" com "—" (o chamado da demonstração está aberto).
+- **Fica para depois:**
+  - o cliente ver que o pedido foi recusado (hoje só o painel vê);
+  - fechar sozinho o chamado de conta quando a conta fecha;
+  - o selo visível do chamado na mesa do mapa;
+  - pessoas na abertura pelo QR (abre para 1, como o Garçom);
+  - os screenshots (abaixo).
+- **Screenshots:** novo `painel-folha-qr` (o teste existe em `visual-admin.spec.ts`, sem o arquivo de referência; a URL e o QR levam a porta, então a referência tem que sair contra a 3010). Mudam: `painel-mesas` e os que mostram o topo de Mesas (botão "Chamados 1", o selo "Chamou o garçom" na mesa 1), `painel-comanda` e as gavetas de mesa (botão "Simular cliente na mesa"), `painel-configurar-salao` (interruptor e bloco do QR) e a sacola do painel ("Todos os 35 recursos Pro").
+- **Testes e cobertura:** 1887 testes no Vitest (`pnpm check` verde). O E2E novo ("mesas: o cliente pede pelo QR da mesa 11…") passou em `desktop-1920` e `celular-390`, contra o `next start` na porta 3010. A cobertura ficou em 85,93/79,16/84,34/86,89 no geral: os mínimos sobem para 85/79/84/86; `lib/**` continua em 98/95/98/98.
