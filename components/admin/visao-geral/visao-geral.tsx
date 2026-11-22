@@ -2,14 +2,16 @@
 
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { ReceiptTextIcon, SquareKanbanIcon } from "lucide-react"
+import { PrinterIcon, ReceiptTextIcon, SquareKanbanIcon } from "lucide-react"
 import Link from "next/link"
 import { parseAsString, useQueryState } from "nuqs"
-import { useMemo } from "react"
+import { useMemo, useRef, useState } from "react"
+import { flushSync } from "react-dom"
+import { useReactToPrint } from "react-to-print"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { useLoja, usePedidos } from "@/lib/admin/dados/consultas"
+import { useLoja, useMotoboys, usePedidos } from "@/lib/admin/dados/consultas"
 import { useCategorias, useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import { useMesas } from "@/lib/admin/dados/consultas-mesas"
 import { useFarmacia } from "@/lib/admin/farmacia-estado"
@@ -22,15 +24,21 @@ import { situacaoDaMeta } from "@/lib/admin/regras/dashboard/metas"
 import { resumir } from "@/lib/admin/regras/dashboard/resumo"
 import { destaquesDoSegmento } from "@/lib/admin/regras/dashboard/segmento"
 import { hojeVsSemanaPassada } from "@/lib/admin/regras/dashboard/semana-passada"
+import { escrituracao } from "@/lib/admin/regras/farmacia"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
-import { lotesDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
+import { lotesDemo, movimentosDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { AbaAgenda } from "./agenda/aba-agenda"
 import { AbaClientes } from "./clientes/aba-clientes"
+import { AbaEntrega } from "./entrega/aba-entrega"
+import { ProvedorDaAba } from "./exportar"
+import { AbaFarmacia } from "./farmacia/aba-farmacia"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
 import { AbaFinanceiro } from "./financeiro/aba-financeiro"
 import { AbaOperacao } from "./operacao/aba-operacao"
 import { AbaResumo } from "./painel-visao-geral"
+import { AbaPesagem } from "./pesagem/aba-pesagem"
 import { AbaProdutos } from "./produtos/aba-produtos"
 import { AbaVendas } from "./vendas/aba-vendas"
 
@@ -79,6 +87,9 @@ export function VisaoGeral() {
   const { data: pedidosDeClientes } = usePedidos(agora ? periodoDeClientes(agora) : undefined, {
     ativo: aba === "clientes" && Boolean(agora),
   })
+  // A Agenda precisa de tudo o que está marcado (os vagos de amanhã), não só do período.
+  const { data: agenda } = usePedidos({}, { ativo: aba === "agenda" })
+  const { data: motoboys } = useMotoboys()
 
   const resumo = useMemo(
     () => (pedidos && periodo && agora ? resumir(pedidos, periodo, agora) : null),
@@ -112,6 +123,13 @@ export function VisaoGeral() {
         : { lotes: [], receitas: [] },
     [segmento, agora],
   )
+  const movimentos = useMemo(
+    () =>
+      aba === "farmacia" && agora && produtos
+        ? escrituracao(movimentosDemo(agora), farmacia.receitas, produtos, decisoes)
+        : [],
+    [aba, agora, produtos, farmacia, decisoes],
+  )
   const alertas = useMemo(
     () =>
       pedidos && produtos && loja && agora
@@ -134,6 +152,26 @@ export function VisaoGeral() {
     [pedidos, agora, segmento, farmacia, decisoes, temMesas, mesas],
   )
 
+  // Imprimir leva só a aba aberta, com um cabeçalho e as tabelas recolhidas abertas.
+  const tituloDaAba = abasDo(segmento).find((item) => item.id === aba)?.titulo ?? "Resumo"
+  const periodoDaAba = aba === "clientes" && agora ? periodoDeClientes(agora) : periodo
+  const areaDeImpressao = useRef<HTMLDivElement>(null)
+  const [impressoEm, setImpressoEm] = useState<Date | null>(null)
+  const nomeDaLoja = loja?.nome ?? ""
+  const imprimir = useReactToPrint({
+    contentRef: areaDeImpressao,
+    documentTitle: periodoDaAba
+      ? `${nomeDaLoja} · ${tituloDaAba} · ${format(periodoDaAba.de, "dd/MM")} a ${format(periodoDaAba.ate, "dd/MM")}`
+      : nomeDaLoja,
+    // Na folha não vão botões nem as trocas de medida (R$ ou Qtd., Dia ou Semana).
+    pageStyle:
+      "@page { margin: 12mm } [data-slot=button], [data-slot=toggle-group] { display: none !important }",
+    onBeforePrint: async () => {
+      flushSync(() => setImpressoEm(new Date()))
+    },
+    onAfterPrint: () => setImpressoEm(null),
+  })
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 md:p-6 lg:px-8">
       <CabecalhoPagina
@@ -146,6 +184,16 @@ export function VisaoGeral() {
         }
         acoes={
           <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={!resumo}
+              onClick={() => imprimir()}
+            >
+              <PrinterIcon data-icon="inline-start" />
+              Imprimir
+            </Button>
             <Button asChild variant="outline" size="sm">
               <Link href="/admin/pedidos">
                 <ReceiptTextIcon data-icon="inline-start" />
@@ -194,56 +242,113 @@ export function VisaoGeral() {
 
         {/* Só a aba aberta é montada; cada uma é o painel da sua aba para leitores de tela. */}
         <TabsContent value={aba}>
-          {resumo && periodo ? (
-            aba === "vendas" ? (
-              <AbaVendas pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
-            ) : aba === "clientes" ? (
-              pedidosDeClientes && loja && agora ? (
-                <AbaClientes
-                  pedidos={pedidosDeClientes}
-                  agora={agora}
-                  segmento={segmento}
-                  loja={loja}
-                  linkDaLoja={typeof window === "undefined" ? "/" : `${window.location.origin}/`}
-                />
+          <div ref={areaDeImpressao}>
+            {/* Só na folha impressa: de que loja, aba e período é, e quando saiu. */}
+            {periodoDaAba && (
+              <div
+                data-testid="cabecalho-da-impressao"
+                className="mb-6 hidden flex-col gap-1 border-b border-border pb-4 print:flex"
+              >
+                <p className="text-lg font-semibold">{`${nomeDaLoja} · ${tituloDaAba}`}</p>
+                <p className="text-sm">
+                  {`Período: ${format(periodoDaAba.de, "dd/MM/yyyy")} a ${format(periodoDaAba.ate, "dd/MM/yyyy")}`}
+                </p>
+                <p className="text-sm">
+                  {`Impresso em ${format(impressoEm ?? agora ?? periodoDaAba.ate, "dd/MM/yyyy 'às' HH:mm")}`}
+                </p>
+              </div>
+            )}
+            <ProvedorDaAba
+              loja={nomeDaLoja}
+              aba={tituloDaAba}
+              periodo={periodoDaAba ?? { de: new Date(0), ate: new Date(0) }}
+              imprimindo={impressoEm !== null}
+            >
+              {resumo && periodo ? (
+                aba === "vendas" ? (
+                  <AbaVendas pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
+                ) : aba === "clientes" ? (
+                  pedidosDeClientes && loja && agora ? (
+                    <AbaClientes
+                      pedidos={pedidosDeClientes}
+                      agora={agora}
+                      segmento={segmento}
+                      loja={loja}
+                      linkDaLoja={
+                        typeof window === "undefined" ? "/" : `${window.location.origin}/`
+                      }
+                    />
+                  ) : (
+                    <EsqueletoVisaoGeral />
+                  )
+                ) : aba === "operacao" ? (
+                  <AbaOperacao pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
+                ) : aba === "produtos" ? (
+                  // Sem o cardápio, "o que não vendeu" estaria errado: espera os dois chegarem.
+                  produtos && categorias ? (
+                    <AbaProdutos
+                      pedidos={pedidos ?? []}
+                      periodo={periodo}
+                      segmento={segmento}
+                      produtos={produtos}
+                      categorias={categorias}
+                    />
+                  ) : (
+                    <EsqueletoVisaoGeral />
+                  )
+                ) : aba === "entrega" ? (
+                  <AbaEntrega pedidos={pedidos ?? []} periodo={periodo} motoboys={motoboys ?? []} />
+                ) : aba === "agenda" ? (
+                  agenda && loja && agora ? (
+                    <AbaAgenda
+                      pedidos={agenda}
+                      periodo={periodo}
+                      agora={agora}
+                      horarios={loja.horarios}
+                      capacidade={loja.capacidadeAtendimentos ?? 1}
+                    />
+                  ) : (
+                    <EsqueletoVisaoGeral />
+                  )
+                ) : aba === "farmacia" ? (
+                  produtos && agora ? (
+                    <AbaFarmacia
+                      pedidos={pedidos ?? []}
+                      periodo={periodo}
+                      agora={agora}
+                      produtos={produtos}
+                      receitas={farmacia.receitas}
+                      decisoes={decisoes}
+                      lotes={farmacia.lotes}
+                      movimentos={movimentos}
+                    />
+                  ) : (
+                    <EsqueletoVisaoGeral />
+                  )
+                ) : aba === "pesagem" ? (
+                  <AbaPesagem pedidos={pedidos ?? []} periodo={periodo} />
+                ) : aba === "financeiro" ? (
+                  <AbaFinanceiro
+                    pedidos={pedidos ?? []}
+                    periodo={periodo}
+                    taxas={loja?.taxasPagamento}
+                  />
+                ) : (
+                  <AbaResumo
+                    resumo={resumo}
+                    periodo={periodo}
+                    segmento={segmento}
+                    comparacao={comparacao}
+                    alertas={alertas}
+                    meta={meta}
+                    destaques={destaques}
+                  />
+                )
               ) : (
                 <EsqueletoVisaoGeral />
-              )
-            ) : aba === "operacao" ? (
-              <AbaOperacao pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
-            ) : aba === "produtos" ? (
-              // Sem o cardápio, "o que não vendeu" estaria errado: espera os dois chegarem.
-              produtos && categorias ? (
-                <AbaProdutos
-                  pedidos={pedidos ?? []}
-                  periodo={periodo}
-                  segmento={segmento}
-                  produtos={produtos}
-                  categorias={categorias}
-                />
-              ) : (
-                <EsqueletoVisaoGeral />
-              )
-            ) : aba === "financeiro" ? (
-              <AbaFinanceiro
-                pedidos={pedidos ?? []}
-                periodo={periodo}
-                taxas={loja?.taxasPagamento}
-              />
-            ) : (
-              <AbaResumo
-                resumo={resumo}
-                periodo={periodo}
-                segmento={segmento}
-                comparacao={comparacao}
-                alertas={alertas}
-                meta={meta}
-                destaques={destaques}
-              />
-            )
-          ) : (
-            <EsqueletoVisaoGeral />
-          )}
+              )}
+            </ProvedorDaAba>
+          </div>
         </TabsContent>
       </Tabs>
     </div>

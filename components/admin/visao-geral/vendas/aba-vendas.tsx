@@ -35,6 +35,7 @@ import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
 import { emReais } from "@/lib/formato"
 import { BlocoSecao } from "../../bloco-secao"
 import { Indicador, Regua } from "../../regua"
+import { BaixarCsv, useImprimindo } from "../exportar"
 import type { MedidaDoGrafico } from "../grafico-por-dia"
 import { Numero } from "../numero"
 import { ListaDeFatias, Secao, Variacao } from "../partes"
@@ -111,6 +112,8 @@ export function AbaVendas({
   const origens = useMemo(() => origensDasVendas(pedidos, periodo), [pedidos, periodo])
   const noPeriodo = `de=${dia(periodo.de)}&ate=${dia(periodo.ate)}`
   const [tabelaAberta, setTabelaAberta] = useState(false)
+  // Na impressão, a tabela sai aberta.
+  const imprimindo = useImprimindo()
   const [medida, setMedida] = useState<MedidaDoGrafico>("faturamento")
   const [escolhido, setAgrupamento] = useState<Agrupamento>("dia")
   const semanal = podeAgruparPorSemana(periodo)
@@ -228,7 +231,7 @@ export function AbaVendas({
         </Secao>
       </div>
 
-      <Collapsible open={tabelaAberta} onOpenChange={setTabelaAberta}>
+      <Collapsible open={tabelaAberta || imprimindo} onOpenChange={setTabelaAberta}>
         <div className="border-y border-border/70">
           <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between py-4 text-left text-[15px] font-semibold tracking-[-0.01em] outline-none focus-visible:ring-2 focus-visible:ring-ring">
             Dia a dia do período, em tabela
@@ -239,7 +242,27 @@ export function AbaVendas({
             />
           </CollapsibleTrigger>
           <CollapsibleContent>
-            <div className="pb-4">
+            <div className="flex flex-col gap-2 pb-4">
+              <div className="flex justify-end">
+                <BaixarCsv
+                  tabela="Dia a dia do período"
+                  linhas={serie.toReversed()}
+                  colunas={[
+                    { titulo: "Dia", tipo: "data", valor: (ponto) => ponto.inicio },
+                    { titulo: n.Pedidos, tipo: "numero", valor: (ponto) => ponto.pedidos },
+                    {
+                      titulo: "Faturamento",
+                      tipo: "dinheiro",
+                      valor: (ponto) => ponto.faturamento,
+                    },
+                    {
+                      titulo: "Ticket médio",
+                      tipo: "dinheiro",
+                      valor: (ponto) => (ponto.pedidos ? ponto.faturamento / ponto.pedidos : 0),
+                    },
+                  ]}
+                />
+              </div>
               <Table aria-label="Dia a dia do período">
                 <TableHeader>
                   <TableRow>

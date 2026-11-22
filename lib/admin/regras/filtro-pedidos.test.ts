@@ -106,6 +106,32 @@ describe("filtrarPedidos", () => {
       3,
     ])
   })
+
+  test("filtra pelo bairro da entrega, sem ligar para acento e maiúsculas", () => {
+    const noJardim = {
+      ...PEDIDOS_DE_TESTE[0],
+      id: 80,
+      tipo: "entrega" as const,
+      endereco: {
+        cep: "12000000",
+        logradouro: "Rua A",
+        numero: "1",
+        bairro: "Jardim São José",
+        cidade: "Taubaté",
+      },
+    }
+    expect(ids(filtrarPedidos([...PEDIDOS, noJardim], { bairros: ["jardim sao jose"] }))).toEqual([
+      80,
+    ])
+  })
+
+  test("filtra pelo motoboy; sem-motoboy acha as entregas sem ninguém anotado", () => {
+    const doLeo = { ...PEDIDOS_DE_TESTE[0], id: 90, tipo: "entrega" as const, motoboyId: "leo" }
+    const lista = [...PEDIDOS, doLeo]
+    expect(ids(filtrarPedidos(lista, { motoboys: ["leo"] }))).toEqual([90])
+    // As entregas 1, 3, 5 e 6 dos pedidos de teste, e a 42 do João, não têm motoboy.
+    expect(ids(filtrarPedidos(lista, { motoboys: ["sem-motoboy"] }))).toEqual([1, 3, 5, 6, 42])
+  })
 })
 
 describe("totaisDaLista", () => {
