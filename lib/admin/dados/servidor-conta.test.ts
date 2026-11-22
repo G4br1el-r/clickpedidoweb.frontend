@@ -114,3 +114,161 @@ describe("taxa e couvert congelados", () => {
     expect(comanda).not.toHaveProperty("couvert")
   })
 })
+
+/** Servidor sem taxa nem couvert, com a limpeza ligada ou não. */
+const semTaxa = (limpeza = true) =>
+  servidor((catalogo) => {
+    catalogo.salao.taxaServico = { ativa: false, percentual: 10 }
+    catalogo.salao.couvert = { ativo: false, porPessoa: 8 }
+    catalogo.salao.limpeza = limpeza
+  })
+
+/** Mesa 30 com a conta de R$ 100,00 (Rodízio avulso), sem taxa nem couvert. */
+async function contaDeCem(api: Api) {
+  const { mesa } = await abrirMesa(api)
+  const comanda = await api.mesas.lancar({
+    mesaId: mesa.id,
+    enviarParaCozinha: false,
+    itens: [{ avulso: { nome: "Rodízio", preco: 100 }, quantidade: 1 }],
+  })
+  return { mesa, comanda }
+}
+
+describe("pagar contra o saldo", () => {
+  test("Pix de R$ 33,33: o saldo cai e a comanda continua aberta", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    const paga = await api.mesas.pagar(comanda.id, { forma: "pix", valor: 33.33, por: "Rafa" })
+    expect(paga.status).toBe("pronto")
+    expect(paga.situacaoPagamento).toBe("na-entrega")
+    expect(paga.pagamentos).toEqual([
+      { id: expect.any(String), forma: "pix", valor: 33.33, em: AGORA.toISOString(), por: "Rafa" },
+    ])
+    expect(paga.eventos?.at(-1)).toEqual({
+      tipo: "pagamento",
+      em: AGORA.toISOString(),
+      por: "Rafa",
+      texto: "Pix R$ 33,33",
+    })
+  })
+
+  test("misto: Pix e dinheiro com troco; o saldo zerado fecha a conta sozinho", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    await api.mesas.pagar(comanda.id, { forma: "pix", valor: 33.33 })
+    const fechada = await api.mesas.pagar(comanda.id, {
+      forma: "dinheiro",
+      valor: 66.67,
+      recebido: 80,
+    })
+    expect(fechada.pagamentos?.at(-1)).toMatchObject({
+      forma: "dinheiro",
+      valor: 66.67,
+      recebido: 80,
+      troco: 13.33,
+    })
+    expect(fechada).toMatchObject({
+      status: "concluido",
+      situacaoPagamento: "pago",
+      pagoEm: AGORA.toISOString(),
+      // A forma do pedido é a do maior pagamento.
+      pagamento: "dinheiro",
+      total: 100,
+    })
+    expect(fechada).not.toHaveProperty("trocoPara")
+    expect(fechada.eventos?.slice(-2).map((evento) => evento.texto)).toEqual([
+      "Dinheiro R$ 66,67 · troco R$ 13,33",
+      "Conta fechada",
+    ])
+  })
+
+  test("cartão pede crédito ou débito, e guarda qual foi", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    await expect(
+      api.mesas.pagar(comanda.id, { forma: "cartao-na-entrega", valor: 10 }),
+    ).rejects.toThrow("Escolha crédito ou débito.")
+    const paga = await api.mesas.pagar(comanda.id, {
+      forma: "cartao-na-entrega",
+      valor: 10,
+      cartao: "credito",
+    })
+    expect(paga.pagamentos?.[0]).toMatchObject({ cartao: "credito", valor: 10 })
+    expect(paga.eventos?.at(-1)?.texto).toBe("Cartão de crédito R$ 10,00")
+  })
+
+  test("acima do saldo recusa, menos em dinheiro, que fecha e dá troco", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    await expect(api.mesas.pagar(comanda.id, { forma: "pix", valor: 100.01 })).rejects.toThrow(
+      "O valor passa do saldo de R$ 100,00.",
+    )
+    for (const valor of [0, -5, Number.NaN, 10.005]) {
+      await expect(api.mesas.pagar(comanda.id, { forma: "pix", valor })).rejects.toThrow(
+        "Informe um valor acima de zero.",
+      )
+    }
+    await expect(
+      api.mesas.pagar(comanda.id, { forma: "dinheiro", valor: 50, recebido: 40 }),
+    ).rejects.toThrow("O valor recebido é menor que o da parte.")
+    const fechada = await api.mesas.pagar(comanda.id, { forma: "dinheiro", valor: 150 })
+    expect(fechada.pagamentos).toMatchObject([{ valor: 100, recebido: 150, troco: 50 }])
+    expect(fechada).toMatchObject({ status: "concluido", trocoPara: 150 })
+  })
+
+  test("por item: o item de R$ 40,00 com 10% paga R$ 44,00 e não se paga de novo", async () => {
+    const api = servidor()
+    const { mesa } = await abrirMesa(api)
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [
+        { avulso: { nome: "Pizza", preco: 40 }, quantidade: 1 },
+        { avulso: { nome: "Suco", preco: 9.5 }, quantidade: 1 },
+      ],
+    })
+    const [pizza] = comanda.itens
+    const paga = await api.mesas.pagar(comanda.id, { forma: "pix", itens: [pizza.id] })
+    expect(paga.pagamentos).toMatchObject([{ forma: "pix", valor: 44, itens: [pizza.id] }])
+    expect(paga.eventos?.at(-1)?.texto).toBe("Pix R$ 44,00 · 1 item")
+    await expect(api.mesas.pagar(comanda.id, { forma: "pix", itens: [pizza.id] })).rejects.toThrow(
+      "Esse item já foi pago.",
+    )
+    await expect(api.mesas.pagar(comanda.id, { forma: "pix", itens: ["outro"] })).rejects.toThrow(
+      "Item não encontrado na comanda",
+    )
+  })
+
+  test("a conta fechada pelo último pagamento põe a mesa em limpeza, se ligada", async () => {
+    for (const limpeza of [true, false]) {
+      await clear()
+      const api = semTaxa(limpeza)
+      const { mesa, comanda } = await contaDeCem(api)
+      await api.mesas.pagar(comanda.id, { forma: "pix", valor: 40 })
+      await api.mesas.pagar(comanda.id, { forma: "pix", valor: 60 })
+      const depois = (await api.mesas.listar()).find((item) => item.id === mesa.id)
+      expect(depois?.status).toBe("livre")
+      expect(depois?.limpezaDesde).toBe(limpeza ? AGORA.toISOString() : undefined)
+    }
+  })
+
+  test("fecharConta paga o saldo inteiro de uma vez, como um pagamento", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    await api.mesas.pagar(comanda.id, { forma: "pix", valor: 30 })
+    const fechada = await api.mesas.fecharConta(comanda.id, "dinheiro")
+    expect(fechada.status).toBe("concluido")
+    expect(fechada.pagamentos).toMatchObject([
+      { forma: "pix", valor: 30 },
+      { forma: "dinheiro", valor: 70 },
+    ])
+  })
+
+  test("Marcar como pago em Pedidos recusa a comanda de mesa aberta", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    await expect(api.pedidos.marcarPago(comanda.id)).rejects.toThrow(
+      "Receba a conta pela tela de Mesas.",
+    )
+  })
+})

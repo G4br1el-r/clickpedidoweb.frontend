@@ -1,4 +1,10 @@
-import type { FormaPagamento, MotivoCancelamento, OrigemPedido, TipoPedido } from "../dados/tipos"
+import type {
+  FormaPagamento,
+  MotivoCancelamento,
+  OrigemPedido,
+  PagamentoConta,
+  TipoPedido,
+} from "../dados/tipos"
 
 const CANAIS: Record<TipoPedido, string> = {
   entrega: "Entrega",
@@ -37,6 +43,16 @@ export const MOTIVOS_CANCELAMENTO = Object.keys(MOTIVOS) as MotivoCancelamento[]
 
 export const rotuloCanal = (tipo: TipoPedido) => CANAIS[tipo]
 export const rotuloPagamento = (forma: FormaPagamento) => PAGAMENTOS[forma]
-export const rotuloOrigem = (origem: OrigemPedido) => ORIGENS[origem]
+/** Um pagamento da conta da mesa: no cartão, diz se foi crédito ou débito. */
+export function rotuloDoPagamento({
+  forma,
+  cartao,
+}: Pick<PagamentoConta, "cartao"> & { forma: FormaPagamento }) {
+  if (forma === "cartao-na-entrega" && cartao) {
+    return cartao === "credito" ? "Cartão de crédito" : "Cartão de débito"
+  }
+  return PAGAMENTOS[forma]
+}
+export const rotuloOrigem =(origem: OrigemPedido) => ORIGENS[origem]
 export const rotuloMotivo = (motivo: MotivoCancelamento | undefined) =>
   motivo ? MOTIVOS[motivo] : "Não informado"

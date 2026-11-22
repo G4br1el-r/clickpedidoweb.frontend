@@ -1,6 +1,6 @@
 import { addDays, addMinutes, endOfDay, format, isSameDay, startOfDay, subDays } from "date-fns"
 import { del, get, set } from "idb-keyval"
-import { plural } from "../../formato"
+import { emReais, plural } from "../../formato"
 import { expediente, horariosLivres, INTERVALO_MIN } from "../regras/agenda"
 import {
   copiarProduto,
@@ -9,7 +9,7 @@ import {
   sincronizarOpcoes,
   soltarOpcoesDe,
 } from "../regras/cardapio"
-import { comTotais } from "../regras/conta"
+import { comTotais, itensPagos, resumoDaConta, valorDosItens } from "../regras/conta"
 import { cozinhaJaPreparou, depoisDeTirar, itensDaCozinha } from "../regras/cozinha"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
@@ -30,6 +30,7 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
+import { rotuloDoPagamento } from "../regras/rotulos"
 import { mesasSeCruzam, primeiraPosicaoLivre } from "../regras/salao"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
@@ -40,6 +41,7 @@ import { type BaseLojaV3, migrarDaVersao3 } from "./migracao"
 import {
   type Bairro,
   type BaseLoja,
+  type CartaoPagamento,
   type CatalogoLoja,
   type Categoria,
   type ConfigLoja,
@@ -52,6 +54,7 @@ import {
   type MotivoCancelamento,
   type Motoboy,
   type MovimentoEstoque,
+  type PagamentoConta,
   type Pedido,
   type Produto,
   type StatusPedido,
@@ -144,6 +147,19 @@ export type LancamentoMesa = {
   por?: string
 }
 
+/**
+ * Um pagamento da conta. `valor` é a parte que abate do saldo (no dinheiro, acima do saldo vira
+ * troco); por item, o valor sai dos itens. `recebido`: o que o cliente entregou em dinheiro.
+ */
+export type Pagamento = {
+  forma: PagamentoMesa
+  valor?: number
+  recebido?: number
+  cartao?: CartaoPagamento
+  itens?: string[]
+  por?: string
+}
+
 /** Parte de um item preparado que saiu da comanda: não volta ao estoque. */
 type Perda = { item: ItemPedido; quantidade: number; motivo: string }
 
@@ -206,6 +222,9 @@ function abrirMesas(base: BaseLoja): BaseLoja {
 }
 
 const reais = (valor: number) => Math.round(valor * 100) / 100
+
+/** Valor em reais e centavos, sem fração de centavo. */
+const emCentavosExatos = (valor: number) => Number.isInteger(Number((valor * 100).toFixed(6)))
 
 /** Comanda aberta da mesa, se houver. */
 const comandaDa = (base: BaseLoja, mesaId: string) =>
@@ -305,6 +324,31 @@ function retirar(
     texto: `Tirou ${itensEmTexto([{ ...item, quantidade }])}`,
     ...(porque ? { motivo: porque } : {}),
   })
+}
+
+/**
+ * O saldo zerou: a comanda fica concluída e paga. A forma do pedido é a do maior pagamento (o
+ * primeiro, no empate), e o troco do pedido só vale quando houve um pagamento único em dinheiro.
+ */
+function fechada(comanda: Pedido, agora: string, por: string | undefined): Pedido {
+  const pagamentos = comanda.pagamentos ?? []
+  const maior = pagamentos.reduce<PagamentoConta | undefined>(
+    (atual, pagamento) => (!atual || pagamento.valor > atual.valor ? pagamento : atual),
+    undefined,
+  )
+  const { trocoPara: _troco, ...semTroco } = comanda
+  const [unico] = pagamentos
+  return comEvento(
+    {
+      ...semTroco,
+      status: "concluido",
+      situacaoPagamento: "pago",
+      pagoEm: agora,
+      pagamento: maior?.forma ?? comanda.pagamento,
+      ...(pagamentos.length === 1 && unico.recebido ? { trocoPara: unico.recebido } : {}),
+    },
+    { tipo: "fechada", em: agora, ...autor(por), texto: "Conta fechada" },
+  )
 }
 
 const semContaPedida = ({ contaPedidaEm: _contaPedidaEm, ...comanda }: Pedido): Pedido => comanda
@@ -883,6 +927,71 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     return responder(loja)
   }
 
+  /**
+   * Um pagamento contra o saldo: confere forma, cartão, itens e valor, grava o pagamento e o
+   * evento, e fecha a conta quando o saldo zera. Sem valor nem itens, paga o saldo.
+   */
+  function receber(comanda: Pedido, pagamento: Pagamento): Pedido {
+    conferirPagamento(pagamento.forma)
+    if (comanda.itens.length === 0) throw new Error("A comanda está vazia.")
+    const cartao = pagamento.forma === "cartao-na-entrega" ? pagamento.cartao : undefined
+    if (pagamento.forma === "cartao-na-entrega" && cartao !== "credito" && cartao !== "debito") {
+      throw new Error("Escolha crédito ou débito.")
+    }
+    // Por item, o valor sai dos itens marcados (com a taxa deles).
+    const itens = pagamento.itens?.length ? [...new Set(pagamento.itens)] : undefined
+    if (itens) {
+      const pagos = itensPagos(comanda)
+      for (const itemId of itens) {
+        conferirItem(comanda, itemId)
+        if (pagos.has(itemId)) throw new Error("Esse item já foi pago.")
+      }
+    }
+    const pedido = itens
+      ? valorDosItens(comanda, itens)
+      : (pagamento.valor ?? resumoDaConta(comanda).saldo)
+    if (!(pedido > 0) || !emCentavosExatos(pedido)) {
+      throw new Error("Informe um valor acima de zero.")
+    }
+    const { saldo } = resumoDaConta(comanda)
+    const dinheiro = pagamento.forma === "dinheiro"
+    if (pedido > saldo && !dinheiro) {
+      throw new Error(`O valor passa do saldo de ${emReais(saldo)}.`)
+    }
+    // No dinheiro, o que passa do saldo é troco.
+    const valor = Math.min(pedido, saldo)
+    const recebido = dinheiro ? (pagamento.recebido ?? pedido) : valor
+    if (recebido < pedido) throw new Error("O valor recebido é menor que o da parte.")
+    const troco = reais(recebido - valor)
+    const agora = new Date().toISOString()
+    const novo: PagamentoConta = {
+      id: `pag-${crypto.randomUUID().slice(0, 8)}`,
+      forma: pagamento.forma,
+      valor,
+      em: agora,
+      ...autor(pagamento.por),
+      ...(dinheiro && troco > 0 ? { recebido, troco } : {}),
+      ...(cartao ? { cartao } : {}),
+      ...(itens ? { itens } : {}),
+    }
+    const paga = comEvento(
+      { ...comanda, pagamentos: [...(comanda.pagamentos ?? []), novo] },
+      {
+        tipo: "pagamento",
+        em: agora,
+        ...autor(pagamento.por),
+        texto: [
+          `${rotuloDoPagamento(novo)} ${emReais(novo.valor)}`,
+          novo.troco ? `troco ${emReais(novo.troco)}` : null,
+          itens ? plural(itens.length, "item", "itens") : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      },
+    )
+    return resumoDaConta(paga).saldo > 0 ? paga : fechada(paga, agora, pagamento.por)
+  }
+
   return {
     async base(): Promise<BaseLoja> {
       return responder(await carregar())
@@ -983,6 +1092,10 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             throw new Error("Pedido cancelado não recebe pagamento.")
           }
           if (pedido.situacaoPagamento === "pago") throw new Error("Este pedido já está pago.")
+          // A comanda aberta tem saldo, troco e histórico: recebe-se por mesas.pagar.
+          if (pedido.tipo === "mesa" && pedido.mesa && EM_ANDAMENTO.includes(pedido.status)) {
+            throw new Error("Receba a conta pela tela de Mesas.")
+          }
           if (faltaPesar(pedido)) throw new Error("Pese o pedido antes de receber.")
           return {
             ...pedido,
@@ -1877,19 +1990,16 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         })
       },
 
-      /** Recebe a conta: conclui a comanda, marca como paga e a mesa fica livre. */
-      fecharConta(pedidoId: number, pagamento: PagamentoMesa) {
-        return alterarComanda(pedidoId, (comanda) => {
-          conferirPagamento(pagamento)
-          if (comanda.itens.length === 0) throw new Error("A comanda está vazia.")
-          return {
-            ...comanda,
-            status: "concluido",
-            pagamento,
-            situacaoPagamento: "pago",
-            pagoEm: new Date().toISOString(),
-          }
-        })
+      /** Um pagamento contra o saldo da conta. */
+      pagar(pedidoId: number, pagamento: Pagamento) {
+        return alterarComanda(pedidoId, (comanda) => receber(comanda, pagamento))
+      },
+
+      /** Recebe o saldo inteiro de uma vez, numa forma só. */
+      fecharConta(pedidoId: number, forma: PagamentoMesa, cartao?: CartaoPagamento) {
+        return alterarComanda(pedidoId, (comanda) =>
+          receber(comanda, { forma, ...(cartao ? { cartao } : {}) }),
+        )
       },
 
       /** Mesa com itens só sai pelo fechamento da conta; comanda vazia é cancelada. */

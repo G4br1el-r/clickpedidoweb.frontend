@@ -4,6 +4,7 @@ import {
   rotuloCanal,
   rotuloMotivo,
   rotuloOrigem,
+  rotuloDoPagamento,
   rotuloPagamento,
 } from "./rotulos"
 
@@ -21,6 +22,18 @@ describe("rótulos", () => {
     expect(rotuloPagamento("dinheiro")).toBe("Dinheiro")
     expect(rotuloPagamento("cartao-na-entrega")).toBe("Cartão na maquininha")
     expect(rotuloPagamento("pagar-apos-pesagem")).toBe("Após a pesagem")
+  })
+
+  test("um pagamento da conta: o cartão diz se é crédito ou débito", () => {
+    expect(rotuloDoPagamento({ forma: "pix" })).toBe("Pix")
+    expect(rotuloDoPagamento({ forma: "dinheiro" })).toBe("Dinheiro")
+    expect(rotuloDoPagamento({ forma: "cartao-na-entrega", cartao: "credito" })).toBe(
+      "Cartão de crédito",
+    )
+    expect(rotuloDoPagamento({ forma: "cartao-na-entrega", cartao: "debito" })).toBe(
+      "Cartão de débito",
+    )
+    expect(rotuloDoPagamento({ forma: "cartao-na-entrega" })).toBe("Cartão na maquininha")
   })
 
   test("motivos do cancelamento, na ordem da lista; sem motivo, Não informado", () => {
