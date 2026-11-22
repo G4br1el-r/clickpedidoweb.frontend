@@ -18,6 +18,7 @@ import type {
   FormaPagamento,
   ItemPedido,
   Mesa,
+  MotivoRefazer,
   OrigemPedido,
   Pedido,
   Produto,
@@ -540,8 +541,7 @@ function comHorarios(pedido: Pedido, atualizado: Date, agora: Date): Pedido {
     return { ...pedido, etapas: { "aguardando-pagamento": hora(criado) } }
   }
   const etapas: Partial<Record<StatusPedido, string>> = { recebido: hora(criado) }
-  if (pedido.status === "cancelado")
-    return { ...pedido, etapas: { ...etapas, cancelado: hora(atualizado) } }
+  if (pedido.status === "cancelado") return canceladoComHorarios(pedido, etapas, atualizado)
 
   if (pedido.agendamento) {
     const inicio = new Date(pedido.agendamento.inicio)
@@ -576,7 +576,78 @@ function comHorarios(pedido: Pedido, atualizado: Date, agora: Date): Pedido {
       ...(serviu ? { servidoEm: hora(servido) } : {}),
     }
   })
-  return { ...pedido, itens, etapas }
+  const comItens = { ...pedido, itens, etapas }
+  return ate >= 3 ? comRefazer(comItens, pronto, ate === 4 ? atualizado : agora) : comItens
+}
+
+const MOTIVOS_DA_DEMO: MotivoRefazer[] = ["errado", "caiu", "reclamacao", "outro"]
+
+/**
+ * Um em cada três cancelados da cozinha foi cancelado depois de começar: os itens já
+ * tinham sido iniciados (2 a 5 min depois da chegada), antes do cancelamento.
+ */
+function canceladoComHorarios(
+  pedido: Pedido,
+  etapas: Partial<Record<StatusPedido, string>>,
+  atualizado: Date,
+): Pedido {
+  const comCancelado = { ...pedido, etapas: { ...etapas, cancelado: atualizado.toISOString() } }
+  const iniciou = addMinutes(new Date(pedido.criadoEm), 2 + (pedido.id % 4))
+  if (pedido.origem === "pdv" || pedido.id % 3 !== 0 || iniciou >= atualizado) return comCancelado
+  return {
+    ...comCancelado,
+    etapas: { ...comCancelado.etapas, "em-preparo": iniciou.toISOString() },
+    itens: pedido.itens.map((item) =>
+      (item.vaiParaCozinha ?? pedido.enviarParaCozinha)
+        ? { ...item, iniciadoEm: iniciou.toISOString() }
+        : item,
+    ),
+  }
+}
+
+/**
+ * Um pedido em 23 que já saiu teve um item refeito: 4 a 8 min depois de pronto, com o
+ * preparo e a saída do refazer até o limite (o encerramento ou agora). Sem sortear.
+ */
+function comRefazer(pedido: Pedido, pronto: Date, limite: Date): Pedido {
+  const [primeiro] = pedido.itens.filter((item) => item.vaiParaCozinha ?? pedido.enviarParaCozinha)
+  if (!primeiro || pedido.id % 23 !== 0) return pedido
+  const em = addMinutes(pronto, 4 + (pedido.id % 5))
+  const iniciou = addMinutes(em, 2)
+  const feito = addMinutes(iniciou, 6 + (pedido.id % 4))
+  const saiu = addMinutes(feito, 3)
+  if (saiu > limite) return pedido
+  const {
+    lancadoEm: _lancado,
+    iniciadoEm: _iniciado,
+    feitoEm: _feito,
+    servidoEm: _servido,
+    ...dados
+  } = primeiro
+  const naMesa = pedido.tipo === "mesa"
+  return {
+    ...pedido,
+    refacoes: [
+      {
+        numero: 1,
+        rodada: primeiro.rodada ?? 1,
+        motivo: MOTIVOS_DA_DEMO[pedido.id % MOTIVOS_DA_DEMO.length],
+        em: em.toISOString(),
+        itens: [
+          {
+            ...dados,
+            id: `${primeiro.id}~r1`,
+            quantidade: 1,
+            total: primeiro.precoUnitario,
+            iniciadoEm: iniciou.toISOString(),
+            feitoEm: feito.toISOString(),
+            ...(naMesa ? { servidoEm: saiu.toISOString() } : {}),
+          },
+        ],
+        ...(naMesa ? {} : { entregueEm: saiu.toISOString() }),
+      },
+    ],
+  }
 }
 
 export type OpcoesPedidoAgora = Omit<OpcoesGeracao, "de"> & {

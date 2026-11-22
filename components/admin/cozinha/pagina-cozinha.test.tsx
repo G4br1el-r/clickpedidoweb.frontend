@@ -1467,3 +1467,34 @@ describe("PaginaCozinha: histórico", () => {
     expect(gaveta.getByRole("list", { name: "Linha do tempo" })).toHaveTextContent("Servido")
   })
 })
+
+describe("PaginaCozinha: desempenho", () => {
+  test("o Quadro abre com a faixa do turno de hoje", async () => {
+    telaGrande()
+    renderizar()
+    const faixa = within(
+      await screen.findByRole("region", { name: "Turno de hoje" }, { timeout: 8000 }),
+    )
+    expect(faixa.getByText("Tempo médio até pronto")).toBeInTheDocument()
+    expect(faixa.getByText("Atrasados agora")).toBeInTheDocument()
+  })
+
+  test("a aba Desempenho mostra a régua, o gráfico por hora e os tempos por praça, tipo e produto", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("tab", { name: "Desempenho" }))
+    expect(await screen.findByText("Tempo até pronto", {}, { timeout: 8000 })).toBeInTheDocument()
+    expect(screen.getByRole("region", { name: "Por hora do dia" })).toBeInTheDocument()
+
+    await usuario.click(screen.getByRole("radio", { name: "30 dias" }))
+    const pracas = await screen.findByRole("list", { name: "Por praça" })
+    expect(within(pracas).getByText("Forno")).toBeInTheDocument()
+    expect(screen.getByRole("list", { name: "Por tipo de pedido" })).toHaveTextContent("Entrega")
+    expect(
+      within(screen.getByRole("list", { name: "Produtos mais demorados" })).getAllByRole(
+        "listitem",
+      ),
+    ).toHaveLength(5)
+  })
+})

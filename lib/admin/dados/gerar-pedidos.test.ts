@@ -222,6 +222,38 @@ describe("gerarPedidos", () => {
     expect(pedidos.filter((pedido) => pedido.etapas?.pronto).length).toBeGreaterThan(10)
   })
 
+  test("em 30 dias, alguns cancelados depois de iniciar e alguns refazer, com horas em ordem", () => {
+    const pedidos = gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "lanchonete",
+      de: new Date(2026, 9, 15),
+      agora: AGORA,
+    })
+    const canceladosIniciados = pedidos.filter(
+      (pedido) =>
+        pedido.status === "cancelado" &&
+        pedido.itens.some(
+          (item) => item.iniciadoEm && item.iniciadoEm < (pedido.etapas?.cancelado ?? ""),
+        ),
+    )
+    expect(canceladosIniciados.length).toBeGreaterThan(5)
+    const refeitos = pedidos.filter((pedido) => (pedido.refacoes ?? []).length > 0)
+    expect(refeitos.length).toBeGreaterThan(5)
+    for (const pedido of refeitos) {
+      const [refacao] = pedido.refacoes ?? []
+      expect(pedido.status === "concluido" || pedido.status === "saiu-para-entrega").toBe(true)
+      expect(["errado", "caiu", "reclamacao", "outro"]).toContain(refacao.motivo)
+      const [copia] = refacao.itens
+      const pronto = pedido.etapas?.pronto ?? ""
+      expect(refacao.em > pronto).toBe(true)
+      expect(copia.iniciadoEm && copia.iniciadoEm > refacao.em).toBe(true)
+      expect(copia.feitoEm && copia.feitoEm > (copia.iniciadoEm ?? "")).toBe(true)
+      expect(Date.parse(copia.feitoEm ?? "")).toBeLessThanOrEqual(AGORA.getTime())
+      // Refazer saiu: servido na mesa, entregue no resto.
+      expect(Boolean(copia.servidoEm) || Boolean(refacao.entregueEm)).toBe(true)
+    }
+  })
+
   test("a mesa pronta há mais tempo já foi servida, de 3 a 6 min depois de pronta", () => {
     const pedidos = gerarPedidos({
       catalogo: catalogo(),

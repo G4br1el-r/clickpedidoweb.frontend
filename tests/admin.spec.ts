@@ -362,6 +362,24 @@ test("cozinha: o Histórico acha o ticket, mostra a linha do tempo e refaz", asy
   await expect(refeito).toContainText("Refazer · Caiu")
 })
 
+test("cozinha: a faixa do turno no Quadro e a aba Desempenho do mês", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha")
+  const faixa = page.getByRole("region", { name: "Turno de hoje" })
+  await expect(faixa).toContainText("Tempo médio até pronto", { timeout: 15_000 })
+  await esperarAnimacoes(page)
+  await expect(faixa).toHaveScreenshot("cozinha-turno.png")
+
+  await page.getByRole("tab", { name: "Desempenho" }).click()
+  await page.getByRole("radio", { name: "30 dias" }).click()
+  await expect(page.getByRole("list", { name: "Por praça" })).toBeVisible()
+  await verificarAcessibilidade(page)
+  await page.waitForLoadState("networkidle")
+  await esperarAnimacoes(page)
+  await page.mouse.move(0, 0)
+  await expect(page).toHaveScreenshot("cozinha-desempenho.png", { fullPage: true })
+})
+
 test("praças: o Forno e a Montagem fazem a sua parte, e a expedição vê pronto", async ({
   page,
 }, info) => {

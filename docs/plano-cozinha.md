@@ -451,3 +451,49 @@ A fase sai em dois commits, com revisão entre eles: **5a** (praças, expediçã
 2. **Servidor:** criar o refazer e mexer no ticket dele; o pedido original fica igual.
 3. **Tela:** aba Histórico (lista, dia, busca, filtros), detalhe com linha do tempo e Reimprimir, janela de refazer no Histórico e no menu do ticket em Prontos, ticket REFAZER no quadro, Servido no Garçom e Entregue em Prontos.
 4. **E2E e screenshots:** pizzaria: abrir o Histórico, buscar, abrir a linha do tempo, refazer com motivo Caiu e ver o ticket REFAZER em A fazer; screenshots revisados do Histórico (desktop e celular), do detalhe e da janela de refazer.
+
+**Na implementação (6)**
+
+- A linha do tempo mostra o pronto de cada praça só quando o ticket passa por mais de uma: com uma praça só, ele repetiria o Pronto.
+- O botão de cada linha do Histórico tem o nome do ticket como texto (a verificação de acessibilidade pede que o nome bata com o que se vê).
+- No servidor, a hora do aparelho decide o "hoje": antes dela, o Histórico mostra o esqueleto (sem isso, a data do servidor e a do navegador divergiam).
+
+## Fase 7: desempenho
+
+**Desenho** (das decisões 26 e 27 e dos dados da demo)
+
+- **Faixa do turno**, no topo do Quadro, na régua do painel: tempo médio até pronto de hoje, prontos hoje, atrasados agora e o item mais pedido. Grátis.
+- **Aba Desempenho**, entre Histórico e Ajustes: período Hoje, 7 dias ou 30 dias.
+  - Régua: tempo até pronto, % no prazo (abaixo do atraso da loja), tickets (com os cancelados depois de iniciar) e retrabalho (refazer sobre tickets).
+  - Gráfico de tickets por hora da chegada, uma série, com o tempo médio na dica.
+  - Listas com barra: por praça (da chegada ao último item dela), por tipo de pedido e os cinco produtos mais demorados (da chegada ao item riscado).
+  - O cancelado e o refazer não entram no tempo médio; o refazer conta só no retrabalho.
+- **Demo:** um em cada três cancelados da cozinha foi cancelado depois de iniciar, e um em cada 23 pedidos que saíram teve um item refeito, com horários sem sorteio novo. `VERSAO` 7.
+
+**Fronteiras de teste**
+
+1. **Regras:** resumo do turno, números do período, por hora, por tipo, por praça e produtos mais demorados.
+2. **Gerador:** cancelados depois de iniciar e refazer, com horas em ordem e até agora.
+3. **Tela:** a faixa, a régua e as listas com valores literais; a aba com período e listas na página.
+4. **E2E e screenshots:** a faixa e a aba Desempenho do mês, desktop e celular.
+
+**Na implementação (7)**
+
+- A demo abre pedidos do dia a qualquer hora, então os números na tela são testados nos componentes que recebem os valores prontos; a página confere só que eles aparecem.
+
+## Fase 8: Pro
+
+**Desenho** (da decisão 35)
+
+- **Chaves no `CATALOGO_PRO`:** `cozinha.pracas` (mais de uma praça), `cozinha.tv` (modo TV), `cozinha.chamada` (painel de chamada), `cozinha.desempenho` (aba Desempenho), `cozinha.tempoPreparo` (tempo de preparo por produto) e `cozinha.via` (via impressa sozinha). Elas não são campos da aparência, então nunca entram na sacola sozinhas: o cadeado mostra o preço e o botão Contratar, e o "Liberar todos" da lateral libera junto.
+- **O que fica com cadeado:** a aba Desempenho (a faixa do turno continua grátis); "Nova praça" quando já existe uma (as praças da demo continuam funcionando); as chaves de imprimir a via sozinha (o Reimprimir manual continua grátis); o campo de tempo de preparo do produto e o disparo nos tickets; o modo TV e o painel de chamada.
+- **Modo TV** (`/admin/cozinha/tv`, praça no endereço): só leitura, letra grande, as três colunas, tela inteira por cima da lateral. Quando os tickets não cabem, pagina sozinho a cada 8 s, com "1/2" no canto.
+- **Painel de chamada** (`/admin/cozinha/chamada`): para o cliente da retirada (do site e do balcão). Colunas "Preparando" e "Pode retirar", só o número do pedido, grande. O número que chega em "Pode retirar" toca o som de chamada. Sai quando a retirada é concluída.
+- **Tempo de preparo por produto:** campo opcional (1 a 120 min). Com ele, cada item do ticket diz quando começar para tudo ficar pronto junto ("Comece agora" / "Comece em 12 min"), e o ticket só entra em atenção depois do maior tempo de preparo e em atraso depois dele mais a folga da loja (atraso − atenção).
+- O menu "⋯" do cabeçalho da Cozinha ganha "Modo TV" e "Painel de chamada", ao lado de Tela cheia.
+
+**Fronteiras de teste**
+
+1. **Regras:** páginas da TV; números da chamada; disparo dos itens; tempos do ticket com preparo; chaves Pro fora da sacola.
+2. **Tela:** cadeado e Contratar em cada recurso; TV paginando; chamada com o som; campo de preparo e "Comece em".
+3. **E2E e screenshots:** a TV e a chamada no desktop; o cadeado da aba Desempenho.

@@ -74,6 +74,7 @@ import { useFilaDeVias } from "../impressao/via-cozinha"
 import { Traco } from "../traco"
 import { AjustesCozinha } from "./ajustes-cozinha"
 import { AtalhosCozinha } from "./atalhos-cozinha"
+import { DesempenhoCozinha, FaixaDoTurnoAoVivo } from "./desempenho-cozinha"
 import { ESCALA_DO_QUADRO, ExibicaoCozinha } from "./exibicao-cozinha"
 import { HistoricoCozinha } from "./historico-cozinha"
 import { JanelaRefazer } from "./janela-refazer"
@@ -85,11 +86,12 @@ import { useAtalhosDaCozinha } from "./use-atalhos-da-cozinha"
 import { useSonsDaCozinha } from "./use-sons-da-cozinha"
 import { useViasDaCozinha } from "./use-vias-da-cozinha"
 
-const ABAS = ["quadro", "historico", "ajustes"] as const
+const ABAS = ["quadro", "historico", "desempenho", "ajustes"] as const
 
 const NOME_DA_ABA: Record<(typeof ABAS)[number], string> = {
   quadro: "Quadro",
   historico: "Histórico",
+  desempenho: "Desempenho",
   ajustes: "Ajustes",
 }
 
@@ -504,6 +506,9 @@ export function PaginaCozinha({
         <TabsContent value="historico">
           <HistoricoCozinha aoReimprimir={aoReimprimir} aoRefazer={setRefazendo} />
         </TabsContent>
+        <TabsContent value="desempenho">
+          <DesempenhoCozinha />
+        </TabsContent>
         <TabsContent value="ajustes">
           <AjustesCozinha />
         </TabsContent>
@@ -574,6 +579,8 @@ export function PaginaCozinha({
               </Label>
             </div>
           </div>
+
+          {agora && <FaixaDoTurnoAoVivo agora={agora} tempos={tempos} intervalo={intervalo} />}
 
           <MaisTarde
             tickets={maisTarde}
