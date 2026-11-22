@@ -193,3 +193,23 @@ export function saidasDaReceita(
     ]
   })
 }
+
+/** A decisão do farmacêutico que lança saídas: só a aprovação, com a hora em que aprovou. */
+type DecisoesDaEscrituracao = Record<string, { situacao: string; em: string } | undefined>
+
+/**
+ * A escrituração completa: os movimentos lançados mais as saídas das receitas aprovadas,
+ * do mais novo ao mais antigo.
+ */
+export function escrituracao(
+  movimentos: MovimentoControlado[],
+  receitas: Receita[],
+  produtos: Produto[],
+  decisoes: DecisoesDaEscrituracao,
+): MovimentoControlado[] {
+  const dispensadas = receitas.flatMap((receita) => {
+    const decisao = decisoes[receita.id]
+    return decisao?.situacao === "aprovada" ? saidasDaReceita(receita, produtos, decisao.em) : []
+  })
+  return [...movimentos, ...dispensadas].toSorted((a, b) => Date.parse(b.em) - Date.parse(a.em))
+}

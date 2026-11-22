@@ -17,10 +17,13 @@ const porcentagem = new Intl.NumberFormat("pt-BR", {
 export function Secao({
   titulo,
   descricao,
+  acao,
   children,
 }: {
   titulo: string
   descricao?: ReactNode
+  /** Um botão no canto do título (ex.: baixar a tabela em CSV). */
+  acao?: ReactNode
   children: ReactNode
 }) {
   const id = useId()
@@ -30,7 +33,12 @@ export function Secao({
         <h2 id={id} className="text-[15px] font-semibold tracking-[-0.01em]">
           {titulo}
         </h2>
-        {descricao && <p className="text-[13px] text-muted-foreground">{descricao}</p>}
+        {(descricao || acao) && (
+          <div className="flex items-center gap-2">
+            {descricao && <p className="text-[13px] text-muted-foreground">{descricao}</p>}
+            {acao}
+          </div>
+        )}
       </div>
       {children}
     </section>

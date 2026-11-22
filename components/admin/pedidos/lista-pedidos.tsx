@@ -44,8 +44,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table"
-import type { Pedido } from "@/lib/admin/dados/tipos"
-import { contarPor, filtrarPedidos, totaisDaLista } from "@/lib/admin/regras/filtro-pedidos"
+import type { Motoboy, Pedido } from "@/lib/admin/dados/tipos"
+import {
+  contarPor,
+  filtrarPedidos,
+  SEM_MOTOBOY,
+  totaisDaLista,
+} from "@/lib/admin/regras/filtro-pedidos"
 import { formatarTelefone } from "@/lib/admin/regras/mensagens"
 import {
   rotuloCanal,
@@ -173,7 +178,14 @@ function opcoesDe<K extends "status" | "tipo" | "pagamento">(
 }
 
 /** Tabela de pedidos com busca, filtros com contagem, ordenação e paginação, tudo no endereço. */
-export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
+export function ListaPedidos({
+  pedidos,
+  motoboys = [],
+}: {
+  pedidos: Pedido[]
+  /** Para dar nome ao motoboy na etiqueta do filtro. */
+  motoboys?: Motoboy[]
+}) {
   const [estado, setEstado] = useEstadoLista()
   const [, abrirPedido] = usePedidoAberto()
 
@@ -187,6 +199,8 @@ export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
         origens: estado.origem,
         clientes: estado.cliente,
         motivos: estado.motivo,
+        bairros: estado.bairro,
+        motoboys: estado.motoboy,
       }),
     [
       pedidos,
@@ -197,6 +211,8 @@ export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
       estado.origem,
       estado.cliente,
       estado.motivo,
+      estado.bairro,
+      estado.motoboy,
     ],
   )
   const totais = totaisDaLista(filtrados)
@@ -207,7 +223,9 @@ export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
       estado.pagamento.length +
       estado.origem.length +
       estado.cliente.length +
-      estado.motivo.length >
+      estado.motivo.length +
+      estado.bairro.length +
+      estado.motoboy.length >
       0
   // Filtros que só chegam pelo endereço (das abas da visão geral): uma etiqueta para tirar cada um.
   const etiquetas = [
@@ -225,6 +243,20 @@ export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
       chave: `motivo:${motivo}`,
       texto: `Motivo: ${rotuloMotivo(motivo === "nao-informado" ? undefined : motivo)}`,
       tirar: () => ({ motivo: estado.motivo.filter((outro) => outro !== motivo) }),
+    })),
+    ...estado.bairro.map((bairro) => ({
+      chave: `bairro:${bairro}`,
+      texto: `Bairro: ${bairro}`,
+      tirar: () => ({ bairro: estado.bairro.filter((outro) => outro !== bairro) }),
+    })),
+    ...estado.motoboy.map((id) => ({
+      chave: `motoboy:${id}`,
+      texto: `Motoboy: ${
+        id === SEM_MOTOBOY
+          ? "Sem motoboy"
+          : (motoboys.find((motoboy) => motoboy.id === id)?.nome ?? id)
+      }`,
+      tirar: () => ({ motoboy: estado.motoboy.filter((outro) => outro !== id) }),
     })),
   ]
 
@@ -266,6 +298,8 @@ export function ListaPedidos({ pedidos }: { pedidos: Pedido[] }) {
       origem: null,
       cliente: null,
       motivo: null,
+      bairro: null,
+      motoboy: null,
       pagina: null,
     })
 
