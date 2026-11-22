@@ -39,7 +39,7 @@ export default defineConfig({
         branches: 79,
         functions: 84,
         lines: 86,
-        "lib/**": { statements: 98, branches: 95, functions: 98, lines: 98 },
+        "lib/**": { statements: 98, branches: 95, functions: 99, lines: 99 },
       },
     },
   },

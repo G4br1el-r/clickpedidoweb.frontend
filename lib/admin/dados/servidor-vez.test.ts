@@ -8,6 +8,8 @@ import type { BaseLoja } from "./tipos"
 /** O IndexedDB do navegador (fronteira): dá para segurar a gravação até o teste soltar. */
 const disco = vi.hoisted(() => ({
   segurar: false,
+  /** A próxima gravação falha (disco cheio, por exemplo). */
+  falhar: false,
   soltar: [] as (() => void)[],
   /** Roda uma vez, na próxima leitura do disco: outra aba gravando no meio. */
   aoLer: undefined as (() => Promise<void>) | undefined,
@@ -25,6 +27,10 @@ vi.mock("idb-keyval", async (original) => {
       return valor
     },
     set: (...argumentos: Parameters<typeof real.set>) => {
+      if (disco.falhar) {
+        disco.falhar = false
+        return Promise.reject(new Error("Disco cheio"))
+      }
       const gravar = () => real.set(...argumentos)
       if (!disco.segurar) return gravar()
       // A transação já entrou na fila do IndexedDB; só a resposta demora.
@@ -50,6 +56,7 @@ beforeEach(async () => {
   disco.segurar = false
   disco.soltar = []
   disco.aoLer = undefined
+  disco.falhar = false
   await clear()
   localStorage.clear()
 })
@@ -93,4 +100,15 @@ test("outra aba grava entre a leitura e a gravação desta: a gravação refaz s
   await a.mesas.criar({ numero: 31 })
 
   expect((await aba().mesas.listar()).map((mesa) => mesa.numero)).toEqual([1, 2, 30, 31, 32])
+})
+
+test("a falha do disco chega a quem gravou, e a próxima gravação segue", async () => {
+  const api = aba()
+  await api.mesas.listar()
+  disco.falhar = true
+
+  await expect(api.mesas.criar({ numero: 30 })).rejects.toThrow("Disco cheio")
+  await api.mesas.criar({ numero: 31 })
+
+  expect((await aba().mesas.listar()).map((mesa) => mesa.numero)).toContain(31)
 })
