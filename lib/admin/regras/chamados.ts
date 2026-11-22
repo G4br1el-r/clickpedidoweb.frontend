@@ -1,5 +1,5 @@
 import { isSameDay } from "date-fns"
-import type { Chamado } from "../dados/tipos"
+import type { Chamado, PedidoQr } from "../dados/tipos"
 
 /** Os chamados que esperam alguém, do mais antigo para o mais novo. */
 export function chamadosAbertos(chamados: Chamado[]): Chamado[] {
@@ -15,6 +15,17 @@ const TEXTOS: Record<Chamado["tipo"], string> = {
 
 export function textoDoChamado(tipo: Chamado["tipo"]): string {
   return TEXTOS[tipo]
+}
+
+/** O selo do que está aberto na mesa, do mais forte ao mais fraco: pedido, conta, garçom. */
+export function seloDaMesa(
+  chamados: Chamado[] | undefined,
+  pedidos: PedidoQr[] | undefined,
+): string | null {
+  if (pedidos?.length) return "Pedido pelo QR"
+  const abertos = chamadosAbertos(chamados ?? [])
+  if (abertos.some((chamado) => chamado.tipo === "conta")) return TEXTOS.conta
+  return abertos.length > 0 ? TEXTOS.garcom : null
 }
 
 /**

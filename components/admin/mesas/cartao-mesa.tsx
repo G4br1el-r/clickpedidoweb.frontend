@@ -3,6 +3,7 @@
 import NumberFlow from "@number-flow/react"
 import {
   ArrowRightLeftIcon,
+  BellRingIcon,
   CombineIcon,
   ConciergeBellIcon,
   EllipsisIcon,
@@ -71,7 +72,7 @@ function resumoSemComanda(
  * cliente, o garçom, as pessoas, o total e os alertas.
  */
 export function descricaoDaMesa(
-  { mesa, comanda, estado, alertas, reserva }: MesaNaGrade,
+  { mesa, comanda, estado, alertas, reserva, selo }: MesaNaGrade,
   agora: Date | null,
 ): string {
   const ocupada = mesa.status === "ocupada"
@@ -81,6 +82,7 @@ export function descricaoDaMesa(
   return [
     // Na limpeza o resumo já começa pelo estado: "Limpeza há 5 min".
     estado.estado === "limpeza" ? resumo : estado.rotulo,
+    selo,
     nomePadrao(mesa) ? null : mesa.nome,
     estado.estado === "limpeza" ? null : resumo,
     mesa.clienteNome,
@@ -310,6 +312,7 @@ export function CartaoMesa({
   estado,
   alertas,
   reserva,
+  selo,
   agora,
   aoAbrir,
   aoEditar,
@@ -359,8 +362,18 @@ export function CartaoMesa({
           {estado.rotulo}
         </span>
         <span id={`mesa-${mesa.id}-detalhes`} className="sr-only">
-          {descricaoDaMesa({ mesa, comanda, estado, alertas, reserva }, agora)}
+          {descricaoDaMesa({ mesa, comanda, estado, alertas, reserva, selo }, agora)}
         </span>
+        {/* O cliente chamou pelo QR: o selo pede o olho na cor da ação, como o alerta. */}
+        {selo && (
+          <span
+            aria-hidden="true"
+            className="flex w-fit items-center gap-1 rounded-md bg-(--tom-novo)/12 px-1.5 py-0.5 text-xs font-semibold"
+          >
+            <BellRingIcon className="size-3" />
+            {selo}
+          </span>
+        )}
         {!nomePadrao(mesa) && (
           <span className="truncate text-xs text-muted-foreground">{mesa.nome}</span>
         )}

@@ -17,11 +17,18 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAgora } from "@/hooks/use-agora"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useFila } from "@/lib/admin/dados/consultas"
-import { useConfigSalao, useMesas, useReservas } from "@/lib/admin/dados/consultas-mesas"
+import {
+  useChamados,
+  useConfigSalao,
+  useMesas,
+  usePedidosQr,
+  useReservas,
+} from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
 import { useGarcomCarregado } from "@/lib/admin/garcom"
 import { usePreferenciasMesasCarregadas } from "@/lib/admin/preferencias-mesas"
 import { alertasDaMesa } from "@/lib/admin/regras/alertas-mesa"
+import { seloDaMesa } from "@/lib/admin/regras/chamados"
 import { filtrarMesas, type MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { reservaDaMesa } from "@/lib/admin/regras/reservas"
@@ -32,6 +39,7 @@ import { SeloPro } from "../campos"
 import { AtalhosMesas, FolhaAtalhos } from "./atalhos-mesas"
 import { BloquearMesa } from "./bloquear-mesa"
 import { CartaoMesa } from "./cartao-mesa"
+import { ChamadosSalao } from "./chamados"
 import { ComandaMesa } from "./comanda-mesa"
 import { ConfigurarSalao } from "./configurar-salao"
 import { LIMPAR_GRADE, useEstadoGrade, useMesaAberta, useVista, type Vista } from "./estado-grade"
@@ -54,6 +62,9 @@ export function PaginaMesas() {
   const { data: salao } = useConfigSalao()
   const { data: fila } = useFila()
   const { data: reservas } = useReservas(4_000)
+  const qrLigado = salao?.funcoes.qr ?? false
+  const { data: chamados } = useChamados(4_000, { ativo: qrLigado })
+  const { data: pedidosQr } = usePedidosQr(4_000, { ativo: qrLigado })
   const agora = useAgora(30_000)
   const [filtros, setFiltros] = useEstadoGrade()
   const [numeroAberto, setNumeroAberto] = useMesaAberta()
@@ -132,6 +143,12 @@ export function PaginaMesas() {
       mesa,
       comanda,
       reserva,
+      selo: qrLigado
+        ? seloDaMesa(
+            chamados?.filter((chamado) => chamado.mesaId === mesa.id),
+            pedidosQr?.filter((pedido) => pedido.mesaId === mesa.id),
+          )
+        : null,
       estado: estadoDaMesa(mesa, comanda, {
         ...(principal ? { principal } : {}),
         ...(reserva && agora
@@ -189,6 +206,16 @@ export function PaginaMesas() {
             >
               <KeyboardIcon />
             </Button>
+            {mesas && salao && (
+              <ChamadosSalao
+                mesas={mesas}
+                salao={salao}
+                chamados={chamados}
+                pedidos={pedidosQr}
+                agora={agora}
+                aoConfigurar={() => setSalaoAberto(true)}
+              />
+            )}
             <ConfigurarSalao salao={salao} aberto={salaoAberto} aoMudar={setSalaoAberto} />
             <NovaMesa aberta={novaAberta} aoMudar={setNovaAberta} />
           </>
