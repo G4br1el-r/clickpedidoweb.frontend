@@ -257,6 +257,19 @@ describe("editar o mapa", () => {
     )
   })
 
+  test("na edição, o painel de reservas sai de cena e volta ao cancelar", async () => {
+    const usuario = await abrir("?vista=mapa")
+    await mapa("Salão")
+    expect(
+      await screen.findByRole("region", { name: "Reservas e espera" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+
+    expect(screen.queryByRole("region", { name: "Reservas e espera" })).not.toBeInTheDocument()
+    await usuario.click(screen.getByRole("button", { name: "Cancelar" }))
+    expect(screen.getByRole("region", { name: "Reservas e espera" })).toBeInTheDocument()
+  })
+
   test("no celular o mapa só é visto: não tem Editar mapa", async () => {
     vi.unstubAllGlobals()
     await abrir("?vista=mapa")

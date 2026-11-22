@@ -296,6 +296,10 @@ function LinhaEspera({
 
 const CAIXA = "flex min-w-0 flex-col gap-3 rounded-xl bg-foreground/[0.03] p-4"
 
+// A aba de fora, sobre o fundo da caixa, precisa de mais contraste que o padrão (foreground/60
+// não chega a 4,5:1 no claro; o axe do E2E do mapa pegou).
+const ABA = "text-foreground/75"
+
 /**
  * Com a função Pro desligada (Q32): o cadeado, o preço e o caminho para ligar. As reservas
  * marcadas antes de desligar continuam segurando a mesa (o servidor não confere o plano): o bloco
@@ -449,10 +453,10 @@ function Painel({ mesas, salao }: { mesas: Mesa[]; salao: ConfigSalao }) {
       </h2>
       <Tabs value={aba} onValueChange={setAba}>
         <TabsList className="w-full">
-          <TabsTrigger value="reservas">
+          <TabsTrigger value="reservas" className={ABA}>
             Reservas <span className="tabular-nums">{marcadas}</span>
           </TabsTrigger>
-          <TabsTrigger value="espera">
+          <TabsTrigger value="espera" className={ABA}>
             Espera <span className="tabular-nums">{espera?.length ?? 0}</span>
           </TabsTrigger>
         </TabsList>

@@ -26,6 +26,7 @@ import { filtrarMesas, type MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { reservaDaMesa } from "@/lib/admin/regras/reservas"
 import { plural } from "@/lib/formato"
+import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { SeloPro } from "../campos"
 import { AtalhosMesas, FolhaAtalhos } from "./atalhos-mesas"
@@ -198,9 +199,16 @@ export function PaginaMesas() {
         <NumerosSalao mesas={mesas} abertas={[...comandas.values()]} agora={agora} />
       )}
 
-      {/* O painel de reservas fica à direita a partir de 1280 px; abaixo disso, acima da grade. */}
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
-        {mesas && salao && (
+      {/* O painel de reservas fica à direita a partir de 1280 px; abaixo disso, acima da grade.
+          Editando o mapa ele sai de cena: o mapa fica com a largura toda e, no celular deitado,
+          o painel não empurra o mapa para baixo da dobra. */}
+      <div
+        className={cn(
+          "grid gap-5 xl:items-start",
+          !editandoMapa && "xl:grid-cols-[minmax(0,1fr)_20rem]",
+        )}
+      >
+        {mesas && salao && !editandoMapa && (
           <aside className="min-w-0 xl:sticky xl:top-4 xl:col-start-2 xl:row-start-1">
             <PainelReservas mesas={mesas} salao={salao} aoConfigurar={() => setSalaoAberto(true)} />
           </aside>

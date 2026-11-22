@@ -227,7 +227,11 @@ export function FormularioReserva({
 }) {
   return (
     <Dialog open={aberto} onOpenChange={aoMudar}>
-      <DialogContent className="sm:max-w-md" onCloseAutoFocus={devolverFocoA(focoAoFechar)}>
+      <DialogContent
+        // No celular deitado a janela passa da altura da tela: ela rola por dentro.
+        className="max-h-[calc(100dvh-2rem)] overflow-y-auto sm:max-w-md"
+        onCloseAutoFocus={devolverFocoA(focoAoFechar)}
+      >
         {aberto && <Campos reserva={reserva} aoFechar={() => aoMudar(false)} />}
       </DialogContent>
     </Dialog>
