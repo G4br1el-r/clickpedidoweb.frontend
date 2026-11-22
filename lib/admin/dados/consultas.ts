@@ -1,9 +1,11 @@
 "use client"
 
 import { type QueryKey, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useEffect } from "react"
 import { proximoStatus } from "../regras/status"
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
+import { avisarOutrasAbas, ouvirOutrasAbas } from "./ao-vivo"
 import { carregarCatalogo } from "./catalogos"
 import { criarServidor, type FiltroPedidos, type Servidor, type VendaPdv } from "./servidor"
 import type { ConfigLoja, MotivoCancelamento, Pedido, StatusPedido } from "./tipos"
@@ -21,10 +23,27 @@ export function servidorDo(segmento: SegmentoPainelId): Servidor {
       segmento,
       carregarCatalogo: () => carregarCatalogo(segmento),
       espera: ESPERA,
+      aoGravar: () => avisarOutrasAbas(segmento),
     })
     servidores.set(segmento, servidor)
   }
   return servidor
+}
+
+/**
+ * Ao vivo entre abas (Q43): quando outra aba grava, esquece a cópia em memória daquele segmento
+ * e confere de novo as consultas dele.
+ */
+export function useAoVivo() {
+  const cliente = useQueryClient()
+  useEffect(
+    () =>
+      ouvirOutrasAbas((segmento) => {
+        servidores.get(segmento)?.esquecer()
+        void cliente.invalidateQueries({ queryKey: chaves.tudo(segmento) })
+      }),
+    [cliente],
+  )
 }
 
 /** Esquece as bases já abertas; a próxima leitura volta ao IndexedDB. */

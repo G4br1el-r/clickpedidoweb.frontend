@@ -28,6 +28,29 @@ beforeEach(() => {
 })
 
 describe("ShellAdmin", () => {
+  test("ao vivo: a gravação de outra aba confere de novo as consultas do segmento", async () => {
+    const cliente = new QueryClient()
+    cliente.setQueryData(["admin", "pizzaria", "mesas"], [])
+    render(
+      <QueryClientProvider client={cliente}>
+        <TooltipProvider>
+          <ShellAdmin>
+            <h1>Mesas</h1>
+          </ShellAdmin>
+        </TooltipProvider>
+      </QueryClientProvider>,
+    )
+
+    // Outra aba do mesmo navegador (o BroadcastChannel do Node faz o papel do navegador).
+    const outraAba = new BroadcastChannel("clickpedido-admin")
+    outraAba.postMessage({ segmento: "pizzaria" })
+    outraAba.close()
+
+    await vi.waitFor(() =>
+      expect(cliente.getQueryState(["admin", "pizzaria", "mesas"])?.isInvalidated).toBe(true),
+    )
+  })
+
   test("a barra lateral com os módulos fica ao lado do conteúdo da página", async () => {
     renderizar()
     expect(screen.getByRole("heading", { level: 1, name: "Fila de pedidos" })).toBeInTheDocument()
