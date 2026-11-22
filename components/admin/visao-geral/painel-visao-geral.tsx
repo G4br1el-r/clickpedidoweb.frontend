@@ -305,7 +305,15 @@ export function AbaResumo({
 export function AbaFinanceiro({ resumo }: { resumo: Resumo }) {
   return (
     <div className="flex flex-col gap-10">
-      <BlocoSecao titulo="Formas de pagamento" descricao="No período">
+      <BlocoSecao
+        titulo="Formas de pagamento"
+        descricao={
+          // O faturamento do Início fica sem a taxa; aqui é o que entrou no caixa (Q34).
+          resumo.taxaServico > 0
+            ? "No período. O que entrou no caixa, inclui a taxa de serviço"
+            : "No período"
+        }
+      >
         <ListaDeFatias
           vazio="Nenhuma venda no período."
           itens={resumo.pagamentos.map((fatia) => ({

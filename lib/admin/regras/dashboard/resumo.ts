@@ -1,4 +1,4 @@
-import { addDays, format, isSameDay, startOfDay } from "date-fns"
+import { addDays, endOfDay, format, isSameDay, startOfDay } from "date-fns"
 import type { FormaPagamento, Pedido, StatusPedido, TipoPedido } from "../../dados/tipos"
 import { emCentavos, resumoDaConta } from "../conta"
 import { diasNoPeriodo, type Periodo, periodoAnterior } from "../periodo"
@@ -104,6 +104,13 @@ function porForma(pedidos: Pedido[]): Fatia<{ forma: FormaPagamento }>[] {
     .sort((a, b) => b.total - a.total || b.pedidos - a.pedidos)
 }
 
+/** A conta foi paga (e a taxa entrou para o garçom) dentro do período, pelo dia do pagamento. */
+function taxaPagaNoPeriodo(pedido: Pedido, { de, ate }: Periodo) {
+  if (pedido.situacaoPagamento !== "pago" || !pedido.pagoEm || !ehValido(pedido)) return false
+  const pago = Date.parse(pedido.pagoEm)
+  return pago >= startOfDay(de).getTime() && pago <= endOfDay(ate).getTime()
+}
+
 /** Tudo o que a visão geral mostra, a partir dos pedidos do período e do anterior. */
 export function resumir(pedidos: Pedido[], periodo: Periodo, agora: Date): Resumo {
   const doPeriodo = noPeriodo(pedidos, periodo)
@@ -167,7 +174,9 @@ export function resumir(pedidos: Pedido[], periodo: Periodo, agora: Date): Resum
     serie: dias.map((dia) => ({ ...dia, hoje: isSameDay(dia.data, agora), pico: dia === melhor })),
     pagamentos: porForma(validos),
     taxaServico:
-      validos.reduce((soma, pedido) => soma + emCentavos(resumoDaConta(pedido).taxa), 0) / 100,
+      pedidos
+        .filter((pedido) => taxaPagaNoPeriodo(pedido, periodo))
+        .reduce((soma, pedido) => soma + emCentavos(resumoDaConta(pedido).taxa), 0) / 100,
     canais: fatias(validos, (pedido) => pedido.tipo).map(({ valor, ...resto }) => ({
       tipo: valor,
       ...resto,

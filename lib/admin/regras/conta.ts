@@ -114,6 +114,11 @@ export function comTotais(pedido: Pedido): Pedido {
   return { ...pedido, subtotal: itens, desconto: descontos, total }
 }
 
+/** O valor do pedido que é da casa: o total sem a taxa de serviço (que é do garçom, Q34). */
+export function valorSemTaxa(pedido: Pedido): number {
+  return emReais(emCentavos(pedido.total) - emCentavos(resumoDaConta(pedido).taxa))
+}
+
 /** Divide o valor em partes iguais, em centavos: o que sobra vai para a última parte. */
 export function dividirIgualmente(valor: number, partes: number): number[] {
   const centavos = emCentavos(valor)

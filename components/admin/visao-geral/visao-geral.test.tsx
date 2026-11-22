@@ -212,6 +212,13 @@ describe("abas do painel", () => {
     expect(taxa).toHaveTextContent("dos garçons")
   })
 
+  test("com taxa de serviço, as formas de pagamento avisam que incluem a taxa", () => {
+    render(<AbaFinanceiro resumo={{ ...RESUMO, taxaServico: 8.75 }} />, { wrapper: Provedores })
+    expect(screen.getByRole("region", { name: "Formas de pagamento" })).toHaveTextContent(
+      "O que entrou no caixa, inclui a taxa de serviço",
+    )
+  })
+
   test("sem taxa de serviço no período, o bloco não aparece", () => {
     render(<AbaFinanceiro resumo={RESUMO} />, { wrapper: Provedores })
     expect(screen.queryByRole("region", { name: "Taxa de serviço" })).not.toBeInTheDocument()
