@@ -5,7 +5,9 @@ import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter } from "nuqs/adapters/testing"
 import { type ReactNode, useState } from "react"
+import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
@@ -16,14 +18,20 @@ import { PaginaFila } from "./pagina-fila"
 const imprimir = vi.fn()
 vi.mock("react-to-print", () => ({ useReactToPrint: () => imprimir }))
 
+/** O endereço da página: a busca e os filtros da fila ficam nele. */
+const urlMudou = vi.fn()
+
 function Provedores({ children }: { children: ReactNode }) {
   const [cliente] = useState(
     () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
   )
   return (
-    <NuqsTestingAdapter hasMemory>
+    <NuqsTestingAdapter hasMemory onUrlUpdate={urlMudou}>
       <QueryClientProvider client={cliente}>
-        <TooltipProvider>{children}</TooltipProvider>
+        <TooltipProvider>
+          {children}
+          <Toaster />
+        </TooltipProvider>
       </QueryClientProvider>
     </NuqsTestingAdapter>
   )
@@ -106,6 +114,7 @@ beforeEach(async () => {
   await clear()
   reiniciarServidores()
   imprimir.mockClear()
+  urlMudou.mockClear()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
   usePreferenciasFila.setState({ ...usePreferenciasFila.getInitialState(), simular: false }, true)
 })
@@ -114,6 +123,7 @@ afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
   abaEscondida(false)
+  toast.dismiss()
 })
 
 describe("PaginaFila", () => {
@@ -141,6 +151,104 @@ describe("PaginaFila", () => {
     expect(
       await (await coluna("Em preparo")).findByRole("heading", { name: numero }),
     ).toBeInTheDocument()
+  })
+
+  test("avançar dá 6 s para desfazer: o cartão volta para a coluna de antes", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const cartao = (await coluna("Novos"))
+      .getAllByRole("article")
+      .find((item) => within(item).queryByRole("button", { name: "Iniciar preparo" }))
+    if (!cartao) throw new Error("Devia haver um pedido novo pronto para começar")
+    const numero = within(cartao).getByRole("heading").textContent ?? ""
+
+    await usuario.click(within(cartao).getByRole("button", { name: "Iniciar preparo" }))
+    await (await coluna("Em preparo")).findByRole("heading", { name: numero })
+    // O aviso deste pedido (os de outros testes podem ainda estar saindo da tela).
+    const aviso = (await screen.findByText(`${numero}: Em preparo`)).closest("li")
+    if (!aviso) throw new Error("O aviso do avanço devia estar na tela")
+    await usuario.click(within(aviso).getByRole("button", { name: "Desfazer" }))
+
+    expect(
+      await (await coluna("Novos")).findByRole("heading", { name: numero }),
+    ).toBeInTheDocument()
+    expect((await servidorDo("pizzaria").pedidos.buscar(Number(numero.slice(1))))?.status).toBe(
+      "recebido",
+    )
+  })
+
+  test("seleção: marcar dois pedidos, imprimir os dois cupons e avançar os dois de uma vez", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const novos = await coluna("Novos")
+    await usuario.click(screen.getByRole("button", { name: "Selecionar" }))
+    const caixas = novos.getAllByRole("checkbox", { name: /^Selecionar #/ })
+    expect(caixas.length).toBeGreaterThanOrEqual(2)
+    const numeros = caixas
+      .slice(0, 2)
+      .map((caixa) => (caixa.getAttribute("aria-label") ?? "").replace("Selecionar ", ""))
+    await usuario.click(caixas[0])
+    await usuario.click(caixas[1])
+
+    const barra = within(screen.getByRole("region", { name: "Pedidos selecionados" }))
+    expect(barra.getByText("2 selecionados")).toBeInTheDocument()
+    await usuario.click(barra.getByRole("button", { name: "Imprimir" }))
+    expect(imprimir).toHaveBeenCalledTimes(2)
+
+    await usuario.click(barra.getByRole("button", { name: "Avançar" }))
+    const preparo = await coluna("Em preparo")
+    for (const numero of numeros) {
+      expect(await preparo.findByRole("heading", { name: numero })).toBeInTheDocument()
+    }
+    expect(screen.queryByRole("region", { name: "Pedidos selecionados" })).not.toBeInTheDocument()
+  })
+
+  test("Shift+clique num cartão seleciona sem entrar no modo de seleção", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const [cartao] = (await coluna("Em preparo")).getAllByRole("article")
+    await usuario.keyboard("{Shift>}")
+    await usuario.click(within(cartao).getByText(/itens? ·/))
+    await usuario.keyboard("{/Shift}")
+    expect(
+      within(screen.getByRole("region", { name: "Pedidos selecionados" })).getByText(
+        "1 selecionado",
+      ),
+    ).toBeInTheDocument()
+  })
+
+  test("teclado: as setas andam pelos cartões, Enter avança e P imprime o cartão em foco", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const [primeiro] = (await coluna("Novos")).getAllByRole("article")
+    const numero = within(primeiro).getByRole("heading").textContent ?? ""
+
+    await usuario.keyboard("{ArrowDown}")
+    expect(primeiro).toHaveFocus()
+    await usuario.keyboard("p")
+    expect(imprimir).toHaveBeenCalledTimes(1)
+    await usuario.keyboard("{Enter}")
+    expect(
+      await (await coluna("Em preparo")).findByRole("heading", { name: numero }),
+    ).toBeInTheDocument()
+  })
+
+  test("teclado: / vai para a busca e ? abre a folha de atalhos", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+    await usuario.keyboard("/")
+    expect(screen.getByRole("searchbox", { name: "Buscar pedido" })).toHaveFocus()
+    await usuario.keyboard("{Escape}")
+    screen.getByRole("searchbox", { name: "Buscar pedido" }).blur()
+    await usuario.keyboard("?")
+    const ajuda = within(await screen.findByRole("dialog", { name: "Atalhos da fila" }))
+    expect(ajuda.getByText("Avançar o pedido em foco")).toBeInTheDocument()
   })
 
   test("no celular, as colunas viram abas com a contagem", async () => {
@@ -477,6 +585,60 @@ describe("PaginaFila", () => {
     expect(screen.queryByRole("button", { name: "Mais" })).not.toBeInTheDocument()
   })
 
+  test("os cartões marcam o cliente novo e o freguês da casa", async () => {
+    telaGrande()
+    renderizar()
+    await coluna("Novos")
+    await waitFor(
+      () => {
+        const textos = screen.getAllByRole("article").map((cartao) => cartao.textContent ?? "")
+        expect(textos.some((texto) => texto.includes("Cliente frequente"))).toBe(true)
+      },
+      { timeout: 8000 },
+    )
+  })
+
+  test("a busca acha pelo nome em todas as colunas e fica no endereço", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+    const [primeiro] = await servidorDo("pizzaria").pedidos.listar({ status: ["em-preparo"] })
+    const nome = primeiro.cliente.nome
+
+    await usuario.type(screen.getByRole("searchbox", { name: "Buscar pedido" }), nome)
+    await waitFor(() => {
+      const cartoes = screen.getAllByRole("article")
+      expect(cartoes.length).toBeGreaterThan(0)
+      for (const cartao of cartoes) expect(cartao).toHaveTextContent(nome)
+    })
+    expect(urlMudou).toHaveBeenLastCalledWith(
+      expect.objectContaining({ queryString: expect.stringContaining("busca=") }),
+    )
+  })
+
+  test("filtros rápidos: só um canal e só os não pagos", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+
+    await usuario.click(screen.getByRole("button", { name: "Entrega" }))
+    await waitFor(() => {
+      for (const cartao of screen.getAllByRole("article")) {
+        expect(within(cartao).getByText("Entrega")).toBeInTheDocument()
+      }
+    })
+    await usuario.click(screen.getByRole("button", { name: "Entrega" }))
+
+    await usuario.click(screen.getByRole("button", { name: "Não pagos" }))
+    await waitFor(() => {
+      for (const cartao of screen.getAllByRole("article")) {
+        expect(cartao).toHaveTextContent(/Cobrar|Aguardando pagamento/)
+      }
+    })
+  })
+
   test("métricas: tocar em Atrasados mostra só os atrasados; tocar de novo mostra todos", async () => {
     telaGrande()
     const usuario = userEvent.setup()
@@ -499,17 +661,44 @@ describe("PaginaFila", () => {
     await waitFor(() => expect(screen.getAllByRole("article")).toHaveLength(todos))
   })
 
-  test("métricas: concluídos e cancelados levam à lista de pedidos filtrada", async () => {
+  test("métricas: concluídos e cancelados abrem a gaveta Finalizados hoje", async () => {
     telaGrande()
+    const usuario = userEvent.setup()
     renderizar()
     expect(
-      await screen.findByRole("link", { name: /^Concluídos/ }, { timeout: 8000 }),
-    ).toHaveAttribute("href", "/admin/pedidos?status=concluido")
-    expect(screen.getByRole("link", { name: /^Cancelados/ })).toHaveAttribute(
-      "href",
-      "/admin/pedidos?status=cancelado",
-    )
+      await screen.findByRole("button", { name: /^Cancelados/ }, { timeout: 8000 }),
+    ).toBeInTheDocument()
     expect(screen.getByText("Preparo médio")).toBeInTheDocument()
+    // Aberta, a gaveta é modal: o resto da página sai da árvore de acessibilidade.
+    await usuario.click(screen.getByRole("button", { name: /^Concluídos/ }))
+    const gaveta = within(await screen.findByRole("dialog", { name: "Finalizados hoje" }))
+    expect(gaveta.getByRole("link", { name: "Ver todos em Pedidos" })).toHaveAttribute(
+      "href",
+      "/admin/pedidos",
+    )
+  })
+
+  test("Finalizados hoje: reabrir devolve o pedido para Prontos; reimprimir manda o cupom", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+    await usuario.click(screen.getByRole("button", { name: /^Finalizados hoje/ }))
+    const gaveta = within(await screen.findByRole("dialog", { name: "Finalizados hoje" }))
+    const linhas = await gaveta.findAllByRole("listitem")
+    expect(linhas.length).toBeGreaterThan(0)
+
+    const [reimprimir] = gaveta.getAllByRole("button", { name: /^Reimprimir cupom de #/ })
+    await usuario.click(reimprimir)
+    expect(imprimir).toHaveBeenCalled()
+
+    const [reabrir] = gaveta.getAllByRole("button", { name: /^Reabrir #/ })
+    const numero = (reabrir.getAttribute("aria-label") ?? "").replace("Reabrir ", "")
+    await usuario.click(reabrir)
+    await usuario.keyboard("{Escape}")
+    expect(
+      await (await coluna("Prontos")).findByRole("heading", { name: numero }),
+    ).toBeInTheDocument()
   })
 
   test("o aparelho que não escolheu o som usa o som da loja", async () => {
@@ -522,6 +711,23 @@ describe("PaginaFila", () => {
     expect(menu.getByRole("combobox", { name: "Tipo do alerta" })).toHaveTextContent(
       "Padrão da loja (Suave)",
     )
+  })
+
+  test("Modo compacto, neste aparelho: cada pedido vira uma linha que abre ao tocar", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+    const menu = await abrirEsteAparelho(usuario)
+    await usuario.click(menu.getByRole("switch", { name: "Modo compacto" }))
+    await usuario.keyboard("{Escape}")
+
+    expect(usePreferenciasFila.getState().compacto).toBe(true)
+    const preparo = await coluna("Em preparo")
+    await waitFor(() =>
+      expect(preparo.queryAllByRole("button", { expanded: false }).length).toBeGreaterThan(0),
+    )
+    expect(preparo.queryByRole("button", { name: "Marcar como pronto" })).not.toBeInTheDocument()
   })
 
   test("Este aparelho reúne o som, os avisos e a demonstração", async () => {

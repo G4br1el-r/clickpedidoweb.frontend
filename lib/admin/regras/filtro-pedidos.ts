@@ -3,6 +3,7 @@ import type {
   MotivoCancelamento,
   OrigemPedido,
   Pedido,
+  SituacaoPagamento,
   StatusPedido,
   TipoPedido,
 } from "../dados/tipos"
@@ -21,6 +22,8 @@ export type FiltrosLista = {
   status?: StatusPedido[]
   tipos?: TipoPedido[]
   pagamentos?: FormaPagamento[]
+  /** Só o que ainda falta receber: a cobrar na entrega ou aguardando pagamento. */
+  naoPagos?: boolean
   origens?: OrigemPedido[]
   /** Telefones do cliente, só os dígitos com DDD. */
   clientes?: string[]
@@ -54,15 +57,18 @@ function combinaBusca(pedido: Pedido, busca: string) {
   if (digitos.length >= 4 && pedido.cliente.telefone.includes(digitos)) return true
   return (
     normalizar(pedido.cliente.nome).includes(texto) ||
+    (pedido.endereco ? normalizar(pedido.endereco.bairro).includes(texto) : false) ||
     pedido.itens.some((item) => normalizar(item.nome).includes(texto))
   )
 }
 
+const A_RECEBER: readonly SituacaoPagamento[] = ["na-entrega", "pendente"]
+
 const aceita = <T>(lista: T[] | undefined, valor: T) => !lista?.length || lista.includes(valor)
 
 /**
- * Busca (número, cliente, telefone ou item) combinada com os filtros de status, canal,
- * pagamento, origem, cliente, motivo do cancelamento, bairro e motoboy.
+ * Busca (número, cliente, telefone, bairro ou item) combinada com os filtros de status, canal,
+ * pagamento, origem, cliente, motivo do cancelamento, bairro, motoboy e o que falta receber.
  */
 export function filtrarPedidos(
   pedidos: Pedido[],
@@ -76,6 +82,7 @@ export function filtrarPedidos(
     motivos,
     bairros,
     motoboys,
+    naoPagos = false,
   }: FiltrosLista,
 ) {
   const bairrosNormais = bairros?.map((bairro) => normalizar(bairro).trim())
@@ -84,6 +91,7 @@ export function filtrarPedidos(
       aceita(status, pedido.status) &&
       aceita(tipos, pedido.tipo) &&
       aceita(pagamentos, pedido.pagamento) &&
+      (!naoPagos || A_RECEBER.includes(pedido.situacaoPagamento)) &&
       aceita(origens, pedido.origem) &&
       (!clientes?.length || clientes.includes(telefoneDoCliente(pedido.cliente.telefone) ?? "")) &&
       (!motivos?.length || motivos.includes(motivoDoPedido(pedido) as MotivoDoFiltro)) &&

@@ -142,3 +142,15 @@ Base: a [Fase 5 do plano do painel](plano-painel-admin.md#fase-5-fila-de-pedidos
     - a sincronização entre abas vale para o painel todo (`useSincronizarAbas` no `ShellAdmin`), e não só para a fila. Antes, uma aba nunca via o que a outra gravava: cada uma guardava a base em memória;
     - no pé do cartão, imprimir, detalhes e cancelar andam juntos; o botão da etapa fica com a linha toda quando eles descem.
   - **Fica para depois:** busca, filtros por canal, compacto, tela cheia, painel de chamada e o indicador da impressora entram na faixa de ferramentas nas fases 3 e 5.
+- **Fase 3: pronta em 19/11/2026** (branch `claude/admin-fila-fase-3`, que parte da fase 2).
+  - **Decidido no caminho:**
+    - "só atrasados" é o filtro da régua (fase 2); a busca e os filtros novos (canal, não pagos) ficam no endereço (`busca`, `canal`, `naoPagos`). A busca da lista de pedidos também passou a achar pelo bairro;
+    - selo do cliente: "1º pedido" sem pedidos antes (pelo telefone, sem cancelados) e "Cliente frequente" com 10 ou mais nos 30 dias antes. Para isso a demonstração ganhou fregueses fiéis (8, mais da metade dos pedidos), clientes ocasionais e clientes novos: o cliente sai do mesmo sorteio de antes, mapeado pelo id, então itens, valores e horários continuam iguais e só os nomes mudaram. A base guardada subiu para a versão 4;
+    - "voltar uma etapa" no servidor serve ao desfazer (6 s no aviso), ao arrastar de volta e, como "reabrir", à gaveta. Voltar de concluído desfaz a cobrança marcada ao concluir;
+    - Reabrir devolve para Prontos (no salão, Em atendimento); a conta fechada da mesa reabre em Mesas e o cancelado não volta pela gaveta (só reimprime);
+    - Concluídos e Cancelados da régua abrem a gaveta Finalizados hoje, no lugar de levar à lista de pedidos;
+    - avançar em lote leva cada pedido à própria próxima etapa e pula o que não pode, com aviso; despachar em lote vem com o despacho, na fase 4;
+    - os atalhos valem só no computador (colunas lado a lado), fora de campo de texto e de janela; R abre os motivos de recusa do cartão em foco;
+    - arrastar usa o ponteiro para escolher a coluna e não rola a página sozinho; no celular e no tablet (abas) não arrasta.
+  - **Achado no caminho:** no celular de 320 px, com o Mais aberto, os botões da faixa de ferramentas passavam da tela; agora quebram linha (E2E confere a largura da página contra a da tela).
+  - **Screenshots:** além da fila, mudaram os nomes dos clientes nas telas que os mostram (pedidos, visão geral, cozinha, mesas e comanda, agenda, pesagem); revisadas por amostra (os valores, itens e status ficaram iguais) e atualizadas.

@@ -58,3 +58,13 @@ export const rotuloOrigem = (origem: OrigemPedido) => ORIGENS[origem]
 export const rotuloMotivo = (motivo: MotivoCancelamento | undefined) =>
   motivo ? MOTIVOS[motivo] : "Não informado"
 export const rotuloTaxa = (forma: keyof TaxasPagamento) => TAXAS[forma]
+
+const SELOS_DA_ORIGEM: Record<OrigemPedido, string> = {
+  site: "Site",
+  pdv: "PDV",
+  garcom: "Garçom",
+  painel: "Painel",
+}
+
+/** De onde o pedido veio, curto, no selo do cartão da fila. */
+export const seloDaOrigem = (origem: OrigemPedido) => SELOS_DA_ORIGEM[origem]

@@ -8,6 +8,7 @@ import {
   sincronizarOpcoes,
   soltarOpcoesDe,
 } from "../regras/cardapio"
+import { type HistoricoCliente, historicoDoCliente } from "../regras/clientes"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
@@ -27,7 +28,7 @@ import {
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
 import { prazoNaChegada } from "../regras/prazo"
-import { proximoStatus } from "../regras/status"
+import { proximoStatus, statusAnterior } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearCustos } from "./custos-demo"
 import { semearEstoque } from "./estoque-demo"
@@ -53,7 +54,7 @@ import type {
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 5
+const VERSAO = 6
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -189,6 +190,29 @@ const comandaDa = (base: BaseLoja, mesaId: string) =>
 function recalcular(pedido: Pedido): Pedido {
   const subtotal = reais(pedido.itens.reduce((soma, item) => soma + item.total, 0))
   return { ...pedido, subtotal, total: reais(subtotal - pedido.desconto) }
+}
+
+/** O pedido na etapa seguinte; concluir cobra o que se pagava na entrega ou no balcão. */
+function avancado(pedido: Pedido, de: StatusPedido): Pedido {
+  conferirEtapa(pedido, de)
+  if (pedido.esperaAceite) throw new Error("Aceite o pedido antes de começar.")
+  const proximo = proximoStatus(pedido.tipo, pedido.status)
+  if (!proximo) throw new Error("Este pedido não tem próxima etapa")
+  const pagoAgora = proximo === "concluido" && pedido.situacaoPagamento === "na-entrega"
+  return {
+    ...pedido,
+    status: proximo,
+    ...(pagoAgora ? { situacaoPagamento: "pago" as const, pagoEm: new Date().toISOString() } : {}),
+  }
+}
+
+/** O pagamento foi registrado no mesmo momento da conclusão (cobrado na entrega ou no balcão). */
+function foiPagoAoConcluir(pedido: Pedido): boolean {
+  const concluiu = pedido.historico
+    ?.filter((evento) => evento.tipo === "etapa" && evento.status === "concluido")
+    .at(-1)
+  if (!concluiu || !pedido.pagoEm || pedido.situacaoPagamento !== "pago") return false
+  return Math.abs(Date.parse(pedido.pagoEm) - Date.parse(concluiu.em)) < 2_000
 }
 
 /** A ação partiu da etapa que a tela mostrava; se outra aba mudou o pedido, recusa. */
@@ -707,6 +731,17 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return responder(filtrados.toReversed())
       },
 
+      /** O que cada cliente já pediu antes destes pedidos: dá o selo "1º pedido" ou "frequente". */
+      async historicoDosClientes(ids: number[]): Promise<Record<number, HistoricoCliente>> {
+        const { pedidos } = await carregar()
+        const historico: Record<number, HistoricoCliente> = {}
+        for (const id of ids) {
+          const pedido = pedidos.find((item) => item.id === id)
+          if (pedido) historico[id] = historicoDoCliente(pedido, pedidos)
+        }
+        return responder(historico)
+      },
+
       async buscar(id: number): Promise<Pedido | undefined> {
         const { pedidos } = await carregar()
         return responder(pedidos.find((pedido) => pedido.id === id))
@@ -714,19 +749,52 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
       /** `de`: a etapa que a tela mostrava. Outra aba pode ter mudado o pedido antes. */
       avancar(id: number, de: StatusPedido) {
+        return alterar(id, (pedido) => avancado(pedido, de))
+      },
+
+      /**
+       * Vários de uma vez (seleção na fila): cada um vai para a própria próxima etapa. O que
+       * não pode (espera aceite, sem próxima etapa, etapa mudada em outra aba) fica de fora.
+       */
+      async avancarEmLote(itens: { id: number; de: StatusPedido }[]) {
+        const avancados: Pedido[] = []
+        let pulados = 0
+        for (const { id, de } of itens) {
+          try {
+            avancados.push(await alterar(id, (pedido) => avancado(pedido, de)))
+          } catch {
+            pulados += 1
+          }
+        }
+        return { avancados, pulados }
+      },
+
+      /** Volta uma etapa: desfazer, arrastar de volta ou reabrir. `de` é a etapa que a tela viu. */
+      voltar(id: number, de: StatusPedido) {
         return alterar(id, (pedido) => {
           conferirEtapa(pedido, de)
-          if (pedido.esperaAceite) throw new Error("Aceite o pedido antes de começar.")
-          const proximo = proximoStatus(pedido.tipo, pedido.status)
-          if (!proximo) throw new Error("Este pedido não tem próxima etapa")
-          const pagoAgora = proximo === "concluido" && pedido.situacaoPagamento === "na-entrega"
-          return {
-            ...pedido,
-            status: proximo,
-            ...(pagoAgora
-              ? { situacaoPagamento: "pago" as const, pagoEm: new Date().toISOString() }
-              : {}),
+          const anterior = statusAnterior(pedido.tipo, pedido.status)
+          if (!anterior) throw new Error("Este pedido não tem etapa anterior.")
+          // Concluir marcou como pago o que se cobrava na entrega ou no balcão: voltar desfaz.
+          if (de === "concluido" && foiPagoAoConcluir(pedido)) {
+            const { pagoEm: _pagoEm, ...semPagamento } = pedido
+            return { ...semPagamento, status: anterior, situacaoPagamento: "na-entrega" as const }
           }
+          return { ...pedido, status: anterior }
+        })
+      },
+
+      /** Concluído por engano: volta para Prontos (no salão, Em atendimento), pela gaveta da fila. */
+      reabrir(id: number) {
+        return alterar(id, (pedido) => {
+          if (pedido.status !== "concluido") throw new Error("Só reabre pedido concluído.")
+          if (pedido.tipo === "mesa") throw new Error("A conta da mesa reabre em Mesas.")
+          const destino: StatusPedido = pedido.tipo === "atendimento" ? "em-preparo" : "pronto"
+          if (foiPagoAoConcluir(pedido)) {
+            const { pagoEm: _pagoEm, ...semPagamento } = pedido
+            return { ...semPagamento, status: destino, situacaoPagamento: "na-entrega" as const }
+          }
+          return { ...pedido, status: destino }
         })
       },
 

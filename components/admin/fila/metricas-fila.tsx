@@ -1,7 +1,6 @@
 "use client"
 
 import NumberFlow from "@number-flow/react"
-import Link from "next/link"
 import type { ReactNode } from "react"
 import type { FiltroDaFila, MetricasDaFila } from "@/lib/admin/regras/metricas-fila"
 import { cn } from "@/lib/utils"
@@ -52,17 +51,20 @@ function Conteudo({
 
 /**
  * A régua da fila: números ao vivo entre fios, sem cartões. Os de pedidos em andamento
- * filtram as colunas (tocar de novo tira o filtro); concluídos e cancelados levam à lista de
- * pedidos. Quatro por linha num contêiner a partir de 448 px, oito do largo em diante.
+ * filtram as colunas (tocar de novo tira o filtro); concluídos e cancelados abrem a gaveta
+ * "Finalizados hoje". Quatro por linha num contêiner a partir de 448 px, oito do largo em diante.
  */
 export function MetricasFila({
   metricas,
   filtro,
   aoFiltrar,
+  aoAbrirFinalizados,
 }: {
   metricas: MetricasDaFila
   filtro: FiltroDaFila | null
   aoFiltrar: (filtro: FiltroDaFila | null) => void
+  /** Concluídos e cancelados abrem a gaveta "Finalizados hoje". */
+  aoAbrirFinalizados: () => void
 }) {
   const filtros: { id: FiltroDaFila | null; rotulo: string; valor: number; tom?: string }[] = [
     { id: null, rotulo: "Em andamento", valor: metricas.emAndamento },
@@ -80,11 +82,11 @@ export function MetricasFila({
     },
     { id: "ultima-hora", rotulo: "Na última hora", valor: metricas.ultimaHora },
   ]
-  const fatos: { rotulo: string; valor: number | null; href?: string; sufixo?: string }[] = [
+  const fatos: { rotulo: string; valor: number | null; abre?: boolean; sufixo?: string }[] = [
     { rotulo: "Preparo médio", valor: metricas.preparoMedioMin, sufixo: " min" },
     { rotulo: "Até a entrega", valor: metricas.entregaMedioMin, sufixo: " min" },
-    { rotulo: "Concluídos", valor: metricas.concluidos, href: "/admin/pedidos?status=concluido" },
-    { rotulo: "Cancelados", valor: metricas.cancelados, href: "/admin/pedidos?status=cancelado" },
+    { rotulo: "Concluídos", valor: metricas.concluidos, abre: true },
+    { rotulo: "Cancelados", valor: metricas.cancelados, abre: true },
   ]
 
   const itens: ReactNode[] = [
@@ -103,11 +105,17 @@ export function MetricasFila({
         </button>
       )
     }),
-    ...fatos.map(({ rotulo, valor, href, sufixo }) =>
-      href ? (
-        <Link key={rotulo} href={href} className={cn(FATO, TOCAVEL)}>
+    ...fatos.map(({ rotulo, valor, abre, sufixo }) =>
+      abre ? (
+        <button
+          key={rotulo}
+          type="button"
+          aria-haspopup="dialog"
+          className={cn(FATO, TOCAVEL)}
+          onClick={aoAbrirFinalizados}
+        >
           <Conteudo rotulo={rotulo} valor={valor} />
-        </Link>
+        </button>
       ) : (
         <div key={rotulo} className={FATO}>
           <Conteudo rotulo={rotulo} valor={valor} {...(sufixo ? { sufixo } : {})} />

@@ -138,3 +138,21 @@ export function resumoDaFila(pedidos: Pedido[], segmento: SegmentoPainelId, agor
       .length,
   }
 }
+
+/** Tamanho do pedido no cartão: quantos itens (somando as quantidades) e o total. */
+export function resumoDosItens(pedido: Pedido): string {
+  const itens = pedido.itens.reduce((soma, item) => soma + item.quantidade, 0)
+  return `${itens} ${itens === 1 ? "item" : "itens"} · ${emReais(pedido.total)}`
+}
+
+/**
+ * A gaveta "Finalizados hoje": o que foi concluído hoje e o que chegou hoje e foi cancelado,
+ * sem repetir, do que fechou por último ao primeiro.
+ */
+export function finalizadosHoje(concluidosHoje: Pedido[], criadosHoje: Pedido[]): Pedido[] {
+  const porId = new Map<number, Pedido>()
+  for (const pedido of [...concluidosHoje, ...criadosHoje]) {
+    if (pedido.status === "concluido" || pedido.status === "cancelado") porId.set(pedido.id, pedido)
+  }
+  return [...porId.values()].sort((a, b) => Date.parse(b.atualizadoEm) - Date.parse(a.atualizadoEm))
+}

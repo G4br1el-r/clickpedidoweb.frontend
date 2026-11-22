@@ -2,9 +2,9 @@
 
 import NumberFlow from "@number-flow/react"
 import { startOfDay } from "date-fns"
-import { ChevronDownIcon, InboxIcon, VolumeXIcon } from "lucide-react"
+import { ArchiveIcon, ChevronDownIcon, InboxIcon, ListChecksIcon, VolumeXIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
-import { parseAsStringLiteral, useQueryState } from "nuqs"
+import { parseAsStringLiteral, useQueryState, useQueryStates } from "nuqs"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -13,34 +13,48 @@ import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Toggle } from "@/components/ui/toggle"
 import { useAgora } from "@/hooks/use-agora"
 import { useTelaGrande, useTelaLarga } from "@/hooks/use-tela-grande"
 import {
   useAceitarPedido,
+  useAvancarEmLote,
   useAvancarPedido,
   useCancelarPedido,
   useDefinirEntrega,
   useFila,
+  useHistoricoDosClientes,
   useLoja,
   useMotoboys,
   usePedidos,
+  useReabrirPedido,
   useRecusarPedido,
   useSimularPedido,
+  useVoltarPedido,
 } from "@/lib/admin/dados/consultas"
-import type { MotivoEscolhido, Pedido, SomAlerta } from "@/lib/admin/dados/tipos"
+import type {
+  MotivoEscolhido,
+  Pedido,
+  SomAlerta,
+  StatusPedido,
+  TipoPedido,
+} from "@/lib/admin/dados/tipos"
 import {
   usePreferenciasCarregadas,
   usePreferenciasFila,
   useSomDoAparelho,
 } from "@/lib/admin/preferencias-fila"
 import { alarmeTocando } from "@/lib/admin/regras/aceite"
+import { type HistoricoCliente, seloDoCliente } from "@/lib/admin/regras/clientes"
 import {
   type ColunaFila,
   colunasDaFila,
+  finalizadosHoje,
   novosPedidos,
   pedidosDeDiasAnteriores,
   resumoDaFila,
 } from "@/lib/admin/regras/fila"
+import { filtrarPedidos } from "@/lib/admin/regras/filtro-pedidos"
 import {
   FILTROS_DA_FILA,
   type FiltroDaFila,
@@ -48,7 +62,12 @@ import {
   metricasDaFila,
 } from "@/lib/admin/regras/metricas-fila"
 import type { TemposDaLoja } from "@/lib/admin/regras/prazo"
-import { rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
+import {
+  destinoDoArraste,
+  proximoStatus,
+  rotuloStatus,
+  tomDoStatus,
+} from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
 import { liberarSom, somBloqueado, tocarAlerta } from "@/lib/admin/som"
@@ -59,14 +78,20 @@ import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
 import { Traco } from "../traco"
+import { AjudaAtalhos } from "./ajuda-atalhos"
 import { AjustePrazo } from "./ajuste-prazo"
+import { Arrastavel, QuadroArrastavel, useColunaSoltavel } from "./arrastar"
 import { AvisoDiasAnteriores } from "./aviso-dias-anteriores"
 import { avisarChegada } from "./avisos-do-aparelho"
+import { BarraSelecao } from "./barra-selecao"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
 import { EsteAparelho } from "./este-aparelho"
+import { FerramentasFila, PARAMETROS_FILA } from "./ferramentas-fila"
+import { GavetaFinalizados } from "./gaveta-finalizados"
 import { MetricasFila } from "./metricas-fila"
 import { PausaPedidos } from "./pausa-pedidos"
+import { useAtalhosDaFila } from "./use-atalhos-da-fila"
 import { useTelaAcesa } from "./use-tela-acesa"
 import { useTituloDaAba } from "./use-titulo-da-aba"
 
@@ -78,7 +103,12 @@ const _SONS: { valor: SomAlerta; rotulo: string }[] = [
 ]
 
 /** Quanto tempo o "Chegou agora" fica no cartão. */
+/** Seleção dos pedidos para as ações em lote. */
+type SelecaoDaFila = { ativa: boolean; ids: ReadonlySet<number>; alternar: (id: number) => void }
+
 const DESTAQUE_MS = 10_000
+/** Quanto tempo o "Desfazer" fica no aviso depois de avançar. */
+const DESFAZER_MS = 6_000
 
 /** O que a fila mostra quando uma métrica filtra as colunas. */
 const ROTULO_DO_FILTRO: Record<FiltroDaFila, string> = {
@@ -196,6 +226,10 @@ function Coluna({
   emAndamento,
   limiteAceiteMin,
   tempos,
+  historico,
+  nomeLoja,
+  compacto,
+  selecao,
   acoes,
   comTitulo,
 }: {
@@ -206,14 +240,24 @@ function Coluna({
   emAndamento: number | undefined
   limiteAceiteMin: number
   tempos: TemposDaLoja
+  historico: Record<number, HistoricoCliente> | undefined
+  nomeLoja: string
+  compacto: boolean
+  selecao: SelecaoDaFila
   acoes: AcoesDoCartao
   comTitulo: boolean
 }) {
+  // Com as colunas lado a lado, o cartão se arrasta para a coluna seguinte ou a anterior.
+  const soltavel = useColunaSoltavel(coluna.status, comTitulo)
   return (
     <section
+      ref={soltavel.ref}
       aria-label={`${coluna.titulo}, ${coluna.pedidos.length}`}
       // Coluna sem bandeja: os cartões ficam direto na folha, e um fio separa as colunas.
-      className="flex min-w-0 flex-col gap-2.5 lg:px-3 lg:first:pl-0 lg:last:pr-0"
+      className={cn(
+        "flex min-w-0 flex-col gap-2.5 transition-colors duration-150 lg:px-3 lg:first:pl-0 lg:last:pr-0",
+        soltavel.sobre && "bg-foreground/[0.03]",
+      )}
     >
       {comTitulo && (
         <h2 className="flex items-center gap-2 pb-1 text-sm font-semibold">
@@ -231,22 +275,31 @@ function Coluna({
       ) : (
         <AnimatePresence initial={false}>
           {coluna.pedidos.map((pedido) => (
-            <CartaoFila
-              key={pedido.id}
-              pedido={pedido}
-              agora={agora}
-              motoboys={motoboys ?? []}
-              novo={novos.has(pedido.id)}
-              ocupado={emAndamento === pedido.id}
-              limiteAceiteMin={limiteAceiteMin}
-              tempos={tempos}
-              aoAceitar={() => acoes.aceitar(pedido)}
-              aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
-              aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
-              aoAvancar={() => acoes.avancar(pedido)}
-              aoAbrir={() => acoes.abrir(pedido)}
-              aoImprimir={() => acoes.imprimir(pedido)}
-            />
+            <Arrastavel key={pedido.id} id={pedido.id} ativo={comTitulo}>
+              <CartaoFila
+                pedido={pedido}
+                agora={agora}
+                motoboys={motoboys ?? []}
+                novo={novos.has(pedido.id)}
+                ocupado={emAndamento === pedido.id}
+                limiteAceiteMin={limiteAceiteMin}
+                tempos={tempos}
+                seloCliente={historico?.[pedido.id] ? seloDoCliente(historico[pedido.id]) : null}
+                nomeLoja={nomeLoja}
+                compacto={compacto}
+                selecao={{
+                  ativa: selecao.ativa,
+                  marcado: selecao.ids.has(pedido.id),
+                  alternar: () => selecao.alternar(pedido.id),
+                }}
+                aoAceitar={() => acoes.aceitar(pedido)}
+                aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
+                aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
+                aoAvancar={() => acoes.avancar(pedido)}
+                aoAbrir={() => acoes.abrir(pedido)}
+                aoImprimir={() => acoes.imprimir(pedido)}
+              />
+            </Arrastavel>
           ))}
         </AnimatePresence>
       )}
@@ -278,12 +331,24 @@ export function PaginaFila({
   const { data: concluidos = [] } = usePedidos(hoje ? { concluidosEm: hoje } : undefined, {
     ativo: Boolean(hoje),
   })
+  const { data: historico } = useHistoricoDosClientes(fila?.map((pedido) => pedido.id) ?? [])
   const { data: criadosHoje = [] } = usePedidos(hoje ? { de: hoje, ate: hoje } : undefined, {
     ativo: Boolean(hoje),
   })
   // Filtro das métricas ("só atrasados"), no endereço da página.
   const [filtro, setFiltro] = useQueryState("ver", parseAsStringLiteral(FILTROS_DA_FILA))
+  const [ferramentas, setFerramentas] = useQueryStates(PARAMETROS_FILA)
+  const filtrando =
+    Boolean(filtro || ferramentas.busca) || ferramentas.canal.length > 0 || ferramentas.naoPagos
   const avancar = useAvancarPedido()
+  const voltar = useVoltarPedido()
+  const reabrir = useReabrirPedido()
+  const [finalizadosAberto, setFinalizadosAberto] = useState(false)
+  const [ajudaAberta, setAjudaAberta] = useState(false)
+  // Seleção para ações em lote: o modo mostra as caixas; Shift+clique marca sem o modo.
+  const [selecionando, setSelecionando] = useState(false)
+  const [marcados, setMarcados] = useState<ReadonlySet<number>>(new Set())
+  const avancarEmLote = useAvancarEmLote()
   const aceitar = useAceitarPedido()
   const recusar = useRecusarPedido()
   const cancelar = useCancelarPedido()
@@ -346,9 +411,27 @@ export function PaginaFila({
         { id: pedido.id, de: pedido.status },
         {
           ...avisoDeErro,
+          // 6 s para desfazer: o toque errado no pico volta o pedido para a coluna de antes.
           onSuccess: (atualizado) =>
             toast.success(
               `#${atualizado.numero}: ${rotuloStatus(atualizado.tipo, atualizado.status)}`,
+              {
+                duration: DESFAZER_MS,
+                action: {
+                  label: "Desfazer",
+                  onClick: () =>
+                    voltar.mutate(
+                      { id: atualizado.id, de: atualizado.status },
+                      {
+                        ...avisoDeErro,
+                        onSuccess: (voltou) =>
+                          toast(
+                            `#${voltou.numero} de volta: ${rotuloStatus(voltou.tipo, voltou.status)}`,
+                          ),
+                      },
+                    ),
+                },
+              },
             ),
         },
       ),
@@ -366,7 +449,69 @@ export function PaginaFila({
   }
 
   const colunas =
-    fila && agora ? colunasDaFila(filtrarFila(fila, filtro, agora, tempos), segmento, agora) : null
+    fila && agora
+      ? colunasDaFila(
+          filtrarFila(
+            filtrarPedidos(fila, {
+              busca: ferramentas.busca,
+              tipos: ferramentas.canal,
+              naoPagos: ferramentas.naoPagos,
+            }),
+            filtro,
+            agora,
+            tempos,
+          ),
+          segmento,
+          agora,
+        )
+      : null
+  const finalizados = finalizadosHoje(concluidos, criadosHoje)
+  // Soltar noutra coluna: a seguinte avança, a anterior volta; pular etapa não move.
+  const aoSoltar = (pedido: Pedido, para: StatusPedido) => {
+    if (para === pedido.status) return
+    const destino = destinoDoArraste(pedido.tipo, pedido.status, para)
+    if (destino === "avancar") acoes.avancar(pedido)
+    else if (destino === "voltar") {
+      voltar.mutate(
+        { id: pedido.id, de: pedido.status },
+        {
+          ...avisoDeErro,
+          onSuccess: (voltou) =>
+            toast(`#${voltou.numero} de volta: ${rotuloStatus(voltou.tipo, voltou.status)}`),
+        },
+      )
+    } else toast("Só dá para levar o pedido para a etapa seguinte ou a anterior.")
+  }
+  // Atalhos de teclado: só no computador, onde as colunas ficam lado a lado.
+  useAtalhosDaFila({
+    ativo: telaGrande,
+    colunas: colunas?.map((coluna) => coluna.pedidos.map((pedido) => pedido.id)) ?? [],
+    pedidos: fila ?? [],
+    acoes: {
+      avancar: (pedido) => {
+        if (proximoStatus(pedido.tipo, pedido.status)) acoes.avancar(pedido)
+      },
+      aceitar: acoes.aceitar,
+      imprimir: acoes.imprimir,
+      ajuda: () => setAjudaAberta(true),
+    },
+  })
+  // Só conta o que ainda está na fila: o que saiu (outra aba, cancelado) sai da seleção.
+  const selecionados = (fila ?? []).filter((pedido) => marcados.has(pedido.id))
+  const limparSelecao = () => {
+    setMarcados(new Set())
+    setSelecionando(false)
+  }
+  const selecao: SelecaoDaFila = {
+    ativa: selecionando,
+    ids: marcados,
+    alternar: (id) =>
+      setMarcados((atuais) => {
+        const novos = new Set(atuais)
+        if (!novos.delete(id)) novos.add(id)
+        return novos
+      }),
+  }
   const metricas =
     fila && agora
       ? metricasDaFila({
@@ -380,6 +525,14 @@ export function PaginaFila({
       : null
   const resumo = fila && agora ? resumoDaFila([...fila, ...concluidos], segmento, agora) : null
   const temEntrega = temModulo(segmento, "motoboys")
+  const canaisDoSegmento: TipoPedido[] =
+    segmento === "salao"
+      ? []
+      : [
+          ...(temEntrega ? (["entrega"] as const) : []),
+          "retirada",
+          ...(temModulo(segmento, "mesas") ? (["mesa"] as const) : []),
+        ]
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
@@ -452,8 +605,22 @@ export function PaginaFila({
         {/* Faixas 2 e 3: a régua e as ferramentas. No celular, recolhidas no Mais. */}
         {(aparelhoGrande || maisAberto) && (
           <div id="fila-mais" className="flex flex-col">
-            {metricas && <MetricasFila metricas={metricas} filtro={filtro} aoFiltrar={setFiltro} />}
+            {metricas && (
+              <MetricasFila
+                metricas={metricas}
+                filtro={filtro}
+                aoFiltrar={setFiltro}
+                aoAbrirFinalizados={() => setFinalizadosAberto(true)}
+              />
+            )}
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/70 py-3">
+              <FerramentasFila
+                busca={ferramentas.busca}
+                canais={ferramentas.canal}
+                canaisDoSegmento={canaisDoSegmento}
+                naoPagos={ferramentas.naoPagos}
+                aoMudar={(mudanca) => void setFerramentas(mudanca)}
+              />
               {filtro && (
                 <p className="flex items-center gap-2 text-sm">
                   <Traco tom="novo" />
@@ -463,7 +630,28 @@ export function PaginaFila({
                   </Button>
                 </p>
               )}
-              <div className="ml-auto">
+              <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+                <Toggle
+                  variant="outline"
+                  size="sm"
+                  pressed={selecionando}
+                  onPressedChange={(ligado) => (ligado ? setSelecionando(true) : limparSelecao())}
+                  className="cursor-pointer"
+                >
+                  <ListChecksIcon data-icon="inline-start" />
+                  Selecionar
+                </Toggle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-haspopup="dialog"
+                  onClick={() => setFinalizadosAberto(true)}
+                >
+                  <ArchiveIcon data-icon="inline-start" />
+                  Finalizados hoje
+                  <span className="text-muted-foreground tabular-nums">{finalizados.length}</span>
+                </Button>
                 <EsteAparelho loja={loja} />
               </div>
             </div>
@@ -477,7 +665,7 @@ export function PaginaFila({
             <Skeleton key={indice} className="h-96 rounded-xl" />
           ))}
         </div>
-      ) : !filtro && colunas.every((coluna) => coluna.pedidos.length === 0) ? (
+      ) : !filtrando && colunas.every((coluna) => coluna.pedidos.length === 0) ? (
         <Empty className="border">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -488,25 +676,31 @@ export function PaginaFila({
           </EmptyHeader>
         </Empty>
       ) : telaGrande ? (
-        <div
-          className="grid items-stretch divide-x divide-border/70"
-          style={{ gridTemplateColumns: `repeat(${colunas.length}, minmax(0, 1fr))` }}
-        >
-          {colunas.map((coluna) => (
-            <Coluna
-              key={coluna.id}
-              coluna={coluna}
-              agora={agora}
-              motoboys={motoboys}
-              novos={novos}
-              emAndamento={idEmAndamento}
-              limiteAceiteMin={limiteAceiteMin}
-              tempos={tempos}
-              acoes={acoes}
-              comTitulo
-            />
-          ))}
-        </div>
+        <QuadroArrastavel pedidos={fila ?? []} aoSoltar={aoSoltar}>
+          <div
+            className="grid items-stretch divide-x divide-border/70"
+            style={{ gridTemplateColumns: `repeat(${colunas.length}, minmax(0, 1fr))` }}
+          >
+            {colunas.map((coluna) => (
+              <Coluna
+                key={coluna.id}
+                coluna={coluna}
+                agora={agora}
+                motoboys={motoboys}
+                novos={novos}
+                emAndamento={idEmAndamento}
+                limiteAceiteMin={limiteAceiteMin}
+                tempos={tempos}
+                historico={historico}
+                nomeLoja={loja?.nome ?? ""}
+                compacto={preferencias.compacto}
+                selecao={selecao}
+                acoes={acoes}
+                comTitulo
+              />
+            ))}
+          </div>
+        </QuadroArrastavel>
       ) : (
         <Tabs defaultValue={colunas[0].id}>
           <TabsList className="sem-barra w-full justify-start overflow-x-auto">
@@ -530,6 +724,10 @@ export function PaginaFila({
                 emAndamento={idEmAndamento}
                 limiteAceiteMin={limiteAceiteMin}
                 tempos={tempos}
+                historico={historico}
+                nomeLoja={loja?.nome ?? ""}
+                compacto={preferencias.compacto}
+                selecao={selecao}
                 acoes={acoes}
                 comTitulo={false}
               />
@@ -538,6 +736,47 @@ export function PaginaFila({
         </Tabs>
       )}
 
+      {selecionados.length > 0 && (
+        <BarraSelecao
+          quantos={selecionados.length}
+          ocupado={avancarEmLote.isPending}
+          aoLimpar={limparSelecao}
+          aoImprimir={() => {
+            for (const pedido of selecionados) impressao.imprimir(pedido)
+          }}
+          aoAvancar={() =>
+            avancarEmLote.mutate(
+              selecionados.map((pedido) => ({ id: pedido.id, de: pedido.status })),
+              {
+                ...avisoDeErro,
+                onSuccess: ({ avancados, pulados }) => {
+                  limparSelecao()
+                  toast.success(
+                    `${plural(avancados.length, "pedido avançou", "pedidos avançaram")}.` +
+                      (pulados > 0 ? ` ${plural(pulados, "ficou", "ficaram")} de fora.` : ""),
+                  )
+                },
+              },
+            )
+          }
+        />
+      )}
+      <AjudaAtalhos aberta={ajudaAberta} aoMudar={setAjudaAberta} />
+      <GavetaFinalizados
+        pedidos={finalizados}
+        aberta={finalizadosAberto}
+        aoMudar={setFinalizadosAberto}
+        aoReabrir={(pedido) =>
+          reabrir.mutate(pedido.id, {
+            ...avisoDeErro,
+            onSuccess: (reaberto) =>
+              toast(
+                `#${reaberto.numero} reaberto: ${rotuloStatus(reaberto.tipo, reaberto.status)}`,
+              ),
+          })
+        }
+        aoReimprimir={impressao.imprimir}
+      />
       <DetalhesPedido />
       {impressao.elemento}
     </div>

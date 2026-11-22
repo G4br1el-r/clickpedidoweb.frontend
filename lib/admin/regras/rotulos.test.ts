@@ -6,6 +6,7 @@ import {
   rotuloOrigem,
   rotuloPagamento,
   rotuloTaxa,
+  seloDaOrigem,
 } from "./rotulos"
 
 describe("rótulos", () => {
@@ -53,5 +54,14 @@ describe("rótulos", () => {
     expect(rotuloOrigem("pdv")).toBe("PDV do balcão")
     expect(rotuloOrigem("garcom")).toBe("Garçom")
     expect(rotuloOrigem("painel")).toBe("Painel da loja")
+  })
+})
+
+describe("seloDaOrigem", () => {
+  test("de onde o pedido veio, como o selo do cartão mostra", () => {
+    expect(seloDaOrigem("site")).toBe("Site")
+    expect(seloDaOrigem("pdv")).toBe("PDV")
+    expect(seloDaOrigem("garcom")).toBe("Garçom")
+    expect(seloDaOrigem("painel")).toBe("Painel")
   })
 })

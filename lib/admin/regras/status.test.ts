@@ -1,10 +1,12 @@
 import { describe, expect, test } from "vitest"
 import {
+  destinoDoArraste,
   etapasDoCaminho,
   proximoStatus,
   rotuloAcao,
   rotuloStatus,
   rotuloStatusComum,
+  statusAnterior,
   tomDoStatus,
 } from "./status"
 
@@ -114,5 +116,35 @@ describe("etapasDoCaminho", () => {
     expect(etapasDoCaminho("retirada")).toEqual(["recebido", "em-preparo", "pronto", "concluido"])
     expect(etapasDoCaminho("mesa")).toEqual(["recebido", "em-preparo", "pronto", "concluido"])
     expect(etapasDoCaminho("atendimento")).toEqual(["recebido", "em-preparo", "concluido"])
+  })
+})
+
+describe("statusAnterior", () => {
+  test("a etapa de antes, para desfazer ou arrastar de volta", () => {
+    expect(statusAnterior("entrega", "em-preparo")).toBe("recebido")
+    expect(statusAnterior("entrega", "pronto")).toBe("em-preparo")
+    expect(statusAnterior("entrega", "saiu-para-entrega")).toBe("pronto")
+    expect(statusAnterior("entrega", "concluido")).toBe("saiu-para-entrega")
+    expect(statusAnterior("retirada", "concluido")).toBe("pronto")
+    expect(statusAnterior("atendimento", "concluido")).toBe("em-preparo")
+  })
+
+  test("o começo e o que saiu da operação não voltam", () => {
+    expect(statusAnterior("entrega", "recebido")).toBeNull()
+    expect(statusAnterior("entrega", "cancelado")).toBeNull()
+    expect(statusAnterior("mesa", "concluido")).toBeNull()
+  })
+})
+
+describe("destinoDoArraste", () => {
+  test("soltar na coluna seguinte avança; na anterior, volta", () => {
+    expect(destinoDoArraste("entrega", "em-preparo", "pronto")).toBe("avancar")
+    expect(destinoDoArraste("entrega", "em-preparo", "recebido")).toBe("voltar")
+  })
+
+  test("pular etapa, a mesma coluna ou etapa que o pedido não tem: não move", () => {
+    expect(destinoDoArraste("entrega", "recebido", "pronto")).toBeNull()
+    expect(destinoDoArraste("entrega", "pronto", "pronto")).toBeNull()
+    expect(destinoDoArraste("retirada", "pronto", "saiu-para-entrega")).toBeNull()
   })
 })

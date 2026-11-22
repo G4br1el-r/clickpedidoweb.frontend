@@ -442,6 +442,47 @@ describe("servidor de demonstração", () => {
     expect(new Set(tokens).size).toBe(3)
   })
 
+  test("o histórico do cliente de cada pedido: quem pede pela primeira vez e quem volta", async () => {
+    const api = servidor()
+    const todos = await api.pedidos.listar()
+    const porTelefone = Map.groupBy(
+      todos.filter((pedido) => pedido.status !== "cancelado"),
+      (pedido) => pedido.cliente.telefone,
+    )
+    const unico = [...porTelefone.values()].find((lista) => lista.length === 1)?.[0]
+    const fiel = [...porTelefone.values()].sort((a, b) => b.length - a.length)[0]
+    if (!unico || !fiel) throw new Error("A demonstração devia ter cliente novo e freguês")
+    // Listar vem do mais novo para o mais antigo: o primeiro do freguês é o último pedido dele.
+    const ultimoDoFiel = fiel[0]
+
+    const historico = await api.pedidos.historicoDosClientes([unico.id, ultimoDoFiel.id])
+    expect(historico[unico.id]).toEqual({ anteriores: 0, nosUltimos30: 0 })
+    expect(historico[ultimoDoFiel.id].anteriores).toBe(fiel.length - 1)
+  })
+
+  test("avançar em lote: cada um vai para a própria próxima etapa; o que não pode é pulado", async () => {
+    const api = servidor()
+    const abertos = await api.pedidos.listar({ status: ["recebido", "em-preparo"] })
+    const novo = abertos.find((pedido) => pedido.status === "recebido" && !pedido.esperaAceite)
+    const emPreparo = abertos.find((pedido) => pedido.status === "em-preparo")
+    if (!novo || !emPreparo) throw new Error("A demonstração devia ter novo e em preparo")
+    await api.salvarLoja({ ...(await api.loja()), aceiteManual: true })
+    const esperando = await api.pedidos.simular()
+
+    const resultado = await api.pedidos.avancarEmLote([
+      { id: novo.id, de: "recebido" },
+      { id: emPreparo.id, de: "em-preparo" },
+      { id: esperando.id, de: "recebido" },
+      // A tela via uma etapa que já mudou: pula.
+      { id: novo.id, de: "pronto" },
+    ])
+    expect(resultado.avancados.map((pedido) => [pedido.id, pedido.status])).toEqual([
+      [novo.id, "em-preparo"],
+      [emPreparo.id, "pronto"],
+    ])
+    expect(resultado.pulados).toBe(2)
+  })
+
   test("um pedido simulado chega como novo, com o número seguinte", async () => {
     const api = servidor()
     const [ultimo] = await api.pedidos.listar()
@@ -450,6 +491,74 @@ describe("servidor de demonstração", () => {
     expect(novo.id).toBe(ultimo.id + 1)
     expect(novo.status).toBe("recebido")
     expect((await api.pedidos.listar())[0].id).toBe(novo.id)
+  })
+
+  describe("voltar uma etapa", () => {
+    test("desfaz o avanço e entra na linha do tempo; só a partir da etapa que a tela viu", async () => {
+      const api = servidor()
+      const [novo] = (await api.pedidos.listar({ status: ["recebido"] })).filter(
+        (pedido) => !pedido.esperaAceite,
+      )
+      await api.pedidos.avancar(novo.id, "recebido")
+
+      const voltou = await api.pedidos.voltar(novo.id, "em-preparo")
+      expect(voltou.status).toBe("recebido")
+      expect(voltou.historico?.at(-1)).toEqual({
+        tipo: "etapa",
+        status: "recebido",
+        em: AGORA.toISOString(),
+      })
+      await expect(api.pedidos.voltar(novo.id, "em-preparo")).rejects.toThrow(
+        "Este pedido já mudou de etapa. Atualize a tela.",
+      )
+      await expect(api.pedidos.voltar(novo.id, "recebido")).rejects.toThrow(
+        "Este pedido não tem etapa anterior.",
+      )
+    })
+
+    test("voltar de concluído desfaz a cobrança feita na entrega", async () => {
+      const api = servidor()
+      const naRua = (await api.pedidos.listar({ status: ["saiu-para-entrega"] })).find(
+        (pedido) => pedido.situacaoPagamento === "na-entrega",
+      )
+      if (!naRua) throw new Error("A demonstração devia ter uma entrega na rua a cobrar")
+      expect((await api.pedidos.avancar(naRua.id, "saiu-para-entrega")).situacaoPagamento).toBe(
+        "pago",
+      )
+
+      const reaberto = await api.pedidos.voltar(naRua.id, "concluido")
+      expect(reaberto.status).toBe("saiu-para-entrega")
+      expect(reaberto.situacaoPagamento).toBe("na-entrega")
+      expect(reaberto.pagoEm).toBeUndefined()
+    })
+
+    test("reabrir um concluído o devolve para Prontos, desfazendo a cobrança da entrega", async () => {
+      const api = servidor()
+      const naRua = (await api.pedidos.listar({ status: ["saiu-para-entrega"] })).find(
+        (pedido) => pedido.situacaoPagamento === "na-entrega",
+      )
+      if (!naRua) throw new Error("A demonstração devia ter uma entrega na rua a cobrar")
+      await api.pedidos.avancar(naRua.id, "saiu-para-entrega")
+
+      const reaberto = await api.pedidos.reabrir(naRua.id)
+      expect(reaberto.status).toBe("pronto")
+      expect(reaberto.situacaoPagamento).toBe("na-entrega")
+      await expect(api.pedidos.reabrir(naRua.id)).rejects.toThrow("Só reabre pedido concluído.")
+    })
+
+    test("a conta fechada da mesa não reabre pela fila", async () => {
+      const api = servidor()
+      const mesa = await api.mesas.criar({ numero: 9 })
+      const comanda = await api.mesas.lancar({
+        mesaId: mesa.id,
+        enviarParaCozinha: false,
+        itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+      })
+      await api.mesas.fecharConta(comanda.id, "pix")
+      await expect(api.pedidos.reabrir(comanda.id)).rejects.toThrow(
+        "A conta da mesa reabre em Mesas.",
+      )
+    })
   })
 
   describe("prazo prometido", () => {

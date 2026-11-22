@@ -1023,6 +1023,69 @@ test("fila: pausar, acrescentar ao prazo e filtrar os atrasados pela régua", as
   await expect(atrasados).toHaveAttribute("aria-pressed", "false")
 })
 
+test("fila: buscar pelo número e reabrir um pedido pelos Finalizados hoje", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/fila")
+  const cartoes = page.getByRole("article")
+  await expect(cartoes.first()).toBeVisible({ timeout: 15_000 })
+  const numero = (await cartoes.first().getByRole("heading").textContent()) ?? ""
+
+  // No celular, a busca e a gaveta ficam no Mais.
+  const mais = page.getByRole("button", { name: "Mais" })
+  if (await mais.isVisible()) await mais.click()
+  // As ferramentas cabem na tela: a página não rola de lado.
+  // (No celular emulado, o que passa da tela alarga a página: compara com a tela do teste.)
+  const largura = await page.evaluate(() => document.documentElement.scrollWidth)
+  expect(largura).toBeLessThanOrEqual(page.viewportSize()?.width ?? 0)
+  await page.getByRole("searchbox", { name: "Buscar pedido" }).fill(numero)
+  await expect(page.getByRole("heading", { name: numero, exact: true })).toBeVisible()
+  await expect(page.getByRole("article").filter({ visible: true })).toHaveCount(1)
+  await page.getByRole("searchbox", { name: "Buscar pedido" }).fill("")
+
+  await page.getByRole("button", { name: /^Finalizados hoje/ }).click()
+  const gaveta = page.getByRole("dialog", { name: "Finalizados hoje" })
+  const reabrir = gaveta.getByRole("button", { name: /^Reabrir #/ }).first()
+  await expect(reabrir).toBeVisible()
+  await esperarAnimacoes(page)
+  await verificarAcessibilidade(page)
+  const reaberto = ((await reabrir.getAttribute("aria-label")) ?? "").replace("Reabrir ", "")
+  await reabrir.click()
+  await expect(page.getByText(`${reaberto} reaberto`)).toBeVisible()
+})
+
+test("fila: arrastar o cartão para a coluna seguinte avança o pedido", async ({ page }, info) => {
+  test.skip(
+    (info.project.use.viewport?.width ?? 0) < 1024,
+    "No celular e no tablet a fila usa abas",
+  )
+  test.skip(Boolean(info.project.use.isMobile), "Arrastar com o dedo fica para o teste no aparelho")
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/fila")
+  const novos = page.getByRole("region", { name: /^Novos, / })
+  const cartao = novos.getByRole("article").first()
+  await expect(cartao).toBeVisible({ timeout: 15_000 })
+  await esperarAnimacoes(page)
+  const numero = (await cartao.getByRole("heading").textContent()) ?? ""
+
+  // Pega o cartão onde ele está e leva de lado, na mesma altura, até a coluna seguinte.
+  const pegar = cartao.getByText(/itens? ·/)
+  await pegar.scrollIntoViewIfNeeded()
+  const de = await pegar.boundingBox()
+  const para = await page.getByRole("region", { name: /^Em preparo, / }).boundingBox()
+  if (!de || !para) throw new Error("Cartão e coluna deviam estar na tela")
+  const altura = de.y + de.height / 2
+  await page.mouse.move(de.x + de.width / 2, altura)
+  await page.mouse.down()
+  await page.mouse.move(para.x + para.width / 2, altura, { steps: 12 })
+  await page.mouse.up()
+
+  await expect(
+    page
+      .getByRole("region", { name: /^Em preparo, / })
+      .getByRole("heading", { name: numero, exact: true }),
+  ).toBeVisible()
+})
+
 test("fila: aceitar numa aba tira o aceite pendente da outra aba", async ({
   page,
   context,
