@@ -7,6 +7,7 @@ import {
   itensPagos,
   pagamentosDoPedido,
   pagoNoDiaSemTaxa,
+  partesRecebidas,
   resumoDaConta,
   saldoDepoisDe,
   taxaSobre,
@@ -246,5 +247,28 @@ describe("saldoDepoisDe", () => {
     })
     expect(saldoDepoisDe(paga, "p1")).toBe(66.67)
     expect(saldoDepoisDe(paga, "p2")).toBe(33.34)
+  })
+})
+
+describe("partesRecebidas", () => {
+  test("cada pagamento do valor de uma parte marca a primeira parte livre com esse valor", () => {
+    const pagamento = (id: string, valor: number, itens?: string[]) => ({
+      id,
+      forma: "pix" as const,
+      valor,
+      em: "",
+      ...(itens ? { itens } : {}),
+    })
+    expect(partesRecebidas([33.33, 33.33, 33.34], [pagamento("p1", 33.34)])).toEqual([
+      false,
+      false,
+      true,
+    ])
+    expect(
+      partesRecebidas(
+        [33.33, 33.33, 33.34],
+        [pagamento("p1", 33.33), pagamento("p2", 10), pagamento("p3", 33.33, ["i1"])],
+      ),
+    ).toEqual([true, false, false])
   })
 })

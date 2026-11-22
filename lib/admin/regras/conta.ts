@@ -144,6 +144,25 @@ export function trocoDoPagamento({
   return emReais(Math.max(emCentavos(recebido) - abate, 0))
 }
 
+/**
+ * Quais partes da divisão já entraram: cada pagamento por valor (o por item não conta) marca a
+ * primeira parte ainda livre com o mesmo valor.
+ */
+export function partesRecebidas(
+  partes: number[],
+  pagamentos: Pick<PagamentoConta, "valor" | "itens">[],
+): boolean[] {
+  const recebidas = partes.map(() => false)
+  for (const { valor, itens } of pagamentos) {
+    if (itens?.length) continue
+    const livre = partes.findIndex(
+      (parte, indice) => !recebidas[indice] && emCentavos(parte) === emCentavos(valor),
+    )
+    if (livre >= 0) recebidas[livre] = true
+  }
+  return recebidas
+}
+
 /** Os itens já cobertos por pagamentos por item. */
 export function itensPagos(conta: Pick<ContaDaMesa, "pagamentos">): Set<string> {
   return new Set((conta.pagamentos ?? []).flatMap((pagamento) => pagamento.itens ?? []))

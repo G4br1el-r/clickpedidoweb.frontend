@@ -243,6 +243,66 @@ describe("ComandaMesa: a aba Conta", () => {
   })
 })
 
+describe("ComandaMesa: avisos ao receber e dividir", () => {
+  test("dinheiro: recebido menor que a parte avisa no campo e não deixa receber", async () => {
+    await mesaComConta()
+    const { usuario, gaveta } = await abrirConta()
+    await usuario.click(gaveta.getByRole("button", { name: "Fechar conta" }))
+    await usuario.click(janelaReceber().getByRole("radio", { name: "Dinheiro" }))
+    await usuario.type(janelaReceber().getByRole("textbox", { name: "Valor recebido" }), "50")
+    expect(
+      janelaReceber().getByText("O valor recebido é menor que o da parte."),
+    ).toBeInTheDocument()
+    expect(janelaReceber().getByRole("button", { name: nome("Receber R$ 64,40") })).toBeDisabled()
+  })
+
+  test("Pix acima do saldo avisa no campo e não deixa receber", async () => {
+    await mesaComConta()
+    const { usuario, gaveta } = await abrirConta()
+    await usuario.click(gaveta.getByRole("button", { name: "Fechar conta" }))
+    await usuario.click(janelaReceber().getByRole("radio", { name: "Pix" }))
+    const valor = janelaReceber().getByRole("textbox", { name: "Valor" })
+    await usuario.clear(valor)
+    await usuario.type(valor, "70")
+    expect(janelaReceber().getByText("O valor passa do saldo de R$ 64,40.")).toBeInTheDocument()
+    expect(janelaReceber().getByRole("button", { name: nome("Receber R$ 70,00") })).toBeDisabled()
+  })
+
+  test("partes fora de 2 a 20 avisam", async () => {
+    await mesaComConta()
+    const { usuario, gaveta } = await abrirConta()
+    const dividir = within(gaveta.getByRole("region", { name: "Dividir igualmente" }))
+    const partes = dividir.getByRole("spinbutton", { name: "Partes" })
+    await usuario.clear(partes)
+    await usuario.type(partes, "25")
+    expect(dividir.getByText("Divida de 2 a 20 partes.")).toBeInTheDocument()
+    expect(dividir.queryByRole("button", { name: /^Receber/ })).not.toBeInTheDocument()
+  })
+
+  test("Por item não perde a seleção se a janela Receber for fechada sem receber", async () => {
+    await mesaComConta()
+    const { usuario, gaveta } = await abrirConta()
+    const porItem = within(gaveta.getByRole("region", { name: "Por item" }))
+    await usuario.click(porItem.getByRole("checkbox", { name: /Pizza/ }))
+    await usuario.click(porItem.getByRole("button", { name: nome("Receber R$ 44,00") }))
+    await usuario.keyboard("{Escape}")
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Receber da mesa 70" })).not.toBeInTheDocument(),
+    )
+    expect(porItem.getByRole("checkbox", { name: /Pizza/ })).toBeChecked()
+  })
+
+  test("as partes já recebidas aparecem como recebidas", async () => {
+    const { comanda } = await mesaComConta()
+    await api().mesas.pagar(comanda.id, { forma: "pix", valor: 32.2 })
+    const { gaveta } = await abrirConta()
+    const dividir = within(gaveta.getByRole("region", { name: "Dividir igualmente" }))
+    // R$ 64,40 em 2: uma parte de R$ 32,20 já entrou.
+    expect(dividir.getByRole("button", { name: nome("Recebida R$ 32,20") })).toBeDisabled()
+    expect(dividir.getByRole("button", { name: nome("Receber R$ 32,20") })).toBeEnabled()
+  })
+})
+
 describe("ComandaMesa: por item com desconto", () => {
   test("com desconto na conta, Por item avisa e não deixa marcar", async () => {
     const { comanda } = await mesaComConta()

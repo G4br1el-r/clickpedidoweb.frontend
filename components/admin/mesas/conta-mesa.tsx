@@ -22,6 +22,7 @@ import { useGarcom } from "@/lib/admin/garcom"
 import {
   dividirIgualmente,
   itensPagos,
+  partesRecebidas,
   resumoDaConta,
   valorDosItens,
 } from "@/lib/admin/regras/conta"
@@ -79,6 +80,8 @@ function DividirIgualmente({
 }) {
   const [partes, setPartes] = useState(Math.min(Math.max(pedido.mesa?.pessoas ?? 2, 2), 20))
   const valida = Number.isInteger(partes) && partes >= 2 && partes <= 20
+  const valores = valida ? dividirIgualmente(resumoDaConta(pedido).total, partes) : []
+  const recebidas = partesRecebidas(valores, pedido.pagamentos ?? [])
   return (
     <Secao titulo="Dividir igualmente">
       <div className="flex items-center gap-3">
@@ -94,9 +97,9 @@ function DividirIgualmente({
           onChange={(evento) => setPartes(evento.target.valueAsNumber)}
         />
       </div>
-      {valida && (
+      {valida ? (
         <ul className="flex flex-wrap gap-2">
-          {dividirIgualmente(resumoDaConta(pedido).total, partes).map((valor, indice) => (
+          {valores.map((valor, indice) => (
             // As partes não mudam de lugar: a posição é a identidade de cada uma.
             // biome-ignore lint/suspicious/noArrayIndexKey: a lista só cresce ou encolhe no fim
             <li key={indice}>
@@ -104,13 +107,16 @@ function DividirIgualmente({
                 type="button"
                 size="sm"
                 variant="outline"
+                disabled={recebidas[indice]}
                 onClick={() => aoReceber({ valor })}
               >
-                Receber {emReais(valor)}
+                {recebidas[indice] ? "Recebida" : "Receber"} {emReais(valor)}
               </Button>
             </li>
           ))}
         </ul>
+      ) : (
+        <p className="text-sm text-destructive">Divida de 2 a 20 partes.</p>
       )}
     </Secao>
   )
@@ -166,10 +172,8 @@ function PorItem({
         variant="outline"
         className="self-start"
         disabled={escolhidos.length === 0}
-        onClick={() => {
-          aoReceber({ itens: escolhidos })
-          setMarcados([])
-        }}
+        // A marcação fica até o pagamento entrar: o item pago sai sozinho da lista.
+        onClick={() => aoReceber({ itens: escolhidos })}
       >
         Receber {emReais(valor)}
       </Button>

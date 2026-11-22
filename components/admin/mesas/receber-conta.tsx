@@ -13,7 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { Field, FieldLabel } from "@/components/ui/field"
+import { Field, FieldError, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
@@ -55,15 +55,18 @@ function CampoDinheiro({
   valor,
   aoMudar,
   desabilitado,
+  erro,
 }: {
   id: string
   rotulo: string
   valor: number | undefined
   aoMudar: (valor: number | undefined) => void
   desabilitado?: boolean
+  /** O que está errado no valor, mostrado embaixo do campo. */
+  erro?: string | undefined
 }) {
   return (
-    <Field>
+    <Field data-invalid={erro ? true : undefined}>
       <FieldLabel htmlFor={id}>{rotulo}</FieldLabel>
       <NumericFormat
         id={id}
@@ -77,7 +80,10 @@ function CampoDinheiro({
         disabled={desabilitado}
         value={valor ?? ""}
         onValueChange={({ floatValue }) => aoMudar(floatValue)}
+        aria-invalid={erro ? true : undefined}
+        aria-describedby={erro ? `${id}-erro` : undefined}
       />
+      {erro && <FieldError id={`${id}-erro`}>{erro}</FieldError>}
     </Field>
   )
 }
@@ -108,12 +114,17 @@ function Formulario({
     dinheiro && valor !== undefined && recebido !== undefined
       ? trocoDoPagamento({ valor, saldo, recebido })
       : 0
+  // Pix e cartão não passam do saldo; no dinheiro, o que passa vira troco.
+  const passaDoSaldo = forma !== null && !dinheiro && valor !== undefined && valor > saldo
+  const faltaDinheiro =
+    dinheiro && valor !== undefined && recebido !== undefined && recebido < valor
   const pronto =
     forma !== null &&
     (forma !== "cartao-na-entrega" || cartao !== null) &&
     valor !== undefined &&
     valor > 0 &&
-    (!dinheiro || recebido === undefined || recebido >= valor)
+    !passaDoSaldo &&
+    !faltaDinheiro
 
   return (
     <>
@@ -152,6 +163,7 @@ function Formulario({
         valor={valor}
         aoMudar={setValor}
         desabilitado={porItem}
+        erro={passaDoSaldo ? `O valor passa do saldo de ${emReais(saldo)}.` : undefined}
       />
       {dinheiro && valor !== undefined && (
         <div className="flex flex-col gap-2">
@@ -160,6 +172,7 @@ function Formulario({
             rotulo="Valor recebido"
             valor={recebido}
             aoMudar={setRecebido}
+            erro={faltaDinheiro ? "O valor recebido é menor que o da parte." : undefined}
           />
           <fieldset aria-label="Notas" className="flex flex-wrap gap-2">
             {sugestoesDeTroco(valor).map((nota) => (
