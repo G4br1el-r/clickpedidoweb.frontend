@@ -16,10 +16,12 @@ import {
   useDarCortesia,
   useDesbloquearMesa,
   useDescontar,
+  useDesfazer,
   useEditarItem,
   useEditarMesa,
   useEstornarPagamento,
   useImprimirPreConta,
+  useJuntarMesas,
   useLancarNaMesa,
   useMarcarLimpa,
   useMarcarServido,
@@ -29,8 +31,11 @@ import {
   useReabrirConta,
   useRemoverItem,
   useSalvarConfigSalao,
+  useSepararMesas,
   useTirarCouvert,
   useTirarTaxa,
+  useTransferirItens,
+  useTransferirMesa,
   useUltimaConta,
 } from "./consultas-mesas"
 import type { Mesa } from "./tipos"
@@ -414,5 +419,86 @@ describe("consultas das mesas", () => {
 
     await act(() => result.current.reabrir.mutateAsync({ pedidoId: aberta.id, motivo: "Erro" }))
     await waitFor(() => expect(result.current.comanda.data?.status).toBe("pronto"))
+  })
+})
+
+describe("consultas das movimentações", () => {
+  async function comandaNaMesa(numero: number) {
+    const api = servidorDo("pizzaria")
+    const mesa = await api.mesas.criar({ numero })
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Suco", preco: 9.5 }, quantidade: 3 }],
+    })
+    return { api, mesa, comanda }
+  }
+
+  test("transferir, juntar, separar e desfazer chegam ao servidor e atualizam a comanda e as mesas", async () => {
+    const { api, mesa, comanda } = await comandaNaMesa(81)
+    const destino = await api.mesas.criar({ numero: 82 })
+    const livre = await api.mesas.criar({ numero: 83 })
+    const { result } = renderHook(
+      () => ({
+        mesas: useMesas(),
+        comanda: usePedido(comanda.id),
+        transferir: useTransferirMesa(),
+        juntar: useJuntarMesas(),
+        separar: useSepararMesas(),
+        desfazer: useDesfazer(),
+      }),
+      { wrapper: envolver() },
+    )
+    await waitFor(() => expect(result.current.comanda.data?.mesa?.numero).toBe(81))
+    const daTela = (id: string) => result.current.mesas.data?.find((item) => item.id === id)
+
+    const { desfazer } = await act(() =>
+      result.current.transferir.mutateAsync({ pedidoId: comanda.id, mesaDestinoId: destino.id }),
+    )
+    await waitFor(() => expect(result.current.comanda.data?.mesa?.numero).toBe(82))
+    await waitFor(() => expect(daTela(destino.id)?.status).toBe("ocupada"))
+
+    await act(() => result.current.desfazer.mutateAsync(desfazer))
+    await waitFor(() => expect(result.current.comanda.data?.mesa?.numero).toBe(81))
+    await waitFor(() => expect(daTela(mesa.id)?.status).toBe("ocupada"))
+
+    await act(() =>
+      result.current.juntar.mutateAsync({ pedidoId: comanda.id, mesaIds: [livre.id], por: "Bia" }),
+    )
+    await waitFor(() =>
+      expect(result.current.comanda.data?.mesa?.juntadas).toEqual([{ id: livre.id, numero: 83 }]),
+    )
+    await waitFor(() => expect(daTela(livre.id)?.juntadaCom).toBe(mesa.id))
+
+    await act(() => result.current.separar.mutateAsync({ pedidoId: comanda.id }))
+    await waitFor(() => expect(result.current.comanda.data?.mesa?.juntadas).toBeUndefined())
+    await waitFor(() => expect(daTela(livre.id)?.juntadaCom).toBeUndefined())
+  })
+
+  test("transferir itens guarda as duas comandas; marcar limpa devolve o desfazer", async () => {
+    const { api, comanda } = await comandaNaMesa(84)
+    const destino = await api.mesas.criar({ numero: 85 })
+    const { result } = renderHook(
+      () => ({
+        comanda: usePedido(comanda.id),
+        transferir: useTransferirItens(),
+        limpa: useMarcarLimpa(),
+      }),
+      { wrapper: envolver() },
+    )
+    await waitFor(() => expect(result.current.comanda.data).toBeDefined())
+
+    const { destino: aberta } = await act(() =>
+      result.current.transferir.mutateAsync({
+        pedidoId: comanda.id,
+        mesaDestinoId: destino.id,
+        itens: [{ itemId: comanda.itens[0].id, quantidade: 1 }],
+      }),
+    )
+    await waitFor(() => expect(result.current.comanda.data?.itens[0].quantidade).toBe(2))
+    expect(aberta.mesa?.numero).toBe(85)
+
+    const limpa = await act(() => result.current.limpa.mutateAsync("mesa-9"))
+    expect(limpa.desfazer).toEqual(expect.any(String))
   })
 })

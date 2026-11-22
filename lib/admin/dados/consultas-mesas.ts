@@ -301,6 +301,64 @@ export function useImprimirPreConta() {
   )
 }
 
+/** A movimentação devolve a comanda: quem a tem aberta vê a mesa nova na hora. */
+const guardarMovida = (
+  cliente: QueryClient,
+  segmento: SegmentoPainelId,
+  { comanda, destino }: { comanda: Pedido; destino?: Pedido },
+) => {
+  guardarComanda(cliente, segmento, comanda)
+  if (destino) guardarComanda(cliente, segmento, destino)
+}
+
+export function useTransferirMesa() {
+  return useMudancaNasMesas(
+    (
+      servidor,
+      {
+        pedidoId,
+        mesaDestinoId,
+        ...opcoes
+      }: { pedidoId: number; mesaDestinoId: string; confirmarReserva?: boolean; por?: string },
+    ) => servidor.mesas.transferir(pedidoId, mesaDestinoId, opcoes),
+    { aoSucesso: guardarMovida },
+  )
+}
+
+export function useJuntarMesas() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, mesaIds, por }: { pedidoId: number; mesaIds: string[]; por?: string }) =>
+      servidor.mesas.juntar(pedidoId, mesaIds, por ? { por } : {}),
+    { aoSucesso: guardarMovida },
+  )
+}
+
+export function useSepararMesas() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, por }: { pedidoId: number; por?: string }) =>
+      servidor.mesas.separar(pedidoId, por ? { por } : {}),
+    { aoSucesso: guardarMovida },
+  )
+}
+
+export function useTransferirItens() {
+  return useMudancaNasMesas(
+    (
+      servidor,
+      {
+        pedidoId,
+        ...transferencia
+      }: { pedidoId: number } & Parameters<Servidor["mesas"]["transferirItens"]>[1],
+    ) => servidor.mesas.transferirItens(pedidoId, transferencia),
+    { aoSucesso: guardarMovida },
+  )
+}
+
+/** Desfaz a movimentação pela foto do servidor (10 s); no fim, tudo confere de novo. */
+export function useDesfazer() {
+  return useMudancaNasMesas((servidor, id: string) => servidor.mesas.desfazer(id))
+}
+
 export function useReabrirConta() {
   return useMudancaNasMesas(
     (servidor, { pedidoId, ...motivo }: ComMotivo) => servidor.mesas.reabrir(pedidoId, motivo),
