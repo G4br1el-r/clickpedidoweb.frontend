@@ -17,6 +17,7 @@ import { useAgora } from "@/hooks/use-agora"
 import { useFila } from "@/lib/admin/dados/consultas"
 import { useConfigSalao, useMesas } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
+import { useGarcomCarregado } from "@/lib/admin/garcom"
 import { usePreferenciasMesasCarregadas } from "@/lib/admin/preferencias-mesas"
 import { alertasDaMesa } from "@/lib/admin/regras/alertas-mesa"
 import { filtrarMesas, type MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
@@ -39,6 +40,7 @@ const GRADE = "grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-co
 /** Mesas do salão: a grade por área, na ordem das áreas, e a comanda de cada mesa. */
 export function PaginaMesas() {
   usePreferenciasMesasCarregadas()
+  useGarcomCarregado()
   const { data: mesas } = useMesas(4_000)
   const { data: salao } = useConfigSalao()
   const { data: fila } = useFila()

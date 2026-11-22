@@ -15,7 +15,6 @@ import {
   Trash2Icon,
 } from "lucide-react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
-import Link from "next/link"
 import { useRef, useState } from "react"
 import { NumericFormat } from "react-number-format"
 import { useReactToPrint } from "react-to-print"
@@ -62,6 +61,8 @@ import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import { emReais, formatoMoeda } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
+import { AbrirMesa } from "./abrir-mesa"
+import { AdicionarItens } from "./adicionar-itens"
 import { ConfirmarExclusaoMesa } from "./excluir-mesa"
 import { TirarItem } from "./tirar-item"
 
@@ -263,6 +264,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   const remover = useRemoverItem()
   const liberar = useLiberarMesa()
   const [fechando, setFechando] = useState(false)
+  const [adicionando, setAdicionando] = useState(false)
   const conta = useRef<HTMLDivElement>(null)
   const imprimir = useReactToPrint({
     contentRef: conta,
@@ -327,7 +329,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
         <TabsContent value="itens" className="flex flex-col gap-5 overflow-y-auto p-4">
           {vazia ? (
             <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-balance text-muted-foreground">
-              A comanda está vazia. Libere a mesa ou lance itens pelo Garçom.
+              A comanda está vazia. Adicione itens ou libere a mesa.
             </p>
           ) : (
             <ul
@@ -411,6 +413,15 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
               </AnimatePresence>
             </ul>
           )}
+          <Button
+            type="button"
+            variant="outline"
+            className="self-start"
+            onClick={() => setAdicionando(true)}
+          >
+            <PlusIcon data-icon="inline-start" />
+            Adicionar itens
+          </Button>
           <ItemAvulso mesaId={mesa.id} />
         </TabsContent>
         <TabsContent value="conta" className="flex flex-col gap-5 overflow-y-auto p-4" />
@@ -482,6 +493,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
           setConfirmando(null)
         }}
       />
+      <AdicionarItens mesa={mesa} comanda={pedido} aberta={adicionando} aoMudar={setAdicionando} />
       <FecharConta
         pedido={pedido}
         mesa={mesa}
@@ -545,14 +557,7 @@ function AcaoSemComanda({ mesa, estado }: { mesa: Mesa; estado: EstadoMesa }) {
       </>
     )
   }
-  return (
-    <>
-      <p>A comanda abre quando o garçom lança o primeiro item.</p>
-      <Button asChild variant="outline" className="self-start">
-        <Link href="/admin/garcom">Abrir o Garçom</Link>
-      </Button>
-    </>
-  )
+  return <AbrirMesa mesa={mesa} />
 }
 
 function MesaSemComanda({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void }) {
