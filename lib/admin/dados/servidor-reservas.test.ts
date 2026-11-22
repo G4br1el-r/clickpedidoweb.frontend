@@ -225,3 +225,73 @@ describe("sentar a reserva: a mesa e o horário", () => {
     await expect(api.reservas.sentar(id, { mesaId, confirmarReserva: true })).resolves.toBeDefined()
   })
 })
+
+describe("lista de espera", () => {
+  test("entrar põe no fim da fila, com a hora de chegada; listar traz quem espera", async () => {
+    const api = servidor()
+    await api.espera.entrar({ nome: "Carlos", pessoas: 2, telefone: "(12) 99876-1234" })
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 35))
+    const juliana = await api.espera.entrar({ nome: " Juliana ", pessoas: 4 })
+
+    expect(juliana).toMatchObject({
+      nome: "Juliana",
+      pessoas: 4,
+      chegouEm: new Date(2026, 10, 13, 20, 35).toISOString(),
+      status: "esperando",
+    })
+    expect((await servidor().espera.listar()).map((entrada) => entrada.nome)).toEqual([
+      "Carlos",
+      "Juliana",
+    ])
+    expect((await api.espera.listar())[0].telefone).toBe("12998761234")
+  })
+
+  test.each([
+    [{ nome: "" }, "Informe o nome."],
+    [{ pessoas: 100 }, "Informe de 1 a 99 pessoas."],
+    [{ telefone: "12345" }, "Informe o telefone com DDD."],
+  ])("entrar recusa %o: %s", async (mudanca, erro) => {
+    const api = servidor()
+    await expect(api.espera.entrar({ nome: "Carlos", pessoas: 2, ...mudanca })).rejects.toThrow(
+      erro,
+    )
+  })
+
+  test("chamar grava a hora da chamada; desistir tira da lista", async () => {
+    const api = servidor()
+    const carlos = await api.espera.entrar({ nome: "Carlos", pessoas: 2 })
+    const juliana = await api.espera.entrar({ nome: "Juliana", pessoas: 4 })
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 40))
+    expect(await api.espera.chamar(carlos.id)).toMatchObject({
+      chamadaEm: new Date(2026, 10, 13, 20, 40).toISOString(),
+      status: "esperando",
+    })
+    expect(await api.espera.desistir(juliana.id)).toMatchObject({ status: "desistiu" })
+    expect((await servidor().espera.listar()).map((entrada) => entrada.nome)).toEqual(["Carlos"])
+  })
+
+  test("sentar abre a mesa com o nome e as pessoas, e tira da fila", async () => {
+    const api = servidor()
+    const mesaId = await mesaNova(api, 30)
+    const { id } = await api.espera.entrar({ nome: "Juliana", pessoas: 4 })
+    const { entrada, comanda } = await api.espera.sentar(id, { mesaId, por: "Bia" })
+
+    expect(entrada.status).toBe("sentou")
+    expect(comanda.cliente.nome).toBe("Juliana")
+    expect(comanda.mesa).toMatchObject({ id: mesaId, pessoas: 4 })
+    expect(await servidor().espera.listar()).toEqual([])
+  })
+
+  test("quem saiu da fila não é chamado nem sentado; sem mesa, pede", async () => {
+    const api = servidor()
+    const mesaId = await mesaNova(api, 30)
+    const { id } = await api.espera.entrar({ nome: "Juliana", pessoas: 4 })
+    await expect(api.espera.sentar(id, {})).rejects.toThrow("Escolha a mesa.")
+    await api.espera.desistir(id)
+    const erro = "Essa pessoa não está mais na espera."
+    await expect(api.espera.sentar(id, { mesaId })).rejects.toThrow(erro)
+    await expect(api.espera.chamar(id)).rejects.toThrow(erro)
+    await expect(api.espera.desistir(id)).rejects.toThrow(erro)
+    await expect(api.espera.chamar("ninguem")).rejects.toThrow("Não está na espera.")
+  })
+})

@@ -47,7 +47,9 @@ import {
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
 import {
+  conferirEspera,
   conferirReserva,
+  type NovaEntradaEspera,
   type NovaReserva,
   reservaDaMesa,
   reservaEmConflito,
@@ -69,6 +71,7 @@ import {
   type ConfigLoja,
   type ConfigSalao,
   type DescontoConta,
+  type EntradaEspera,
   type EventoComanda,
   FORMAS_MESA,
   type FormaMesa,
@@ -975,6 +978,24 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       eventoAberta(agora, pessoas, garcom ?? por),
     )
     return { base: abrirMesas({ ...base, pedidos: [...base.pedidos, comanda] }), comanda }
+  }
+
+  /** Quem ainda está na fila; quem sentou ou desistiu já saiu dela. */
+  function esperando(base: BaseLoja, id: string): EntradaEspera {
+    const entrada = base.espera.find((item) => item.id === id)
+    if (!entrada) throw new Error("Não está na espera.")
+    if (entrada.status !== "esperando") throw new Error("Essa pessoa não está mais na espera.")
+    return entrada
+  }
+
+  async function mudarEspera(
+    id: string,
+    mudar: (entrada: EntradaEspera) => EntradaEspera,
+  ): Promise<EntradaEspera> {
+    const base = await carregar()
+    const nova = mudar(esperando(base, id))
+    await substituir({ ...base, espera: base.espera.map((item) => (item.id === id ? nova : item)) })
+    return responder(nova)
   }
 
   async function mudarProduto(id: string, mudar: (produto: Produto) => Produto): Promise<Produto> {
@@ -1980,6 +2001,65 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       /** A pessoa não veio: a mesa fica livre na hora, sem esperar a tolerância. */
       naoCompareceu(id: string): Promise<Reserva> {
         return mudarReserva(id, (reserva) => ({ ...reserva, status: "nao-compareceu" }))
+      },
+    },
+
+    espera: {
+      /** Quem está esperando, pela chegada. */
+      async listar(): Promise<EntradaEspera[]> {
+        return responder(
+          (await carregar()).espera
+            .filter((entrada) => entrada.status === "esperando")
+            .toSorted((a, b) => Date.parse(a.chegouEm) - Date.parse(b.chegouEm)),
+        )
+      },
+
+      async entrar(dados: NovaEntradaEspera): Promise<EntradaEspera> {
+        const { erros, entrada: conferida } = conferirEspera({
+          nome: dados.nome,
+          telefone: dados.telefone ?? "",
+          pessoas: String(dados.pessoas),
+        })
+        if (!conferida) throw new Error(Object.values(erros)[0])
+        const base = await carregar()
+        const entrada: EntradaEspera = {
+          id: novoId("espera")(),
+          ...conferida,
+          chegouEm: new Date().toISOString(),
+          status: "esperando",
+        }
+        await substituir({ ...base, espera: [...base.espera, entrada] })
+        return responder(entrada)
+      },
+
+      /** Grava a hora da chamada (o WhatsApp abre na tela; nada sai daqui). */
+      chamar(id: string): Promise<EntradaEspera> {
+        return mudarEspera(id, (entrada) => ({ ...entrada, chamadaEm: new Date().toISOString() }))
+      },
+
+      desistir(id: string): Promise<EntradaEspera> {
+        return mudarEspera(id, (entrada) => ({ ...entrada, status: "desistiu" }))
+      },
+
+      /** Abre a mesa com o nome e as pessoas de quem esperava, e tira da fila. */
+      async sentar(
+        id: string,
+        { mesaId, ...abertura }: Sentada,
+      ): Promise<{ entrada: EntradaEspera; comanda: Pedido }> {
+        const base = await carregar()
+        const entrada = esperando(base, id)
+        if (!mesaId) throw new Error("Escolha a mesa.")
+        const { base: aberta, comanda } = abrirComanda(base, mesaId, {
+          ...abertura,
+          pessoas: entrada.pessoas,
+          clienteNome: entrada.nome,
+        })
+        const sentou: EntradaEspera = { ...entrada, status: "sentou" }
+        await substituir({
+          ...aberta,
+          espera: aberta.espera.map((item) => (item.id === id ? sentou : item)),
+        })
+        return responder({ entrada: sentou, comanda })
       },
     },
 
