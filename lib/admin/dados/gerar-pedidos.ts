@@ -276,7 +276,11 @@ function historicoGerado({
             StatusPedido,
             Date,
           ][])
-    return etapas.map(([etapa, em]) => ({ status: etapa, em: em.toISOString() }))
+    return etapas.map(([etapa, em]) => ({
+      tipo: "etapa",
+      status: etapa,
+      em: em.toISOString(),
+    }))
   }
   const sorte = sorteadorDaSemente((Math.floor(criado.getTime() / 1000) + id) | 0)
   const caminho: StatusPedido[] = online ? ["aguardando-pagamento", "recebido"] : ["recebido"]
@@ -294,6 +298,7 @@ function historicoGerado({
 
   if (status !== "concluido" && status !== "cancelado") {
     return ate.map((etapa, indice) => ({
+      tipo: "etapa",
       status: etapa,
       em: addMinutes(criado, indice === 0 ? 0 : (IDADE_DA_ETAPA[etapa] ?? 0)).toISOString(),
     }))
@@ -313,12 +318,21 @@ function historicoGerado({
     if (indice > 0) decorrido += minutos[indice - 1]
     const em =
       indice === ate.length - 1 ? atualizado : new Date(criado.getTime() + decorrido * escala)
-    return { status: etapa, em: em.toISOString() }
+    return { tipo: "etapa", status: etapa, em: em.toISOString() }
   })
 }
 
-const comMotivo = (motivo: MotivoCancelamento | undefined) =>
-  motivo ? { motivoCancelamento: motivo } : {}
+/** O cancelamento de um cancelado gerado, na hora da última etapa. Sem motivo, nada. */
+const comMotivo = (motivo: MotivoCancelamento | undefined, historico: EtapaDoPedido[]) =>
+  motivo
+    ? {
+        cancelamento: {
+          tipo: "cancelamento" as const,
+          motivo,
+          em: historico.at(-1)?.em ?? "",
+        },
+      }
+    : {}
 
 /** De quantos dias para cá os clientes "sumidos" deixaram de pedir. */
 const SUMIDO_HA = 40
@@ -354,7 +368,7 @@ function clienteDaDemonstracao(
 /** Motivos sorteados para os cancelados, com o peso de cada um. */
 const MOTIVOS_SORTEADOS: [MotivoCancelamento | undefined, number][] = [
   [undefined, 20],
-  ["cliente-desistiu", 25],
+  ["cliente-pediu", 25],
   ["demora", 15],
   ["sem-estoque", 15],
   ["fora-da-area", 10],
@@ -591,7 +605,7 @@ export function gerarPedidos({
         atualizado = addMinutes(new Date(agendamento.inicio), agendamento.duracaoMin)
       }
       const historico: EtapaDoPedido[] = vendaNaHora
-        ? [{ status, em: criado.toISOString() }]
+        ? [{ tipo: "etapa", status, em: criado.toISOString() }]
         : historicoGerado({ id, tipo, status, online, criado, atualizado, agendamento })
       let situacaoPagamento: SituacaoPagamento
       if (status === "cancelado") situacaoPagamento = "cancelado"
@@ -642,7 +656,7 @@ export function gerarPedidos({
         criadoEm: criado.toISOString(),
         atualizadoEm: atualizado.toISOString(),
         historico,
-        ...(status === "cancelado" ? comMotivo(motivoGerado(id, tipo, historico)) : {}),
+        ...(status === "cancelado" ? comMotivo(motivoGerado(id, tipo, historico), historico) : {}),
         ...(encerrado ? { impressoEm: addMinutes(criado, 1).toISOString() } : {}),
         enviarParaCozinha: true,
         ...(agendamento ? { agendamento } : {}),
@@ -769,7 +783,7 @@ export function gerarPedidoAgora({
     ...(pagamento === "dinheiro" && sorte.chance(50) ? { trocoPara: trocoPara(total) } : {}),
     criadoEm: agora.toISOString(),
     atualizadoEm: agora.toISOString(),
-    historico: [{ status: "recebido", em: agora.toISOString() }],
+    historico: [{ tipo: "etapa", status: "recebido", em: agora.toISOString() }],
     enviarParaCozinha: true,
     ...(agendamento ? { agendamento } : {}),
   }

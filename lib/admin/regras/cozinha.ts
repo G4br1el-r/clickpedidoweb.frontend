@@ -39,6 +39,8 @@ export const cozinhaJaPreparou = (comanda: Pedido, item: ItemPedido) =>
 
 /** "id:rodada" da rodada que a cozinha tem de cada pedido. */
 function chaveDaRodada(pedido: Pedido): string | null {
+  // Sem o aceite da loja, a rodada ainda não chegou na cozinha.
+  if (pedido.esperaAceite) return null
   const [primeiro] = itensDaCozinha(pedido).atuais
   return primeiro ? `${pedido.id}:${rodadaDo(primeiro)}` : null
 }
@@ -91,6 +93,8 @@ export function colunasDaCozinha(
   const naCozinha = pedidos.filter(
     (pedido) =>
       pedido.tipo !== "atendimento" &&
+      // A cozinha só começa o que a loja aceitou.
+      !pedido.esperaAceite &&
       PASSA_NO_FILTRO[filtro](pedido) &&
       itensDaCozinha(pedido).atuais.length > 0,
   )

@@ -22,23 +22,16 @@ export type FormaPagamento =
   | "cartao-na-entrega"
   | "pagar-apos-pesagem"
 
-export type SituacaoPagamento = "pendente" | "pago" | "na-entrega" | "cancelado"
-
-/** Por que o pedido foi cancelado. Sem o campo no pedido, "Não informado". */
-export type MotivoCancelamento =
-  | "cliente-desistiu"
-  | "sem-estoque"
-  | "fora-da-area"
-  | "pagamento-nao-aprovado"
-  | "demora"
-  | "loja-fechou"
-  | "outro"
+/** "estorno-pendente": estava pago e o pedido foi cancelado; a loja deve devolver. */
+export type SituacaoPagamento =
+  | "pendente"
+  | "pago"
+  | "na-entrega"
+  | "cancelado"
+  | "estorno-pendente"
 
 /** Por onde o pedido entrou. "painel": agendamento marcado pela própria loja. */
 export type OrigemPedido = "site" | "pdv" | "garcom" | "painel"
-
-/** Uma mudança de etapa do pedido: para onde foi e quando. */
-export type EtapaDoPedido = { status: StatusPedido; em: string }
 
 export type ItemPedido = {
   id: string
@@ -81,6 +74,30 @@ export type EnderecoEntrega = {
   referencia?: string
 }
 
+/**
+ * Por que a loja recusou ou cancelou o pedido. "outro" vem com texto. Pedido cancelado sem
+ * `cancelamento` (os antigos da demonstração) conta como "Não informado".
+ */
+export type MotivoCancelamento =
+  | "sem-estoque"
+  | "fora-da-area"
+  | "loja-cheia"
+  | "cliente-pediu"
+  | "cliente-nao-veio"
+  | "endereco-invalido"
+  | "receita-invalida"
+  | "fraude"
+  | "pagamento-nao-aprovado"
+  | "demora"
+  | "loja-fechou"
+  | "outro"
+
+/** Uma mudança de etapa do pedido: para onde foi e quando. */
+export type EtapaDoPedido = { tipo: "etapa"; status: StatusPedido; em: string }
+
+/** Uma linha do histórico do pedido: as etapas, desde a primeira, e o que mais aconteceu. */
+export type EventoPedido = EtapaDoPedido | { tipo: "pago" | "impresso" | "aceito"; em: string }
+
 export type Pedido = {
   id: number
   /** Número mostrado para a loja e o cliente. Na lanchonete, recomeça todo mês. */
@@ -106,8 +123,8 @@ export type Pedido = {
   observacao?: string
   criadoEm: string
   atualizadoEm: string
-  /** Cada etapa por que o pedido passou, da primeira à atual. */
-  historico: EtapaDoPedido[]
+  /** Cada etapa por que o pedido passou, da primeira à atual, e o que mais aconteceu. */
+  historico: EventoPedido[]
   impressoEm?: string
   /** Mesa: se a rodada vai para a cozinha. */
   enviarParaCozinha: boolean
@@ -117,11 +134,24 @@ export type Pedido = {
   dataRetirada?: string
   /** Açougue: resultado da pesagem. */
   pesagem?: { totalEstimado: number; diferenca: number; pesadoEm: string }
-  /** Cancelado: o motivo escolhido. Sem o campo, "Não informado". */
-  motivoCancelamento?: MotivoCancelamento
   /** O estoque já saiu por este pedido (para devolver no cancelamento uma vez só). */
   estoqueBaixado?: boolean
+  /** Chegou pelo site com o aceite manual ligado: espera a loja aceitar ou recusar. */
+  esperaAceite?: boolean
+  /** Recusado no aceite ou cancelado depois: por quê e quando. */
+  cancelamento?: Cancelamento
 }
+
+export type Cancelamento = {
+  tipo: "recusa" | "cancelamento"
+  motivo: MotivoCancelamento
+  /** Texto do "Outro motivo". */
+  detalhe?: string
+  em: string
+}
+
+/** O que a pessoa escolhe ao recusar ou cancelar. */
+export type MotivoEscolhido = { motivo: MotivoCancelamento; detalhe?: string }
 
 export type Categoria = {
   id: string
@@ -308,7 +338,7 @@ export type Bairro = { id: string; cidade: string; nome: string; taxa: number; a
 /** Dia da semana: 0 = domingo. */
 export type HorarioFuncionamento = { dia: number; aberto: boolean; abre: string; fecha: string }
 
-export type SomAlerta = "suave" | "alto" | "muito-alto"
+export type SomAlerta = "suave" | "alto" | "muito-alto" | "sirene"
 
 /**
  * Taxa cobrada por forma de pagamento, em % do valor. Dinheiro e Pix no balcão não têm taxa;
@@ -350,6 +380,10 @@ export type ConfigLoja = {
   impressaoAutomatica: boolean
   cortarPapel: boolean
   som: SomAlerta
+  /** Pedido do site espera a loja aceitar ou recusar na fila. */
+  aceiteManual: boolean
+  /** Depois de quantos minutos sem aceite o cartão fica vermelho. A loja nunca recusa sozinha. */
+  limiteAceiteMin: number
   /** Salão: vídeo do banner da loja (YouTube, Shorts ou Reels). */
   videoBanner?: string
   vitrines: {

@@ -63,7 +63,11 @@ describe("filtrarPedidos", () => {
       ...PEDIDOS_DE_TESTE[0],
       id: 70,
       status: "cancelado" as const,
-      motivoCancelamento: "demora" as const,
+      cancelamento: {
+        tipo: "cancelamento" as const,
+        motivo: "demora" as const,
+        em: "2026-11-13T22:30:00.000Z",
+      },
     }
     expect(ids(filtrarPedidos([...PEDIDOS, comMotivo], { motivos: ["demora"] }))).toEqual([70])
     // O pedido 3 dos pedidos de teste foi cancelado sem motivo.

@@ -29,9 +29,14 @@ const ORIGENS: Record<OrigemPedido, string> = {
 }
 
 const MOTIVOS: Record<MotivoCancelamento, string> = {
-  "cliente-desistiu": "Cliente desistiu",
+  "cliente-pediu": "Cliente pediu para cancelar",
   "sem-estoque": "Sem estoque",
   "fora-da-area": "Fora da área de entrega",
+  "loja-cheia": "Loja cheia",
+  "endereco-invalido": "Endereço inválido",
+  "cliente-nao-veio": "Cliente não veio",
+  "receita-invalida": "Receita inválida",
+  fraude: "Suspeita de fraude",
   "pagamento-nao-aprovado": "Pagamento não aprovado",
   demora: "Demora",
   "loja-fechou": "Loja fechou",

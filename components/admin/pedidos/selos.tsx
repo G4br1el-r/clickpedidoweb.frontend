@@ -34,6 +34,7 @@ const SITUACOES: Record<SituacaoPagamento, string> = {
   "na-entrega": "A cobrar",
   pendente: "Aguardando",
   cancelado: "Sem cobrança",
+  "estorno-pendente": "Estorno pendente",
 }
 
 export const rotuloSituacao = (situacao: SituacaoPagamento) => SITUACOES[situacao]

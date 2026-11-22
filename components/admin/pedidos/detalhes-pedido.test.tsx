@@ -85,6 +85,22 @@ describe("DetalhesPedido", () => {
     expect(etapas[2]).not.toHaveAttribute("data-feita")
   })
 
+  test("a linha do tempo mostra a chegada e cada ação, com a hora", async () => {
+    const pedido = await umPedido((p) => p.status === "recebido")
+    const servidor = servidorDo(useSegmentoAtual.getState().segmento)
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 41))
+    await servidor.pedidos.avancar(pedido.id, "recebido")
+    renderizar(pedido.id)
+    const detalhes = await painel(pedido)
+
+    const linha = within(detalhes.getByRole("list", { name: "Linha do tempo" }))
+    const horaDaChegada = new Date(pedido.criadoEm).toTimeString().slice(0, 5)
+    expect(linha.getAllByRole("listitem").map((item) => item.textContent)).toEqual([
+      `${horaDaChegada}Pedido recebido`,
+      "20:41Em preparo",
+    ])
+  })
+
   test("entrega: itens, endereço com mapa e WhatsApp do cliente", async () => {
     const pedido = await umPedido((p) => p.tipo === "entrega" && p.status === "em-preparo")
     renderizar(pedido.id)
@@ -111,23 +127,26 @@ describe("DetalhesPedido", () => {
     expect(await detalhes.findByRole("button", { name: "Saiu para entrega" })).toBeInTheDocument()
   })
 
-  test("cancelar pede confirmação antes", async () => {
+  test("cancelar pede o motivo e confirmação antes", async () => {
     const usuario = userEvent.setup()
     const pedido = await umPedido((p) => p.status === "recebido")
     renderizar(pedido.id)
     const detalhes = await painel(pedido)
 
     await usuario.click(detalhes.getByRole("button", { name: "Cancelar pedido" }))
-    const confirmacao = screen.getByRole("alertdialog", {
-      name: `Cancelar o pedido #${pedido.numero}?`,
-    })
-    await usuario.click(within(confirmacao).getByRole("button", { name: "Sim, cancelar" }))
+    const confirmacao = within(
+      screen.getByRole("alertdialog", { name: `Cancelar o pedido #${pedido.numero}?` }),
+    )
+    const confirmar = confirmacao.getByRole("button", { name: "Sim, cancelar" })
+    expect(confirmar).toBeDisabled()
+    await usuario.click(confirmacao.getByRole("radio", { name: "Cliente pediu para cancelar" }))
+    await usuario.click(confirmar)
 
-    expect(await detalhes.findByText("Cancelado")).toBeInTheDocument()
+    expect(await detalhes.findByText("Cancelado: Cliente pediu para cancelar")).toBeInTheDocument()
     expect(detalhes.queryByRole("button", { name: "Cancelar pedido" })).not.toBeInTheDocument()
   })
 
-  test("ao cancelar dá para escolher o motivo, que fica guardado e aparece no pedido", async () => {
+  test("motivo 'Outro' pede o texto antes de confirmar", async () => {
     const usuario = userEvent.setup()
     const pedido = await umPedido((p) => p.status === "recebido")
     renderizar(pedido.id)
@@ -135,19 +154,18 @@ describe("DetalhesPedido", () => {
 
     await usuario.click(detalhes.getByRole("button", { name: "Cancelar pedido" }))
     const confirmacao = within(screen.getByRole("alertdialog"))
-    const motivos = confirmacao.getByRole("radiogroup", { name: "Motivo (opcional)" })
-    await usuario.click(within(motivos).getByRole("radio", { name: "Fora da área de entrega" }))
-    await usuario.click(confirmacao.getByRole("button", { name: "Sim, cancelar" }))
+    await usuario.click(confirmacao.getByRole("radio", { name: "Outro motivo" }))
+    const confirmar = confirmacao.getByRole("button", { name: "Sim, cancelar" })
+    expect(confirmar).toBeDisabled()
+    await usuario.type(confirmacao.getByRole("textbox", { name: "Qual o motivo?" }), "Acabou o gás")
+    await usuario.click(confirmar)
 
-    expect(await detalhes.findByText("Motivo: Fora da área de entrega")).toBeInTheDocument()
-    const guardado = await servidorDo(useSegmentoAtual.getState().segmento).pedidos.buscar(
-      pedido.id,
-    )
-    expect(guardado?.motivoCancelamento).toBe("fora-da-area")
+    expect(await detalhes.findByText("Cancelado: Acabou o gás")).toBeInTheDocument()
+    expect(detalhes.getByText("Motivo: Acabou o gás")).toBeInTheDocument()
   })
 
   test("cancelado sem motivo mostra Não informado", async () => {
-    const pedido = await umPedido((p) => p.status === "cancelado" && !p.motivoCancelamento)
+    const pedido = await umPedido((p) => p.status === "cancelado" && !p.cancelamento)
     renderizar(pedido.id)
     const detalhes = await painel(pedido)
 

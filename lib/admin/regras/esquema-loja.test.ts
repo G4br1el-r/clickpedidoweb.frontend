@@ -24,6 +24,23 @@ describe("esquemaLoja", () => {
     expect(resultado.cidadesAtendidas).toEqual(["Lorena"])
   })
 
+  test("fila: aceita a sirene e o limite do aceite fica entre 1 e 30 minutos", () => {
+    expect(erros({ ...VALIDA, som: "sirene", limiteAceiteMin: 1 })).toEqual({})
+    expect(erros({ ...VALIDA, limiteAceiteMin: 0 })).toEqual({
+      limiteAceiteMin: "Entre 1 e 30 minutos.",
+    })
+    expect(erros({ ...VALIDA, limiteAceiteMin: 31 })).toEqual({
+      limiteAceiteMin: "Entre 1 e 30 minutos.",
+    })
+    expect(erros({ ...VALIDA, limiteAceiteMin: 2.5 })).toEqual({
+      limiteAceiteMin: "Entre 1 e 30 minutos.",
+    })
+    // Campo vazio: o número não existe.
+    expect(erros({ ...VALIDA, limiteAceiteMin: Number.NaN })).toEqual({
+      limiteAceiteMin: "Entre 1 e 30 minutos.",
+    })
+  })
+
   test("dados da loja: nome, telefones com DDD", () => {
     expect(erros({ ...VALIDA, nome: " ", telefone: "1234", whatsapp: "99" })).toEqual({
       nome: "Informe o nome da loja.",

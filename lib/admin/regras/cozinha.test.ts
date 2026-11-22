@@ -114,12 +114,31 @@ describe("colunasDaCozinha", () => {
     ])
   })
 
+  test("pedido que ainda espera o aceite da loja não chega na cozinha", () => {
+    const esperando: Pedido = { ...QUADRO[0], id: 99, esperaAceite: true }
+    const ids = colunasDaCozinha([...QUADRO, esperando], "todos", AGORA)[0].pedidos.map((p) => p.id)
+    expect(ids).toEqual([11, 12, 10])
+  })
+
   test("filtros: mesas, entrega (sem retirada) e retirada", () => {
     const ids = (filtro: FiltroCozinha) =>
       colunasDaCozinha(QUADRO, filtro, AGORA).flatMap((coluna) => coluna.pedidos.map((p) => p.id))
     expect(ids("mesas")).toEqual([12, 13])
     expect(ids("entrega")).toEqual([10, 14])
     expect(ids("retirada")).toEqual([11])
+  })
+})
+
+describe("rodadasNovas: aceite", () => {
+  test("a cozinha só toca quando a loja aceita o pedido", () => {
+    const esperando: Pedido = { ...QUADRO[0], id: 99, esperaAceite: true }
+    const conhecidas = rodadasNaCozinha(QUADRO)
+    expect(rodadasNovas(conhecidas, [...QUADRO, esperando])).toEqual([])
+
+    const aceito: Pedido = { ...esperando, esperaAceite: false }
+    expect(
+      rodadasNovas(rodadasNaCozinha([...QUADRO, esperando]), [...QUADRO, aceito]),
+    ).toHaveLength(1)
   })
 })
 

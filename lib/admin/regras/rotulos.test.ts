@@ -26,9 +26,14 @@ describe("rótulos", () => {
 
   test("motivos do cancelamento, na ordem da lista; sem motivo, Não informado", () => {
     expect(MOTIVOS_CANCELAMENTO.map(rotuloMotivo)).toEqual([
-      "Cliente desistiu",
+      "Cliente pediu para cancelar",
       "Sem estoque",
       "Fora da área de entrega",
+      "Loja cheia",
+      "Endereço inválido",
+      "Cliente não veio",
+      "Receita inválida",
+      "Suspeita de fraude",
       "Pagamento não aprovado",
       "Demora",
       "Loja fechou",

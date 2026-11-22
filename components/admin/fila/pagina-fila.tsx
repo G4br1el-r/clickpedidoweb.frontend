@@ -2,7 +2,7 @@
 
 import NumberFlow from "@number-flow/react"
 import { startOfDay } from "date-fns"
-import { BellRingIcon, InboxIcon } from "lucide-react"
+import { BellRingIcon, InboxIcon, VolumeXIcon } from "lucide-react"
 import { AnimatePresence } from "motion/react"
 import { useEffect, useEffectEvent, useRef, useState } from "react"
 import { toast } from "sonner"
@@ -21,33 +21,44 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAgora } from "@/hooks/use-agora"
-import { useTelaGrande } from "@/hooks/use-tela-grande"
+import { useTelaLarga } from "@/hooks/use-tela-grande"
 import {
+  useAceitarPedido,
   useAvancarPedido,
+  useCancelarPedido,
   useDefinirEntrega,
   useFila,
   useLoja,
   useMotoboys,
   usePedidos,
+  useRecusarPedido,
   useSimularPedido,
 } from "@/lib/admin/dados/consultas"
-import type { Pedido, SomAlerta } from "@/lib/admin/dados/tipos"
+import type { MotivoEscolhido, Pedido, SomAlerta } from "@/lib/admin/dados/tipos"
 import {
   usePreferenciasCarregadas,
   usePreferenciasFila,
   useSomDoAparelho,
 } from "@/lib/admin/preferencias-fila"
-import { type ColunaFila, colunasDaFila, novosPedidos, resumoDaFila } from "@/lib/admin/regras/fila"
+import { alarmeTocando } from "@/lib/admin/regras/aceite"
+import {
+  type ColunaFila,
+  colunasDaFila,
+  novosPedidos,
+  pedidosDeDiasAnteriores,
+  resumoDaFila,
+} from "@/lib/admin/regras/fila"
 import { rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
-import { tocarAlerta } from "@/lib/admin/som"
+import { liberarSom, somBloqueado, tocarAlerta } from "@/lib/admin/som"
 import { plural } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
 import { Traco } from "../traco"
+import { AvisoDiasAnteriores } from "./aviso-dias-anteriores"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
 
@@ -55,6 +66,7 @@ const SONS: { valor: SomAlerta; rotulo: string }[] = [
   { valor: "suave", rotulo: "Suave" },
   { valor: "alto", rotulo: "Alto" },
   { valor: "muito-alto", rotulo: "Muito alto" },
+  { valor: "sirene", rotulo: "Sirene" },
 ]
 
 /** Quanto tempo o "Chegou agora" fica no cartão. */
@@ -78,6 +90,37 @@ function Chave({
         {rotulo}
       </Label>
     </div>
+  )
+}
+
+/**
+ * O navegador segura o som até a pessoa tocar na página. Com o alerta ligado, a fila pede
+ * esse toque: sem ele, o alarme do pedido novo não sai. Qualquer toque na página também libera.
+ */
+function AvisoSomBloqueado({ somLigado }: { somLigado: boolean }) {
+  const [bloqueado, setBloqueado] = useState(false)
+  useEffect(() => {
+    if (!somLigado) return
+    const conferir = () => setBloqueado(somBloqueado())
+    conferir()
+    window.addEventListener("pointerdown", conferir)
+    return () => window.removeEventListener("pointerdown", conferir)
+  }, [somLigado])
+
+  if (!somLigado || !bloqueado) return null
+  return (
+    <Button
+      type="button"
+      variant="outline"
+      className="self-start border-(--atencao)/60 bg-(--atencao)/10"
+      onClick={async () => {
+        await liberarSom()
+        setBloqueado(somBloqueado())
+      }}
+    >
+      <VolumeXIcon data-icon="inline-start" />
+      Toque para ativar o som
+    </Button>
   )
 }
 
@@ -120,15 +163,24 @@ function useChegadas(pedidos: Pedido[] | undefined, aoChegar: (chegaram: Pedido[
   return novos
 }
 
+/** O que cada cartão sabe fazer com o pedido dele. */
+type AcoesDoCartao = {
+  aceitar: (pedido: Pedido) => void
+  recusar: (pedido: Pedido, escolhido: MotivoEscolhido) => void
+  cancelar: (pedido: Pedido, escolhido: MotivoEscolhido) => void
+  avancar: (pedido: Pedido) => void
+  abrir: (pedido: Pedido) => void
+  imprimir: (pedido: Pedido) => void
+}
+
 function Coluna({
   coluna,
   agora,
   motoboys,
   novos,
   emAndamento,
-  aoAvancar,
-  aoAbrir,
-  aoImprimir,
+  limiteAceiteMin,
+  acoes,
   comTitulo,
 }: {
   coluna: ColunaFila
@@ -136,9 +188,8 @@ function Coluna({
   motoboys: ReturnType<typeof useMotoboys>["data"]
   novos: ReadonlySet<number>
   emAndamento: number | undefined
-  aoAvancar: (pedido: Pedido) => void
-  aoAbrir: (pedido: Pedido) => void
-  aoImprimir: (pedido: Pedido) => void
+  limiteAceiteMin: number
+  acoes: AcoesDoCartao
   comTitulo: boolean
 }) {
   return (
@@ -170,9 +221,13 @@ function Coluna({
               motoboys={motoboys ?? []}
               novo={novos.has(pedido.id)}
               ocupado={emAndamento === pedido.id}
-              aoAvancar={() => aoAvancar(pedido)}
-              aoAbrir={() => aoAbrir(pedido)}
-              aoImprimir={() => aoImprimir(pedido)}
+              limiteAceiteMin={limiteAceiteMin}
+              aoAceitar={() => acoes.aceitar(pedido)}
+              aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
+              aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
+              aoAvancar={() => acoes.avancar(pedido)}
+              aoAbrir={() => acoes.abrir(pedido)}
+              aoImprimir={() => acoes.imprimir(pedido)}
             />
           ))}
         </AnimatePresence>
@@ -182,11 +237,18 @@ function Coluna({
 }
 
 /** Fila ao vivo: o quadro do que está em andamento, com as chaves da loja e o alerta. */
-export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao?: number }) {
+export function PaginaFila({
+  intervaloSimulacao = 60_000,
+  intervaloAlarme = 5_000,
+}: {
+  intervaloSimulacao?: number
+  intervaloAlarme?: number
+}) {
   usePreferenciasCarregadas()
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const agora = useAgora(30_000)
-  const telaGrande = useTelaGrande()
+  // No tablet a barra lateral come 256 px: quatro colunas só a partir do notebook.
+  const telaGrande = useTelaLarga()
   const { data: fila } = useFila()
   const { data: loja } = useLoja()
   const { data: motoboys } = useMotoboys()
@@ -196,6 +258,9 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
     ativo: Boolean(hoje),
   })
   const avancar = useAvancarPedido()
+  const aceitar = useAceitarPedido()
+  const recusar = useRecusarPedido()
+  const cancelar = useCancelarPedido()
   const definirEntrega = useDefinirEntrega()
   const simularPedido = useSimularPedido()
   const [, abrirPedido] = usePedidoAberto()
@@ -213,6 +278,14 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
     }
   })
 
+  // Alarme insistente: enquanto algum pedido espera aceite, o som repete.
+  const tocando = Boolean(fila && alarmeTocando(fila))
+  useEffect(() => {
+    if (!tocando || !preferencias.somLigado) return
+    const relogio = setInterval(() => tocarAlerta(somDoAparelho), intervaloAlarme)
+    return () => clearInterval(relogio)
+  }, [tocando, preferencias.somLigado, somDoAparelho, intervaloAlarme])
+
   // Demonstração: um pedido novo chega de tempos em tempos.
   const simular = simularPedido.mutate
   useEffect(() => {
@@ -221,18 +294,42 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
     return () => clearInterval(relogio)
   }, [preferencias.simular, intervaloSimulacao, simular])
 
-  const aoAvancar = (pedido: Pedido) =>
-    avancar.mutate(
-      { id: pedido.id, de: pedido.status },
-      {
-        onSuccess: (atualizado) =>
-          toast.success(
-            `#${atualizado.numero}: ${rotuloStatus(atualizado.tipo, atualizado.status)}`,
-          ),
-        onError: (erro) => toast.error(erro.message),
-      },
-    )
-  const aoAbrir = (pedido: Pedido) => abrirPedido(pedido.id)
+  const avisoDeErro = { onError: (erro: Error) => toast.error(erro.message) }
+  const acoes: AcoesDoCartao = {
+    aceitar: (pedido) =>
+      aceitar.mutate(pedido.id, {
+        ...avisoDeErro,
+        onSuccess: (aceito) => toast.success(`#${aceito.numero} aceito.`),
+      }),
+    recusar: (pedido, escolhido) =>
+      recusar.mutate(
+        { id: pedido.id, ...escolhido },
+        { ...avisoDeErro, onSuccess: (recusado) => toast(`#${recusado.numero} recusado.`) },
+      ),
+    cancelar: (pedido, escolhido) =>
+      cancelar.mutate(
+        { id: pedido.id, de: pedido.status, ...escolhido },
+        { ...avisoDeErro, onSuccess: (cancelado) => toast(`#${cancelado.numero} cancelado.`) },
+      ),
+    avancar: (pedido) =>
+      avancar.mutate(
+        { id: pedido.id, de: pedido.status },
+        {
+          ...avisoDeErro,
+          onSuccess: (atualizado) =>
+            toast.success(
+              `#${atualizado.numero}: ${rotuloStatus(atualizado.tipo, atualizado.status)}`,
+            ),
+        },
+      ),
+    abrir: (pedido) => abrirPedido(pedido.id),
+    imprimir: impressao.imprimir,
+  }
+  // O cartão que está sendo mexido fica com os botões travados até o servidor responder.
+  const emAndamento = [avancar, aceitar, recusar, cancelar].find((mutacao) => mutacao.isPending)
+  const idEmAndamento =
+    typeof emAndamento?.variables === "number" ? emAndamento.variables : emAndamento?.variables?.id
+  const limiteAceiteMin = loja?.limiteAceiteMin ?? 5
 
   const colunas = fila && agora ? colunasDaFila(fila, segmento, agora) : null
   const resumo = fila && agora ? resumoDaFila([...fila, ...concluidos], segmento, agora) : null
@@ -257,6 +354,9 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
             : "Carregando a fila…"
         }
       />
+
+      <AvisoSomBloqueado somLigado={preferencias.somLigado} />
+      {fila && agora && <AvisoDiasAnteriores pedidos={pedidosDeDiasAnteriores(fila, agora)} />}
 
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-y border-border/70 py-3">
         <ChaveDaLoja loja={loja} agora={agora} />
@@ -359,10 +459,9 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
               agora={agora}
               motoboys={motoboys}
               novos={novos}
-              emAndamento={avancar.isPending ? avancar.variables?.id : undefined}
-              aoAvancar={aoAvancar}
-              aoAbrir={aoAbrir}
-              aoImprimir={impressao.imprimir}
+              emAndamento={idEmAndamento}
+              limiteAceiteMin={limiteAceiteMin}
+              acoes={acoes}
               comTitulo
             />
           ))}
@@ -387,10 +486,9 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
                 agora={agora}
                 motoboys={motoboys}
                 novos={novos}
-                emAndamento={avancar.isPending ? avancar.variables?.id : undefined}
-                aoAvancar={aoAvancar}
-                aoAbrir={aoAbrir}
-                aoImprimir={impressao.imprimir}
+                emAndamento={idEmAndamento}
+                limiteAceiteMin={limiteAceiteMin}
+                acoes={acoes}
                 comTitulo={false}
               />
             </TabsContent>

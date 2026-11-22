@@ -25,6 +25,7 @@ function comHistorico(
   criado = CRIADO,
 ): Pedido {
   const historico = etapas.map(([status, minutos]) => ({
+    tipo: "etapa" as const,
     status,
     em: addMinutes(criado, minutos).toISOString(),
   }))
@@ -149,12 +150,12 @@ describe("cancelamentos", () => {
     pedidoDeTeste(2, CRIADO, 40, {
       tipo: "entrega",
       status: "cancelado",
-      motivoCancelamento: "demora",
+      cancelamento: { tipo: "cancelamento", motivo: "demora", em: "2026-11-13T22:30:00.000Z" },
     }),
     pedidoDeTeste(3, CRIADO, 30, {
       tipo: "entrega",
       status: "cancelado",
-      motivoCancelamento: "demora",
+      cancelamento: { tipo: "cancelamento", motivo: "demora", em: "2026-11-13T22:30:00.000Z" },
     }),
     pedidoDeTeste(4, CRIADO, 20, { tipo: "retirada", status: "cancelado" }),
     pedidoDeTeste(5, CRIADO, 60, { tipo: "retirada" }),
@@ -184,8 +185,8 @@ describe("cancelamentos", () => {
     const naoPago = pedidoDeTeste(9, CRIADO, 45, {
       status: "cancelado",
       historico: [
-        { status: "aguardando-pagamento", em: CRIADO.toISOString() },
-        { status: "cancelado", em: addMinutes(CRIADO, 30).toISOString() },
+        { tipo: "etapa", status: "aguardando-pagamento", em: CRIADO.toISOString() },
+        { tipo: "etapa", status: "cancelado", em: addMinutes(CRIADO, 30).toISOString() },
       ],
     })
     expect(cancelamentos([...pedidos, naoPago], PERIODO).onlineNaoPago).toEqual({

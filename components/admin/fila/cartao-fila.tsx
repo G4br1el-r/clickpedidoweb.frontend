@@ -3,6 +3,7 @@
 import { format } from "date-fns"
 import {
   AlertTriangleIcon,
+  BellRingIcon,
   BikeIcon,
   CalendarIcon,
   ClockIcon,
@@ -10,18 +11,21 @@ import {
   PanelRightOpenIcon,
   PrinterIcon,
   ScaleIcon,
+  XIcon,
 } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
-import type { Motoboy, Pedido } from "@/lib/admin/dados/tipos"
+import type { MotivoEscolhido, Motoboy, Pedido } from "@/lib/admin/dados/tipos"
+import { esperaDoAceite } from "@/lib/admin/regras/aceite"
 import { textoCobranca, type Urgencia, urgencia } from "@/lib/admin/regras/fila"
 import { textoRetirada } from "@/lib/admin/regras/numero"
 import { itensParaPesar } from "@/lib/admin/regras/pesagem"
 import { rotuloCanal } from "@/lib/admin/regras/rotulos"
 import { rotuloAcao, tomDoStatus } from "@/lib/admin/regras/status"
 import { cn } from "@/lib/utils"
+import { ConfirmarComMotivo } from "../pedidos/confirmar-com-motivo"
 import { Traco } from "../traco"
 
 const CANAL_CURTO = { entrega: "Entrega", retirada: "Retirada", atendimento: "Salão" } as const
@@ -75,6 +79,10 @@ export function CartaoFila({
   motoboys,
   novo,
   ocupado,
+  limiteAceiteMin,
+  aoAceitar,
+  aoRecusar,
+  aoCancelar,
   aoAvancar,
   aoAbrir,
   aoImprimir,
@@ -84,11 +92,16 @@ export function CartaoFila({
   motoboys: Motoboy[]
   novo: boolean
   ocupado: boolean
+  limiteAceiteMin: number
+  aoAceitar: () => void
+  aoRecusar: (escolhido: MotivoEscolhido) => void
+  aoCancelar: (escolhido: MotivoEscolhido) => void
   aoAvancar: () => void
   aoAbrir: () => void
   aoImprimir: () => void
 }) {
   const semMovimento = useReducedMotion()
+  const espera = esperaDoAceite(pedido, agora, limiteAceiteMin)
   const acao = rotuloAcao(pedido.tipo, pedido.status)
   const motoboy = motoboys.find((item) => item.id === pedido.motoboyId)
   // Açougue: carne no quilo que ainda não passou pela balança.
@@ -113,8 +126,9 @@ export function CartaoFila({
       <Card
         className={cn(
           "gap-3 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 transition-[box-shadow] duration-200",
-          ANEL_URGENCIA[urgencia(pedido, agora)],
+          ANEL_URGENCIA[espera?.passou ? "atrasado" : urgencia(pedido, agora)],
           novo && "ring-2 ring-(--atencao)/55",
+          espera?.passou && "ring-2",
         )}
       >
         {/* Chegou agora: um realce na cor de atenção que esmaece sozinho. */}
@@ -157,6 +171,21 @@ export function CartaoFila({
         </CardHeader>
 
         <CardContent className="flex flex-col gap-2 px-3 text-sm">
+          {espera && (
+            // A loja nunca recusa sozinha: passou do limite, o aviso só fica mais forte.
+            <p
+              className={cn(
+                "flex items-center gap-1.5 self-start rounded-md px-1.5 py-0.5 text-xs font-medium tabular-nums",
+                espera.passou
+                  ? "bg-(--tom-cancelado)/10 text-destructive dark:text-(--tom-cancelado)"
+                  : "bg-(--atencao)/12 text-foreground",
+              )}
+            >
+              <BellRingIcon className="size-3.5" aria-hidden="true" />
+              Esperando aceite há {espera.minutos} min
+              {espera.passou && <span className="sr-only">, passou do limite</span>}
+            </p>
+          )}
           <div className="flex flex-col">
             <span className="font-medium">{pedido.cliente.nome}</span>
             {pedido.mesa?.garcom && (
@@ -210,12 +239,35 @@ export function CartaoFila({
           )}
         </CardContent>
 
-        <CardFooter className="gap-2 border-border/70 bg-transparent px-3 pt-3">
-          {acao ? (
+        <CardFooter className="flex-wrap gap-2 border-border/70 bg-transparent px-3 pt-3">
+          {espera ? (
+            <>
+              <Button
+                type="button"
+                size="sm"
+                className="min-w-[min(100%,7rem)] flex-1"
+                disabled={ocupado}
+                onClick={aoAceitar}
+              >
+                Aceitar
+              </Button>
+              <ConfirmarComMotivo
+                gatilho={
+                  <Button type="button" size="sm" variant="outline" disabled={ocupado}>
+                    Recusar
+                  </Button>
+                }
+                titulo={`Recusar o pedido #${pedido.numero}?`}
+                descricao="O cliente fica sabendo do motivo. Se já pagou, o pedido fica marcado para devolver."
+                confirmar="Sim, recusar"
+                aoConfirmar={aoRecusar}
+              />
+            </>
+          ) : acao ? (
             <Button
               type="button"
               size="sm"
-              className="min-w-0 flex-1"
+              className="min-w-[min(100%,7rem)] flex-1"
               disabled={ocupado}
               onClick={aoAvancar}
             >
@@ -243,6 +295,28 @@ export function CartaoFila({
           >
             <PanelRightOpenIcon />
           </Button>
+          {/* Quem espera aceite se recusa; o resto se cancela, sempre com motivo. */}
+          {!espera && (
+            <ConfirmarComMotivo
+              gatilho={
+                <Button
+                  type="button"
+                  size="icon-sm"
+                  variant="ghost"
+                  className="text-muted-foreground hover:text-destructive"
+                  aria-label={`Cancelar pedido #${pedido.numero}`}
+                  title={`Cancelar #${pedido.numero}`}
+                  disabled={ocupado}
+                >
+                  <XIcon />
+                </Button>
+              }
+              titulo={`Cancelar o pedido #${pedido.numero}?`}
+              descricao="O pedido sai da fila e da cozinha. Se já estava pago, fica marcado para devolver ao cliente."
+              confirmar="Sim, cancelar"
+              aoConfirmar={aoCancelar}
+            />
+          )}
         </CardFooter>
       </Card>
     </motion.article>

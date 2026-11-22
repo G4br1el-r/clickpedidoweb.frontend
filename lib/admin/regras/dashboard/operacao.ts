@@ -1,12 +1,13 @@
 import type { Pedido, StatusPedido, TipoPedido } from "../../dados/tipos"
 import { MINUTOS_DE_ATRASO } from "../fila"
 import { type MotivoDoFiltro, motivoDoPedido } from "../filtro-pedidos"
+import { etapasDe } from "../historico"
 import type { Periodo } from "../periodo"
 import { noPeriodo, reais } from "./comum"
 
 /** Quando o pedido entrou numa etapa, pelo histórico (a primeira vez). */
 const quando = (pedido: Pedido, status: StatusPedido) => {
-  const etapa = pedido.historico.find((item) => item.status === status)
+  const etapa = etapasDe(pedido).find((item) => item.status === status)
   return etapa ? Date.parse(etapa.em) : undefined
 }
 
@@ -133,8 +134,8 @@ export function cancelamentos(pedidos: Pedido[], periodo: Periodo) {
   // Cancelado sem nunca ter sido recebido: o pagamento online não entrou.
   const naoPagos = cancelados.filter(
     (pedido) =>
-      pedido.historico.some((etapa) => etapa.status === "aguardando-pagamento") &&
-      !pedido.historico.some((etapa) => etapa.status === "recebido"),
+      etapasDe(pedido).some((etapa) => etapa.status === "aguardando-pagamento") &&
+      !etapasDe(pedido).some((etapa) => etapa.status === "recebido"),
   )
 
   return {

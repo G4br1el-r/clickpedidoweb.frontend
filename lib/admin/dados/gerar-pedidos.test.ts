@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest"
 import { clientesDos90Dias, reguaDeClientes, sumidos } from "../regras/dashboard/clientes"
+import { etapasDe } from "../regras/historico"
 import { MOTIVOS_CANCELAMENTO } from "../regras/rotulos"
 import { proximoStatus } from "../regras/status"
 import { catalogoDeTeste as catalogo } from "./catalogo-de-teste"
@@ -200,7 +201,7 @@ describe("gerarPedidos", () => {
     )
 
     for (const pedido of pedidos) {
-      const { historico } = pedido
+      const historico = etapasDe(pedido)
       expect(historico[0].em).toBe(pedido.criadoEm)
       expect(historico.at(-1)?.status).toBe(pedido.status)
       if (pedido.status === "concluido" || pedido.status === "cancelado") {
@@ -235,7 +236,7 @@ describe("gerarPedidos", () => {
     )
     expect(entregues.length).toBeGreaterThan(0)
     for (const pedido of entregues) {
-      const etapas = pedido.historico.map((etapa) => etapa.status)
+      const etapas = etapasDe(pedido).map((etapa) => etapa.status)
       expect(etapas.slice(-5)).toEqual([
         "recebido",
         "em-preparo",
@@ -261,16 +262,18 @@ describe("gerarPedidos", () => {
       agora: AGORA,
     }).filter((pedido) => pedido.status === "cancelado")
 
-    const motivos = cancelados.map((pedido) => pedido.motivoCancelamento)
+    const motivos = cancelados.map((pedido) => pedido.cancelamento?.motivo)
     expect(motivos).toContain(undefined)
     expect(new Set(motivos).size).toBeGreaterThan(3)
     for (const pedido of cancelados) {
-      if (pedido.motivoCancelamento)
-        expect(MOTIVOS_CANCELAMENTO).toContain(pedido.motivoCancelamento)
-      if (pedido.motivoCancelamento === "fora-da-area") expect(pedido.tipo).toBe("entrega")
+      const motivo = pedido.cancelamento?.motivo
+      if (motivo) expect(MOTIVOS_CANCELAMENTO).toContain(motivo)
+      if (motivo === "fora-da-area") expect(pedido.tipo).toBe("entrega")
+      // O cancelamento fica na hora da última etapa.
+      if (pedido.cancelamento) expect(pedido.cancelamento.em).toBe(pedido.historico.at(-1)?.em)
       // Cancelado antes de pagar online: o pagamento não foi aprovado.
-      if (pedido.historico.at(-2)?.status === "aguardando-pagamento") {
-        expect(pedido.motivoCancelamento).toBe("pagamento-nao-aprovado")
+      if (etapasDe(pedido).at(-2)?.status === "aguardando-pagamento") {
+        expect(pedido.cancelamento?.motivo).toBe("pagamento-nao-aprovado")
       }
     }
     for (const pedido of gerarPedidos({
@@ -279,7 +282,7 @@ describe("gerarPedidos", () => {
       de: new Date(2026, 10, 9),
       agora: AGORA,
     }).filter((item) => item.status !== "cancelado")) {
-      expect(pedido).not.toHaveProperty("motivoCancelamento")
+      expect(pedido).not.toHaveProperty("cancelamento")
     }
   })
 

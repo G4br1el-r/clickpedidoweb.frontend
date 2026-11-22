@@ -1,6 +1,12 @@
 import { render, screen } from "@testing-library/react"
 import { describe, expect, test } from "vitest"
-import { SeloStatus } from "./selos"
+import { rotuloSituacao, SeloStatus } from "./selos"
+
+describe("rotuloSituacao", () => {
+  test("pago e depois cancelado: a loja deve devolver", () => {
+    expect(rotuloSituacao("estorno-pendente")).toBe("Estorno pendente")
+  })
+})
 
 describe("SeloStatus", () => {
   test("escreve o status com o nome do tipo e marca o tom no traço", () => {

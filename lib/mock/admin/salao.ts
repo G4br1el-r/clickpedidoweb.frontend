@@ -86,6 +86,9 @@ export const catalogoSalao: CatalogoLoja = {
     impressaoAutomatica: false,
     cortarPapel: true,
     som: "alto",
+    // O agendamento pelo site ganha o "Confirmar horário" na fase 6 da fila.
+    aceiteManual: false,
+    limiteAceiteMin: 5,
     vitrines: {
       destaques: {
         titulo: "Destaques",

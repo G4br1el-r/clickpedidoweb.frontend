@@ -37,6 +37,8 @@ export function catalogoDeTeste(): CatalogoLoja {
       impressaoAutomatica: false,
       cortarPapel: true,
       som: "alto",
+      aceiteManual: false,
+      limiteAceiteMin: 5,
       vitrines: {
         destaques: { titulo: "Destaques", ativo: true },
         ofertas: { titulo: "Ofertas", ativo: true },

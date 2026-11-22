@@ -26,6 +26,7 @@ function comHistorico(
   mudancas: Partial<Pedido> = {},
 ): Pedido {
   const historico = etapas.map(([status, minutos]) => ({
+    tipo: "etapa" as const,
     status,
     em: addMinutes(CRIADO, minutos).toISOString(),
   }))
@@ -57,7 +58,7 @@ const PEDIDOS: Pedido[] = [
       ["recebido", 0],
       ["cancelado", 10],
     ],
-    { motivoCancelamento: "demora" },
+    { cancelamento: { tipo: "cancelamento", motivo: "demora", em: "2026-11-13T22:30:00.000Z" } },
   ),
   comHistorico(4, "retirada", [
     ["recebido", 0],
@@ -208,9 +209,9 @@ describe("AbaOperacao: mesas e salão", () => {
         status: "concluido",
         agendamento: { inicio: marcado.toISOString(), duracaoMin: 60 },
         historico: [
-          { status: "recebido", em: new Date(2026, 10, 12, 10).toISOString() },
-          { status: "em-preparo", em: addMinutes(marcado, comecou).toISOString() },
-          { status: "concluido", em: addMinutes(marcado, terminou).toISOString() },
+          { tipo: "etapa", status: "recebido", em: new Date(2026, 10, 12, 10).toISOString() },
+          { tipo: "etapa", status: "em-preparo", em: addMinutes(marcado, comecou).toISOString() },
+          { tipo: "etapa", status: "concluido", em: addMinutes(marcado, terminou).toISOString() },
         ],
       })
     renderizar({ segmento: "salao", pedidos: [atendimento(1, 0, 60), atendimento(2, 20, 90)] })

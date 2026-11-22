@@ -6,7 +6,7 @@ import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { carregarCatalogo } from "./catalogos"
 import { criarServidor, type FiltroPedidos, type Servidor, type VendaPdv } from "./servidor"
-import type { ConfigLoja, MotivoCancelamento, Pedido, StatusPedido } from "./tipos"
+import type { ConfigLoja, MotivoEscolhido, Pedido, StatusPedido } from "./tipos"
 
 /** Espera de rede simulada: dá para ver os estados de carregamento; zero nos testes. */
 const ESPERA = process.env.NODE_ENV === "test" ? 0 : 250
@@ -126,12 +126,26 @@ export function useAvancarPedido() {
 }
 
 export function useCancelarPedido() {
-  return useMutacaoDePedido<MudancaDeEtapa & { motivo?: MotivoCancelamento }>(
-    (servidor, { id, de, motivo }) => servidor.pedidos.cancelar(id, de, motivo),
-    (pedido, { de, motivo }) =>
+  return useMutacaoDePedido<MudancaDeEtapa & MotivoEscolhido>(
+    (servidor, { id, de, ...escolhido }) => servidor.pedidos.cancelar(id, de, escolhido),
+    (pedido, { de }) =>
       pedido.status === "concluido" || pedido.status !== de
         ? pedido
-        : { ...pedido, status: "cancelado", ...(motivo ? { motivoCancelamento: motivo } : {}) },
+        : { ...pedido, status: "cancelado" },
+  )
+}
+
+export function useAceitarPedido() {
+  return useMutacaoDePedido<number>(
+    (servidor, id) => servidor.pedidos.aceitar(id),
+    (pedido) => ({ ...pedido, esperaAceite: false }),
+  )
+}
+
+export function useRecusarPedido() {
+  return useMutacaoDePedido<{ id: number } & MotivoEscolhido>(
+    (servidor, { id, ...escolhido }) => servidor.pedidos.recusar(id, escolhido),
+    (pedido) => ({ ...pedido, status: "cancelado", esperaAceite: false }),
   )
 }
 
@@ -202,6 +216,24 @@ export function useSimularPedido() {
     mutationFn: () => servidorDo(segmento).pedidos.simular(),
     onSuccess: () => cliente.invalidateQueries({ queryKey: chaves.pedidos(segmento) }),
   })
+}
+
+/** Pedidos esquecidos de outro dia: concluir ou cancelar todos de uma vez. */
+export function useResolverEmLote() {
+  const segmento = useSegmento()
+  const cliente = useQueryClient()
+  const atualizar = () => cliente.invalidateQueries({ queryKey: chaves.tudo(segmento) })
+  return {
+    concluir: useMutation({
+      mutationFn: (ids: number[]) => servidorDo(segmento).pedidos.concluirEmLote(ids),
+      onSettled: atualizar,
+    }),
+    cancelar: useMutation({
+      mutationFn: ({ ids, ...escolhido }: { ids: number[] } & MotivoEscolhido) =>
+        servidorDo(segmento).pedidos.cancelarEmLote(ids, escolhido),
+      onSettled: atualizar,
+    }),
+  }
 }
 
 export function useUltimasVendas() {

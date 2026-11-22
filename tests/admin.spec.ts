@@ -299,11 +299,13 @@ test("cancelar com o motivo e guardar as taxas de pagamento da loja", async ({ p
   const detalhes = page.getByRole("dialog", { name: /^Pedido #/ })
   await detalhes.getByRole("button", { name: "Cancelar pedido" }).click()
   const confirmacao = page.getByRole("alertdialog")
-  await confirmacao.getByRole("radio", { name: "Cliente desistiu" }).click()
-  await expect(confirmacao.getByRole("radio", { name: "Cliente desistiu" })).toBeChecked()
+  await confirmacao.getByRole("radio", { name: "Cliente pediu para cancelar" }).click()
+  await expect(
+    confirmacao.getByRole("radio", { name: "Cliente pediu para cancelar" }),
+  ).toBeChecked()
   await verificarAcessibilidade(page)
   await confirmacao.getByRole("button", { name: "Sim, cancelar" }).click()
-  await expect(detalhes.getByText("Motivo: Cliente desistiu")).toBeVisible()
+  await expect(detalhes.getByText("Motivo: Cliente pediu para cancelar")).toBeVisible()
 
   await page.goto("/admin/loja")
   const taxas = page.getByRole("region", { name: "Taxas de pagamento" })
@@ -688,6 +690,7 @@ test("estoque: contagem, a venda no PDV baixa e esgota, o cancelamento devolve",
   await page.goto("/admin/pedidos")
   await page.getByRole("table").getByRole("row").nth(1).click()
   await page.getByRole("button", { name: "Cancelar pedido" }).click()
+  await page.getByRole("radio", { name: "Cliente pediu para cancelar" }).click()
   await page.getByRole("button", { name: "Sim, cancelar" }).click()
   await expect(page.getByRole("button", { name: "Cancelar pedido" })).toHaveCount(0)
 
@@ -930,6 +933,85 @@ test("o painel fala a mesma família da vitrine, título e texto", async ({ page
   }))
   expect(fontes.titulo).toMatch(/Geist/)
   expect(fontes.texto).toMatch(/Geist/)
+})
+
+test("fila: os botões de cada cartão ficam dentro do cartão, com o texto inteiro, em qualquer tela", async ({
+  page,
+}) => {
+  await page.goto("/admin/fila")
+  const cartoes = page.getByRole("article")
+  await expect(cartoes.first()).toBeVisible({ timeout: 15_000 })
+  await esperarAnimacoes(page)
+  for (const cartao of await cartoes.all()) {
+    if (!(await cartao.isVisible())) continue
+    const borda = await cartao.boundingBox()
+    if (!borda) continue
+    for (const botao of await cartao.getByRole("button").all()) {
+      const caixa = await botao.boundingBox()
+      if (!caixa) continue
+      const nome = await botao.getAttribute("aria-label")
+      expect(caixa.x, nome ?? "botão").toBeGreaterThanOrEqual(borda.x)
+      expect(caixa.x + caixa.width, nome ?? "botão").toBeLessThanOrEqual(borda.x + borda.width)
+      // Texto cortado: o conteúdo é mais largo que o botão.
+      const sobra = await botao.evaluate((el) => el.clientWidth - el.scrollWidth)
+      expect(sobra, `texto de ${nome ?? (await botao.textContent())}`).toBeGreaterThanOrEqual(0)
+    }
+  }
+})
+
+test("fila: pedido do site espera aceite; aceitar e recusar com motivo", async ({ page }, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a fila usa abas")
+  // Relógio controlado: a simulação manda um pedido do site por minuto.
+  await page.clock.install({ time: new Date("2026-11-13T20:30:00-03:00") })
+  await page.goto("/admin/fila")
+  const novos = page.getByRole("region", { name: /^Novos, / })
+  await expect(novos).toBeVisible({ timeout: 15_000 })
+  // A simulação já vem ligada de fábrica.
+  await expect(page.getByRole("switch", { name: "Simular pedidos chegando" })).toBeChecked()
+
+  await page.clock.fastForward(61_000)
+  const esperando = novos.getByRole("article").filter({ hasText: "Esperando aceite" }).first()
+  await expect(esperando).toBeVisible({ timeout: 10_000 })
+  const numero = (await esperando.getByRole("heading").textContent()) ?? ""
+  await esperando.getByRole("button", { name: "Aceitar" }).click()
+  const aceito = novos
+    .getByRole("article")
+    .filter({ has: page.getByRole("heading", { name: numero, exact: true }) })
+  await expect(aceito.getByRole("button", { name: "Iniciar preparo" })).toBeVisible()
+
+  await page.clock.fastForward(61_000)
+  const outro = novos.getByRole("article").filter({ hasText: "Esperando aceite" }).first()
+  await expect(outro).toBeVisible({ timeout: 10_000 })
+  const numeroRecusado = (await outro.getByRole("heading").textContent()) ?? ""
+  await outro.getByRole("button", { name: "Recusar" }).click()
+  const dialogo = page.getByRole("alertdialog", { name: `Recusar o pedido ${numeroRecusado}?` })
+  await dialogo.getByRole("radio", { name: "Loja cheia" }).click()
+  await dialogo.getByRole("button", { name: "Sim, recusar" }).click()
+  await expect(page.getByRole("heading", { name: numeroRecusado, exact: true })).toHaveCount(0)
+  // Sem axe aqui: com o relógio controlado as animações param no meio (cartão transparente).
+})
+
+test("fila: pedidos de dias anteriores saem do quadro e se resolvem de uma vez", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/fila")
+  // Abre no dia 13 (com pedidos em andamento) e volta no dia seguinte.
+  await expect(page.getByRole("heading", { level: 1, name: "Fila de pedidos" })).toBeVisible()
+  await expect(page.getByText(/em andamento/)).toBeVisible({ timeout: 15_000 })
+  await page.clock.setFixedTime(new Date("2026-11-14T11:00:00-03:00"))
+  await page.reload()
+
+  const aviso = page.getByRole("button", { name: /pedidos? de dias anteriores$/ })
+  await expect(aviso).toBeVisible({ timeout: 15_000 })
+  await aviso.click()
+  const lista = page.getByRole("dialog", { name: "Pedidos de dias anteriores" })
+  await expect(lista.getByRole("listitem").first()).toBeVisible()
+  await verificarAcessibilidade(page, "[role=dialog]")
+  await lista.getByRole("button", { name: "Concluir todos" }).click()
+
+  await expect(lista).toBeHidden()
+  await expect(aviso).toBeHidden()
 })
 
 test("fila: ao avançar, o pedido anda de uma coluna para a outra", async ({ page }, info) => {

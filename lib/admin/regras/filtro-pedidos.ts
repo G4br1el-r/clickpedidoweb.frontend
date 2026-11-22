@@ -14,7 +14,7 @@ export type MotivoDoFiltro = MotivoCancelamento | "nao-informado"
 
 /** O motivo do pedido cancelado, ou "nao-informado"; o que não foi cancelado não tem. */
 export const motivoDoPedido = (pedido: Pedido): MotivoDoFiltro | undefined =>
-  pedido.status === "cancelado" ? (pedido.motivoCancelamento ?? "nao-informado") : undefined
+  pedido.status === "cancelado" ? (pedido.cancelamento?.motivo ?? "nao-informado") : undefined
 
 export type FiltrosLista = {
   busca?: string

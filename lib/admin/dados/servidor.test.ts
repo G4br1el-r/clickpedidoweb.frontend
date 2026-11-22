@@ -137,6 +137,22 @@ describe("servidor de demonstração", () => {
     expect((await servidor().pedidos.buscar(novo.id))?.status).toBe("em-preparo")
   })
 
+  test("cada ação no pedido entra na linha do tempo, com a hora, e fica guardada", async () => {
+    const api = servidor()
+    const [novo] = await api.pedidos.listar({ status: ["recebido"] })
+
+    await api.pedidos.avancar(novo.id, "recebido")
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 34))
+    await api.pedidos.marcarImpresso(novo.id)
+
+    // O que já estava no histórico (a chegada) continua; as ações entram no fim.
+    expect((await servidor().pedidos.buscar(novo.id))?.historico).toEqual([
+      ...novo.historico,
+      { tipo: "etapa", status: "em-preparo", em: "2026-11-13T23:30:00.000Z" },
+      { tipo: "impresso", em: "2026-11-13T23:34:00.000Z" },
+    ])
+  })
+
   test("duas abas: avançar ou cancelar a partir de uma etapa que já passou é recusado", async () => {
     const api = servidor()
     const [novo] = await api.pedidos.listar({ status: ["recebido"] })
@@ -144,7 +160,9 @@ describe("servidor de demonstração", () => {
 
     const mensagem = "Este pedido já mudou de etapa. Atualize a tela."
     await expect(api.pedidos.avancar(novo.id, "recebido")).rejects.toThrow(mensagem)
-    await expect(api.pedidos.cancelar(novo.id, "recebido")).rejects.toThrow(mensagem)
+    await expect(
+      api.pedidos.cancelar(novo.id, "recebido", { motivo: "cliente-pediu" }),
+    ).rejects.toThrow(mensagem)
     expect((await api.pedidos.buscar(novo.id))?.status).toBe("em-preparo")
   })
 
@@ -175,27 +193,44 @@ describe("servidor de demonstração", () => {
     const pago = await api.pedidos.marcarPago(novo.id)
     expect(pago.situacaoPagamento).toBe("pago")
 
-    const cancelado = await api.pedidos.cancelar(novo.id, "recebido")
+    const cancelado = await api.pedidos.cancelar(novo.id, "recebido", { motivo: "cliente-pediu" })
     expect(cancelado.status).toBe("cancelado")
-    // Já estava pago: o dinheiro não some do registro.
-    expect(cancelado.situacaoPagamento).toBe("pago")
+    // Já estava pago: a loja deve devolver o dinheiro ao cliente.
+    expect(cancelado.situacaoPagamento).toBe("estorno-pendente")
+    expect(cancelado.cancelamento).toEqual({
+      tipo: "cancelamento",
+      motivo: "cliente-pediu",
+      em: AGORA.toISOString(),
+    })
 
     const [concluido] = await api.pedidos.listar({ status: ["concluido"] })
-    await expect(api.pedidos.cancelar(concluido.id, "concluido")).rejects.toThrow(
-      "Pedido concluído não pode ser cancelado",
-    )
+    await expect(
+      api.pedidos.cancelar(concluido.id, "concluido", { motivo: "cliente-pediu" }),
+    ).rejects.toThrow("Pedido concluído não pode ser cancelado")
   })
 
-  test("cancelar guarda o motivo escolhido; sem motivo, o pedido fica sem o campo", async () => {
+  test("cancelar sem pagamento não deixa nada a devolver", async () => {
     const api = servidor()
-    const [primeiro, segundo] = await api.pedidos.listar({ status: ["recebido"] })
+    const pedidos = await api.pedidos.listar({ status: ["recebido", "em-preparo"] })
+    const aPagar = pedidos.find((pedido) => pedido.situacaoPagamento === "na-entrega")
+    if (!aPagar) throw new Error("A demonstração devia ter um pedido a pagar na entrega")
 
-    const comMotivo = await api.pedidos.cancelar(primeiro.id, "recebido", "fora-da-area")
-    expect(comMotivo.motivoCancelamento).toBe("fora-da-area")
-    expect((await servidor().pedidos.buscar(primeiro.id))?.motivoCancelamento).toBe("fora-da-area")
+    const cancelado = await api.pedidos.cancelar(aPagar.id, aPagar.status, { motivo: "fraude" })
+    expect(cancelado.situacaoPagamento).toBe("cancelado")
+  })
 
-    const semMotivo = await api.pedidos.cancelar(segundo.id, "recebido")
-    expect(semMotivo).not.toHaveProperty("motivoCancelamento")
+  test("motivo 'outro' precisa do texto", async () => {
+    const api = servidor()
+    const [novo] = await api.pedidos.listar({ status: ["recebido"] })
+
+    await expect(
+      api.pedidos.cancelar(novo.id, "recebido", { motivo: "outro", detalhe: "  " }),
+    ).rejects.toThrow("Escreva o motivo.")
+    const cancelado = await api.pedidos.cancelar(novo.id, "recebido", {
+      motivo: "outro",
+      detalhe: "  Acabou o gás  ",
+    })
+    expect(cancelado.cancelamento).toMatchObject({ motivo: "outro", detalhe: "Acabou o gás" })
   })
 
   test("mesas com comanda aberta aparecem ocupadas", async () => {
@@ -211,22 +246,54 @@ describe("servidor de demonstração", () => {
     }
   })
 
-  test("ao reabrir em outro dia, completa os dias e encerra o que ficou aberto", async () => {
-    await servidor().pedidos.listar()
+  test("ao reabrir em outro dia, completa os dias; o que ficou aberto espera a loja resolver", async () => {
+    const doDia13 = await servidor().pedidos.listar({ status: EM_ANDAMENTO })
+    expect(doDia13.length).toBeGreaterThan(0)
 
     vi.setSystemTime(new Date(2026, 10, 15, 21, 0))
     const pedidos = await servidor().pedidos.listar()
 
     expect(pedidos.some((pedido) => new Date(pedido.criadoEm).getDate() === 15)).toBe(true)
-    for (const pedido of pedidos.filter((item) => new Date(item.criadoEm).getDate() === 13)) {
-      expect(["concluido", "cancelado"]).toContain(pedido.status)
+    // Nada é concluído (nem dado como pago) sem a loja dizer: vai para o aviso da fila.
+    for (const antes of doDia13) {
+      expect(pedidos.find((pedido) => pedido.id === antes.id)).toMatchObject({
+        status: antes.status,
+        situacaoPagamento: antes.situacaoPagamento,
+      })
     }
+    // Pix que não foi pago no dia não vira pedido: é cancelado.
+    const pixDo13 = pedidos.filter(
+      (pedido) =>
+        new Date(pedido.criadoEm).getDate() === 13 && pedido.status === "aguardando-pagamento",
+    )
+    expect(pixDo13).toEqual([])
     const ids = pedidos.map((pedido) => pedido.id)
     expect(new Set(ids).size).toBe(ids.length)
   })
 
+  test("pedidos esquecidos de outro dia: concluir ou cancelar todos de uma vez", async () => {
+    const abertos = await servidor().pedidos.listar({ status: EM_ANDAMENTO })
+    vi.setSystemTime(new Date(2026, 10, 15, 21, 0))
+    const api = servidor()
+    const [primeiro, segundo, ...resto] = abertos
+
+    const concluidos = await api.pedidos.concluirEmLote([primeiro.id, segundo.id])
+    expect(concluidos.map((pedido) => pedido.status)).toEqual(["concluido", "concluido"])
+
+    const cancelados = await api.pedidos.cancelarEmLote(
+      resto.map((pedido) => pedido.id),
+      { motivo: "outro", detalhe: "Esquecido no sistema" },
+    )
+    expect(new Set(cancelados.map((pedido) => pedido.status))).toEqual(new Set(["cancelado"]))
+    expect(cancelados[0].cancelamento).toMatchObject({ detalhe: "Esquecido no sistema" })
+    expect(await api.pedidos.listar({ status: EM_ANDAMENTO })).not.toContainEqual(
+      expect.objectContaining({ id: primeiro.id }),
+    )
+  })
+
   describe("histórico de status", () => {
-    const etapas = (pedido: Pedido) => pedido.historico.map((etapa) => etapa.status)
+    const etapas = (pedido: Pedido) =>
+      pedido.historico.flatMap((evento) => (evento.tipo === "etapa" ? [evento.status] : []))
 
     test("cada mudança de etapa entra no fim do histórico, com a hora em que aconteceu", async () => {
       const api = servidor()
@@ -236,16 +303,19 @@ describe("servidor de demonstração", () => {
       vi.setSystemTime(new Date(2026, 10, 13, 20, 34))
       const emPreparo = await api.pedidos.avancar(novo.id, "recebido")
       expect(emPreparo.historico.slice(antes)).toEqual([
-        { status: "em-preparo", em: new Date(2026, 10, 13, 20, 34).toISOString() },
+        { tipo: "etapa", status: "em-preparo", em: new Date(2026, 10, 13, 20, 34).toISOString() },
       ])
 
-      // Mudar o que não é a etapa (aqui, o pagamento) não anota nada.
+      // Mudar o que não é a etapa (aqui, o pagamento) não anota etapa.
       const pago = await api.pedidos.marcarPago(novo.id)
-      expect(pago.historico).toEqual(emPreparo.historico)
+      expect(etapas(pago)).toEqual(etapas(emPreparo))
 
       vi.setSystemTime(new Date(2026, 10, 13, 20, 40))
-      const cancelado = await api.pedidos.cancelar(novo.id, "em-preparo")
+      const cancelado = await api.pedidos.cancelar(novo.id, "em-preparo", {
+        motivo: "cliente-pediu",
+      })
       expect(cancelado.historico.at(-1)).toEqual({
+        tipo: "etapa",
         status: "cancelado",
         em: new Date(2026, 10, 13, 20, 40).toISOString(),
       })
@@ -260,7 +330,9 @@ describe("servidor de demonstração", () => {
         desconto: { modo: "reais", valor: 0 },
         concluida: true,
       })
-      expect(venda.historico).toEqual([{ status: "concluido", em: AGORA.toISOString() }])
+      expect(venda.historico).toEqual([
+        { tipo: "etapa", status: "concluido", em: AGORA.toISOString() },
+      ])
 
       const mesa = await api.mesas.criar({ numero: 9 })
       const comanda = await api.mesas.lancar({
@@ -280,13 +352,17 @@ describe("servidor de demonstração", () => {
       expect(etapas(await api.pedidos.simular())).toEqual(["recebido"])
     })
 
-    test("o que ficou aberto num dia que passou é encerrado com a etapa anotada", async () => {
-      const [aberto] = await servidor().pedidos.listar({ status: ["em-preparo"] })
+    test("o Pix não pago de um dia que passou é cancelado com a etapa anotada", async () => {
+      const [aPagar] = await servidor().pedidos.listar({ status: ["aguardando-pagamento"] })
 
       vi.setSystemTime(new Date(2026, 10, 15, 21, 0))
-      const encerrado = await servidor().pedidos.buscar(aberto.id)
-      expect(encerrado?.historico.at(-1)?.status).toBe(encerrado?.status)
-      expect(encerrado?.historico.at(-1)?.em).toBe(new Date(2026, 10, 15, 21, 0).toISOString())
+      const encerrado = await servidor().pedidos.buscar(aPagar.id)
+      expect(encerrado?.status).toBe("cancelado")
+      expect(encerrado?.historico.at(-1)).toEqual({
+        tipo: "etapa",
+        status: "cancelado",
+        em: new Date(2026, 10, 15, 21, 0).toISOString(),
+      })
     })
   })
 
@@ -374,6 +450,61 @@ describe("servidor de demonstração", () => {
     expect(novo.id).toBe(ultimo.id + 1)
     expect(novo.status).toBe("recebido")
     expect((await api.pedidos.listar())[0].id).toBe(novo.id)
+  })
+
+  describe("aceite manual", () => {
+    test("com o aceite manual ligado, o pedido do site chega esperando aceite", async () => {
+      const api = servidor()
+      await api.salvarLoja({ ...(await api.loja()), aceiteManual: true })
+
+      const novo = await api.pedidos.simular()
+      expect(novo.esperaAceite).toBe(true)
+    })
+
+    test("com o aceite manual desligado, chega já aceito", async () => {
+      const api = servidor()
+      await api.salvarLoja({ ...(await api.loja()), aceiteManual: false })
+
+      const novo = await api.pedidos.simular()
+      expect(novo.esperaAceite).toBeFalsy()
+    })
+
+    test("enquanto espera aceite não avança; aceitar libera e entra na linha do tempo", async () => {
+      const api = servidor()
+      await api.salvarLoja({ ...(await api.loja()), aceiteManual: true })
+      const novo = await api.pedidos.simular()
+
+      await expect(api.pedidos.avancar(novo.id, "recebido")).rejects.toThrow(
+        "Aceite o pedido antes de começar.",
+      )
+      const aceito = await api.pedidos.aceitar(novo.id)
+      expect(aceito.esperaAceite).toBe(false)
+      expect(aceito.status).toBe("recebido")
+      expect(aceito.historico).toEqual([
+        { tipo: "etapa", status: "recebido", em: AGORA.toISOString() },
+        { tipo: "aceito", em: AGORA.toISOString() },
+      ])
+      expect((await api.pedidos.avancar(novo.id, "recebido")).status).toBe("em-preparo")
+      await expect(api.pedidos.aceitar(novo.id)).rejects.toThrow("Este pedido não espera aceite.")
+    })
+
+    test("recusar cancela com o motivo, como recusa, e só vale para quem espera aceite", async () => {
+      const api = servidor()
+      await api.salvarLoja({ ...(await api.loja()), aceiteManual: true })
+      const novo = await api.pedidos.simular()
+
+      const recusado = await api.pedidos.recusar(novo.id, { motivo: "fora-da-area" })
+      expect(recusado.status).toBe("cancelado")
+      expect(recusado.esperaAceite).toBe(false)
+      expect(recusado.cancelamento).toEqual({
+        tipo: "recusa",
+        motivo: "fora-da-area",
+        em: AGORA.toISOString(),
+      })
+      await expect(api.pedidos.recusar(novo.id, { motivo: "fora-da-area" })).rejects.toThrow(
+        "Este pedido não espera aceite.",
+      )
+    })
   })
 
   describe("PDV", () => {
@@ -883,7 +1014,7 @@ describe("servidor de demonstração", () => {
     test("açougue: pedido encerrado não muda de valor na pesagem", async () => {
       const api = acougue()
       const cancelado = await aPesar(api)
-      await api.pedidos.cancelar(cancelado.id, cancelado.status)
+      await api.pedidos.cancelar(cancelado.id, cancelado.status, { motivo: "cliente-pediu" })
       await expect(
         api.pedidos.registrarPesagem(cancelado.id, pesosPedidos(cancelado)),
       ).rejects.toThrow("Pedido encerrado não muda de valor.")
@@ -1470,7 +1601,7 @@ describe("servidor de demonstração", () => {
   test("restaurar volta aos dados de demonstração", async () => {
     const api = servidor()
     const [novo] = await api.pedidos.listar({ status: ["recebido"] })
-    await api.pedidos.cancelar(novo.id, "recebido")
+    await api.pedidos.cancelar(novo.id, "recebido", { motivo: "cliente-pediu" })
 
     await api.restaurar()
     expect((await api.pedidos.buscar(novo.id))?.status).toBe("recebido")

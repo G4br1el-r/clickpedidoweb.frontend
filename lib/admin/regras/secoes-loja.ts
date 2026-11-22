@@ -10,6 +10,7 @@ export const SECOES = [
   "Pagamento online",
   "Taxas de pagamento",
   "Impressão",
+  "Fila e pedidos",
   "Alerta sonoro",
 ] as const
 export type SecaoLoja = (typeof SECOES)[number]
@@ -39,6 +40,8 @@ const SECAO_DO_CAMPO: Partial<Record<keyof ConfigLoja, SecaoLoja>> = {
   taxasPagamento: "Taxas de pagamento",
   impressaoAutomatica: "Impressão",
   cortarPapel: "Impressão",
+  aceiteManual: "Fila e pedidos",
+  limiteAceiteMin: "Fila e pedidos",
   som: "Alerta sonoro",
 }
 

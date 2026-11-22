@@ -169,7 +169,7 @@ describe("PaginaCozinha", () => {
           tocar()
           return {
             type: "sine",
-            frequency: { setValueAtTime: () => {} },
+            frequency: { setValueAtTime: () => {}, linearRampToValueAtTime: () => {} },
             connect: (no: unknown) => no,
             start: () => {},
             stop: () => {},

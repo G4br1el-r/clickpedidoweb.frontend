@@ -3,19 +3,8 @@
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { BikeIcon, MapPinIcon, MessageCircleIcon, PhoneIcon, PrinterIcon } from "lucide-react"
-import { type ReactNode, useState } from "react"
+import type { ReactNode } from "react"
 import { toast } from "sonner"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/ui/empty"
 import {
@@ -36,7 +25,6 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import {
   useAtribuirMotoboy,
@@ -47,7 +35,9 @@ import {
   useMotoboys,
   usePedido,
 } from "@/lib/admin/dados/consultas"
-import type { MotivoCancelamento, Pedido } from "@/lib/admin/dados/tipos"
+import type { Pedido } from "@/lib/admin/dados/tipos"
+import { textoDoMotivo } from "@/lib/admin/regras/aceite"
+import { linhaDoTempo } from "@/lib/admin/regras/historico"
 import {
   enderecoEmTexto,
   formatarTelefone,
@@ -57,12 +47,7 @@ import {
   mensagemParaMotoboy,
 } from "@/lib/admin/regras/mensagens"
 import { faltaPesar } from "@/lib/admin/regras/pesagem"
-import {
-  MOTIVOS_CANCELAMENTO,
-  rotuloCanal,
-  rotuloMotivo,
-  rotuloPagamento,
-} from "@/lib/admin/regras/rotulos"
+import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import { etapasDoCaminho, rotuloAcao, rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
@@ -71,6 +56,7 @@ import { descricaoDoTroco } from "@/lib/pedido"
 import { cn } from "@/lib/utils"
 import { AcoesAgendamento } from "../agendamentos/acoes-agendamento"
 import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
+import { ConfirmarComMotivo } from "./confirmar-com-motivo"
 import { usePedidoAberto } from "./estado-lista"
 import { PesagemPedido } from "./pesagem-pedido"
 import { rotuloSituacao, SeloStatus } from "./selos"
@@ -190,7 +176,10 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
         <CaminhoPedido pedido={pedido} />
         {pedido.status === "cancelado" && (
           <p className="text-sm text-muted-foreground">
-            Motivo: {rotuloMotivo(pedido.motivoCancelamento)}
+            Motivo:{" "}
+            {pedido.cancelamento
+              ? textoDoMotivo(pedido.cancelamento, pedido.tipo)
+              : "Não informado"}
           </p>
         )}
         <div className="flex items-center gap-2 pt-1">
@@ -377,6 +366,19 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
             </div>
           </Bloco>
         )}
+
+        <Bloco titulo="Linha do tempo">
+          <ol aria-label="Linha do tempo" className="flex flex-col gap-1.5 text-sm">
+            {linhaDoTempo(pedido).map((linha) => (
+              <li key={`${linha.em}-${linha.texto}`} className="flex gap-3">
+                <span className="w-10 shrink-0 text-muted-foreground tabular-nums">
+                  {format(new Date(linha.em), "HH:mm")}
+                </span>
+                <span>{linha.texto}</span>
+              </li>
+            ))}
+          </ol>
+        </Bloco>
       </div>
 
       <SheetFooter className="border-t border-border/70 sm:flex-row sm:flex-wrap">
@@ -419,73 +421,22 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
             </Button>
           ))}
         {!encerrado && (
-          <ConfirmarCancelamento
-            numero={pedido.numero}
-            aoConfirmar={(motivo) =>
-              cancelar.mutate(
-                { id: pedido.id, de: pedido.status, ...(motivo ? { motivo } : {}) },
-                aviso,
-              )
+          <ConfirmarComMotivo
+            gatilho={
+              <Button type="button" variant="ghost" className="text-destructive">
+                Cancelar pedido
+              </Button>
+            }
+            titulo={`Cancelar o pedido #${pedido.numero}?`}
+            descricao="O pedido sai da fila e da cozinha. Se já estava pago, fica marcado para devolver ao cliente."
+            confirmar="Sim, cancelar"
+            aoConfirmar={(escolhido) =>
+              cancelar.mutate({ id: pedido.id, de: pedido.status, ...escolhido }, aviso)
             }
           />
         )}
       </SheetFooter>
     </>
-  )
-}
-
-/** Confirmação do cancelamento, com o motivo opcional para não travar quem tem pressa. */
-function ConfirmarCancelamento({
-  numero,
-  aoConfirmar,
-}: {
-  numero: number
-  aoConfirmar: (motivo: MotivoCancelamento | undefined) => void
-}) {
-  const [motivo, setMotivo] = useState<MotivoCancelamento | "">("")
-  return (
-    <AlertDialog onOpenChange={(aberto) => aberto || setMotivo("")}>
-      <AlertDialogTrigger asChild>
-        <Button type="button" variant="ghost" className="text-destructive">
-          Cancelar pedido
-        </Button>
-      </AlertDialogTrigger>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Cancelar o pedido #{numero}?</AlertDialogTitle>
-          <AlertDialogDescription>
-            O pedido sai da fila e da cozinha. Se já estava pago, o pagamento continua registrado.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <div className="grid gap-2">
-          <p id="motivo-cancelamento" className="text-sm font-medium">
-            Motivo <span className="font-normal text-muted-foreground">(opcional)</span>
-          </p>
-          <ToggleGroup
-            type="single"
-            variant="outline"
-            size="sm"
-            spacing={2}
-            aria-labelledby="motivo-cancelamento"
-            value={motivo}
-            onValueChange={(valor) => setMotivo(valor as MotivoCancelamento | "")}
-            className="flex-wrap justify-start"
-          >
-            {MOTIVOS_CANCELAMENTO.map((item) => (
-              <ToggleGroupItem key={item} value={item}>
-                {rotuloMotivo(item)}
-              </ToggleGroupItem>
-            ))}
-          </ToggleGroup>
-        </div>
-        <AlertDialogFooter>
-          <AlertDialogCancel>Voltar</AlertDialogCancel>
-          <AlertDialogAction variant="destructive" onClick={() => aoConfirmar(motivo || undefined)}>
-            Sim, cancelar
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
   )
 }
 

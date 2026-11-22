@@ -1,6 +1,13 @@
 import { describe, expect, test } from "vitest"
 import type { Pedido, StatusPedido, TipoPedido } from "../dados/tipos"
-import { colunasDaFila, novosPedidos, resumoDaFila, textoCobranca, urgencia } from "./fila"
+import {
+  colunasDaFila,
+  novosPedidos,
+  pedidosDeDiasAnteriores,
+  resumoDaFila,
+  textoCobranca,
+  urgencia,
+} from "./fila"
 import { AGORA_DE_TESTE as AGORA, PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
 
 const base = PEDIDOS_DE_TESTE[2]
@@ -37,6 +44,15 @@ describe("colunasDaFila", () => {
     ])
   })
 
+  test("quem espera aceite abre a coluna Novos, do mais antigo ao mais novo", () => {
+    const esperando = (id: number, minutosAtras: number): Pedido => ({
+      ...pedido(id, "recebido", minutosAtras),
+      esperaAceite: true,
+    })
+    const fila = [...FILA, esperando(30, 1), esperando(31, 2)]
+    expect(resumo(colunasDaFila(fila, "pizzaria", AGORA))[0]).toEqual(["Novos", [31, 30, 11, 10]])
+  })
+
   test("salão: agendados de hoje pela hora marcada e em atendimento", () => {
     const marcado = (id: number, status: StatusPedido, inicio: Date): Pedido => ({
       ...pedido(id, status, 60 * 24, "atendimento"),
@@ -67,6 +83,49 @@ describe("colunasDaFila", () => {
     const [agendados] = colunasDaFila([hoje, ontem], "salao", AGORA)
     expect(agendados.pedidos.map((item) => item.id)).toEqual([25, 26])
     expect(urgencia(ontem, AGORA)).toBe("atrasado")
+  })
+})
+
+describe("pedidos de dias anteriores", () => {
+  /** Criado ontem às 21:00, ainda em andamento. */
+  const deOntem = (id: number, status: StatusPedido, tipo: TipoPedido = "entrega"): Pedido =>
+    pedido(id, status, 60 * 23 + 30, tipo)
+
+  test("o que ficou em andamento de outro dia sai das colunas e vai para o aviso", () => {
+    const fila = [...FILA, deOntem(40, "em-preparo"), deOntem(41, "recebido")]
+
+    expect(pedidosDeDiasAnteriores(fila, AGORA).map((item) => item.id)).toEqual([40, 41])
+    expect(resumo(colunasDaFila(fila, "pizzaria", AGORA))).toEqual([
+      ["Novos", [11, 10]],
+      ["Em preparo", [12]],
+      ["Prontos", [13]],
+      ["A caminho", [14]],
+    ])
+  })
+
+  test("concluído, cancelado e aguardando pagamento de outro dia não entram no aviso", () => {
+    const fila = [
+      deOntem(42, "concluido"),
+      deOntem(43, "cancelado"),
+      deOntem(44, "aguardando-pagamento"),
+    ]
+    expect(pedidosDeDiasAnteriores(fila, AGORA)).toEqual([])
+  })
+
+  test("açougue: retirada marcada para hoje ou depois continua na fila", () => {
+    const paraHoje = { ...deOntem(45, "recebido", "retirada"), dataRetirada: "2026-11-13" }
+    const paraOntem = { ...deOntem(46, "recebido", "retirada"), dataRetirada: "2026-11-12" }
+
+    expect(pedidosDeDiasAnteriores([paraHoje, paraOntem], AGORA)).toEqual([paraOntem])
+    expect(colunasDaFila([paraHoje, paraOntem], "acougue", AGORA)[0].pedidos).toEqual([paraHoje])
+  })
+
+  test("salão: agendamento de outro dia fica na coluna, atrasado, e não no aviso", () => {
+    const marcadoOntem: Pedido = {
+      ...deOntem(47, "recebido", "atendimento"),
+      agendamento: { inicio: new Date(2026, 10, 12, 15, 0).toISOString(), duracaoMin: 60 },
+    }
+    expect(pedidosDeDiasAnteriores([marcadoOntem], AGORA)).toEqual([])
   })
 })
 

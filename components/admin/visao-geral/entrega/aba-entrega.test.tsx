@@ -41,6 +41,7 @@ const entregue = (
       ["saiu-para-entrega", saiu],
       ["concluido", entregou],
     ].map(([status, minutos]) => ({
+      tipo: "etapa" as const,
       status: status as Pedido["status"],
       em: addMinutes(CRIADO, minutos as number).toISOString(),
     })),

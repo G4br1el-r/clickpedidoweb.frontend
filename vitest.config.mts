@@ -28,6 +28,10 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     restoreMocks: true,
     unstubGlobals: true,
+    // As telas do painel geram a base da demonstração (90 dias de pedidos) ao abrir: sozinhas
+    // levam 1 a 4 s, mas na suíte inteira (e com cobertura) passavam dos 5 s padrão.
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],

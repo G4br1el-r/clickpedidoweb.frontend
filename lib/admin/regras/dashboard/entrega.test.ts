@@ -17,6 +17,7 @@ function entrega(
     tipo: "entrega",
     status: etapas.at(-1)?.[0] ?? "recebido",
     historico: etapas.map(([status, minutos]) => ({
+      tipo: "etapa" as const,
       status,
       em: addMinutes(CRIADO, minutos).toISOString(),
     })),

@@ -40,7 +40,7 @@ function pedido(
     situacaoPagamento: "pago",
     criadoEm: criadoEm.toISOString(),
     atualizadoEm: criadoEm.toISOString(),
-    historico: [{ status, em: criadoEm.toISOString() }],
+    historico: [{ tipo: "etapa", status, em: criadoEm.toISOString() }],
     enviarParaCozinha: true,
   }
 }
