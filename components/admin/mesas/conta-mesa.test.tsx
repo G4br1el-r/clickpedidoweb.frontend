@@ -296,6 +296,20 @@ describe("ComandaMesa: desconto, cortesia, taxa, couvert e estorno", () => {
     expect(valorDe(gaveta, "Cortesias")).toHaveTextContent("− R$ 4,00")
   })
 
+  test("o item em cortesia ou já pago por item não tem Mais um", async () => {
+    const { comanda } = await mesaComConta()
+    const [pizza, agua] = (await api().pedidos.buscar(comanda.id))?.itens ?? []
+    await api().mesas.darCortesia(comanda.id, agua.id, { motivo: "Brinde" })
+    await api().mesas.pagar(comanda.id, { forma: "pix", itens: [pizza.id] })
+    const { usuario, gaveta } = await abrirConta()
+    await usuario.click(gaveta.getByRole("tab", { name: "Itens" }))
+    for (const nome of ["Pizza", "Água"]) {
+      const item = within(gaveta.getByRole("listitem", { name: nome }))
+      expect(item.queryByRole("button", { name: "Mais um" })).not.toBeInTheDocument()
+      expect(item.getByRole("button", { name: "Menos um" })).toBeInTheDocument()
+    }
+  })
+
   test("Tirar taxa e Tirar couvert pedem motivo e saem do resumo", async () => {
     await mesaComConta()
     const { usuario, gaveta } = await abrirConta()

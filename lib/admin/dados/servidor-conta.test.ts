@@ -647,3 +647,29 @@ describe("virada do dia", () => {
     expect(pagoNoDiaSemTaxa(fechada, new Date(2026, 10, 13, 12, 0))).toBe(30)
   })
 })
+
+describe("item em cortesia ou já pago", () => {
+  test("não aumenta: o pedido a mais é lançado de novo", async () => {
+    const api = semTaxa()
+    const { mesa } = await abrirMesa(api)
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [
+        { avulso: { nome: "Refri", preco: 6 }, quantidade: 1 },
+        { avulso: { nome: "Pizza", preco: 50 }, quantidade: 1 },
+        { avulso: { nome: "Suco", preco: 9 }, quantidade: 1 },
+      ],
+    })
+    const [refri, pizza, suco] = comanda.itens
+    await api.mesas.darCortesia(comanda.id, refri.id, { motivo: "Brinde" })
+    await api.mesas.pagar(comanda.id, { forma: "pix", itens: [pizza.id] })
+    for (const item of [refri, pizza]) {
+      await expect(api.mesas.alterarQuantidade(comanda.id, item.id, 2)).rejects.toThrow(
+        "Lance o item de novo.",
+      )
+    }
+    const mais = await api.mesas.alterarQuantidade(comanda.id, suco.id, 2)
+    expect(mais.itens[2]).toMatchObject({ quantidade: 2, total: 18 })
+  })
+})

@@ -50,7 +50,7 @@ import {
 } from "@/lib/admin/dados/consultas-mesas"
 import type { ItemPedido, Mesa, Pedido } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
-import { resumoDaConta } from "@/lib/admin/regras/conta"
+import { itensPagos, resumoDaConta } from "@/lib/admin/regras/conta"
 import { cozinhaJaPreparou } from "@/lib/admin/regras/cozinha"
 import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { type EstadoMesa, estadoDaMesa } from "@/lib/admin/regras/mesas"
@@ -186,6 +186,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   const semMovimento = useReducedMotion()
   const estado = estadoDaMesa(mesa, pedido)
   const resumo = resumoDaConta(pedido)
+  const pagos = itensPagos(pedido)
 
   return (
     <>
@@ -305,27 +306,30 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                       <span className="w-7 text-center text-sm font-medium tabular-nums">
                         {item.quantidade}
                       </span>
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        className="max-md:size-10"
-                        variant="outline"
-                        aria-label="Mais um"
-                        disabled={item.quantidade >= 999 || cozinhaJaPreparou(pedido, item)}
-                        onClick={() =>
-                          alterar.mutate(
-                            {
-                              pedidoId: pedido.id,
-                              itemId: item.id,
-                              quantidade: item.quantidade + 1,
-                              ...quem,
-                            },
-                            { onError: aoErrar },
-                          )
-                        }
-                      >
-                        <PlusIcon />
-                      </Button>
+                      {/* A cortesia e o pagamento por item valem para o que já estava. */}
+                      {!item.cortesia && !pagos.has(item.id) && (
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          className="max-md:size-10"
+                          variant="outline"
+                          aria-label="Mais um"
+                          disabled={item.quantidade >= 999 || cozinhaJaPreparou(pedido, item)}
+                          onClick={() =>
+                            alterar.mutate(
+                              {
+                                pedidoId: pedido.id,
+                                itemId: item.id,
+                                quantidade: item.quantidade + 1,
+                                ...quem,
+                              },
+                              { onError: aoErrar },
+                            )
+                          }
+                        >
+                          <PlusIcon />
+                        </Button>
+                      )}
                       {!item.cortesia && (
                         <Button
                           type="button"

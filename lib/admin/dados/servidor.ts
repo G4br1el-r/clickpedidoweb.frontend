@@ -1948,6 +1948,13 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           if (quantidade > item.quantidade && cozinhaJaPreparou(comanda, item)) {
             throw new Error(`A cozinha já preparou ${item.nome}. Lance de novo para pedir mais.`)
           }
+          // A cortesia e o pagamento por item valem para o que já estava: o a mais é item novo.
+          if (
+            quantidade > item.quantidade &&
+            (item.cortesia || itensPagos(comanda).has(item.id))
+          ) {
+            throw new Error("Lance o item de novo.")
+          }
           if (quantidade >= item.quantidade) return mudado
           return retirar(mudado, {
             comanda,
