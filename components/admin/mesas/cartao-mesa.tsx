@@ -2,12 +2,15 @@
 
 import NumberFlow from "@number-flow/react"
 import {
+  ArrowRightLeftIcon,
+  CombineIcon,
   ConciergeBellIcon,
   EllipsisIcon,
   LockIcon,
   LockOpenIcon,
   PencilIcon,
   ReceiptTextIcon,
+  SplitIcon,
   SprayCanIcon,
   Trash2Icon,
 } from "lucide-react"
@@ -24,17 +27,22 @@ import {
   useDesbloquearMesa,
   useMarcarLimpa,
   useMarcarServido,
+  useSepararMesas,
 } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa, Pedido } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
 import { tempoDesde } from "@/lib/admin/regras/alertas-mesa"
 import type { MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
+import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { type EstadoMesa, nomePadraoDaMesa } from "@/lib/admin/regras/mesas"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { ALVO_DE_TOQUE } from "../entrega/linha-animada"
 import { Traco } from "../traco"
+import { useAvisoComDesfazer } from "./aviso-desfazer"
 import { ConfirmarExclusaoMesa } from "./excluir-mesa"
+import { JuntarMesas } from "./juntar-mesas"
+import { TransferirMesa } from "./transferir-mesa"
 
 const nomePadrao = (mesa: Mesa) => mesa.nome === nomePadraoDaMesa(mesa.numero)
 
@@ -47,20 +55,33 @@ function resumoSemComanda(mesa: Mesa, estado: EstadoMesa, agora: Date | null) {
   return plural(mesa.lugares, "lugar", "lugares")
 }
 
-type AcaoMesa = "abrir" | "servido" | "limpa" | "desbloquear" | "editar" | "bloquear" | "excluir"
+type AcaoMesa =
+  | "abrir"
+  | "servido"
+  | "limpa"
+  | "desbloquear"
+  | "transferir"
+  | "juntar"
+  | "separar"
+  | "editar"
+  | "bloquear"
+  | "excluir"
 
-/** O que o menu ⋯ oferece em cada estado (decisões de detalhe da Fase 2). */
+/**
+ * O que o menu ⋯ oferece em cada estado (decisões de detalhe da Fase 2; a Fase 5 põe as
+ * movimentações). "Separar" só aparece na mesa aberta que tem mesas juntadas.
+ */
 const ACOES: Record<EstadoMesa, AcaoMesa[]> = {
   livre: ["abrir", "editar", "bloquear", "excluir"],
   reservada: ["abrir", "editar", "bloquear", "excluir"],
   limpeza: ["limpa", "editar", "bloquear", "excluir"],
-  ocupada: ["abrir", "editar"],
-  "na-cozinha": ["abrir", "editar"],
-  servir: ["servido", "abrir", "editar"],
-  "conta-pedida": ["abrir", "editar"],
+  ocupada: ["abrir", "transferir", "juntar", "separar", "editar"],
+  "na-cozinha": ["abrir", "transferir", "juntar", "separar", "editar"],
+  servir: ["servido", "abrir", "transferir", "juntar", "separar", "editar"],
+  "conta-pedida": ["abrir", "transferir", "juntar", "separar", "editar"],
   bloqueada: ["desbloquear", "editar", "excluir"],
-  // Na Fase 5, abre a comanda da principal.
-  juntada: ["abrir"],
+  // Abre a comanda da principal; separar solta todas as mesas da comanda.
+  juntada: ["abrir", "separar"],
 }
 
 type Acoes = {
@@ -80,12 +101,17 @@ function MenuMesa({
 }: Acoes & { mesa: Mesa; comanda: Pedido | undefined; estado: EstadoMesa }) {
   const marcarLimpa = useMarcarLimpa()
   const servir = useMarcarServido()
+  const separar = useSepararMesas()
+  const avisar = useAvisoComDesfazer()
   const por = useGarcom((atual) => atual.nome)
   const desbloquear = useDesbloquearMesa()
   const [excluindo, setExcluindo] = useState(false)
+  const [movendo, setMovendo] = useState<"transferir" | "juntar" | null>(null)
   // Em estado, não em ref: a pergunta de excluir lê o botão ao renderizar.
   const [gatilho, setGatilho] = useState<HTMLButtonElement | null>(null)
   const aoErrar = (erro: Error) => toast.error(erro.message)
+  const temJuntadas = Boolean(comanda?.mesa?.juntadas?.length)
+  const acoes = ACOES[estado].filter((acao) => acao !== "separar" || temJuntadas)
   const itens: Record<AcaoMesa, React.ReactNode> = {
     abrir: (
       <DropdownMenuItem key="abrir" onSelect={aoAbrir}>
@@ -116,13 +142,40 @@ function MenuMesa({
         key="limpa"
         onSelect={() =>
           marcarLimpa.mutate(mesa.id, {
-            onSuccess: () => toast.success(`Mesa ${mesa.numero} limpa.`),
+            onSuccess: ({ desfazer }) => avisar(`Mesa ${mesa.numero} limpa.`, desfazer),
             onError: aoErrar,
           })
         }
       >
         <SprayCanIcon />
         Marcar limpa
+      </DropdownMenuItem>
+    ),
+    transferir: (
+      <DropdownMenuItem key="transferir" onSelect={() => setMovendo("transferir")}>
+        <ArrowRightLeftIcon />
+        Transferir
+      </DropdownMenuItem>
+    ),
+    juntar: (
+      <DropdownMenuItem key="juntar" onSelect={() => setMovendo("juntar")}>
+        <CombineIcon />
+        Juntar mesas
+      </DropdownMenuItem>
+    ),
+    separar: (
+      <DropdownMenuItem
+        key="separar"
+        onSelect={() =>
+          comanda &&
+          separar.mutate(
+            { pedidoId: comanda.id, ...autorDaAcao(por, comanda.mesa?.garcom) },
+            { onSuccess: ({ desfazer }) => avisar("Mesas separadas.", desfazer), onError: aoErrar },
+          )
+        }
+      >
+        <SplitIcon />
+        Separar
       </DropdownMenuItem>
     ),
     desbloquear: (
@@ -173,9 +226,7 @@ function MenuMesa({
             <EllipsisIcon />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="end">
-          {ACOES[estado].map((acao) => itens[acao])}
-        </DropdownMenuContent>
+        <DropdownMenuContent align="end">{acoes.map((acao) => itens[acao])}</DropdownMenuContent>
       </DropdownMenu>
       <ConfirmarExclusaoMesa
         mesa={mesa}
@@ -183,6 +234,22 @@ function MenuMesa({
         aoMudar={setExcluindo}
         focoAoFechar={gatilho}
       />
+      {comanda && movendo === "transferir" && (
+        <TransferirMesa
+          mesa={mesa}
+          comanda={comanda}
+          aberta
+          aoMudar={(aberta) => !aberta && setMovendo(null)}
+        />
+      )}
+      {comanda && movendo === "juntar" && (
+        <JuntarMesas
+          mesa={mesa}
+          comanda={comanda}
+          aberta
+          aoMudar={(aberta) => !aberta && setMovendo(null)}
+        />
+      )}
     </>
   )
 }

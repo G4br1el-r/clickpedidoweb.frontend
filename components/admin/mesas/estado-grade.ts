@@ -10,9 +10,8 @@ import {
 import type { FiltroEstadoMesa, OrdemMesas } from "@/lib/admin/regras/filtro-mesas"
 
 /**
- * Os estados do filtro, na ordem do Select, com o rótulo de cada um. É a lista única. Juntada
- * volta com as movimentações (Fase 5) e Reservada com as reservas (Fase 7): antes delas,
- * nenhuma mesa fica assim.
+ * Os estados do filtro, na ordem do Select, com o rótulo de cada um. É a lista única. Reservada
+ * volta com as reservas (Fase 7): antes delas, nenhuma mesa fica assim.
  */
 export const ROTULOS_ESTADO = {
   livre: "Livre",
@@ -20,6 +19,7 @@ export const ROTULOS_ESTADO = {
   "na-cozinha": "Na cozinha",
   servir: "Servir",
   "conta-pedida": "Pediu a conta",
+  juntada: "Juntada",
   limpeza: "Limpeza",
   bloqueada: "Bloqueada",
 } satisfies Partial<Record<FiltroEstadoMesa, string>>

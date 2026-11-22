@@ -583,7 +583,8 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
     )
   })
 
-  test("o filtro de estado não oferece Reservada nem Juntada, que só chegam nas Fases 5 e 7", async () => {
+  // Fase 5: Juntada volta ao filtro; Reservada só com as reservas (Fase 7).
+  test("o filtro de estado não oferece Reservada, que só chega na Fase 7", async () => {
     const usuario = await abrir()
     await usuario.click(screen.getByRole("combobox", { name: "Estado" }))
     const opcoes = within(await screen.findByRole("listbox")).getAllByRole("option")
@@ -595,6 +596,7 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
       "Na cozinha",
       "Servir",
       "Pediu a conta",
+      "Juntada",
       "Limpeza",
       "Bloqueada",
     ])

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, within } from "@testing-library/react"
+import { cleanup, render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { type ComponentProps, useState } from "react"
 import { describe, expect, test, vi } from "vitest"
@@ -158,15 +158,16 @@ describe("CartaoMesa", () => {
     )
   })
 
-  // A tabela do menu ⋯ nas decisões de detalhe da Fase 2; a Fase 3 põe "Marcar servido" em Servir.
+  // A tabela do menu ⋯ nas decisões de detalhe da Fase 2; a Fase 3 põe "Marcar servido" em Servir
+  // e a Fase 5, "Transferir" e "Juntar mesas" na mesa aberta ("Separar" só com mesas juntadas).
   test.each<[EstadoMesa, string[]]>([
     ["livre", ["Abrir comanda", "Editar", "Bloquear", "Excluir"]],
     ["reservada", ["Abrir comanda", "Editar", "Bloquear", "Excluir"]],
     ["limpeza", ["Marcar limpa", "Editar", "Bloquear", "Excluir"]],
-    ["ocupada", ["Abrir comanda", "Editar"]],
-    ["na-cozinha", ["Abrir comanda", "Editar"]],
-    ["servir", ["Marcar servido", "Abrir comanda", "Editar"]],
-    ["conta-pedida", ["Abrir comanda", "Editar"]],
+    ["ocupada", ["Abrir comanda", "Transferir", "Juntar mesas", "Editar"]],
+    ["na-cozinha", ["Abrir comanda", "Transferir", "Juntar mesas", "Editar"]],
+    ["servir", ["Marcar servido", "Abrir comanda", "Transferir", "Juntar mesas", "Editar"]],
+    ["conta-pedida", ["Abrir comanda", "Transferir", "Juntar mesas", "Editar"]],
     ["bloqueada", ["Desbloquear", "Editar", "Excluir"]],
     ["juntada", ["Abrir comanda"]],
   ])("menu ⋯ da mesa %s: %j", async (estado, itens) => {
@@ -179,6 +180,30 @@ describe("CartaoMesa", () => {
         .getAllByRole("menuitem")
         .map((item) => item.textContent),
     ).toEqual(itens)
+  })
+
+  test("com mesas juntadas na comanda, a aberta e a juntada oferecem Separar", async () => {
+    const usuario = userEvent.setup()
+    const comanda = ocupada.comanda as NonNullable<Props["comanda"]>
+    const junta = {
+      ...comanda,
+      mesa: { id: "mesa-7", numero: 7, juntadas: [{ id: "mesa-8", numero: 8 }] },
+    }
+    desenhar({ ...ocupada, comanda: junta })
+    await usuario.click(screen.getByRole("button", { name: "Ações da mesa 7" }))
+    expect(await screen.findByRole("menuitem", { name: "Separar" })).toBeInTheDocument()
+    cleanup()
+
+    desenhar({
+      comanda: junta,
+      estado: { estado: "juntada", rotulo: "Com a mesa 7", tom: "caminho" },
+    })
+    await usuario.click(screen.getByRole("button", { name: "Ações da mesa 7" }))
+    expect(
+      within(await screen.findByRole("menu"))
+        .getAllByRole("menuitem")
+        .map((item) => item.textContent),
+    ).toEqual(["Abrir comanda", "Separar"])
   })
 
   // jsdom não mede layout: a classe é o que garante que o ⋯ flutua no canto, fora do fluxo.
