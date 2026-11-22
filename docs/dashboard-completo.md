@@ -183,7 +183,7 @@ O dashboard precisa de dados que o modelo não guarda. Estas mudanças saem da t
 ### Horário de cada etapa
 
 - Hoje o pedido só guarda `criadoEm` e `atualizadoEm` (a última mudança).
-- O `Pedido` ganha `historico: { status, em }[]`, gravado a cada mudança de status, em todo o painel (Fila, Pedidos, PDV, Cozinha, Mesas, Garçom e pesagem).
+- O `Pedido` ganha `historico: { status, em }[]`, gravado a cada mudança de status, em todo o painel (Fila, Pedidos, PDV, Cozinha, Mesas, Garçom e pesagem). Depois da junção com a fila (21/11/2026), as etapas moram no mesmo `historico` da linha do tempo (`{ tipo: "etapa", status, em }`, lidas com `etapasDe()`), e o motivo do cancelamento em `Pedido.cancelamento`.
 - O gerador de demonstração passa a produzir o histórico com tempos realistas.
 
 ### Custo e margem

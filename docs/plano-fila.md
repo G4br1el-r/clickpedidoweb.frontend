@@ -40,7 +40,7 @@ Base: a [Fase 5 do plano do painel](plano-painel-admin.md#fase-5-fila-de-pedidos
 
 **Modelo**
 
-- `Pedido.historico: EventoPedido[]` (`{ tipo, em, detalhe? }`).
+- `Pedido.historico: EventoPedido[]` (`{ tipo, em, ... }`). Depois da junção com o dashboard, é o mesmo campo das etapas do dashboard (ver "Junção com o dashboard completo").
 - `Pedido.esperaAceite?: boolean`, marcado pelo servidor na chegada.
 - `Pedido.cancelamento?: { tipo: "recusa" | "cancelamento"; motivo: MotivoCancelamento; detalhe?: string; em: string }`.
 - `SituacaoPagamento` ganha `"estorno-pendente"`.
@@ -190,3 +190,10 @@ Base: a [Fase 5 do plano do painel](plano-painel-admin.md#fase-5-fila-de-pedidos
   - **Achado no caminho:** o axe viu o nome do botão da faixa Próximas retiradas diferente do texto na tela (o leitor de voz não acharia); agora o nome é o próprio texto.
   - **Screenshots:** só mudou o módulo Receitas da farmácia (a receita do pedido entra em Aguardando); revisado e atualizado nas 11 telas. A fila do açougue, da farmácia e do salão não tem screenshot (o teste visual da fila é da pizzaria).
   - **Fica para depois:** a decisão da receita e os lembretes no servidor de verdade; o teste "o desfazer do aviso traz o bairro excluído de volta" (bairros) é instável mesmo sozinho e merece correção à parte.
+- **Junção com o dashboard completo: 21/11/2026.** O main ganhou o dashboard completo enquanto a fila andava, e os dois lados tinham criado, cada um, um histórico do pedido e um motivo de cancelamento. As 6 branches receberam o main (fase 1) e depois a fase anterior, com um modelo só:
+  - `Pedido.historico` é obrigatório e guarda as etapas, desde a primeira (a chegada), e os outros eventos da linha do tempo. `comEtapa` anota a etapa nas criações (PDV, garçom, agenda, fim do dia) e `eventosDaMudanca` em toda mudança do servidor; `etapasDe()` separa só as etapas para o dashboard. A linha do tempo não repete a chegada;
+  - `Pedido.cancelamento` (tipo, motivo, detalhe e hora) no lugar de `motivoCancelamento`. Os motivos juntam as duas listas ("cliente-desistiu" virou "cliente-pediu"); o cancelamento continua pedindo o motivo, e o cancelado sem motivo da demonstração aparece como "Não informado";
+  - a urgência da fila é pelo prazo prometido, e o alerta de atrasados do dashboard usa a mesma regra. A aba Operação continua com os 40 min (`MINUTOS_DE_ATRASO`);
+  - os rótulos de origem são os do dashboard ("PDV do balcão"); o selo curto do cartão é `seloDaOrigem`;
+  - o cliente da demonstração passa pelos dois: fiel, ocasional ou de uma vez só (selos da fila) e o ritmo de sumidos e novos (aba Clientes). A base guardada subiu para a versão 7;
+  - os testes que estouravam tempo na suíte inteira ganharam 15 s (teste e gancho), e a busca do "Chegou agora" aceita mais de um pedido da demonstração. O teste de bairros passou 3 de 3 vezes sozinho. Os mínimos de cobertura subiram para 84/76/82/85.
