@@ -625,7 +625,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
           setConfirmando(null)
         }}
       />
-      <EditarItem pedidoId={pedido.id} item={editando} aoFechar={() => setEditando(null)} />
+      <EditarItem pedido={pedido} item={editando} aoFechar={() => setEditando(null)} />
       <CancelarComanda
         mesa={mesa}
         comanda={pedido}

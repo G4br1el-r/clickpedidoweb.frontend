@@ -31,15 +31,20 @@ function regra(minimo: number, maximo: number) {
   return `De ${minimo} a ${maximo}`
 }
 
-/** Janela das opções do produto no PDV e no Garçom: escolhas, observação e quantidade. */
+/**
+ * Janela das opções do produto no PDV e no Garçom: escolhas, observação e quantidade. Com
+ * `inicial`, edita o item da comanda (Q29): abre marcada, sem a quantidade, e o botão é "Salvar".
+ */
 export function JanelaOpcoes({
   produto,
   precoBase,
+  inicial,
   aoFechar,
   aoAdicionar,
 }: {
   produto: Produto | null
   precoBase: number
+  inicial?: { escolhas: Escolhas; observacao?: string }
   aoFechar: () => void
   /** Recebe também as escolhas: PDV e Garçom as mandam para o servidor calcular o preço. */
   aoAdicionar: (item: Omit<ItemVenda, "chave">, escolhas: Escolhas) => void
@@ -48,9 +53,9 @@ export function JanelaOpcoes({
     .filter((grupo) => grupo.ativo)
     .toSorted((a, b) => a.ordem - b.ordem)
   // Começa sem nada marcado: o caixa escolhe de propósito (nada de borda cobrada por engano).
-  const [escolhas, setEscolhas] = useState<Escolhas>({})
+  const [escolhas, setEscolhas] = useState<Escolhas>(inicial?.escolhas ?? {})
   const [tentou, setTentou] = useState(false)
-  const [observacao, setObservacao] = useState("")
+  const [observacao, setObservacao] = useState(inicial?.observacao ?? "")
   const [quantidade, setQuantidade] = useState(1)
 
   if (!produto) return null
@@ -77,7 +82,9 @@ export function JanelaOpcoes({
     <Dialog open onOpenChange={(aberta) => !aberta && aoFechar()}>
       <DialogContent className="max-h-[90dvh] gap-0 overflow-hidden p-0 sm:max-w-lg">
         <DialogHeader className="border-b p-4">
-          <DialogTitle>Opções de {produto.nome}</DialogTitle>
+          <DialogTitle>
+            {inicial ? `Editar ${produto.nome}` : `Opções de ${produto.nome}`}
+          </DialogTitle>
           <DialogDescription>A partir de {emReais(precoBase)}</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-5 overflow-y-auto p-4">
@@ -150,33 +157,41 @@ export function JanelaOpcoes({
           </Field>
         </div>
         <DialogFooter className="flex-row items-center gap-2 border-t p-4">
-          <div className="flex items-center gap-1">
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label="Diminuir"
-              disabled={quantidade <= 1}
-              onClick={() => setQuantidade(quantidade - 1)}
-            >
-              <MinusIcon />
+          {inicial ? (
+            <Button type="button" className="flex-1" onClick={adicionar}>
+              Salvar
             </Button>
-            <span className="w-8 text-center tabular-nums" aria-live="polite">
-              {quantidade}
-            </span>
-            <Button
-              type="button"
-              variant="outline"
-              size="icon"
-              aria-label="Aumentar"
-              onClick={() => setQuantidade(quantidade + 1)}
-            >
-              <PlusIcon />
-            </Button>
-          </div>
-          <Button type="button" className="flex-1" onClick={adicionar}>
-            Adicionar · {emReais(unitario * quantidade)}
-          </Button>
+          ) : (
+            <>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Diminuir"
+                  disabled={quantidade <= 1}
+                  onClick={() => setQuantidade(quantidade - 1)}
+                >
+                  <MinusIcon />
+                </Button>
+                <span className="w-8 text-center tabular-nums" aria-live="polite">
+                  {quantidade}
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  aria-label="Aumentar"
+                  onClick={() => setQuantidade(quantidade + 1)}
+                >
+                  <PlusIcon />
+                </Button>
+              </div>
+              <Button type="button" className="flex-1" onClick={adicionar}>
+                Adicionar · {emReais(unitario * quantidade)}
+              </Button>
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>

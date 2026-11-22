@@ -347,6 +347,38 @@ describe("ComandaMesa: editar, tirar e cancelar", () => {
     expect(await suco.findByText("“Sem gelo”")).toBeInTheDocument()
   })
 
+  test("Editar no item com opções abre as opções já marcadas; trocar e salvar refaz o item", async () => {
+    const produto = (await api().produtos.listar()).find(
+      (item) =>
+        item.disponivel &&
+        item.grupos.length === 1 &&
+        item.grupos[0].minimo === 1 &&
+        item.grupos[0].maximo === 1 &&
+        item.grupos[0].itens.filter((opcao) => opcao.ativo).length >= 2,
+    ) as Produto
+    const [grupo] = produto.grupos
+    const [primeira, segunda] = grupo.itens.filter((opcao) => opcao.ativo)
+    const mesa = (await api().mesas.listar()).find((item) => item.numero === 11)
+    await api().mesas.abrir(mesa?.id ?? "", { pessoas: 2, garcom: "Bia" })
+    await api().mesas.lancar({
+      mesaId: mesa?.id ?? "",
+      enviarParaCozinha: false,
+      itens: [{ produtoId: produto.id, escolhas: { [grupo.id]: [primeira.id] }, quantidade: 1 }],
+    })
+    const { usuario, gaveta } = await abrirMesa(11)
+    const linha = within(await gaveta.findByRole("listitem", { name: produto.nome }))
+    await usuario.click(linha.getByRole("button", { name: "Editar" }))
+
+    const janela = within(await screen.findByRole("dialog", { name: `Editar ${produto.nome}` }))
+    expect(janela.getByRole("radio", { name: new RegExp(`^${primeira.nome}`) })).toBeChecked()
+    await usuario.click(janela.getByRole("radio", { name: new RegExp(`^${segunda.nome}`) }))
+    await usuario.type(janela.getByRole("textbox", { name: "Observação" }), "Bem assada")
+    await usuario.click(janela.getByRole("button", { name: "Salvar" }))
+
+    expect(await linha.findByText(`${grupo.nome}: ${segunda.nome}`)).toBeInTheDocument()
+    expect(linha.getByText("“Bem assada”")).toBeInTheDocument()
+  })
+
   test("o item que a cozinha já preparou não tem Editar e não aumenta", async () => {
     await mesa11ComPizzaEmPreparo()
     const { gaveta } = await abrirMesa(11)
