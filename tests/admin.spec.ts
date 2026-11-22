@@ -1172,20 +1172,37 @@ test("mesas: arrastar a mesa 2 no mapa encaixa na grade e salva", async ({ page 
   await expect(mesa2).toBeVisible({ timeout: 15_000 })
   await page.getByRole("button", { name: "Editar mapa" }).click()
 
-  // Da coluna 5, linha 2, até a linha 10: 8 células para baixo, soltando um pouco fora do meio.
-  const planta = await salao.boundingBox()
-  const mesa = await mesa2.boundingBox()
-  if (!planta || !mesa) throw new Error("O mapa não apareceu")
-  const altura = planta.height / 16
-  const x = mesa.x + mesa.width / 2
-  const y = mesa.y + mesa.height / 2
-  await page.mouse.move(x, y)
-  await page.mouse.down()
-  await page.mouse.move(x + 6, y + altura * 4, { steps: 8 })
-  await page.mouse.move(x + 6, y + altura * 8 + 5, { steps: 8 })
-  await page.mouse.up()
+  /**
+   * Arrasta a mesa 2 algumas células para baixo, soltando um pouco fora do meio. Antes, a mesa
+   * sobe para logo abaixo do cabeçalho preso: na tela baixa (celular deitado), chegar perto da
+   * borda de baixo rolaria a página durante o arrasto, e a mesa iria mais longe.
+   */
+  async function arrastarParaBaixo(celulas: number) {
+    const inicio = await mesa2.boundingBox()
+    if (!inicio) throw new Error("O mapa não apareceu")
+    await page.evaluate((dy) => window.scrollBy(0, dy), inicio.y - 80)
+    const planta = await salao.boundingBox()
+    const mesa = await mesa2.boundingBox()
+    if (!planta || !mesa) throw new Error("O mapa não apareceu")
+    const altura = planta.height / 16
+    const x = mesa.x + mesa.width / 2
+    const y = mesa.y + mesa.height / 2
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + 6, y + (altura * celulas) / 2, { steps: 8 })
+    await page.mouse.move(x + 6, y + altura * celulas + 5, { steps: 8 })
+    await page.mouse.up()
+  }
 
+  // Da coluna 5, linha 2, até a linha 10, em dois arrastos de 4 células (no meio do caminho a
+  // mesa passa por cima da 6, o que o rascunho aceita).
+  await arrastarParaBaixo(4)
+  await expect(mesa2).toHaveAccessibleDescription(/, coluna 5, linha 6, sobre outra mesa$/)
+  await page.waitForTimeout(100)
+  await arrastarParaBaixo(4)
   await expect(mesa2).toHaveAccessibleDescription(/, coluna 5, linha 10$/)
+  // O dnd-kit engole os cliques dos 50 ms depois de soltar (o clique do próprio arrasto).
+  await page.waitForTimeout(100)
   await page.getByRole("button", { name: "Salvar posições" }).click()
   await expect(page.getByText("Mapa salvo.")).toBeVisible()
   await page.reload()
