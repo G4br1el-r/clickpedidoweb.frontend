@@ -1,24 +1,15 @@
 /**
- * Uma coisa por vez sobre a mesma base: ler, mudar e gravar não se cruzam com outra gravação.
- * Entre abas, o `navigator.locks` do navegador; sem ele, uma fila por nome nesta página (que
- * serve às instâncias do servidor deste módulo, como nos testes).
+ * Uma gravação por vez sobre a mesma base, nesta página: ler, mudar e gravar não se cruzam com
+ * outra chamada (de qualquer instância do servidor deste módulo, como as "abas" dos testes).
+ *
+ * Entre abas, quem garante é a revisão (`servidor.ts`): antes de gravar, a chamada confere se
+ * outra aba gravou depois da leitura dela e, se gravou, refaz sobre a base nova. O
+ * `navigator.locks` foi tentado e saiu: a vez dele chega uns 20 ms depois do clique, e a mudança
+ * feita logo antes de sair da página (ou de recarregá-la) não chegava a ser gravada.
  */
 const filas = new Map<string, Promise<unknown>>()
 
-type Locks = { request<T>(nome: string, fazer: () => Promise<T>): Promise<T> }
-
-function locksDoNavegador(): Locks | undefined {
-  try {
-    const locks = (globalThis.navigator as { locks?: Locks } | undefined)?.locks
-    return typeof locks?.request === "function" ? locks : undefined
-  } catch {
-    return undefined
-  }
-}
-
 export function exclusivo<T>(nome: string, fazer: () => Promise<T>): Promise<T> {
-  const locks = locksDoNavegador()
-  if (locks) return locks.request(nome, fazer)
   const anterior = filas.get(nome) ?? Promise.resolve()
   // A vez de cada um começa quando o anterior acaba, dando certo ou não.
   const vez = anterior.then(fazer, fazer)

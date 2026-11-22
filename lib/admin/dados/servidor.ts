@@ -731,6 +731,13 @@ function encerrar(antes: Pedido, momento: string): Pedido {
   )
 }
 
+/** Outra aba gravou entre a leitura e a gravação desta chamada: ela é refeita. */
+class OutraAbaGravou extends Error {
+  constructor() {
+    super("Outra aba mudou os dados. Tente de novo.")
+  }
+}
+
 /**
  * Servidor de demonstração do painel: uma base por segmento, guardada no IndexedDB
  * deste navegador. Na primeira vez gera 90 dias de pedidos; ao reabrir em outro dia,
@@ -761,6 +768,18 @@ export function criarServidor({
       return localStorage.getItem(chaveRevisao)
     } catch {
       return crypto.randomUUID()
+    }
+  }
+
+  /**
+   * Outra aba gravou depois da leitura desta chamada. Sem `localStorage` não dá para saber, e a
+   * gravação segue (a leitura já voltou ao IndexedDB).
+   */
+  function outraAbaGravou(): boolean {
+    try {
+      return localStorage.getItem(chaveRevisao) !== revisao
+    } catch {
+      return false
     }
   }
 
@@ -934,10 +953,14 @@ export function criarServidor({
         : await exclusivo(chave, async () => {
             // A vez acaba quando a base mudou e a gravação entrou na fila; o fim dela, a chamada
             // espera fora da vez (dando certo ou não).
-            try {
-              return { valor: await fazer(...argumentos), gravando: tomarGravacoes() }
-            } catch (erro) {
-              return { erro, gravando: tomarGravacoes() }
+            for (let tentativa = 1; ; tentativa += 1) {
+              try {
+                return { valor: await fazer(...argumentos), gravando: tomarGravacoes() }
+              } catch (erro) {
+                const gravando = tomarGravacoes()
+                if (!(erro instanceof OutraAbaGravou) || tentativa >= 3) return { erro, gravando }
+                await gravando
+              }
             }
           }).then(async (feito) => {
             await feito.gravando
@@ -1391,6 +1414,8 @@ export function criarServidor({
 
   /** Troca a base inteira (já carregada) e guarda. */
   async function substituir(nova: BaseLoja) {
+    // A base desta chamada ficou velha: `naVez` refaz a chamada sobre a nova.
+    if (outraAbaGravou()) throw new OutraAbaGravou()
     const final = vencerPedidosQr(nova, new Date())
     carregando = Promise.resolve(final)
     // A chamada espera a gravação fora da vez: a próxima já parte desta base.
