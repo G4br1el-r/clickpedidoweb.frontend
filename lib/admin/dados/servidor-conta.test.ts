@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto"
-import { clear } from "idb-keyval"
+import { clear, get, set } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { pagoNoDiaSemTaxa, resumoDaConta } from "../regras/conta"
 import { catalogoDeTeste } from "./catalogo-de-teste"
@@ -740,5 +740,26 @@ describe("por item com desconto", () => {
     await expect(
       api.mesas.pagar(comanda.id, { forma: "pix", itens: [comanda.itens[0].id] }),
     ).rejects.toThrow("Com desconto na conta, divida igualmente ou receba um valor.")
+  })
+})
+
+describe("reabrir a conta paga antes da Fase 4", () => {
+  test("a conta sem pagamentos guarda o pagamento que ela já teve: não volta inteira a receber", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    await api.mesas.fecharConta(comanda.id, "pix")
+    // A base de antes da Fase 4 não tinha `pagamentos`.
+    const chave = "clickpedido-admin-dados:lanchonete"
+    const guardado = await get(chave)
+    const antiga = guardado.base.pedidos.find((pedido: Pedido) => pedido.id === comanda.id)
+    delete antiga.pagamentos
+    await set(chave, guardado)
+
+    vi.setSystemTime(new Date(2026, 10, 13, 21, 0))
+    const reaberta = await semTaxa().mesas.reabrir(comanda.id, { motivo: "Engano" })
+    expect(reaberta.pagamentos).toEqual([
+      { id: expect.any(String), forma: "pix", valor: 100, em: AGORA.toISOString() },
+    ])
+    expect(resumoDaConta(reaberta)).toMatchObject({ pago: 100, saldo: 0 })
   })
 })

@@ -13,6 +13,7 @@ import {
   comTotais,
   erroDoDesconto,
   itensPagos,
+  pagamentosDoPedido,
   resumoDaConta,
   trocoDoPagamento,
   valorDosItens,
@@ -2276,8 +2277,17 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           const erro = porQueNaoReabre(base, conta, new Date())
           if (erro) throw new Error(erro)
           const { pagoEm: _pagoEm, trocoPara: _trocoPara, ...aberta } = conta
+          // Paga antes da Fase 4, sem `pagamentos`: o pagamento que ela teve fica gravado.
+          const pagamentos: PagamentoConta[] =
+            conta.pagamentos ??
+            pagamentosDoPedido(conta).map((pagamento) => ({
+              id: `pag-${crypto.randomUUID().slice(0, 8)}`,
+              forma: pagamento.forma as PagamentoMesa,
+              valor: pagamento.valor,
+              em: pagamento.em,
+            }))
           return comEvento(
-            { ...aberta, status: "pronto", situacaoPagamento: "na-entrega" },
+            { ...aberta, pagamentos, status: "pronto", situacaoPagamento: "na-entrega" },
             {
               tipo: "reaberta",
               em: new Date().toISOString(),
