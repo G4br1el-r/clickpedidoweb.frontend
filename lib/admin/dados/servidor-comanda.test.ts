@@ -469,3 +469,85 @@ describe("cancelar comanda", () => {
     )
   })
 })
+
+describe("servir e pedir a conta", () => {
+  test("a cozinha marca pronta a comanda da mesa: servirDesde vira a hora, e o evento diz a rodada", async () => {
+    const api = servidor()
+    const { comanda } = await comRefri(api, true)
+    const pronta = await api.pedidos.avancar(comanda.id, "em-preparo")
+    expect(pronta.servirDesde).toBe(AGORA.toISOString())
+    expect(pronta.eventos?.at(-1)).toEqual({
+      tipo: "pronta",
+      em: AGORA.toISOString(),
+      texto: "A cozinha terminou a rodada 1",
+    })
+  })
+
+  test("pronta de novo, com servirDesde já preenchido, fica o mais antigo", async () => {
+    const api = servidor()
+    const { mesaId, comanda } = await comRefri(api, true)
+    await api.pedidos.avancar(comanda.id, "em-preparo")
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 40))
+    await api.mesas.lancar({
+      mesaId,
+      enviarParaCozinha: true,
+      itens: [{ produtoId: "refri", escolhas: {}, quantidade: 1 }],
+    })
+    await api.pedidos.avancar(comanda.id, "recebido")
+    const pronta = await api.pedidos.avancar(comanda.id, "em-preparo")
+    expect(pronta.servirDesde).toBe(AGORA.toISOString())
+    expect(pronta.eventos?.at(-1)?.texto).toBe("A cozinha terminou a rodada 2")
+  })
+
+  test("o pedido de entrega pronto não ganha servirDesde", async () => {
+    const api = servidor()
+    const emPreparo = await api.pedidos.listar({ status: ["em-preparo"] })
+    const alvo = emPreparo.find((pedido) => pedido.tipo !== "mesa")
+    if (!alvo) throw new Error("A demonstração devia ter um pedido em preparo fora da mesa")
+    const pronto = await api.pedidos.avancar(alvo.id, "em-preparo")
+    expect(pronto).not.toHaveProperty("servirDesde")
+    expect(pronto).not.toHaveProperty("eventos")
+  })
+
+  test("marcar servido limpa servirDesde e grava o evento; sem nada a servir, recusa", async () => {
+    const api = servidor()
+    const { comanda } = await comRefri(api, true)
+    await expect(api.mesas.marcarServido(comanda.id)).rejects.toThrow("Não há nada para servir.")
+    await api.pedidos.avancar(comanda.id, "em-preparo")
+
+    const servida = await api.mesas.marcarServido(comanda.id, "Bia")
+    expect(servida).not.toHaveProperty("servirDesde")
+    expect(servida.eventos?.at(-1)).toEqual({
+      tipo: "servida",
+      em: AGORA.toISOString(),
+      por: "Bia",
+      texto: "Rodada servida",
+    })
+  })
+
+  test("pedir a conta grava a hora e o evento; pedir de novo mantém a primeira", async () => {
+    const api = servidor()
+    const { comanda } = await comRefri(api, false)
+    const pedida = await api.mesas.pedirConta(comanda.id, "Rafa")
+    expect(pedida.contaPedidaEm).toBe(AGORA.toISOString())
+    expect(pedida.eventos?.at(-1)).toEqual({
+      tipo: "conta-pedida",
+      em: AGORA.toISOString(),
+      por: "Rafa",
+      texto: "Pediu a conta",
+    })
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 45))
+    const deNovo = await api.mesas.pedirConta(comanda.id)
+    expect(deNovo.contaPedidaEm).toBe(AGORA.toISOString())
+    expect(deNovo.eventos?.filter((evento) => evento.tipo === "conta-pedida")).toHaveLength(1)
+  })
+
+  test("servir e pedir a conta recusam a comanda que não está aberta", async () => {
+    const api = servidor()
+    const { comanda } = await comRefri(api, false)
+    await api.mesas.fecharConta(comanda.id, "pix")
+    const recusa = "Só a comanda aberta de uma mesa pode mudar."
+    await expect(api.mesas.pedirConta(comanda.id)).rejects.toThrow(recusa)
+    await expect(api.mesas.marcarServido(comanda.id)).rejects.toThrow(recusa)
+  })
+})

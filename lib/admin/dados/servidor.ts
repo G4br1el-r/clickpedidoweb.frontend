@@ -9,7 +9,7 @@ import {
   sincronizarOpcoes,
   soltarOpcoesDe,
 } from "../regras/cardapio"
-import { cozinhaJaPreparou } from "../regras/cozinha"
+import { cozinhaJaPreparou, itensDaCozinha } from "../regras/cozinha"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
 import { esquemaSalao } from "../regras/esquema-salao"
@@ -876,13 +876,25 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           const proximo = proximoStatus(pedido.tipo, pedido.status)
           if (!proximo) throw new Error("Este pedido não tem próxima etapa")
           const pagoAgora = proximo === "concluido" && pedido.situacaoPagamento === "na-entrega"
-          return {
+          const avancado: Pedido = {
             ...pedido,
             status: proximo,
             ...(pagoAgora
               ? { situacaoPagamento: "pago" as const, pagoEm: new Date().toISOString() }
               : {}),
           }
+          // A cozinha terminou a rodada da mesa: há o que servir (fica a hora mais antiga).
+          if (pedido.tipo !== "mesa" || proximo !== "pronto") return avancado
+          const agora = new Date().toISOString()
+          const [rodada] = itensDaCozinha(pedido).atuais
+          return comEvento(
+            { ...avancado, servirDesde: pedido.servirDesde ?? agora },
+            {
+              tipo: "pronta",
+              em: agora,
+              texto: `A cozinha terminou a rodada ${rodada?.rodada ?? 1}`,
+            },
+          )
         })
       },
 
@@ -1783,6 +1795,19 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
               motivo: texto,
             },
           )
+        })
+      },
+
+      /** O que a cozinha aprontou foi para a mesa: limpa o "Servir". */
+      marcarServido(pedidoId: number, por?: string) {
+        return alterarComanda(pedidoId, ({ servirDesde, ...comanda }) => {
+          if (!servirDesde) throw new Error("Não há nada para servir.")
+          return comEvento(comanda, {
+            tipo: "servida",
+            em: new Date().toISOString(),
+            ...autor(por),
+            texto: "Rodada servida",
+          })
         })
       },
 
