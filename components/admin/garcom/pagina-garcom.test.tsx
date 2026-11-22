@@ -234,6 +234,13 @@ describe("PaginaGarcom", () => {
     expect(garcons.getByRole("button", { name: "Bia" })).toHaveAttribute("aria-pressed", "true")
   })
 
+  test("o nome digitado sem acento ou em minúsculas marca o garçom da lista", async () => {
+    const usuario = await abrir()
+    const garcons = within(await screen.findByRole("group", { name: "Garçons do salão" }))
+    await usuario.type(screen.getByRole("textbox", { name: "Seu nome" }), " rafa ")
+    expect(garcons.getByRole("button", { name: "Rafa" })).toHaveAttribute("aria-pressed", "true")
+  })
+
   test("o nome do garçom fica guardado neste aparelho", async () => {
     const usuario = await abrir()
     await usuario.type(screen.getByRole("textbox", { name: "Seu nome" }), "Rafa")

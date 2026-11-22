@@ -421,10 +421,14 @@ describe("PaginaMesas: a comanda no endereço e as abas", () => {
     expect(await screen.findByRole("dialog", { name: /^Mesa 60/ })).toBeInTheDocument()
   })
 
-  test("a mesa que não existe no endereço não abre nada", async () => {
-    await abrir("?mesa=999")
+  test("a mesa que não existe no endereço não abre nada, e o endereço esquece o número", async () => {
+    const aoMudarUrl = vi.fn()
+    await abrir("?mesa=999", aoMudarUrl)
     expect(await screen.findByRole("list", { name: "Salão" })).toBeInTheDocument()
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(aoMudarUrl).toHaveBeenLastCalledWith(expect.objectContaining({ queryString: "" })),
+    )
   })
 
   test("a comanda tem as abas Itens, Conta e Histórico e começa em Itens", async () => {

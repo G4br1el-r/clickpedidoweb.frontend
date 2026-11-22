@@ -117,6 +117,36 @@ describe("consultas das mesas", () => {
     expect(result.current.comanda.data?.total).toBe(12)
   })
 
+  test("diminuir o que a cozinha preparou repassa o motivo e quem tirou", async () => {
+    const api = servidorDo("pizzaria")
+    const mesa = await api.mesas.criar({ numero: 84 })
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [{ avulso: { nome: "Pizza", preco: 40 }, quantidade: 2 }],
+    })
+    await api.pedidos.avancar(comanda.id, "recebido")
+    const [pizza] = comanda.itens
+    const { result } = renderHook(() => useAlterarQuantidade(), { wrapper: envolver() })
+
+    const depois = await act(() =>
+      result.current.mutateAsync({
+        pedidoId: comanda.id,
+        itemId: pizza.id,
+        quantidade: 1,
+        motivo: "Queimou",
+        por: "Bia",
+      }),
+    )
+    expect(depois.itens[0].quantidade).toBe(1)
+    expect(depois.eventos?.at(-1)).toMatchObject({
+      tipo: "item-removido",
+      texto: "Tirou 1× Pizza",
+      motivo: "Queimou",
+      por: "Bia",
+    })
+  })
+
   test("editar, bloquear, desbloquear e marcar limpa chegam ao servidor e atualizam as mesas", async () => {
     const api = servidorDo("pizzaria")
     const mesa = await api.mesas.criar({ numero: 82 })

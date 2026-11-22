@@ -27,6 +27,7 @@ import { usePedido } from "@/lib/admin/dados/consultas"
 import { useConfigSalao, useLancarNaMesa, useMesas } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
 import { useGarcom, useGarcomCarregado } from "@/lib/admin/garcom"
+import { garcomDoAparelho } from "@/lib/admin/regras/abrir-mesa"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { totaisDaVenda } from "@/lib/admin/regras/pdv"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
@@ -75,6 +76,11 @@ export function PaginaGarcom() {
   const { data: mesas = [] } = useMesas()
   const { data: salao } = useConfigSalao()
   const garcons = salao?.garcons.filter((garcom) => garcom.ativo) ?? []
+  // O nome digitado marca o garçom da lista sem diferenciar acento e maiúscula.
+  const marcado = garcomDoAparelho(
+    garcons.map((garcom) => garcom.nome),
+    nome,
+  )
   const lancar = useLancarNaMesa()
   const [mesaId, setMesaId] = useState<string | null>(null)
   const [cliente, setCliente] = useState("")
@@ -150,8 +156,8 @@ export function PaginaGarcom() {
                         key={garcom.id}
                         type="button"
                         size="sm"
-                        variant={garcom.nome === nome ? "secondary" : "ghost"}
-                        aria-pressed={garcom.nome === nome}
+                        variant={garcom.nome === marcado ? "secondary" : "ghost"}
+                        aria-pressed={garcom.nome === marcado}
                         onClick={() => definirNome(garcom.nome)}
                       >
                         {garcom.nome}

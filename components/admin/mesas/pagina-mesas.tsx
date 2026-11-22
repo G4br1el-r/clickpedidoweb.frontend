@@ -1,7 +1,7 @@
 "use client"
 
 import { ArmchairIcon, KeyboardIcon, SearchXIcon } from "lucide-react"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -65,8 +65,12 @@ export function PaginaMesas() {
       const status = comandaDa(mesa)?.status
       return mesa.status === "ocupada" && (status === "recebido" || status === "em-preparo")
     }).length ?? 0
-  // Número que não existe no endereço não abre nada.
+  // Número que não existe no endereço não abre nada, e sai do endereço.
   const aberta = mesas?.find((mesa) => mesa.numero === numeroAberto) ?? null
+  const semMesa = mesas !== undefined && numeroAberto !== null && aberta === null
+  useEffect(() => {
+    if (semMesa) void setNumeroAberto(null)
+  }, [semMesa, setNumeroAberto])
   const editando = mesas?.find((mesa) => mesa.id === editandoId)
   const bloqueando = mesas?.find((mesa) => mesa.id === bloqueandoId)
 

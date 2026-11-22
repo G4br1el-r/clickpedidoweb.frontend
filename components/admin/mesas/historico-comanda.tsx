@@ -9,23 +9,27 @@ export function HistoricoComanda({ pedido }: { pedido: Pedido }) {
   }
   return (
     <ol aria-label="Histórico da comanda" className="flex flex-col gap-3 text-sm">
-      {eventos.toReversed().map((evento, indice) => (
-        // biome-ignore lint/suspicious/noArrayIndexKey: a lista só cresce no fim
-        <li key={`${evento.em}-${indice}`} className="grid grid-cols-[3rem_1fr] gap-2">
-          <time dateTime={evento.em} className="text-muted-foreground tabular-nums">
-            {format(new Date(evento.em), "HH:mm")}
-          </time>
-          <span className="flex flex-col">
-            <span>
-              {evento.texto}
-              {evento.por ? ` · ${evento.por}` : ""}
+      {eventos
+        // A posição na lista guardada (que só cresce no fim) é a chave: não muda quando
+        // chega um evento novo, mesmo mostrando do mais novo para o mais antigo.
+        .map((evento, posicao) => ({ evento, chave: `${posicao}-${evento.tipo}-${evento.em}` }))
+        .toReversed()
+        .map(({ evento, chave }) => (
+          <li key={chave} className="grid grid-cols-[3rem_1fr] gap-2">
+            <time dateTime={evento.em} className="text-muted-foreground tabular-nums">
+              {format(new Date(evento.em), "HH:mm")}
+            </time>
+            <span className="flex flex-col">
+              <span>
+                {evento.texto}
+                {evento.por ? ` · ${evento.por}` : ""}
+              </span>
+              {evento.motivo && (
+                <span className="text-xs text-muted-foreground">Motivo: {evento.motivo}</span>
+              )}
             </span>
-            {evento.motivo && (
-              <span className="text-xs text-muted-foreground">Motivo: {evento.motivo}</span>
-            )}
-          </span>
-        </li>
-      ))}
+          </li>
+        ))}
     </ol>
   )
 }
