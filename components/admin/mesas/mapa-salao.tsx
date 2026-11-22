@@ -145,10 +145,12 @@ function MesaNoMapa({
           ocupada
             ? "bg-card shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1"
             : "bg-foreground/[0.04] ring-1 ring-border/60 hover:bg-foreground/[0.07]",
-          // O alerta pede o olho com a cor da ação (tom novo), nunca com o vermelho de erro.
-          ocupada && (alerta ? "ring-2 ring-(--tom-novo)" : "ring-border/80"),
-          // Por cima de outra mesa no rascunho: é erro, e o salvar recusa.
-          sobreOutra && "ring-2 ring-destructive",
+          sobreOutra
+            ? // Por cima de outra mesa no rascunho: é erro, e o salvar recusa. O anel vermelho
+              // ganha do alerta e do foco (a mesa movida é a que tem o foco); o foco vira contorno.
+              "ring-2 ring-destructive focus-visible:ring-2 focus-visible:ring-destructive focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring focus-visible:outline-solid"
+            : // O alerta pede o olho com a cor da ação (tom novo), nunca com o vermelho de erro.
+              ocupada && (alerta ? "ring-2 ring-(--tom-novo)" : "ring-border/80"),
         )}
       >
         {/* O nome é o da grade ("Mesa 3"); na planta só cabe o número. */}
