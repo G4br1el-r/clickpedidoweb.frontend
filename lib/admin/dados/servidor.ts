@@ -62,7 +62,7 @@ import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearCustos } from "./custos-demo"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
-import { type BaseLojaV3, migrarDaVersao3 } from "./migracao"
+import { type BaseLojaV4, migrarDaVersao4 } from "./migracao"
 import { reservasDemo } from "./reservas-demo"
 import {
   type Bairro,
@@ -92,10 +92,10 @@ import {
 } from "./tipos"
 
 /**
- * Sobe quando o formato guardado muda. A 3 (custos e histórico, sem o salão) ganha as mesas
- * novas; qualquer outra, inclusive uma 3 que já tenha salão mas não os custos, é gerada de novo.
+ * Sobe quando o formato guardado muda. A 4 do main (custos, histórico e clientes novos, sem o
+ * salão) ganha as mesas novas; qualquer outra, inclusive uma 4 que já tenha salão, é gerada de novo.
  */
-const VERSAO = 4
+const VERSAO = 5
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -761,9 +761,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     return completa
   }
 
-  /** Versão 2 → 3: guarda a base migrada já, com o `geradoEm` de antes, e completa os dias que faltam. */
+  /** Versão 4 → 5: guarda a base migrada já, com o `geradoEm` de antes, e completa os dias que faltam. */
   async function migrar(guardado: Guardado): Promise<BaseLoja> {
-    const base = migrarDaVersao3(guardado.base as unknown as BaseLojaV3)
+    const base = migrarDaVersao4(guardado.base as unknown as BaseLojaV4)
     const migrado: Guardado = { versao: VERSAO, geradoEm: guardado.geradoEm, base }
     await set(chave, migrado)
     return completar(migrado)
@@ -786,7 +786,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         (async () => {
           const guardado = await get<Guardado>(chave)
           if (guardado?.versao === VERSAO) return completar(guardado)
-          if (guardado?.versao === 3 && !guardado.base.salao) return migrar(guardado)
+          if (guardado?.versao === 4 && !guardado.base.salao) return migrar(guardado)
           return doZero()
         })(),
       )

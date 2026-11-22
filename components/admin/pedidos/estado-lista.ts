@@ -14,6 +14,8 @@ import type {
   StatusPedido,
   TipoPedido,
 } from "@/lib/admin/dados/tipos"
+import type { MotivoDoFiltro } from "@/lib/admin/regras/filtro-pedidos"
+import { MOTIVOS_CANCELAMENTO } from "@/lib/admin/regras/rotulos"
 
 const STATUS: readonly StatusPedido[] = [
   "aguardando-pagamento",
@@ -33,6 +35,7 @@ const PAGAMENTOS: readonly FormaPagamento[] = [
   "pagar-apos-pesagem",
 ]
 const ORIGENS: readonly OrigemPedido[] = ["site", "pdv", "garcom", "painel"]
+const MOTIVOS: readonly MotivoDoFiltro[] = [...MOTIVOS_CANCELAMENTO, "nao-informado"]
 const COLUNAS = ["numero", "criadoEm", "total"] as const
 export type ColunaOrdenavel = (typeof COLUNAS)[number]
 
@@ -44,6 +47,14 @@ export const PARAMETROS_LISTA = {
   pagamento: parseAsArrayOf(parseAsStringLiteral(PAGAMENTOS)).withDefault([]),
   /** Só pelo endereço (vem dos gráficos da visão geral): aparece como etiqueta removível. */
   origem: parseAsArrayOf(parseAsStringLiteral(ORIGENS)).withDefault([]),
+  /** Telefones do cliente (só dígitos), vindos da aba Clientes. Etiqueta removível. */
+  cliente: parseAsArrayOf(parseAsString).withDefault([]),
+  /** Motivos de cancelamento, vindos da aba Operação. Etiqueta removível. */
+  motivo: parseAsArrayOf(parseAsStringLiteral(MOTIVOS)).withDefault([]),
+  /** Bairros da entrega, vindos da aba Entrega. Etiqueta removível. */
+  bairro: parseAsArrayOf(parseAsString).withDefault([]),
+  /** Ids de motoboy (ou "sem-motoboy"), vindos da aba Entrega. Etiqueta removível. */
+  motoboy: parseAsArrayOf(parseAsString).withDefault([]),
   ordem: parseAsStringLiteral(COLUNAS).withDefault("criadoEm"),
   crescente: parseAsStringLiteral(["sim"] as const),
   pagina: parseAsInteger.withDefault(1),

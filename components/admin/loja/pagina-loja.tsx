@@ -34,6 +34,7 @@ import { useConectarPagamento, useSalvarLoja } from "@/lib/admin/dados/consultas
 import type { ConfigLoja, FormaPagamento, SomAlerta, TaxasPagamento } from "@/lib/admin/dados/tipos"
 import { esquemaLoja, type FormularioLoja } from "@/lib/admin/regras/esquema-loja"
 import { copiarParaTodos, textoDoHorario } from "@/lib/admin/regras/loja"
+import { rotuloTaxa } from "@/lib/admin/regras/rotulos"
 import { resumoDasAlteracoes, secoesAlteradas } from "@/lib/admin/regras/secoes-loja"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo, temRecurso } from "@/lib/admin/segmentos-painel"
@@ -248,11 +249,9 @@ function CampoDinheiro({
   )
 }
 
-const TAXAS: { forma: keyof TaxasPagamento; rotulo: string }[] = [
-  { forma: "pixOnline", rotulo: "Pix online" },
-  { forma: "cartaoOnline", rotulo: "Cartão online" },
-  { forma: "maquininha", rotulo: "Cartão na maquininha" },
-]
+const TAXAS: { forma: keyof TaxasPagamento; rotulo: string }[] = (
+  ["pixOnline", "cartaoOnline", "maquininha"] as const
+).map((forma) => ({ forma, rotulo: rotuloTaxa(forma) }))
 
 /** Taxa de uma forma de pagamento, em %. Vazio fica sem taxa (conta como 0%). */
 function CampoTaxa({
