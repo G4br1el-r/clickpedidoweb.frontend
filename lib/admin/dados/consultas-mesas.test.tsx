@@ -28,6 +28,7 @@ import {
   useMesas,
   usePagar,
   usePedirConta,
+  usePosicionarMesas,
   useReabrirConta,
   useRemoverItem,
   useSalvarConfigSalao,
@@ -500,5 +501,28 @@ describe("consultas das movimentações", () => {
 
     const limpa = await act(() => result.current.limpa.mutateAsync("mesa-9"))
     expect(limpa.desfazer).toEqual(expect.any(String))
+  })
+
+  test("posicionar as mesas chega ao servidor e a lista já traz a posição nova", async () => {
+    const api = servidorDo("pizzaria")
+    const { result } = renderHook(() => ({ mesas: useMesas(), posicionar: usePosicionarMesas() }), {
+      wrapper: envolver(),
+    })
+    await waitFor(() => expect(result.current.mesas.data).toBeDefined())
+    const daTela = () => result.current.mesas.data?.find((item) => item.id === "mesa-1")?.posicao
+
+    // A próxima leitura das mesas nunca responde: só a cópia que o hook grava traz a posição.
+    const listar = api.mesas.listar
+    vi.spyOn(api.mesas, "listar").mockReturnValue(new Promise(() => {}))
+
+    // Sem esperar a mutação: ela espera a releitura, que aqui não volta.
+    act(() => result.current.posicionar.mutate([{ id: "mesa-1", posicao: { x: 1, y: 10 } }]))
+
+    // O mapa não pisca de volta na posição antiga enquanto a leitura nova não chega.
+    await waitFor(() => expect(daTela()).toEqual({ x: 1, y: 10 }))
+    expect((await listar()).find((item) => item.id === "mesa-1")?.posicao).toEqual({
+      x: 1,
+      y: 10,
+    })
   })
 })

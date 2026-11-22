@@ -13,7 +13,7 @@ import type {
   Retirada,
   Servidor,
 } from "./servidor"
-import type { ConfigSalao, DescontoConta, Pedido } from "./tipos"
+import type { ConfigSalao, DescontoConta, Mesa, Pedido } from "./tipos"
 
 const chaveMesas = (segmento: SegmentoPainelId) => ["admin", segmento, "mesas"] as const
 const chaveSalao = (segmento: SegmentoPainelId) => ["admin", segmento, "salao"] as const
@@ -98,6 +98,20 @@ export function useDesbloquearMesa() {
 
 export function useMarcarLimpa() {
   return useMudancaNasMesas((servidor, id: string) => servidor.mesas.marcarLimpa(id))
+}
+
+/** Salva as posições do mapa. A lista já fica com elas, para o mapa não piscar de volta. */
+export function usePosicionarMesas() {
+  return useMudancaNasMesas(
+    (servidor, lote: Parameters<Servidor["mesas"]["posicionar"]>[0]) =>
+      servidor.mesas.posicionar(lote),
+    {
+      aoSucesso: (cliente, segmento, movidas) =>
+        cliente.setQueryData<Mesa[]>(chaveMesas(segmento), (mesas) =>
+          mesas?.map((mesa) => movidas.find((movida) => movida.id === mesa.id) ?? mesa),
+        ),
+    },
+  )
 }
 
 export function useExcluirMesa() {

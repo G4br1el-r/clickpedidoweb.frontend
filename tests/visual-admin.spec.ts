@@ -229,6 +229,28 @@ for (const tema of ["light", "dark"] as const) {
     await esperarAnimacoes(page)
     await expect(page).toHaveScreenshot(`painel-juntar-mesas-${tema}.png`)
   })
+  test(`painel: mapa do salão e a edição do mapa (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas?vista=mapa")
+    const salao = page.getByRole("list", { name: "Mapa: Salão" })
+    await expect(salao.getByRole("button", { name: "Mesa 1", exact: true })).toBeVisible({
+      timeout: 15_000,
+    })
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-mapa-${tema}.png`, { fullPage: true })
+
+    // No celular o mapa só é visto: não há edição para fotografar.
+    const editar = page.getByRole("button", { name: "Editar mapa" })
+    if (!(await editar.isVisible())) return
+    await editar.click()
+    // A mesa 1 vai para cima da 5: a foto mostra também a mesa marcada como erro.
+    await salao.getByRole("button", { name: "Mesa 1", exact: true }).focus()
+    await page.keyboard.press("ArrowRight")
+    await page.keyboard.press("Shift+ArrowDown")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-mapa-edicao-${tema}.png`, { fullPage: true })
+  })
 
   test(`painel: transferir itens da comanda (${tema})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })

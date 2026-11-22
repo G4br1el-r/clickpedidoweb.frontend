@@ -1132,3 +1132,99 @@ test("mesas: juntar a mesa 8 à 1, ver Mesa 1 + 8 na cozinha, separar e desfazer
   await expect(page.getByText("Desfeito.")).toBeVisible()
   await expect(mesa8).toContainText("Com a mesa 1")
 })
+
+test("mesas: mover a mesa 1 no mapa pelo teclado, salvar e recarregar", async ({ page }, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 768, "No celular o mapa só é visto")
+  test.setTimeout(60_000)
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/mesas?vista=mapa")
+  const salao = page.getByRole("list", { name: "Mapa: Salão" })
+  const mesa1 = salao.getByRole("button", { name: "Mesa 1", exact: true })
+  await expect(mesa1).toBeVisible({ timeout: 15_000 })
+  await verificarAcessibilidade(page)
+
+  await page.getByRole("button", { name: "Editar mapa" }).click()
+  await expect(mesa1).toHaveAccessibleDescription(/, coluna 2, linha 2$/)
+  await mesa1.focus()
+  await page.keyboard.press("ArrowRight")
+  await page.keyboard.press("Shift+ArrowDown")
+  await page.keyboard.press("Shift+ArrowDown")
+  await expect(mesa1).toHaveAccessibleDescription(/, coluna 3, linha 10$/)
+  await expect(mesa1).toBeFocused()
+  await verificarAcessibilidade(page)
+  await page.getByRole("button", { name: "Salvar posições" }).click()
+  await expect(page.getByText("Mapa salvo.")).toBeVisible()
+
+  await page.reload()
+  await expect(mesa1).toBeVisible({ timeout: 15_000 })
+  await page.getByRole("button", { name: "Editar mapa" }).click()
+  await expect(mesa1).toHaveAccessibleDescription(/, coluna 3, linha 10$/)
+  await page.getByRole("button", { name: "Cancelar" }).click()
+})
+
+test("mesas: arrastar a mesa 2 no mapa encaixa na grade e salva", async ({ page }, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 768, "No celular o mapa só é visto")
+  test.setTimeout(60_000)
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/mesas?vista=mapa")
+  const salao = page.getByRole("list", { name: "Mapa: Salão" })
+  const mesa2 = salao.getByRole("button", { name: "Mesa 2", exact: true })
+  await expect(mesa2).toBeVisible({ timeout: 15_000 })
+  await page.getByRole("button", { name: "Editar mapa" }).click()
+
+  /**
+   * Arrasta a mesa 2 algumas células para baixo, soltando um pouco fora do meio. Antes, a mesa
+   * sobe para logo abaixo do cabeçalho preso: na tela baixa (celular deitado), chegar perto da
+   * borda de baixo rolaria a página durante o arrasto, e a mesa iria mais longe.
+   */
+  async function arrastarParaBaixo(celulas: number) {
+    const inicio = await mesa2.boundingBox()
+    if (!inicio) throw new Error("O mapa não apareceu")
+    await page.evaluate((dy) => window.scrollBy(0, dy), inicio.y - 80)
+    const planta = await salao.boundingBox()
+    const mesa = await mesa2.boundingBox()
+    if (!planta || !mesa) throw new Error("O mapa não apareceu")
+    const altura = planta.height / 16
+    const x = mesa.x + mesa.width / 2
+    const y = mesa.y + mesa.height / 2
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + 6, y + (altura * celulas) / 2, { steps: 8 })
+    await page.mouse.move(x + 6, y + altura * celulas + 5, { steps: 8 })
+    await page.mouse.up()
+  }
+
+  // Da coluna 5, linha 2, até a linha 10, em dois arrastos de 4 células (no meio do caminho a
+  // mesa passa por cima da 6, o que o rascunho aceita).
+  await arrastarParaBaixo(4)
+  await expect(mesa2).toHaveAccessibleDescription(/, coluna 5, linha 6, sobre outra mesa$/)
+  await page.waitForTimeout(100)
+  await arrastarParaBaixo(4)
+  await expect(mesa2).toHaveAccessibleDescription(/, coluna 5, linha 10$/)
+  // O dnd-kit engole os cliques dos 50 ms depois de soltar (o clique do próprio arrasto).
+  await page.waitForTimeout(100)
+  await page.getByRole("button", { name: "Salvar posições" }).click()
+  await expect(page.getByText("Mapa salvo.")).toBeVisible()
+  await page.reload()
+  await expect(mesa2).toBeVisible({ timeout: 15_000 })
+  await page.getByRole("button", { name: "Editar mapa" }).click()
+  await expect(mesa2).toHaveAccessibleDescription(/, coluna 5, linha 10$/)
+})
+
+test("mesas: no celular o mapa só é visto, e a página não rola de lado", async ({ page }, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) >= 768, "Só no celular")
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/mesas?vista=mapa")
+  const salao = page.getByRole("list", { name: "Mapa: Salão" })
+  await expect(salao.getByRole("button", { name: "Mesa 1", exact: true })).toBeVisible({
+    timeout: 15_000,
+  })
+  await expect(page.getByRole("button", { name: "Editar mapa" })).toHaveCount(0)
+  await esperarAnimacoes(page)
+  // A planta rola de lado dentro da própria faixa; a página não.
+  const sobra = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  )
+  expect(sobra).toBeLessThanOrEqual(0)
+  await verificarAcessibilidade(page)
+})

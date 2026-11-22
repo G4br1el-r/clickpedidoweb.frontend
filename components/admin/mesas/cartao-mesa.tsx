@@ -55,6 +55,34 @@ function resumoSemComanda(mesa: Mesa, estado: EstadoMesa, agora: Date | null) {
   return plural(mesa.lugares, "lugar", "lugares")
 }
 
+/**
+ * O que o leitor de tela ouve da mesa, igual na grade e no mapa: o estado, o nome, o resumo, o
+ * cliente, o garçom, as pessoas, o total e os alertas.
+ */
+export function descricaoDaMesa(
+  { mesa, comanda, estado, alertas }: MesaNaGrade,
+  agora: Date | null,
+): string {
+  const ocupada = mesa.status === "ocupada"
+  const resumo = ocupada ? null : resumoSemComanda(mesa, estado.estado, agora)
+  const garcom = comanda?.mesa?.garcom ? `Garçom ${comanda.mesa.garcom}` : null
+  const pessoas = comanda?.mesa?.pessoas ? plural(comanda.mesa.pessoas, "pessoa", "pessoas") : null
+  return [
+    // Na limpeza o resumo já começa pelo estado: "Limpeza há 5 min".
+    estado.estado === "limpeza" ? resumo : estado.rotulo,
+    nomePadrao(mesa) ? null : mesa.nome,
+    estado.estado === "limpeza" ? null : resumo,
+    mesa.clienteNome,
+    ocupada ? garcom : null,
+    ocupada ? pessoas : null,
+    // A secundária mostra a comanda da principal: o total é lido lá, não aqui.
+    comanda && ocupada ? emReais(comanda.total) : null,
+    ...alertas.map((item) => item.texto),
+  ]
+    .filter(Boolean)
+    .join(", ")
+}
+
 type AcaoMesa =
   | "abrir"
   | "servido"
@@ -84,21 +112,29 @@ const ACOES: Record<EstadoMesa, AcaoMesa[]> = {
   juntada: ["abrir", "separar"],
 }
 
-type Acoes = {
+export type AcoesDaMesa = {
   aoAbrir: () => void
   /** Recebem o botão ⋯, para onde o foco volta quando a janela fecha. */
   aoEditar: (gatilho: HTMLElement | null) => void
   aoBloquear: (gatilho: HTMLElement | null) => void
 }
 
-function MenuMesa({
+/** O menu ⋯ da mesa, o mesmo na grade e no mapa. */
+export function MenuMesa({
   mesa,
   comanda,
   estado,
   aoAbrir,
   aoEditar,
   aoBloquear,
-}: Acoes & { mesa: Mesa; comanda: Pedido | undefined; estado: EstadoMesa }) {
+  className = "absolute top-2 right-2",
+}: AcoesDaMesa & {
+  mesa: Mesa
+  comanda: Pedido | undefined
+  estado: EstadoMesa
+  /** Onde o botão ⋯ fica em relação à mesa. */
+  className?: string
+}) {
   const marcarLimpa = useMarcarLimpa()
   const servir = useMarcarServido()
   const separar = useSepararMesas()
@@ -220,7 +256,7 @@ function MenuMesa({
             type="button"
             variant="ghost"
             size="icon-sm"
-            className={cn(ALVO_DE_TOQUE, "absolute top-2 right-2")}
+            className={cn(ALVO_DE_TOQUE, className)}
             aria-label={`Ações da mesa ${mesa.numero}`}
           >
             <EllipsisIcon />
@@ -267,7 +303,7 @@ export function CartaoMesa({
   aoEditar,
   aoBloquear,
 }: MesaNaGrade &
-  Acoes & {
+  AcoesDaMesa & {
     agora: Date | null
   }) {
   const ocupada = mesa.status === "ocupada"
@@ -311,20 +347,7 @@ export function CartaoMesa({
           {estado.rotulo}
         </span>
         <span id={`mesa-${mesa.id}-detalhes`} className="sr-only">
-          {[
-            // Na limpeza o resumo já começa pelo estado: "Limpeza há 5 min".
-            estado.estado === "limpeza" ? resumo : estado.rotulo,
-            nomePadrao(mesa) ? null : mesa.nome,
-            estado.estado === "limpeza" ? null : resumo,
-            mesa.clienteNome,
-            ocupada ? garcom : null,
-            ocupada ? pessoas : null,
-            // A secundária mostra a comanda da principal: o total é lido lá, não aqui.
-            comanda && ocupada ? emReais(comanda.total) : null,
-            ...alertas.map((item) => item.texto),
-          ]
-            .filter(Boolean)
-            .join(", ")}
+          {descricaoDaMesa({ mesa, comanda, estado, alertas }, agora)}
         </span>
         {!nomePadrao(mesa) && (
           <span className="truncate text-xs text-muted-foreground">{mesa.nome}</span>

@@ -1542,6 +1542,23 @@ describe("servidor de demonstração", () => {
         expect(editada.posicao).toEqual({ x: 6, y: 0 })
       })
 
+      test("a quadrada na borda virando retangular de 8 lugares não fica com metade fora do mapa", async () => {
+        const { api, a, igual } = await duasMesas()
+        // Em x 22 a quadrada (2 × 2) encosta na borda; com 4 × 2 ela iria até a coluna 26.
+        await alterarGuardada(a.id, { posicao: { x: 22, y: 8 } })
+        const editada = await servidor().mesas.editar(a.id, {
+          ...igual(a),
+          lugares: 8,
+          forma: "retangular",
+        })
+        // A primeira posição livre: na linha 0, as mesas 1 e 2 do catálogo ocupam x 0-1 e 4-5.
+        expect(editada.posicao).toEqual({ x: 6, y: 0 })
+        expect((await api.mesas.listar()).find((mesa) => mesa.id === a.id)?.posicao).toEqual({
+          x: 6,
+          y: 0,
+        })
+      })
+
       test("sem sobreposição, a mesa fica onde estava", async () => {
         const { api, b, igual } = await duasMesas()
         const editada = await api.mesas.editar(b.id, { ...igual(b), lugares: 2, forma: "redonda" })

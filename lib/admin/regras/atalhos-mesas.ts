@@ -3,6 +3,7 @@ export type AcaoAtalho =
   | { tipo: "buscar" }
   | { tipo: "nova-mesa" }
   | { tipo: "ajuda" }
+  | { tipo: "alternar-vista" }
   | { tipo: "abrir-mesa"; numero: number }
 
 export type TeclaApertada = {
@@ -21,6 +22,8 @@ const COMANDOS: Record<string, AcaoAtalho> = {
   n: { tipo: "nova-mesa" },
   N: { tipo: "nova-mesa" },
   "?": { tipo: "ajuda" },
+  m: { tipo: "alternar-vista" },
+  M: { tipo: "alternar-vista" },
 }
 
 /** Lê uma tecla da tela de mesas: devolve os dígitos acumulados e a ação a disparar. */
