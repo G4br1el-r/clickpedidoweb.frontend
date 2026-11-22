@@ -1,0 +1,121 @@
+import "fake-indexeddb/auto"
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
+import { render, screen, within } from "@testing-library/react"
+import userEvent from "@testing-library/user-event"
+import { clear } from "idb-keyval"
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
+import { useLojaAtual } from "@/lib/loja-atual"
+import { VitrineMesa } from "./vitrine-mesa"
+
+function renderizar(mesaId = "mesa-11", segmento = "pizzaria") {
+  const cliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={cliente}>
+      <VitrineMesa segmento={segmento} mesaId={mesaId} />
+    </QueryClientProvider>,
+  )
+}
+
+beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ["Date"] })
+  vi.setSystemTime(new Date(2026, 10, 13, 20, 30))
+  await clear()
+  reiniciarServidores()
+  useLojaAtual.setState({ ...useLojaAtual.getInitialState(), id: "adega-da-vila" }, true)
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+describe("VitrineMesa", () => {
+  test("a mesa da loja, com o aviso de pagar na mesa e sem entrega nem pagamento online", async () => {
+    renderizar()
+    expect(await screen.findByRole("heading", { level: 1, name: "Mesa 11" })).toBeInTheDocument()
+    expect(screen.getByText("Casa da Pizza")).toBeInTheDocument()
+    expect(screen.getByText("Peça daqui e pague na mesa, com o garçom.")).toBeInTheDocument()
+    expect(screen.queryByText(/entrega/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/pix|cartão online/i)).not.toBeInTheDocument()
+    // As cores da vitrine são as da loja da mesa.
+    expect(useLojaAtual.getState().id).toBe("casa-da-pizza")
+  })
+
+  test("o produto vai para o pedido, e pedir para a mesa espera o garçom aceitar", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("button", { name: "Adicionar Água sem gás" }))
+    await usuario.click(screen.getByRole("button", { name: "Adicionar Água sem gás" }))
+
+    const pedido = screen.getByRole("region", { name: "Seu pedido" })
+    expect(within(pedido).getByText("Água sem gás")).toBeInTheDocument()
+    // A linha do item e o total do pedido.
+    expect(within(pedido).getAllByText("R$ 10,00")).toHaveLength(2)
+
+    await usuario.click(within(pedido).getByRole("button", { name: "Pedir para a mesa" }))
+
+    expect(await screen.findByText("Pedido enviado. O garçom vai confirmar.")).toBeInTheDocument()
+    expect(within(pedido).queryByText("Água sem gás")).not.toBeInTheDocument()
+    const [aguardando] = await servidorDo("pizzaria").pedidosQr.listar()
+    expect(aguardando).toMatchObject({ mesaId: "mesa-11", total: 10 })
+  })
+
+  test("com o pedido direto, vai para a cozinha", async () => {
+    const api = servidorDo("pizzaria")
+    const config = await api.salao.config()
+    await api.salao.salvar({ ...config, qr: { ...config.qr, aceite: "direto" } })
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("button", { name: "Adicionar Água sem gás" }))
+    await usuario.click(screen.getByRole("button", { name: "Pedir para a mesa" }))
+    expect(await screen.findByText("Pedido enviado para a cozinha.")).toBeInTheDocument()
+  })
+
+  test("chamar o garçom avisa; pedir a conta da mesa sem conta mostra o porquê", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("button", { name: "Chamar o garçom" }))
+    expect(await screen.findByText("O garçom já vem.")).toBeInTheDocument()
+
+    await usuario.click(screen.getByRole("button", { name: "Pedir a conta" }))
+    expect(await screen.findByText("A mesa ainda não tem conta.")).toBeInTheDocument()
+  })
+
+  test("na mesa aberta, ver a conta mostra os itens e o total; pedir a conta avisa", async () => {
+    const usuario = userEvent.setup()
+    const api = servidorDo("pizzaria")
+    const comanda = await api.mesas.lancar({
+      mesaId: "mesa-11",
+      itens: [{ produtoId: "prod-agua", escolhas: {}, quantidade: 2 }],
+      enviarParaCozinha: false,
+      garcom: "Rafa",
+    })
+    renderizar()
+
+    await usuario.click(await screen.findByRole("button", { name: "Ver a conta" }))
+    const conta = await screen.findByRole("dialog", { name: "A conta da mesa" })
+    expect(within(conta).getByText("2× Água sem gás")).toBeInTheDocument()
+    expect(within(conta).getByText("Total")).toBeInTheDocument()
+    expect(within(conta).getAllByText(/R\$/).length).toBeGreaterThan(0)
+    await usuario.keyboard("{Escape}")
+
+    await usuario.click(screen.getByRole("button", { name: "Pedir a conta" }))
+    expect(await screen.findByText("A conta foi pedida. O garçom já vem.")).toBeInTheDocument()
+    expect((await api.pedidos.buscar(comanda.id))?.contaPedidaEm).toBeDefined()
+  })
+
+  test("ver a conta da mesa sem pedidos diz que ainda não há", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("button", { name: "Ver a conta" }))
+    expect(await screen.findByText("A mesa ainda não tem pedidos.")).toBeInTheDocument()
+  })
+
+  test("a mesa bloqueada e a loja que não existe mostram Mesa indisponível", async () => {
+    const { unmount } = renderizar("mesa-20")
+    expect(await screen.findByRole("heading", { name: "Mesa indisponível." })).toBeInTheDocument()
+    unmount()
+    renderizar("mesa-1", "loja-que-nao-existe")
+    expect(await screen.findByRole("heading", { name: "Mesa indisponível." })).toBeInTheDocument()
+  })
+})
