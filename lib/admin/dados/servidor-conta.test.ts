@@ -450,3 +450,100 @@ describe("desconto, cortesia, taxa e couvert", () => {
     })
   })
 })
+
+describe("pré-conta", () => {
+  test("imprimir a pré-conta marca Pediu a conta; de novo, fica a primeira hora", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    const impressa = await api.mesas.imprimirPreConta(comanda.id, "Rafa")
+    expect(impressa.contaPedidaEm).toBe(AGORA.toISOString())
+    expect(impressa.eventos?.slice(-2)).toMatchObject([
+      { tipo: "conta-pedida", texto: "Pediu a conta", por: "Rafa" },
+      { tipo: "pre-conta", texto: "Pré-conta impressa", por: "Rafa" },
+    ])
+
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 40))
+    const outra = await api.mesas.imprimirPreConta(comanda.id)
+    expect(outra.contaPedidaEm).toBe(AGORA.toISOString())
+    expect(outra.eventos?.at(-1)?.tipo).toBe("pre-conta")
+    expect(outra.eventos?.filter((evento) => evento.tipo === "conta-pedida")).toHaveLength(1)
+  })
+})
+
+describe("reabrir a conta", () => {
+  test("reabre a conta fechada hoje: volta aberta, com os pagamentos, e a mesa sai da limpeza", async () => {
+    const api = semTaxa()
+    const { mesa, comanda } = await contaDeCem(api)
+    await api.mesas.pagar(comanda.id, { forma: "pix", valor: 40 })
+    await api.mesas.fecharConta(comanda.id, "dinheiro")
+    expect((await api.mesas.listar()).find((item) => item.id === mesa.id)?.limpezaDesde).toBe(
+      AGORA.toISOString(),
+    )
+
+    vi.setSystemTime(new Date(2026, 10, 13, 21, 0))
+    const reaberta = await api.mesas.reabrir(comanda.id, {
+      motivo: "Faltou a sobremesa",
+      por: "Rafa",
+    })
+    expect(reaberta).toMatchObject({ status: "pronto", situacaoPagamento: "na-entrega" })
+    expect(reaberta).not.toHaveProperty("pagoEm")
+    expect(reaberta.pagamentos).toMatchObject([{ valor: 40 }, { valor: 60 }])
+    expect(reaberta.eventos?.at(-1)).toMatchObject({
+      tipo: "reaberta",
+      por: "Rafa",
+      texto: "Conta reaberta",
+      motivo: "Faltou a sobremesa",
+    })
+    const depois = (await api.mesas.listar()).find((item) => item.id === mesa.id)
+    expect(depois).toMatchObject({ status: "ocupada", pedidoAtivoId: comanda.id })
+    expect(depois).not.toHaveProperty("limpezaDesde")
+  })
+
+  test("sem motivo, com a mesa já aberta ou na penúltima conta, recusa", async () => {
+    const api = semTaxa()
+    const { mesa, comanda } = await contaDeCem(api)
+    await api.mesas.fecharConta(comanda.id, "pix")
+    await expect(api.mesas.reabrir(comanda.id, { motivo: " " })).rejects.toThrow(
+      "Diga o motivo para reabrir a conta.",
+    )
+    const segunda = await api.mesas.abrir(mesa.id, { pessoas: 2, garcom: "Rafa" })
+    await expect(api.mesas.reabrir(comanda.id, { motivo: "Erro" })).rejects.toThrow(
+      "A mesa 30 já está aberta.",
+    )
+    await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    await api.mesas.fecharConta(segunda.id, "pix")
+    await expect(api.mesas.reabrir(comanda.id, { motivo: "Erro" })).rejects.toThrow(
+      "Só dá para reabrir a última conta da mesa.",
+    )
+  })
+
+  test("virada do dia: aberta às 23:40 e paga às 00:10 reabre às 00:30, mas não no dia seguinte", async () => {
+    vi.setSystemTime(new Date(2026, 10, 13, 23, 40))
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    vi.setSystemTime(new Date(2026, 10, 14, 0, 10))
+    await api.mesas.fecharConta(comanda.id, "pix")
+
+    vi.setSystemTime(new Date(2026, 10, 15, 0, 30))
+    await expect(api.mesas.reabrir(comanda.id, { motivo: "Erro" })).rejects.toThrow(
+      "Só dá para reabrir a conta no mesmo dia.",
+    )
+    vi.setSystemTime(new Date(2026, 10, 14, 0, 30))
+    const reaberta = await api.mesas.reabrir(comanda.id, { motivo: "Erro" })
+    expect(reaberta.status).toBe("pronto")
+  })
+
+  test("ultimaConta: a conta fechada hoje da mesa livre; nada na mesa ocupada ou sem conta hoje", async () => {
+    const api = semTaxa()
+    const { mesa, comanda } = await contaDeCem(api)
+    expect(await api.mesas.ultimaConta(mesa.id)).toBeNull()
+    await api.mesas.fecharConta(comanda.id, "pix")
+    expect((await api.mesas.ultimaConta(mesa.id))?.id).toBe(comanda.id)
+    vi.setSystemTime(new Date(2026, 10, 14, 12, 0))
+    expect(await api.mesas.ultimaConta(mesa.id)).toBeNull()
+  })
+})

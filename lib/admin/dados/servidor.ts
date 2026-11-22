@@ -358,6 +358,17 @@ function fechada(comanda: Pedido, agora: string, por: string | undefined): Pedid
   )
 }
 
+/** A mesa pediu a conta: grava a hora e o evento, ou mantém a primeira hora. */
+function comContaPedida(comanda: Pedido, por: string | undefined): Pedido {
+  if (comanda.itens.length === 0) throw new Error("Lance algum item antes de pedir a conta.")
+  if (comanda.contaPedidaEm) return comanda
+  const agora = new Date().toISOString()
+  return comEvento(
+    { ...comanda, contaPedidaEm: agora },
+    { tipo: "conta-pedida", em: agora, ...autor(por), texto: "Pediu a conta" },
+  )
+}
+
 const semContaPedida = ({ contaPedidaEm: _contaPedidaEm, ...comanda }: Pedido): Pedido => comanda
 
 /** Subtotal, desconto e total da comanda refeitos pela conta (com taxa e couvert). */
@@ -938,6 +949,38 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const loja = { ...base.loja, ...mudanca }
     await substituir({ ...base, loja })
     return responder(loja)
+  }
+
+  /** A última conta de mesa fechada (paga) da mesa, pela hora do pagamento (no empate, a mais nova). */
+  const ultimaFechada = (base: BaseLoja, mesaId: string) =>
+    base.pedidos
+      .filter(
+        (pedido) =>
+          pedido.tipo === "mesa" &&
+          pedido.mesa?.id === mesaId &&
+          pedido.status === "concluido" &&
+          pedido.pagoEm,
+      )
+      .toSorted(
+        (a, b) => Date.parse(b.pagoEm as string) - Date.parse(a.pagoEm as string) || b.id - a.id,
+      )[0]
+
+  /**
+   * Por que a conta não pode ser reaberta agora, ou `null`: só a última conta fechada da mesa,
+   * no mesmo dia do pagamento, com a mesa livre ou em limpeza (Q37).
+   */
+  function porQueNaoReabre(base: BaseLoja, conta: Pedido, agora: Date): string | null {
+    const mesa = base.mesas.find((item) => item.id === conta.mesa?.id)
+    if (conta.tipo !== "mesa" || !mesa || conta.status !== "concluido" || !conta.pagoEm) {
+      return "Só a conta de mesa fechada pode ser reaberta."
+    }
+    if (!isSameDay(new Date(conta.pagoEm), agora)) return "Só dá para reabrir a conta no mesmo dia."
+    if (ultimaFechada(base, mesa.id)?.id !== conta.id) {
+      return "Só dá para reabrir a última conta da mesa."
+    }
+    if (mesa.bloqueio) return `A mesa ${mesa.numero} está bloqueada.`
+    if (comandaDa(base, mesa.id)) return `A mesa ${mesa.numero} já está aberta.`
+    return null
   }
 
   /**
@@ -1991,16 +2034,19 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
       /** A mesa pediu a conta: fica a hora do primeiro pedido. */
       pedirConta(pedidoId: number, por?: string) {
-        return alterarComanda(pedidoId, (comanda) => {
-          if (comanda.itens.length === 0)
-            throw new Error("Lance algum item antes de pedir a conta.")
-          if (comanda.contaPedidaEm) return comanda
-          const agora = new Date().toISOString()
-          return comEvento(
-            { ...comanda, contaPedidaEm: agora },
-            { tipo: "conta-pedida", em: agora, ...autor(por), texto: "Pediu a conta" },
-          )
-        })
+        return alterarComanda(pedidoId, (comanda) => comContaPedida(comanda, por))
+      },
+
+      /** A pré-conta saiu na impressora: a mesa pediu a conta (se ainda não tinha pedido). */
+      imprimirPreConta(pedidoId: number, por?: string) {
+        return alterarComanda(pedidoId, (comanda) =>
+          comEvento(comContaPedida(comanda, por), {
+            tipo: "pre-conta",
+            em: new Date().toISOString(),
+            ...autor(por),
+            texto: "Pré-conta impressa",
+          }),
+        )
       },
 
       /** Um pagamento contra o saldo da conta. */
@@ -2133,6 +2179,34 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
               em: new Date().toISOString(),
               ...autor(por),
               texto: `Estornou ${rotuloDoPagamento(pagamento)} ${emReais(pagamento.valor)}`,
+              motivo: texto,
+            },
+          )
+        })
+      },
+
+      /** A conta da mesa que pode ser reaberta agora (a última, fechada hoje), ou `null`. */
+      async ultimaConta(mesaId: string): Promise<Pedido | null> {
+        const base = await carregar()
+        const conta = ultimaFechada(base, mesaId)
+        return responder(conta && !porQueNaoReabre(base, conta, new Date()) ? conta : null)
+      },
+
+      /** Reabre a última conta fechada da mesa, no mesmo dia, com motivo. Os pagamentos ficam. */
+      reabrir(pedidoId: number, { motivo, por }: { motivo: string; por?: string }) {
+        return alterar(pedidoId, (conta, base) => {
+          const texto = motivo?.trim().slice(0, 140)
+          if (!texto) throw new Error("Diga o motivo para reabrir a conta.")
+          const erro = porQueNaoReabre(base, conta, new Date())
+          if (erro) throw new Error(erro)
+          const { pagoEm: _pagoEm, trocoPara: _trocoPara, ...aberta } = conta
+          return comEvento(
+            { ...aberta, status: "pronto", situacaoPagamento: "na-entrega" },
+            {
+              tipo: "reaberta",
+              em: new Date().toISOString(),
+              ...autor(por),
+              texto: "Conta reaberta",
               motivo: texto,
             },
           )
