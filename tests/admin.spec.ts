@@ -200,6 +200,50 @@ test("abas Clientes e Operação: o WhatsApp do sumido, o cliente e o motivo lev
   await expect(page.getByRole("button", { name: /^Tirar o filtro Motivo: / })).toBeVisible()
 })
 
+test("aba Entrega: o motoboy e o bairro levando às entregas deles", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin?aba=entrega")
+  const bairros = page.getByRole("table", { name: "Por bairro" })
+  await expect(bairros).toBeVisible({ timeout: 15_000 })
+  await verificarAcessibilidade(page)
+
+  const motoboy = page.getByRole("region", { name: "Por motoboy" }).getByRole("link").first()
+  const nome = (await motoboy.textContent()) ?? ""
+  await motoboy.click()
+  await expect(page).toHaveURL(
+    /\/admin\/pedidos\?canal=entrega&motoboy=[\w-]+&de=2026-11-07&ate=2026-11-13/,
+  )
+  await expect(page.getByRole("button", { name: `Tirar o filtro Motoboy: ${nome}` })).toBeVisible()
+  await expect(page.getByRole("table")).toBeVisible()
+
+  await page.goto("/admin?aba=entrega")
+  const bairro = page.getByRole("table", { name: "Por bairro" }).getByRole("link").first()
+  const qual = (await bairro.textContent()) ?? ""
+  await bairro.click()
+  await expect(page).toHaveURL(/\/admin\/pedidos\?canal=entrega&bairro=.+&de=2026-11-07/)
+  await expect(page.getByRole("button", { name: `Tirar o filtro Bairro: ${qual}` })).toBeVisible()
+})
+
+for (const [segmento, id, aba, titulo] of [
+  ["salao", "agenda", "Agenda", "Agenda do período"],
+  ["farmacia", "farmacia", "Farmácia", "Validade dos lotes"],
+  ["acougue", "pesagem", "Pesagem", "Balança do período"],
+] as const) {
+  test(`aba ${aba} no segmento ${segmento}: abre pela barra e passa no axe`, async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+    await noSegmento(page, segmento)
+    await page.goto("/admin")
+    await expect(page.getByRole("region", { name: "Hoje" })).toBeVisible({ timeout: 15_000 })
+    await page
+      .getByRole("tablist", { name: "Abas da visão geral" })
+      .getByRole("tab", { name: aba })
+      .click()
+    await expect(page).toHaveURL(new RegExp(`aba=${id}`))
+    await expect(page.getByRole("region", { name: titulo })).toBeVisible({ timeout: 15_000 })
+    await verificarAcessibilidade(page)
+  })
+}
+
 test("do gráfico aos pedidos do dia: filtrar, abrir e avançar", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
   await page.goto("/admin")

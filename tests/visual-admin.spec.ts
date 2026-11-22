@@ -58,7 +58,14 @@ for (const tema of ["light", "dark"] as const) {
     await expect(page).toHaveScreenshot(`painel-visao-geral-${tema}.png`, { fullPage: true })
   })
 
-  for (const aba of ["vendas", "produtos", "clientes", "operacao", "financeiro"] as const) {
+  for (const aba of [
+    "vendas",
+    "produtos",
+    "clientes",
+    "operacao",
+    "entrega",
+    "financeiro",
+  ] as const) {
     test(`painel: visão geral, aba ${aba} (${tema})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
       await page.goto(`/admin?aba=${aba}`)
@@ -67,8 +74,33 @@ for (const tema of ["light", "dark"] as const) {
         produtos: "Mais vendidos",
         clientes: "Melhores clientes",
         operacao: "Cancelamentos por motivo",
+        entrega: "Por motoboy",
         financeiro: "Formas de pagamento",
       }[aba]
+      await expect(page.getByRole("region", { name: bloco })).toBeVisible({ timeout: 15_000 })
+      await page.waitForLoadState("networkidle")
+      await esperarAnimacoes(page)
+      await expect(page).toHaveScreenshot(`painel-visao-geral-${aba}-${tema}.png`, {
+        fullPage: true,
+      })
+    })
+  }
+
+  // A aba de cada segmento: Agenda no salão, Farmácia e Pesagem no açougue.
+  for (const [segmento, aba, bloco] of [
+    ["salao", "agenda", "Serviços mais agendados"],
+    ["farmacia", "farmacia", "Saldo dos controlados"],
+    ["acougue", "pesagem", "Retiradas por dia"],
+  ] as const) {
+    test(`painel: visão geral, aba ${aba} (${tema})`, async ({ page }) => {
+      await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+      await page.addInitScript((escolhido) => {
+        localStorage.setItem(
+          "clickpedido-admin-segmento",
+          JSON.stringify({ state: { segmento: escolhido }, version: 1 }),
+        )
+      }, segmento)
+      await page.goto(`/admin?aba=${aba}`)
       await expect(page.getByRole("region", { name: bloco })).toBeVisible({ timeout: 15_000 })
       await page.waitForLoadState("networkidle")
       await esperarAnimacoes(page)
