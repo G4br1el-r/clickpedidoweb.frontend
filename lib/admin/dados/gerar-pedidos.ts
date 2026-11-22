@@ -3,6 +3,7 @@ import { uniformInt } from "pure-rand/distribution/uniformInt"
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus"
 import type { RandomGenerator } from "pure-rand/types/RandomGenerator"
 import { horariosLivres } from "../regras/agenda"
+import { comTotais, dividirIgualmente } from "../regras/conta"
 import { calcularPesagem } from "../regras/pesagem"
 import { proximoStatus } from "../regras/status"
 import { SEGMENTOS_PAINEL, type SegmentoPainelId, temModulo, temRecurso } from "../segmentos-painel"
@@ -94,9 +95,14 @@ const AO_VIVO: readonly {
   servirHa?: number
   /** No açougue, com carne no quilo, fica sempre para pagar depois de pesar. */
   pesar?: boolean
+  /** Mesa que já pagou metade da conta em Pix, há 5 min. */
+  pagouParte?: boolean
+  /** Mesa que fechou a conta há tantos minutos, metade em Pix e o resto em dinheiro. */
+  fechadaHa?: number
 }[] = [
+  { idade: 110, tipo: "mesa", pagamento: "dinheiro", fechadaHa: 20 },
   { idade: 95, tipo: "mesa", pagamento: "dinheiro", contaPedidaHa: 12 },
-  { idade: 80, tipo: "mesa", pagamento: "dinheiro" },
+  { idade: 80, tipo: "mesa", pagamento: "dinheiro", pagouParte: true },
   { idade: 70, tipo: "mesa", pagamento: "dinheiro" },
   { idade: 64, tipo: "entrega", pagamento: "pix" },
   { idade: 52, tipo: "entrega", pagamento: "cartao-na-entrega" },
@@ -541,7 +547,8 @@ export function gerarPedidos({
         else status = inicio <= agora ? "em-preparo" : "recebido"
       } else if (hoje) {
         const idade = (agora.getTime() - criado.getTime()) / 60_000
-        status = origem === "pdv" ? "concluido" : statusPorIdade(tipo, idade, online)
+        status =
+          origem === "pdv" || vivo?.fechadaHa ? "concluido" : statusPorIdade(tipo, idade, online)
         if (status === "concluido" && !vivo && sorte.chance(8)) status = "cancelado"
       } else {
         status = sorte.chance(8) ? "cancelado" : "concluido"
@@ -564,6 +571,7 @@ export function gerarPedidos({
       let atualizado = encerrado
         ? new Date(Math.min(addMinutes(criado, sorte.inteiro(30, 70)).getTime(), agora.getTime()))
         : criado
+      if (vivo?.fechadaHa) atualizado = addMinutes(agora, -vivo.fechadaHa)
       // A venda do PDV conclui na hora; o atendimento do salão, quando termina.
       const vendaNaHora = origem === "pdv" && status === "concluido" && !agendamento
       if (vendaNaHora) atualizado = criado
@@ -633,6 +641,8 @@ export function gerarPedidos({
         enviarParaCozinha: true,
         ...(agendamento ? { agendamento } : {}),
       }
+      // Comanda de hoje: taxa e couvert do salão congelados, e a conta paga em parte ou fechada.
+      if (mesa && vivo) novo = contaAoVivo(novo, catalogo, vivo, agora)
       // Açougue: o cliente escolhe o dia de buscar, de hoje a dois dias depois.
       if (temRecurso(segmento, "dataRetirada") && tipo === "retirada") {
         novo = { ...novo, dataRetirada: format(addDays(criado, sorte.inteiro(0, 2)), "yyyy-MM-dd") }
@@ -667,6 +677,46 @@ export function gerarPedidos({
     }
   }
   return pedidos
+}
+
+/**
+ * A comanda do roteiro ao vivo com a taxa e o couvert do salão. A que pagou parte leva metade
+ * em Pix, há 5 min; a fechada, metade em Pix e o resto em dinheiro, na hora do fechamento.
+ */
+function contaAoVivo(
+  comanda: Pedido,
+  { salao }: CatalogoLoja,
+  { pagouParte, fechadaHa }: (typeof AO_VIVO)[number],
+  agora: Date,
+): Pedido {
+  const comTaxa = comTotais({
+    ...comanda,
+    ...(salao.taxaServico.ativa
+      ? { taxaServico: { percentual: salao.taxaServico.percentual } }
+      : {}),
+    ...(salao.couvert.ativo ? { couvert: { porPessoa: salao.couvert.porPessoa } } : {}),
+  })
+  const [metade, resto] = dividirIgualmente(comTaxa.total, 2)
+  const pagamento = (id: string, forma: "pix" | "dinheiro", valor: number, em: Date) => ({
+    id: `pag-${comanda.id}-${id}`,
+    forma,
+    valor,
+    em: em.toISOString(),
+    ...(comanda.mesa?.garcom ? { por: comanda.mesa.garcom } : {}),
+  })
+  if (pagouParte) {
+    return { ...comTaxa, pagamentos: [pagamento("1", "pix", metade, addMinutes(agora, -5))] }
+  }
+  if (!fechadaHa) return comTaxa
+  const pagoEm = addMinutes(agora, -fechadaHa)
+  const { trocoPara: _troco, ...semTroco } = comTaxa
+  return {
+    ...semTroco,
+    pagamento: resto > metade ? "dinheiro" : "pix",
+    situacaoPagamento: "pago",
+    pagoEm: pagoEm.toISOString(),
+    pagamentos: [pagamento("1", "pix", metade, pagoEm), pagamento("2", "dinheiro", resto, pagoEm)],
+  }
 }
 
 export type OpcoesPedidoAgora = Omit<OpcoesGeracao, "de"> & {

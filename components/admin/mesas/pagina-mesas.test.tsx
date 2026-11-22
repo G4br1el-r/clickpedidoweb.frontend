@@ -10,7 +10,9 @@ import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { usePreferenciasMesas } from "@/lib/admin/preferencias-mesas"
+import { indicadoresSalao } from "@/lib/admin/regras/indicadores-salao"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { emReais as emReaisDoIntl } from "@/lib/formato"
 import { FormularioMesa } from "./formulario-mesa"
 import { PaginaMesas } from "./pagina-mesas"
 
@@ -114,6 +116,23 @@ async function abrir(endereco?: string, aoMudarUrl?: OnUrlUpdateFunction) {
 
 const cartao = (numero: number) =>
   screen.findByRole("button", { name: new RegExp(`^Mesa ${numero}\\b`) })
+/** O texto do dinheiro como a tela mostra para a Testing Library (sem o espaço não separável). */
+const emReais = (valor: number) => emReaisDoIntl(valor).replace(/ /g, " ")
+
+/** Os números do salão da demonstração de agora, pela regra (que tem os seus testes com valores). */
+async function numerosDaDemonstracao() {
+  const { mesas, pedidos } = await api().base()
+  const deMesa = pedidos.filter((pedido) => pedido.tipo === "mesa")
+  return indicadoresSalao({
+    mesas,
+    abertas: deMesa.filter((pedido) =>
+      ["recebido", "em-preparo", "pronto"].includes(pedido.status),
+    ),
+    concluidos: deMesa.filter((pedido) => pedido.status === "concluido"),
+    agora: new Date(),
+  })
+}
+
 const comanda = () => within(screen.getByRole("dialog", { name: /^Mesa 60/ }))
 const total = () => comanda().getByText("Total").closest("div")
 
@@ -320,21 +339,27 @@ describe("PaginaMesas", () => {
   })
 
   test("a faixa Números do salão mostra os quatro números da demonstração e esconde o resto em Ver mais", async () => {
+    const numeros = await numerosDaDemonstracao()
     const usuario = await abrir()
 
     const faixa = within(await screen.findByRole("region", { name: "Números do salão" }))
-    // A demonstração não tem conta de mesa paga hoje: faturamento zerado, médias sem valor.
+    // A demonstração tem uma conta de mesa fechada hoje, há 20 min, aberta 90 min antes.
     expect(faixa.getByText("Ocupação").nextElementSibling).toHaveTextContent("8/19 · 42%")
-    expect(faixa.getByText("Pessoas").nextElementSibling).toHaveTextContent("21")
-    expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent("R$ 0,00")
-    expect(faixa.getByText("Ticket por pessoa").nextElementSibling).toHaveTextContent("—")
+    expect(faixa.getByText("Pessoas").nextElementSibling).toHaveTextContent("16")
+    expect(numeros.faturamento).toBeGreaterThan(0)
+    await waitFor(() =>
+      expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent(
+        emReais(numeros.faturamento),
+      ),
+    )
+    expect(faixa.getByText("Ticket por pessoa").nextElementSibling).not.toHaveTextContent("—")
     expect(faixa.queryByText("Permanência média")).not.toBeInTheDocument()
 
     await usuario.click(faixa.getByRole("button", { name: "Ver mais" }))
 
-    expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("—")
-    expect(faixa.getByText("Giro das mesas").nextElementSibling).toHaveTextContent("—")
-    expect(faixa.getByText("Ticket por mesa").nextElementSibling).toHaveTextContent("—")
+    expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("90 min")
+    expect(faixa.getByText("Giro das mesas").nextElementSibling).toHaveTextContent("0,1")
+    expect(faixa.getByText("Ticket por mesa").nextElementSibling).not.toHaveTextContent("—")
   })
 
   test("a conta fechada hoje entra no faturamento, nos tickets, na permanência e no giro", async () => {
@@ -342,18 +367,20 @@ describe("PaginaMesas", () => {
     const { pedidos } = await api().base()
     const comandaAberta = pedidos.find((pedido) => pedido.mesa?.id === mesa.id)
     if (!comandaAberta) throw new Error("A mesa 60 devia ter a comanda aberta")
+    const antes = await numerosDaDemonstracao()
     await api().mesas.fecharConta(comandaAberta.id, "pix")
     const usuario = await abrir()
 
     const faixa = within(await screen.findByRole("region", { name: "Números do salão" }))
     await usuario.click(faixa.getByRole("button", { name: "Ver mais" }))
 
+    // A conta da mesa 60 (R$ 13,50, 25 min) se soma à da demonstração (90 min).
     await waitFor(() =>
-      expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent("R$ 13,50"),
+      expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent(
+        emReais(antes.faturamento + 13.5),
+      ),
     )
-    expect(faixa.getByText("Ticket por pessoa").nextElementSibling).toHaveTextContent("R$ 13,50")
-    expect(faixa.getByText("Ticket por mesa").nextElementSibling).toHaveTextContent("R$ 13,50")
-    expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("25 min")
+    expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("58 min")
     expect(faixa.getByText("Giro das mesas").nextElementSibling).toHaveTextContent("0,1")
   })
 

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { resumoDaConta } from "../regras/conta"
 import { MOTIVOS_CANCELAMENTO } from "../regras/rotulos"
 import { proximoStatus } from "../regras/status"
 import { catalogoDeTeste as catalogo } from "./catalogo-de-teste"
@@ -532,6 +533,58 @@ describe("comandas de mesa ao vivo", () => {
       const lugares = catalogo.mesas.find((mesa) => mesa.id === pedido.mesa?.id)?.lugares as number
       expect(pedido.mesa?.pessoas).toBeGreaterThanOrEqual(1)
       expect(pedido.mesa?.pessoas).toBeLessThanOrEqual(lugares)
+    }
+  })
+
+  test("uma comanda aberta já pagou metade em Pix, há 5 min", async () => {
+    const abertas = await comandasAbertas()
+    const pagas = abertas.filter((pedido) => pedido.pagamentos?.length)
+    expect(pagas).toHaveLength(1)
+    const [comanda] = pagas
+    const [pix] = comanda.pagamentos ?? []
+    expect(pix).toMatchObject({ forma: "pix", em: new Date(2026, 10, 13, 20, 25).toISOString() })
+    // A primeira metade, com o centavo que sobra ficando para a outra.
+    expect(Math.round(pix.valor * 100)).toBe(Math.floor(Math.round(comanda.total * 100) / 2))
+    expect(comanda.situacaoPagamento).toBe("na-entrega")
+  })
+
+  test("uma conta de mesa foi fechada hoje, há 20 min, em Pix e dinheiro", async () => {
+    const pedidos = gerarPedidos({
+      catalogo: await carregarCatalogo("acougue"),
+      segmento: "acougue",
+      de: new Date(2026, 10, 13),
+      agora: AGORA,
+    })
+    const fechadas = pedidos.filter(
+      (pedido) => pedido.tipo === "mesa" && pedido.status === "concluido" && pedido.pagamentos,
+    )
+    expect(fechadas).toHaveLength(1)
+    const [conta] = fechadas
+    expect(conta).toMatchObject({
+      situacaoPagamento: "pago",
+      pagoEm: new Date(2026, 10, 13, 20, 10).toISOString(),
+    })
+    expect(conta.pagamentos?.map((pagamento) => pagamento.forma)).toEqual(["pix", "dinheiro"])
+    expect(resumoDaConta(conta)).toMatchObject({ saldo: 0, pago: conta.total })
+  })
+
+  test("as comandas de hoje levam a taxa e o couvert do salão (pizzaria: 10% e R$ 8,00)", async () => {
+    const pedidos = gerarPedidos({
+      catalogo: await carregarCatalogo("pizzaria"),
+      segmento: "pizzaria",
+      de: new Date(2026, 10, 13),
+      agora: AGORA,
+    })
+    const deHoje = pedidos.filter(
+      (pedido) =>
+        (pedido.tipo === "mesa" && pedido.pagamentos !== undefined) ||
+        (pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status)),
+    )
+    expect(deHoje.length).toBeGreaterThan(0)
+    for (const comanda of deHoje) {
+      expect(comanda).toMatchObject({ taxaServico: { percentual: 10 }, couvert: { porPessoa: 8 } })
+      expect(comanda.total).toBe(resumoDaConta(comanda).total)
+      expect(comanda.total).toBeGreaterThan(comanda.subtotal)
     }
   })
 
