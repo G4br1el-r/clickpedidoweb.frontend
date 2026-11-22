@@ -10,7 +10,16 @@
 
 **Origem:** as decisões Q1 a Q52 da sessão de perguntas de 18 e 19/11/2026, registradas abaixo. Base anterior: Fase 8 de [plano-painel-admin.md](plano-painel-admin.md).
 
-**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. A Fase 5 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4. A Fase 6 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-6`, empilhada sobre a Fase 5. A Fase 7 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-7`, empilhada sobre a Fase 6. As Fases 1 a 7 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
+**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. A Fase 5 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4. A Fase 6 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-6`, empilhada sobre a Fase 5. A Fase 7 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-7`, empilhada sobre a Fase 6. A Fase 8, a última, ficou pronta em 22/11/2026, depois da revisão, na branch `claude/admin-mesas-fase-8`, empilhada sobre a Fase 7. Todas as fases do plano estão prontas, cada uma na sua branch empilhada sobre a anterior, com PRs empilhados no GitHub (#1 a Fase 1, #4 a #10 as Fases 2 a 8), para entrar em ordem.
+
+**Merge do `main` (22/11/2026):** o `main` ganhou as abas novas da visão geral (Produtos, Financeiro completo, Clientes, Operação, Entrega e as de cada segmento, CSV e impressão) e subiu a base guardada para a versão 4, por causa dos clientes novos da demonstração. Ele entrou na Fase 1 e foi repassado fase a fase até a 8, por merge (sem reescrever as branches). O que mudou:
+
+- **Base guardada:** passa para a versão 5. A 4 do `main` sem salão é migrada (`migrarDaVersao4`, antes `migrarDaVersao3`); a 3 e a 4 que já tem salão são geradas de novo.
+- **Financeiro do `main` (Fase 4):** o esboço da aba com a taxa de serviço saiu, e o comportamento voltou na aba nova. O líquido fica sem a taxa (Q34), as formas de pagamento somam cada parte da conta mista, e a taxa de serviço aparece à parte. Na conta de mesa, cortesias e desconto da conta entram em Descontos e o couvert entra no líquido; antes, Bruto − descontos + entrega ficava R$ 152,00 abaixo do Líquido na demonstração. `porForma` e `taxaDeServico` saíram do Resumo para `dashboard/comum.ts`.
+- **Mínimos de cobertura:** em cada fase, ficou o maior de cada lado.
+- **Screenshots:** os de Pedidos, Visão geral, Fila, Cozinha e Mesas foram refeitos em cada fase com os dados da demonstração juntos.
+- **Testes:** em cada fase, `pnpm check` e E2E rápido verdes. Na Fase 8, cobertura de 86,9/79,7/85,6/87,8.
+- **Fica para depois:** as taxas estimadas por forma ainda olham só a forma principal do pedido, sem separar a conta mista.
 
 ## Restrições gerais
 
@@ -2470,3 +2479,214 @@ Antes da revisão:
    - folha de QR com uma URL por mesa;
    - cadeado Pro.
 4. **E2E:** simular o cliente, pedir, aceitar no painel, chamar o garçom e atender, mais o screenshot da folha de QR.
+
+**Branch:** `claude/admin-mesas-fase-8`, empilhada sobre as Fases 1 a 7. O PR vai para `main` depois delas.
+
+**Decisões de detalhe desta fase** (decorrem de Q14, Q26, Q27, Q32, Q35, Q43, da decorrência 6, do ponto de atenção 5 e da pendência "ao vivo entre abas" da Fase 2)
+
+- **Rota do modo mesa:** `/mesa?loja=pizzaria&mesa=mesa-7` (`app/mesa/page.tsx`). A vitrine roteia por páginas planas (`/`, `/pedido`, `/pedidos`, `/finalizar`), sem segmento dinâmico, e o painel já usa o parâmetro (`?mesa=3`): o modo mesa segue o mesmo jeito. A página é um Server Component que lê `searchParams` (uma `Promise` no Next 16, o que deixa a rota dinâmica) e passa `segmento` e `mesaId` para o Client Component `<VitrineMesa />`. `loja` é o segmento do painel, onde os dados da loja moram (`clickpedido-admin-dados:{segmento}`). A URL leva o **id** da mesa, não o número: a mesa excluída não é "assumida" por outra nova com o mesmo número, e o QR dela mostra "Mesa indisponível." (ponto de atenção 5). `urlDaMesa(origem, segmento, mesaId)` monta a URL em `lib/admin/regras/qr.ts`.
+- **A vitrine da mesa:** o cabeçalho tem o nome da loja e "Mesa 7"; logo abaixo, "Peça daqui e pague na mesa, com o garçom." (sem entrega, sem pagamento online e sem o checkout). O cardápio é o do painel (só os produtos ativos e disponíveis, pelas categorias, no preço de balcão, que é o do lançamento da mesa); tocar no produto põe no pedido, e o produto com opções abre a janela de opções do Garçom (`useRodada` passa a aceitar o segmento de fora). "Seu pedido" lista os itens com mais e menos e o total, e "Pedir para a mesa" manda. A barra de ações tem "Chamar o garçom", "Pedir a conta" e "Ver a conta" (a janela com os itens da comanda, a taxa, o couvert, o pago e o que falta; sem comanda, "A mesa ainda não tem pedidos."). As cores são as da vitrine da loja do segmento (a página escolhe essa loja no seletor da vitrine). Os dados são os deste navegador: por isso "Simular cliente na mesa" abre numa aba nova.
+- **Mesa indisponível:** a mesa que não existe (ou foi excluída), a bloqueada, o segmento sem a mesa e a loja com a função QR desligada recusam tudo com "Mesa indisponível." (o cliente não precisa saber o porquê).
+- **Pedido do cliente:** o servidor confere os itens na hora (o produto esgotado ou a opção inválida recusa já). Com `qr.aceite: "garcom"` (padrão) o pedido fica **aguardando aceite** numa coleção nova, `pedidosQr` (opcional na base: a versão continua 4, como os chamados vazios da Fase 1); com `"direto"` ele vira uma rodada para a cozinha na hora, assinada "Cliente pelo QR". Na mesa livre, o primeiro pedido abre a mesa se `qr.abrirMesaPeloQr` estiver ligado (para 1 pessoa e sem garçom, como o lançamento do Garçom); desligado, ou com a mesa reservada agora, recusa com "Chame o garçom para abrir a mesa.". A mesa juntada pede na comanda da principal. **Aceitar** (no painel) lança a rodada para a cozinha com o garçom do aparelho (que abre a mesa livre, como no Garçom) e o evento "Rodada 2 para a cozinha, pedida pelo QR: …"; **Recusar** marca o pedido como recusado. Os dois só valem para o pedido aguardando ("Esse pedido já foi resolvido.").
+- **Chamados:** "Chamar o garçom" e "Pedir a conta" criam um `Chamado` (`garcom` ou `conta`). Um segundo toque com o chamado do mesmo tipo ainda aberto não duplica. O de conta exige comanda aberta ("A mesa ainda não tem conta.") e marca "Pediu a conta" (`contaPedidaEm`, evento assinado "Cliente pelo QR"). "Atender" grava `atendidoEm`; o chamado atendido recusa de novo ("Esse chamado já foi atendido."). `chamados.listar()` traz os de hoje (abertos e atendidos), pela hora.
+- **No painel:** o botão **"Chamados"** fica no cabeçalho de Mesas, com o contador do que espera alguém (chamados abertos e pedidos aguardando aceite). Ele abre a lista: cada chamado diz "Mesa 4 · Chamou o garçom · há 3 min" com "Atender"; cada pedido diz "Mesa 11 · Pedido pelo QR", os itens e o total, com "Aceitar" e "Recusar". O cartão (e a mesa do mapa) ganha o selo do que está aberto nela ("Pedido pelo QR", "Chamou para a conta" ou "Chamou o garçom", nessa ordem), também na descrição falada. Quando chega um chamado ou pedido novo, toca o alerta com a mesma preferência de som da Fila e da Cozinha (`usePreferenciasFila.somLigado` e `useSomDoAparelho`).
+- **Ver mais:** "Atendimento de chamado" mostra o tempo médio entre o chamado e o "Atender" dos atendidos hoje, em minutos arredondados (`tempoMedioDeAtendimento`); sem nenhum atendido, "—".
+- **Simular cliente na mesa:** a gaveta da mesa (aberta ou livre, sem bloqueio) tem o botão, com a função QR ligada. O painel inteiro é a demonstração (os dados moram no navegador), então ele aparece sempre que o QR está ligado. Abre `urlDaMesa(location.origin, segmento, mesa.id)` numa aba nova (`window.open(…, "_blank")`).
+- **Folha de QR:** a lista de Chamados tem "Folha de QR", que abre a prévia de uma folha A4 com um QR por mesa (não bloqueada), cada um com "Mesa 7" e o nome da loja, e "Imprimir" (`react-to-print`, `@page { size: A4 }`). Cada QR leva a URL da mesa.
+- **Cadeado Pro:** com `funcoes.qr` desligada, no lugar de "Chamados" fica "QR na mesa" com o selo Pro, que abre a explicação com o preço (R$ 39,90 por mês) e "Abrir Configurar salão", como o mapa. Configurar salão ganha o bloco "QR na mesa" (quem aceita o pedido e se o primeiro pedido abre a mesa) e o interruptor "QR na mesa" em Funções Pro. O servidor confere a função no lado do cliente (a vitrine), não no painel: os chamados e pedidos que já existem continuam atendíveis.
+- **`CATALOGO_PRO`:** entram `salao.mapa`, `salao.reservas` e `salao.qr`, com o nome e o preço de `FUNCOES_PRO_SALAO` (19,90, 24,90 e 39,90). Elas se ligam em Configurar salão, não no site: `opcaoEmUso` diz "não" para a chave cuja seção não existe na configuração do site, e assim `aplicarPlano` e a sacola do painel não quebram nem as levam.
+- **Ao vivo entre abas (Q43 e a pendência da Fase 2):**
+  - toda gravação do servidor grava também uma **revisão** (`clickpedido-admin-dados:{segmento}:revisao`, um id novo a cada vez) no `localStorage`, que as abas dividem e se lê na hora (no IndexedDB, a leitura a mais atrasava cada resposta e deixou 4 testes de tela no meio do caminho). Cada leitura confere a revisão guardada e, se outra aba gravou depois, relê a base do IndexedDB antes de responder ou de mudar. Sem `localStorage` (bloqueado), vale a cópia em memória, como antes. Assim a aba desatualizada não apaga o que a outra gravou, e as consultas a cada 4 s já veem a mudança da outra aba;
+  - depois de gravar, o servidor avisa pelo `BroadcastChannel("clickpedido-admin")` (`{ segmento }`). A aba que recebe esvazia a cópia em memória do servidor daquele segmento (`esquecer()`) e invalida as consultas `["admin", segmento]`: a mudança aparece na hora. Sem `BroadcastChannel` no navegador, fica a revisão e a consulta a cada 4 s;
+  - quem ouve: o painel inteiro (`ShellAdmin`) e a vitrine da mesa.
+- **Demonstração** (só com `funcoes.qr` ligada; o catálogo de teste vem desligado e continua sem chamados): 1 chamado de garçom aberto há 3 min na primeira mesa ocupada pelo número (não juntada), com id da data. Na virada do dia, o dia novo ganha o dele; a lista só mostra os de hoje.
+
+**Interfaces que a Fase 8 entrega**
+
+```ts
+// lib/admin/regras/qr.ts
+export function urlDaMesa(origem: string, segmento: string, mesaId: string): string // `${origem}/mesa?loja=…&mesa=…`
+
+// lib/admin/regras/chamados.ts
+export function chamadosAbertos(chamados: Chamado[]): Chamado[] // pela hora
+export function textoDoChamado(tipo: Chamado["tipo"]): string // "Chamou o garçom" | "Chamou para a conta"
+export function tempoMedioDeAtendimento(chamados: Chamado[], agora: Date): number | null // minutos
+
+// tipos
+export type PedidoQr = { id; mesaId; itens: ItemLancadoQr[]; resumo: { nome; quantidade; opcoes; observacao?; total }[]; total; criadoEm; status: "aguardando" | "aceito" | "recusado"; resolvidoEm? }
+BaseLoja.pedidosQr?: PedidoQr[]
+
+// servidor
+criarServidor({ …, aoGravar?: () => void })
+esquecer(): void
+qr: {
+  mesa(mesaId): Promise<MesaQr> // { loja; mesa: { id; numero }; categorias; produtos; conta: ContaQr | null; aguardando: number }
+  pedir(mesaId, itens: ItemLancado[]): Promise<{ pedido: PedidoQr | null; comanda: Pedido | null }>
+  chamar(mesaId, tipo: Chamado["tipo"]): Promise<Chamado>
+}
+pedidosQr: { listar(): Promise<PedidoQr[]>; aceitar(id, { garcom?; por? }): Promise<Pedido>; recusar(id): Promise<PedidoQr> }
+chamados: { listar(): Promise<Chamado[]>; atender(id): Promise<Chamado> }
+
+// lib/admin/dados/chamados-demo.ts
+export function chamadosDemo(mesas: Mesa[], agora: Date): Chamado[]
+
+// lib/admin/dados/ao-vivo.ts
+export const CANAL_ADMIN = "clickpedido-admin"
+export function avisarOutrasAbas(segmento): void
+export function ouvirOutrasAbas(aoMudar: (segmento) => void): () => void
+export function useAoVivo(): void // esquece o servidor e invalida ["admin", segmento]
+
+// consultas: useChamados, usePedidosQr, useAtenderChamado, useAceitarPedidoQr, useRecusarPedidoQr;
+// useMesaQr(segmento, mesaId), usePedirNaMesa, useChamarNaMesa (vitrine)
+// components/mesa/vitrine-mesa.tsx: <VitrineMesa segmento mesaId />
+// components/admin/mesas/chamados.tsx: <ChamadosSalao />, <QrPro />; folha-qr.tsx: <FolhaQr />
+// MesaNaGrade ganha chamados?: Chamado[] e pedidosQr?: PedidoQr[]
+```
+
+**Arquivos**
+
+- Criar:
+  - `app/mesa/page.tsx`, `components/mesa/vitrine-mesa.tsx` e `vitrine-mesa.test.tsx`;
+  - `lib/admin/regras/{qr,chamados}.ts` e os testes;
+  - `lib/admin/dados/{ao-vivo,chamados-demo}.ts` e os testes; `lib/admin/dados/servidor-qr.test.ts` e `servidor-ao-vivo.test.ts`;
+  - `components/admin/mesas/{chamados,folha-qr}.tsx` e `chamados.test.tsx`.
+- Mudar:
+  - `lib/admin/dados/{tipos,servidor,consultas,consultas-mesas}.ts`, `lib/admin/config.ts` (e `config.test.ts`);
+  - `lib/admin/regras/{filtro-mesas,indicadores-salao}.ts`;
+  - `components/admin/garcom/montar-rodada.tsx`, `components/admin/shell-admin.tsx`;
+  - `components/admin/mesas/{pagina-mesas,cartao-mesa,mapa-salao,numeros-salao,comanda-mesa,configurar-salao}.tsx` e os testes;
+  - `tests/admin.spec.ts` e `tests/visual-admin.spec.ts`.
+
+### Task 81 (Tarefa 81): a gravação parte da leitura mais recente
+
+- [ ] Testes que falham em `servidor-ao-vivo.test.ts` (duas instâncias de `criarServidor` sobre o mesmo IndexedDB, `fake-indexeddb`):
+  - A e B leem; A cria a mesa 30; B cria a mesa 31; uma terceira instância lista as duas;
+  - B, depois da gravação de A, já lista a mesa 30 sem recarregar;
+  - `aoGravar` é chamado uma vez por gravação, e `esquecer()` faz a leitura seguinte voltar ao IndexedDB.
+- [ ] Implementar (a revisão) e fazer o commit `feat(mesas): cada gravação parte da base mais recente do IndexedDB`.
+
+### Task 82 (Tarefa 82): o aviso entre abas
+
+- [ ] Testes que falham em `ao-vivo.test.ts` (o `BroadcastChannel` trocado por um falso, fronteira do navegador): avisar posta `{ segmento }` no canal "clickpedido-admin"; ouvir chama de volta com o segmento e para ao desligar; sem `BroadcastChannel`, nada quebra; `useAoVivo` esquece o servidor do segmento e invalida as consultas dele, e não as dos outros.
+- [ ] Implementar, ligar em `servidorDo` e no `ShellAdmin`, e fazer o commit `feat(mesas): as outras abas atualizam na hora pelo BroadcastChannel`.
+
+### Task 83 (Tarefa 83): regras do QR e dos chamados
+
+- [ ] Testes que falham em `qr.test.ts` e `chamados.test.ts`: `urlDaMesa("https://loja.app", "pizzaria", "mesa-7")` → "https://loja.app/mesa?loja=pizzaria&mesa=mesa-7"; abertos pela hora (o atendido fica de fora); os textos; tempo médio com 2 e 5 min atendidos hoje → 4 (3,5 arredonda para cima), o de ontem e o aberto não contam, sem nenhum → `null`.
+- [ ] Implementar e fazer o commit `feat(mesas): regras do QR e dos chamados`.
+
+### Task 84 (Tarefa 84): chamados no servidor
+
+- [ ] Testes que falham em `servidor-qr.test.ts` (lanchonete de teste com `funcoes.qr` ligada, sexta 13/11/2026 às 20:30):
+  - "Mesa indisponível." para a mesa que não existe, a excluída, a bloqueada e com a função desligada;
+  - chamar o garçom cria o chamado aberto e o segundo toque devolve o mesmo; `listar` traz os de hoje;
+  - pedir a conta sem comanda recusa; com comanda, cria o chamado e marca `contaPedidaEm` com o evento "Pediu a conta" de "Cliente pelo QR";
+  - atender grava `atendidoEm` (o tempo de resposta), e atender de novo recusa.
+- [ ] Implementar e fazer o commit `feat(mesas): chamar o garçom e pedir a conta pelo QR, e atender no servidor`.
+
+### Task 85 (Tarefa 85): o pedido do cliente no servidor
+
+- [ ] Testes que falham em `servidor-qr.test.ts`:
+  - `qr.mesa` traz o nome da loja, o número, o cardápio (sem o inativo e o esgotado), a conta da comanda (ou `null`) e quantos aguardam;
+  - com aceite do garçom, o pedido fica aguardando com o resumo e o total (preço de balcão) e a mesa continua livre; aceitar abre a mesa com a rodada para a cozinha e o evento "… pedida pelo QR"; recusar marca recusado; resolver de novo recusa;
+  - direto: na mesa livre abre a comanda com a rodada; na aberta, acrescenta a rodada;
+  - abrir pelo QR desligado (e a mesa reservada agora) recusa com "Chame o garçom para abrir a mesa."; o produto esgotado e o pedido vazio recusam.
+- [ ] Implementar (o miolo de `lancar` vira `lancarNa`) e fazer o commit `feat(mesas): pedido do cliente pelo QR, aguardando aceite ou direto`.
+
+### Task 86 (Tarefa 86): demonstração com 1 chamado aberto
+
+- [ ] Testes que falham em `chamados-demo.test.ts` (o chamado de garçom na primeira mesa ocupada, há 3 min; sem ocupada, nenhum) e em `servidor-qr.test.ts` (o catálogo com `funcoes.qr` ligada abre com ele; desligada, sem; na virada, o dia novo ganha o dele e a lista só mostra os de hoje).
+- [ ] Implementar e fazer o commit `feat(mesas): a demonstração tem 1 chamado aberto`.
+
+### Task 87 (Tarefa 87): as funções do salão no catálogo Pro
+
+- [ ] Testes que falham em `config.test.ts`: `CATALOGO_PRO` tem `salao.mapa` (19,90), `salao.reservas` (24,90) e `salao.qr` (39,90); `opcaoEmUso` diz não para elas; `aplicarPlano` e `itensDaSacola` continuam como antes.
+- [ ] Implementar e fazer o commit `feat(mesas): mapa, reservas e QR no catálogo Pro`.
+
+### Task 88 (Tarefa 88): hooks
+
+- [ ] Testes que falham em `consultas-mesas.test.tsx` (`useChamados`, `usePedidosQr`, atender, aceitar e recusar chegam ao servidor e invalidam) e em `consultas-qr.test.tsx` (`useMesaQr`, pedir e chamar pelo segmento da URL, não pelo do painel).
+- [ ] Implementar e fazer o commit `feat(mesas): hooks dos chamados e da vitrine da mesa`.
+
+### Task 89 (Tarefa 89): a vitrine em modo mesa
+
+- [ ] Testes que falham em `vitrine-mesa.test.tsx`: "Mesa 7" e o nome da loja, o aviso de pagar na mesa, sem entrega nem pagamento online; tocar no produto põe em "Seu pedido", e "Pedir para a mesa" manda e diz "Pedido enviado. O garçom vai confirmar." (no direto, "Pedido enviado para a cozinha."); "Chamar o garçom" e "Pedir a conta" avisam; "Ver a conta" mostra itens e total; a mesa bloqueada mostra "Mesa indisponível.".
+- [ ] Implementar `app/mesa/page.tsx` e `VitrineMesa`. Commit `feat(mesas): a vitrine em modo mesa`.
+
+### Task 90 (Tarefa 90): Chamados no painel
+
+- [ ] Testes que falham em `chamados.test.tsx`: o contador "Chamados 1" da demonstração; a lista com "Atender" (some depois) e o pedido com "Aceitar" (a mesa abre) e "Recusar"; o som toca quando chega um chamado novo (o `AudioContext` falso) e não toca com o som desligado; o selo "Chamou o garçom" no cartão e na descrição; com `funcoes.qr` desligada, "QR na mesa" com o selo Pro, "R$ 39,90" e "Abrir Configurar salão".
+- [ ] Implementar e fazer o commit `feat(mesas): chamados e pedidos pelo QR no painel, com som e cadeado Pro`.
+
+### Task 91 (Tarefa 91): o tempo de atendimento no "Ver mais"
+
+- [ ] Teste que falha em `pagina-mesas.test.tsx`: com um chamado atendido em 4 min, "Ver mais" mostra "Atendimento de chamado" com "4 min".
+- [ ] Implementar e fazer o commit `feat(mesas): tempo médio de atendimento de chamado nos números`.
+
+### Task 92 (Tarefa 92): simular o cliente e a folha de QR
+
+- [ ] Testes que falham: na gaveta da mesa, "Simular cliente na mesa" abre a URL da mesa numa aba nova (`window.open` espiado), e não aparece com o QR desligado; a folha de QR tem um QR por mesa não bloqueada, com "Mesa 1" e o nome da loja, e cada QR leva a URL da mesa.
+- [ ] Implementar e fazer o commit `feat(mesas): simular o cliente na mesa e a folha de QR`.
+
+### Task 93 (Tarefa 93): Configurar salão
+
+- [ ] Testes que falham em `configurar-salao.test.tsx`: o interruptor "QR na mesa" grava `funcoes.qr`; "Quem aceita o pedido" grava `qr.aceite`; "O primeiro pedido abre a mesa" grava `qr.abrirMesaPeloQr`. O teste antigo "o QR não aparece…" muda (mudança planejada: o QR entrou no painel).
+- [ ] Implementar e fazer o commit `feat(mesas): QR na mesa em Configurar salão`.
+
+### Task 94 (Tarefa 94): E2E e fechamento
+
+- [ ] Em `tests/admin.spec.ts`: na pizzaria, "Simular cliente na mesa" da mesa 11 abre a vitrine numa aba nova; o cliente pede, o painel aceita (a mesa abre com a rodada), o cliente chama o garçom e o painel atende. Em `tests/visual-admin.spec.ts`, o screenshot da folha de QR. Rodar só os novos, em `desktop-1920` e `celular-390`.
+- [ ] `pnpm check`, mostrando a saída. `pnpm test:coverage` e subir os mínimos se a cobertura subiu.
+- [ ] Os screenshots ficam para a revisão.
+- [ ] Registrar a "Situação" no fim desta seção.
+
+Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-8`, empilhada sobre a Fase 7, depois da revisão. O PR sai depois que as Fases 1 a 7 estiverem no `main`.
+
+- **O que a revisão pegou** (cada correção com o teste vermelho antes):
+  - **duas abas gravando quase juntas perdiam uma gravação:** a revisão só ia ao `localStorage` depois do `set`, e a outra aba gravava por cima com a cópia antiga. Agora cada gravação espera a vez numa fila desta página (`lib/admin/dados/bloqueio.ts`, que as instâncias do servidor do mesmo módulo dividem, como as "abas" dos testes) e, antes de gravar, confere se outra aba gravou depois da leitura dela: se gravou, a chamada é refeita sobre a base nova (até 3 vezes). A revisão muda assim que a transação do IndexedDB entra na fila (que o IndexedDB cumpre na ordem, de qualquer aba), e a chamada espera o fim da gravação fora da vez. As leituras (lista fechada `LEITURAS`; uma chamada nova que ficar de fora espera a vez, o lado seguro) não esperam. Sem `localStorage`, cada leitura volta ao IndexedDB. Nenhuma chamada chama outra pela API, então a vez não se prende nela mesma;
+  - **o pedido do QR que aguardava entrava na conta do próximo cliente:** o `PedidoQr` guarda a comanda da hora (`comandaId`, `null` na mesa livre); aceitar com outra comanda na mesa recusa ("A mesa mudou depois desse pedido."). O pedido que aguardava vira recusado quando a comanda dele fecha, é cancelada ou some (juntada), quando a mesa é excluída e na virada do dia (`vencerPedidosQr`, em toda gravação);
+  - **a vitrine da mesa trocava a loja salva da vitrine** (`useLojaAtual.escolher`) e deixava a sacola de outra loja: agora a página marca a raiz com a loja da mesa e devolve a de antes ao sair; o `TemaDaLoja` não mexe em `/mesa`, e o script de antes da pintura (`SCRIPT_LOJA`) já usa a loja do QR;
+  - **com o QR desligado, chamados e pedidos ficavam presos:** as consultas ficam ligadas; com algo esperando, o botão "Chamados" (contador e lista) fica junto do cadeado Pro, e o selo continua na mesa. A folha de QR só aparece com o QR ligado;
+  - excluir a mesa fecha os chamados abertos dela e recusa os pedidos que aguardavam; a lista deixa de fora o que é de mesa que não existe mais (nada de "Mesa undefined");
+  - `qr.mesa` entregava a comanda inteira (token, custo, eventos, motivos, garçom): agora devolve `conta: ContaQr | null` (`contaQr`, em `regras/qr.ts`), com itens (nome, quantidade, opções, total, cortesia), subtotal, cortesias, descontos, taxa, couvert, total, pago e saldo;
+  - pedir a conta com a comanda vazia diz "A mesa ainda não tem conta." (era a mensagem interna "Lance algum item…");
+  - vitrine: o produto que entra no pedido é anunciado numa região viva ("Água sem gás: 2 no seu pedido"); "Seu pedido está aguardando o garçom."; a leitura que falha mostra "Não deu para carregar. Tente de novo." com "Tentar de novo" (só a recusa da mesa é "Mesa indisponível."; com a mesa já na tela, o erro de uma consulta não a troca);
+  - `/mesa?loja=farmacia&mesa=x` mostra "Mesa indisponível." sem criar a base da farmácia (`temModulo(segmento, "mesas")`);
+  - testes que faltavam: o contador depois de atender; "Ver a conta" com os valores da pizzaria (itens R$ 10,00, taxa R$ 1,00, couvert R$ 8,00, total R$ 19,00); a vitrine com o painel na lanchonete e a mesa da pizzaria, que mata a troca de `segmentoDeFora ?? doPainel` por `doPainel` (conferido trocando o código); os de servidor da mesa juntada (o pedido direto vai para a comanda da principal) e do estoque que só baixa no aceite.
+- **Achado no E2E desta revisão** (cada um com o teste vermelho antes):
+  - com toda chamada em fila, cada gravação segurava as consultas da tela: o invalidar depois de uma mudança demorava, a gaveta trocava antes da resposta e o aviso ("Mesa 11 aberta.", "Conta da mesa 11 fechada.") se perdia; daí as leituras fora da vez e a vez que acaba quando a transação entra na fila (acima);
+  - o botão "Chamados" tinha `aria-label="Chamados, 1 esperando"` sem o texto visível "Chamados 1" (axe: `label-content-name-mismatch`, nos E2E com `verificarAcessibilidade`). O nome agora sai do conteúdo: "Chamados 1 esperando" ("esperando" só para o leitor de tela).
+- **Pendências que entraram:**
+  - o cliente vê que o pedido foi recusado: `qr.mesa` traz `ultimoPedido` (o status do último pedido de hoje, da comanda de agora), e a vitrine diz "O garçom não aceitou o seu último pedido. Fale com ele.";
+  - a conta paga atende sozinha o chamado de conta da mesa (e das juntadas), com a hora do pagamento; o de garçom fica.
+- **Mudou fora do plano:**
+  - a revisão da base ficou no `localStorage`, não no IndexedDB (commit `fix(mesas): a revisão da base fica no localStorage`): a leitura a mais no IndexedDB a cada consulta atrasava as respostas e 4 testes de tela antigos (categorias, estoque, fila e loja) liam a lista antes da hora;
+  - a vez da gravação (`bloqueio.ts`) é uma fila nesta página, e não o `navigator.locks`: a vez dele chegava uns 20 ms depois do clique, e a mudança feita logo antes de sair da página não era gravada (E2E: "Marcar pronto" na Cozinha e esgotar o gelo da adega). Entre abas vale a conferência da revisão antes de gravar, com a chamada refeita (até 3 vezes); a janela que sobra é a do `localStorage` entre processos do navegador (alguns ms);
+  - `MesaNaGrade` ganhou `selo?: string | null` (de `seloDaMesa`, em `regras/chamados.ts`) em vez de levar os chamados e os pedidos; o mapa lê o selo só na descrição falada;
+  - `qr.mesa` devolve `conta: ContaQr | null` (a projeção em `regras/qr.ts`) e `ultimoPedido`, além do que o plano pedia;
+  - o tempo médio de atendimento (`tempoMedioDeAtendimento`) ficou em `regras/chamados.ts`, e `indicadores-salao.ts` não mudou: `NumerosSalao` recebe os chamados e calcula ali;
+  - o teste de `urlDaMesa` estava em `chamados.test.ts`; foi para `qr.test.ts`, com o de `contaQr`;
+  - o pedido do QR guarda `comandaId`, e o que aguardava vira recusado sozinho (comanda que fecha, cancela ou some, mesa excluída, virada do dia);
+  - com o QR desligado e algo esperando, ficam o botão Chamados e o cadeado lado a lado; a folha de QR só aparece com o QR ligado;
+  - o chamado não se repete enquanto o do mesmo tipo está aberto **hoje** (o aberto de ontem não segura o de hoje);
+  - "Simular cliente na mesa" ficou na gaveta da mesa (livre e aberta), não no menu ⋯;
+  - a folha de QR imprime também a URL de cada mesa, em letra pequena, embaixo do QR (reserva para quem não lê QR; o teste confere a URL pelo texto);
+  - na vitrine, cada produto tem o botão "Adicionar …" à parte (o E2E pegou o `label-content-name-mismatch` da linha inteira como botão);
+  - "Atendimento de chamado" só aparece em "Ver mais" com o QR ligado;
+  - o botão do topo se chama "Chamados 1 esperando" para o leitor de tela (era "Chamados, 1 esperando", sem o texto visível);
+  - o cabeçalho de Mesas quebra a linha das ações em tela média (768 px com a barra lateral e o celular deitado).
+- **Testes antigos que mudaram (mudança planejada):**
+  - `configurar-salao.test.tsx`: "o QR não aparece, e reservas, QR e funções voltam iguais…" virou "reservas, QR e funções voltam iguais no que é salvo sem mexer neles" (o QR entrou no painel);
+  - `pagina-mesas.test.tsx`: "a faixa Números do salão…" confere também "Atendimento de chamado" com "—" (o chamado da demonstração está aberto);
+  - revisão: `vitrine-mesa.test.tsx` "a mesa da loja, …" não confere mais que a loja escolhida virou a Casa da Pizza (agora é o contrário: a loja salva fica, teste novo); "na mesa aberta, ver a conta…" confere os valores; `servidor-qr.test.ts` "o nome da loja, …, e a comanda" virou "…, e a conta" (a `ContaQr`, sem a comanda); `chamados.test.tsx` "com o QR desligado, fica o QR na mesa com o cadeado Pro" virou "…e nada esperando, fica só…" (atende o chamado da demonstração antes) e o nome do botão passou a "Chamados N esperando" (também em `admin.spec.ts` e `visual-admin.spec.ts`).
+- **Fica para depois:**
+  - o selo visível do chamado na mesa do mapa (mudaria os screenshots do mapa nas 11 telas; o leitor de tela já ouve);
+  - pessoas na abertura pelo QR (abre para 1, como o Garçom);
+  - o pedido feito na mesa livre que o garçom abre à mão antes de aceitar: o aceite recusa ("A mesa mudou depois desse pedido.") e o garçom lança de novo;
+  - não há screenshot da sacola do painel ("Todos os 35 recursos Pro"): nada a atualizar.
+- **Screenshots** (conferidos nas imagens esperada, atual e diferença, claro e escuro, em celular-390 e desktop-1920; os que vêm depois do primeiro no mesmo teste, como `painel-comanda`, `painel-receber-conta`, `painel-juntar-mesas` e `painel-mapa-edicao`, comparando o arquivo antigo com o novo; depois gerados nas outras 9 telas, com uma amostra de cada tamanho conferida):
+  - novos, nas 11 telas e nos dois temas: `painel-folha-qr` (o QR e a URL ficam escondidos na foto, porque levam a porta: a máscara passaria por cima do rodapé da janela, e o `style` da foto não soma com o `stylePath` da configuração), `painel-chamados` (a lista com o chamado da mesa 1 e "Folha de QR") e `vitrine-mesa` (a vitrine da mesa 11 com uma água em "Seu pedido");
+  - atualizados pelo topo de Mesas ("Chamados 1", o selo "Chamou o garçom" na mesa 1 e, em 768 px e no celular deitado, as ações abaixo do título): `painel-mesas`, `painel-mapa`, `painel-mapa-edicao`, `painel-atalhos-mesas`, `painel-nova-mesa`, `painel-nova-reserva`, `painel-sentar`, `painel-entrar-na-espera`, `painel-configurar-salao` e, por trás da gaveta, `painel-adicionar-itens`;
+  - atualizados pela gaveta com "Simular cliente na mesa": `painel-comanda`, `painel-comanda-conta`, `painel-receber-conta`, `painel-abrir-mesa`, `painel-transferir-mesa`, `painel-juntar-mesas` e `painel-transferir-itens`;
+  - o E2E dos screenshots pegou o topo de Mesas espremido em 768 px (com a barra lateral) e no celular deitado: o resumo virava uma palavra por linha. O cabeçalho de Mesas agora quebra a linha das ações (só nesta tela).
+- **Testes e cobertura:** 1917 testes no Vitest (`pnpm check` verde: Biome, tsc e 180 arquivos de teste). E2E rápido contra o `next start` na porta 3010: na primeira rodada, 67 falhas (os screenshots acima, o `label-content-name-mismatch` do botão Chamados e os avisos perdidos pela fila das leituras); depois das correções, os funcionais de `admin.spec.ts` nas duas telas passaram (64 passaram, 12 pulados) e `visual-admin.spec.ts` nas 11 telas passou (790 passaram, 24 pulados). O E2E do QR ("o cliente pede pelo QR da mesa 11…") passou nas 11 telas. **E2E completo (11 telas):** 2284 passaram, 651 pulados, 13 falharam, todas em telas que a branch não toca e que já falhavam no E2E completo de 21/11 (durante a Fase 2): a visão geral em 768, 1024 e 1366 px (`scrollable-region-focusable` na tabela do Resumo; `git diff da1e375..HEAD` em `painel-visao-geral.tsx` só mexe na aba Financeiro), "entrega: motoboy novo…" em 430, 768 e 1024 px (`target-size` no "Copiar para todos os dias" de `loja/pagina-loja.tsx`, que a branch não muda) e `visual-previa-foco` em 1366 e 2560 px (o arquivo de referência nunca existiu nessas telas; o teste e a prévia não mudam na branch). A cobertura ficou em 86,03/79,27/84,47/86,98 no geral (os mínimos continuam em 85/79/84/86) e `lib/**` em 98,47/95,49/99,05/99,11: funções e linhas sobem para 99 (98/95/99/99).

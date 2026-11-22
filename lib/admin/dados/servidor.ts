@@ -46,6 +46,7 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
+import { type ContaQr, contaQr } from "../regras/qr"
 import {
   conferirEspera,
   conferirReserva,
@@ -59,6 +60,8 @@ import { rotuloDoPagamento } from "../regras/rotulos"
 import { colide, posicaoValida, primeiraPosicaoLivre } from "../regras/salao"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
+import { exclusivo } from "./bloqueio"
+import { chamadosDemo } from "./chamados-demo"
 import { semearCustos } from "./custos-demo"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
@@ -70,6 +73,7 @@ import {
   type CartaoPagamento,
   type CatalogoLoja,
   type Categoria,
+  type Chamado,
   type ConfigLoja,
   type ConfigSalao,
   type DescontoConta,
@@ -78,12 +82,14 @@ import {
   FORMAS_MESA,
   type FormaMesa,
   type ItemPedido,
+  type ItemPedidoQr,
   type Mesa,
   type MotivoCancelamento,
   type Motoboy,
   type MovimentoEstoque,
   type PagamentoConta,
   type Pedido,
+  type PedidoQr,
   type PosicaoMesa,
   type Produto,
   type Reserva,
@@ -211,11 +217,28 @@ export type AberturaMesa = {
 /** Sentar quem reservou ou esperava: a mesa (a da reserva, se não vier), o garçom e quem fez. */
 export type Sentada = Omit<AberturaMesa, "pessoas" | "clienteNome"> & { mesaId?: string }
 
+/** A mesa como o cliente a vê pelo QR. */
+export type MesaQr = {
+  loja: string
+  mesa: { id: string; numero: number }
+  categorias: Categoria[]
+  /** Só o que dá para pedir: ativo e disponível. */
+  produtos: Produto[]
+  /** A conta da comanda aberta da mesa (a da principal, na juntada), como o cliente vê. */
+  conta: ContaQr | null
+  /** Pedidos desta mesa esperando o garçom aceitar. */
+  aguardando: number
+  /** Como ficou o último pedido pelo QR de quem está na mesa (hoje, na comanda de agora). */
+  ultimoPedido: PedidoQr["status"] | null
+}
+
 export type OpcoesServidor = {
   segmento: SegmentoPainelId
   carregarCatalogo: () => Promise<CatalogoLoja>
   /** Espera simulada de rede, em ms. */
   espera?: number
+  /** Depois de cada gravação: avisa as outras abas (o `BroadcastChannel`, em `ao-vivo.ts`). */
+  aoGravar?: () => void
 }
 
 /** Gerador de ids novos com prefixo: prod-1a2b3c4d. */
@@ -268,6 +291,36 @@ function abrirMesas(base: BaseLoja): BaseLoja {
 }
 
 const reais = (valor: number) => Math.round(valor * 100) / 100
+
+/**
+ * O pedido do QR que aguardava e não vale mais vira recusado: o de um dia que passou, o da mesa
+ * que não existe mais e o da comanda que fechou, foi cancelada ou juntada a outra. Assim ele não
+ * entra na conta do próximo cliente.
+ */
+function vencerPedidosQr(base: BaseLoja, agora: Date): BaseLoja {
+  const lista = base.pedidosQr ?? []
+  if (!lista.some((pedido) => pedido.status === "aguardando")) return base
+  const hoje = startOfDay(agora)
+  const mesas = new Set(base.mesas.map((mesa) => mesa.id))
+  const abertas = new Set(
+    base.pedidos
+      .filter((pedido) => pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status))
+      .map((pedido) => pedido.id),
+  )
+  const venceu = (pedido: PedidoQr) =>
+    new Date(pedido.criadoEm) < hoje ||
+    !mesas.has(pedido.mesaId) ||
+    (pedido.comandaId !== null && !abertas.has(pedido.comandaId))
+  if (!lista.some((pedido) => pedido.status === "aguardando" && venceu(pedido))) return base
+  return {
+    ...base,
+    pedidosQr: lista.map((pedido) =>
+      pedido.status === "aguardando" && venceu(pedido)
+        ? { ...pedido, status: "recusado" as const, resolvidoEm: agora.toISOString() }
+        : pedido,
+    ),
+  }
+}
 
 /**
  * O pedido mais novo que a base já teve: o de maior id em Pedidos ou o que já saiu de lá (a
@@ -455,6 +508,9 @@ function comContaPedida(comanda: Pedido, por: string | undefined): Pedido {
 
 const semContaPedida = ({ contaPedidaEm: _contaPedidaEm, ...comanda }: Pedido): Pedido => comanda
 
+/** Quem assina o que o cliente faz pela vitrine da mesa. */
+const POR_QR = "Cliente pelo QR"
+
 /** Subtotal, desconto e total da comanda refeitos pela conta (com taxa e couvert). */
 const recalcular = comTotais
 
@@ -612,11 +668,23 @@ function mesaLivreParaReceber(
   return mesa
 }
 
-/** Com as reservas ligadas, a demonstração ganha as reservas e a espera do dia. */
-function comReservasDoDia(base: BaseLoja, agora: Date): BaseLoja {
-  if (!base.salao.funcoes.reservas) return base
-  const { reservas, espera } = reservasDemo(base.mesas, agora)
-  return { ...base, reservas: [...base.reservas, ...reservas], espera: [...base.espera, ...espera] }
+/**
+ * A demonstração do dia: com as reservas ligadas, as reservas e a espera; com o QR ligado, o
+ * chamado aberto.
+ */
+function comDemonstracaoDoDia(base: BaseLoja, agora: Date): BaseLoja {
+  const comReservas = base.salao.funcoes.reservas
+    ? (() => {
+        const { reservas, espera } = reservasDemo(base.mesas, agora)
+        return {
+          ...base,
+          reservas: [...base.reservas, ...reservas],
+          espera: [...base.espera, ...espera],
+        }
+      })()
+    : base
+  if (!base.salao.funcoes.qr) return comReservas
+  return { ...comReservas, chamados: [...base.chamados, ...chamadosDemo(base.mesas, agora)] }
 }
 
 /**
@@ -663,18 +731,84 @@ function encerrar(antes: Pedido, momento: string): Pedido {
   )
 }
 
+/** Outra aba gravou entre a leitura e a gravação desta chamada: ela é refeita. */
+class OutraAbaGravou extends Error {
+  constructor() {
+    super("Outra aba mudou os dados. Tente de novo.")
+  }
+}
+
 /**
  * Servidor de demonstração do painel: uma base por segmento, guardada no IndexedDB
  * deste navegador. Na primeira vez gera 90 dias de pedidos; ao reabrir em outro dia,
  * completa os dias que faltam.
  */
-export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: OpcoesServidor) {
+export function criarServidor({
+  segmento,
+  carregarCatalogo,
+  espera = 250,
+  aoGravar,
+}: OpcoesServidor) {
   const chave = `clickpedido-admin-dados:${segmento}`
+  /**
+   * Muda a cada gravação, de qualquer aba. A cópia em memória vale enquanto a revisão guardada
+   * for a dela: outra aba gravou, a próxima leitura (ou gravação) relê a base. Fica no
+   * `localStorage`, que as abas dividem e se lê na hora, sem esperar o IndexedDB.
+   */
+  const chaveRevisao = `${chave}:revisao`
   let carregando: Promise<BaseLoja> | undefined
+  let revisao: string | null = null
 
-  async function salvar(base: BaseLoja) {
+  /**
+   * Sem `localStorage` (bloqueado no navegador), não dá para saber se outra aba gravou: cada
+   * leitura volta ao IndexedDB.
+   */
+  function revisaoGuardada(): string | null {
+    try {
+      return localStorage.getItem(chaveRevisao)
+    } catch {
+      return crypto.randomUUID()
+    }
+  }
+
+  /**
+   * Outra aba gravou depois da leitura desta chamada. Sem `localStorage` não dá para saber, e a
+   * gravação segue (a leitura já voltou ao IndexedDB).
+   */
+  function outraAbaGravou(): boolean {
+    try {
+      return localStorage.getItem(chaveRevisao) !== revisao
+    } catch {
+      return false
+    }
+  }
+
+  /**
+   * Grava a base. A transação do IndexedDB entra na fila já (quem ler depois, de qualquer aba,
+   * espera por ela) e a revisão muda na hora; o que volta é o fim da gravação, que avisa as
+   * outras abas.
+   */
+  function salvar(base: BaseLoja): Promise<void> {
     const guardado: Guardado = { versao: VERSAO, geradoEm: new Date().toISOString(), base }
-    await set(chave, guardado)
+    const nova = crypto.randomUUID()
+    const gravando = set(chave, guardado)
+    try {
+      localStorage.setItem(chaveRevisao, nova)
+    } catch {
+      // Sem onde guardar, a revisão vale só nesta aba.
+    }
+    revisao = nova
+    return gravando.then(() => aoGravar?.())
+  }
+
+  /** As gravações de `substituir` que a chamada da vez ainda não esperou. */
+  let gravacoes: Promise<void>[] = []
+  const tomarGravacoes = () => {
+    const tomadas = Promise.all(gravacoes)
+    gravacoes = []
+    // A falha chega a quem chamou, fora da vez; até lá, não é "rejeição sem dono".
+    tomadas.catch(() => {})
+    return tomadas
   }
 
   async function doZero(): Promise<BaseLoja> {
@@ -708,7 +842,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           : mesa,
       ),
     }
-    const base = comReservasDoDia(limpando, agora)
+    const base = comDemonstracaoDoDia(limpando, agora)
     await salvar(base)
     return base
   }
@@ -739,7 +873,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         ),
     })
     // A reserva que ficou marcada num dia que passou não veio; quem esperava foi embora.
-    const completa = comReservasDoDia(
+    const completa = comDemonstracaoDoDia(
       abrirMesas({
         ...base,
         pedidos: [...anteriores, ...novos.map(marcarEmAndamento)],
@@ -757,8 +891,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       }),
       agora,
     )
-    await salvar(completa)
-    return completa
+    const semVencidos = vencerPedidosQr(completa, agora)
+    await salvar(semVencidos)
+    return semVencidos
   }
 
   /** Versão 4 → 5: guarda a base migrada já, com o `geradoEm` de antes, e completa os dias que faltam. */
@@ -780,6 +915,12 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
   }
 
   async function carregar(): Promise<BaseLoja> {
+    // Outra aba gravou depois desta cópia: ela não vale mais.
+    const guardada = revisaoGuardada()
+    if (guardada !== revisao) {
+      revisao = guardada
+      carregando = undefined
+    }
     return (
       carregando ??
       lembrar(
@@ -793,9 +934,79 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     )
   }
 
+  /** A resposta é uma cópia: quem recebe não mexe na base. A espera simulada vem depois, fora da vez. */
   async function responder<T>(valor: T): Promise<T> {
-    if (espera > 0) await new Promise((pronto) => setTimeout(pronto, espera))
     return structuredClone(valor)
+  }
+
+  /**
+   * Cada gravação espera a vez (`exclusivo`): ler, mudar e gravar não se cruzam com a gravação de
+   * outra aba ou de outra chamada desta. Nenhuma chamada chama outra por aqui, então a vez não
+   * se prende nela mesma. A leitura não espera: a gravação só troca a cópia em memória depois de
+   * pronta, e a leitura que pega a de antes vê a nova na próxima consulta. Esperar deixaria a
+   * tela inteira em fila atrás de cada gravação.
+   */
+  function naVez<A extends unknown[], R>(fazer: (...argumentos: A) => Promise<R>, ler: boolean) {
+    return async (...argumentos: A): Promise<R> => {
+      const resultado = ler
+        ? await fazer(...argumentos)
+        : await exclusivo(chave, async () => {
+            // A vez acaba quando a base mudou e a gravação entrou na fila; o fim dela, a chamada
+            // espera fora da vez (dando certo ou não).
+            for (let tentativa = 1; ; tentativa += 1) {
+              try {
+                return { valor: await fazer(...argumentos), gravando: tomarGravacoes() }
+              } catch (erro) {
+                const gravando = tomarGravacoes()
+                if (!(erro instanceof OutraAbaGravou) || tentativa >= 3) return { erro, gravando }
+                await gravando
+              }
+            }
+          }).then(async (feito) => {
+            await feito.gravando
+            if ("erro" in feito) throw feito.erro
+            return feito.valor
+          })
+      if (espera > 0) await new Promise((pronto) => setTimeout(pronto, espera))
+      return resultado
+    }
+  }
+
+  /** As chamadas que só leem. Qualquer outra (inclusive uma nova, esquecida aqui) espera a vez. */
+  const LEITURAS = new Set([
+    "base",
+    "loja",
+    "pedidos.listar",
+    "pedidos.buscar",
+    "produtos.listar",
+    "categorias.listar",
+    "pdv.ultimasVendas",
+    "agendamentos.horarios",
+    "reservas.listar",
+    "espera.listar",
+    "qr.mesa",
+    "pedidosQr.listar",
+    "chamados.listar",
+    "salao.config",
+    "mesas.listar",
+    "mesas.ultimaConta",
+    "estoque.movimentos",
+    "motoboys.listar",
+    "bairros.listar",
+  ])
+
+  function cadaUmNaVez<T extends object>(alvo: T, caminho = ""): T {
+    return Object.fromEntries(
+      Object.entries(alvo).map(([nome, valor]) => [
+        nome,
+        typeof valor === "function"
+          ? naVez(
+              valor as (...argumentos: unknown[]) => Promise<unknown>,
+              LEITURAS.has(`${caminho}${nome}`),
+            )
+          : cadaUmNaVez(valor as object, `${caminho}${nome}.`),
+      ]),
+    ) as T
   }
 
   /** Altera um pedido, guarda e devolve a versão nova. */
@@ -822,15 +1033,26 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     // juntas a ela) espera a limpeza.
     const contaFechada = novo.tipo === "mesa" && !antes.pagoEm && novo.pagoEm
     const usadas = [novo.mesa?.id, ...(novo.mesa?.juntadas ?? []).map((junta) => junta.id)]
+    // A conta paga também atende o "Pedir a conta" que estava aberto nessas mesas.
+    const comChamados = contaFechada
+      ? {
+          ...atualizada,
+          chamados: atualizada.chamados.map((chamado) =>
+            chamado.tipo === "conta" && !chamado.atendidoEm && usadas.includes(chamado.mesaId)
+              ? { ...chamado, atendidoEm: novo.pagoEm }
+              : chamado,
+          ),
+        }
+      : atualizada
     await substituir(
-      contaFechada && atualizada.salao.limpeza
+      contaFechada && comChamados.salao.limpeza
         ? {
-            ...atualizada,
-            mesas: atualizada.mesas.map((mesa) =>
+            ...comChamados,
+            mesas: comChamados.mesas.map((mesa) =>
               usadas.includes(mesa.id) ? { ...mesa, limpezaDesde: novo.pagoEm } : mesa,
             ),
           }
-        : atualizada,
+        : comChamados,
     )
     return responder(novo)
   }
@@ -1020,6 +1242,31 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     return { base: abrirMesas({ ...base, pedidos: [...base.pedidos, comanda] }), comanda }
   }
 
+  /**
+   * A mesa que o QR abriu: existe, sem bloqueio, com a função QR ligada. O cliente não precisa
+   * saber o porquê: qualquer outro caso é "Mesa indisponível." (ponto de atenção 5).
+   */
+  function mesaDoQr(base: BaseLoja, mesaId: string): Mesa {
+    const mesa = base.mesas.find((item) => item.id === mesaId)
+    if (!mesa || mesa.bloqueio || !base.salao.funcoes.qr) throw new Error("Mesa indisponível.")
+    return mesa
+  }
+
+  /** O pedido do QR que ainda espera o garçom: aceito ou recusado, já foi resolvido. */
+  function aguardandoQr(base: BaseLoja, id: string): PedidoQr {
+    const pedido = (base.pedidosQr ?? []).find((item) => item.id === id)
+    if (!pedido) throw new Error("Pedido não encontrado")
+    if (pedido.status !== "aguardando") throw new Error("Esse pedido já foi resolvido.")
+    return pedido
+  }
+
+  const resolverQr = (base: BaseLoja, pedido: PedidoQr, status: "aceito" | "recusado") => ({
+    ...base,
+    pedidosQr: (base.pedidosQr ?? []).map((item) =>
+      item.id === pedido.id ? { ...item, status, resolvidoEm: new Date().toISOString() } : item,
+    ),
+  })
+
   /** Quem ainda está na fila; quem sentou ou desistiu já saiu dela. */
   function esperando(base: BaseLoja, id: string): EntradaEspera {
     const entrada = base.espera.find((item) => item.id === id)
@@ -1167,8 +1414,12 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
   /** Troca a base inteira (já carregada) e guarda. */
   async function substituir(nova: BaseLoja) {
-    carregando = Promise.resolve(nova)
-    await salvar(nova)
+    // A base desta chamada ficou velha: `naVez` refaz a chamada sobre a nova.
+    if (outraAbaGravou()) throw new OutraAbaGravou()
+    const final = vencerPedidosQr(nova, new Date())
+    carregando = Promise.resolve(final)
+    // A chamada espera a gravação fora da vez: a próxima já parte desta base.
+    gravacoes.push(salvar(final))
   }
 
   /**
@@ -1405,6 +1656,106 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     return resumoDaConta(paga).saldo > 0 ? paga : fechada(paga, agora, pagamento.por)
   }
 
+  /**
+   * Lança itens na mesa sobre a base dada: abre a comanda ou acrescenta uma rodada nova. Com
+   * cozinha, a comanda volta para "Novo" e a cozinha vê só esta rodada. `peloQr`: a rodada veio
+   * do cliente, pela vitrine da mesa. Devolve a base nova, sem gravar.
+   */
+  function lancarNa(
+    base: BaseLoja,
+    lancamento: LancamentoMesa,
+    { peloQr = false }: { peloQr?: boolean } = {},
+  ): { base: BaseLoja; comanda: Pedido } {
+    const mesa = base.mesas.find((item) => item.id === lancamento.mesaId)
+    if (!mesa) throw new Error("Mesa não encontrada")
+    if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
+    if (lancamento.itens.length === 0) throw new Error("Inclua pelo menos um item.")
+
+    const agora = new Date().toISOString()
+    const aberta = comandaDa(base, mesa.id)
+    // Na mesa livre, o lançamento abre a mesa com as regras da tela de Mesas: a reserva
+    // só se confirma lá, e o garçom tem que ser da lista do salão.
+    if (!aberta && reservaDaVez(base, mesa.id, new Date())) {
+      throw new Error(`A mesa ${mesa.numero} está reservada. Abra pela tela de Mesas.`)
+    }
+    const garcom = aberta
+      ? undefined
+      : (garcomDaLista(base, lancamento.garcom, false) ?? lancamento.garcom?.trim().slice(0, 80))
+    const rodada = Math.max(0, ...(aberta?.itens.map((item) => item.rodada ?? 1) ?? [])) + 1
+    const id = aberta?.id ?? proximoId(base)
+    const vaiParaCozinha = lancamento.enviarParaCozinha
+    const novos: ItemPedido[] = lancamento.itens.map((lancado, indice) => {
+      const { produtoId, nome, precoUnitario, custoUnitario, opcoes, produtosDasOpcoes } =
+        precificar(base, lancado)
+      // Como o 0 e o negativo, o que não é número vira 1.
+      const pedida = Number.isFinite(lancado.quantidade) ? Math.round(lancado.quantidade) : 1
+      const quantidade = Math.min(Math.max(pedida, 1), 999)
+      const observacao = lancado.observacao?.trim().slice(0, 140)
+      return {
+        id: `${id}-${rodada}-${indice + 1}`,
+        produtoId,
+        nome,
+        quantidade,
+        precoUnitario,
+        ...(custoUnitario !== undefined ? { custoUnitario } : {}),
+        opcoes,
+        ...(produtosDasOpcoes.length > 0 ? { produtosDasOpcoes } : {}),
+        // As escolhas ficam no item: editar abre a janela já marcada.
+        ...("escolhas" in lancado && Object.keys(lancado.escolhas).length > 0
+          ? { escolhas: lancado.escolhas }
+          : {}),
+        ...(observacao ? { observacao } : {}),
+        total: reais(precoUnitario * quantidade),
+        rodada,
+        vaiParaCozinha,
+        lancadoEm: agora,
+      }
+    })
+
+    const cliente = lancamento.clienteNome?.trim().slice(0, 80)
+    const por = lancamento.por?.trim() ? lancamento.por : (garcom ?? lancamento.garcom)
+    const comanda: Pedido = comEvento(
+      comEtapa(
+        recalcular(
+          aberta
+            ? {
+                // Lançar de novo desfaz o "Pediu a conta" (Q23).
+                ...semContaPedida(aberta),
+                itens: [...aberta.itens, ...novos],
+                status: vaiParaCozinha ? "recebido" : aberta.status,
+                enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
+                atualizadoEm: agora,
+                estoqueBaixado: true,
+              }
+            : comEvento(
+                comandaNova(base, mesa, {
+                  id,
+                  agora,
+                  cliente,
+                  garcom,
+                  pessoas: 1,
+                  itens: novos,
+                  enviarParaCozinha: vaiParaCozinha,
+                }),
+                eventoAberta(agora, 1, garcom),
+              ),
+        ),
+        agora,
+      ),
+      {
+        tipo: "rodada",
+        em: agora,
+        ...autor(por),
+        texto: `Rodada ${rodada} ${vaiParaCozinha ? "para a cozinha" : "lançada na mesa"}${peloQr ? ", pedida pelo QR" : ""}: ${itensEmTexto(novos)}`,
+      },
+    )
+    const comEstoque = aplicarEstoque(base, aberta, comanda, { conferir: true })
+    const pedidos = aberta
+      ? comEstoque.pedidos.map((pedido) => (pedido.id === comanda.id ? comanda : pedido))
+      : [...comEstoque.pedidos, comanda]
+    return { base: abrirMesas({ ...comEstoque, pedidos }), comanda }
+  }
+
   /** As fotos do desfazer: o antes e o depois das mesas e comandas de cada movimentação. */
   const fotos = new Map<string, Foto>()
 
@@ -1439,7 +1790,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     return { base: final, desfazer }
   }
 
-  return {
+  const api = cadaUmNaVez({
     async base(): Promise<BaseLoja> {
       return responder(await carregar())
     },
@@ -2113,6 +2464,217 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       },
     },
 
+    /** O que o cliente faz pela vitrine da mesa (o QR). */
+    qr: {
+      /** A mesa como o cliente vê: a loja, o cardápio que dá para pedir, a comanda e o que aguarda. */
+      async mesa(mesaId: string): Promise<MesaQr> {
+        const base = await carregar()
+        const mesa = mesaDoQr(base, mesaId)
+        const comanda = comandaDa(base, mesa.id)
+        const produtos = base.produtos
+          .filter((produto) => produto.ativo && produto.disponivel)
+          .toSorted((a, b) => a.ordem - b.ordem)
+        return responder({
+          loja: base.loja.nome,
+          mesa: { id: mesa.id, numero: mesa.numero },
+          categorias: base.categorias
+            .filter(
+              (categoria) =>
+                categoria.ativa && produtos.some((produto) => produto.categoriaId === categoria.id),
+            )
+            .toSorted((a, b) => a.ordem - b.ordem),
+          produtos,
+          conta: comanda ? contaQr(comanda) : null,
+          aguardando: (base.pedidosQr ?? []).filter(
+            (pedido) => pedido.mesaId === mesa.id && pedido.status === "aguardando",
+          ).length,
+          ultimoPedido:
+            (base.pedidosQr ?? [])
+              .filter(
+                (pedido) =>
+                  pedido.mesaId === mesa.id &&
+                  pedido.comandaId === (comanda?.id ?? null) &&
+                  isSameDay(new Date(pedido.criadoEm), new Date()),
+              )
+              .at(-1)?.status ?? null,
+        })
+      },
+
+      /**
+       * O pedido do cliente: os itens são conferidos já. Com o aceite do garçom, fica aguardando;
+       * direto, vira a rodada da cozinha. Na mesa livre, só abre com "abrir pelo QR" ligado e sem
+       * reserva da vez.
+       */
+      async pedir(
+        mesaId: string,
+        itens: ItemPedidoQr[],
+      ): Promise<{ pedido: PedidoQr | null; comanda: Pedido | null }> {
+        const base = await carregar()
+        const mesa = mesaDoQr(base, mesaId)
+        if (itens.length === 0) throw new Error("Inclua pelo menos um item.")
+        const limpos = itens.map(({ produtoId, escolhas, quantidade, observacao }) => {
+          const pedida = Number.isFinite(quantidade) ? Math.round(quantidade) : 1
+          const texto = observacao?.trim().slice(0, 140)
+          return {
+            produtoId,
+            escolhas,
+            quantidade: Math.min(Math.max(pedida, 1), 999),
+            ...(texto ? { observacao: texto } : {}),
+          }
+        })
+        const resumo = limpos.map((item) => {
+          const { nome, opcoes, precoUnitario } = precificar(base, item)
+          return {
+            nome,
+            quantidade: item.quantidade,
+            opcoes,
+            ...(item.observacao ? { observacao: item.observacao } : {}),
+            total: reais(precoUnitario * item.quantidade),
+          }
+        })
+        const aberta = comandaDa(base, mesa.id)
+        if (
+          !aberta &&
+          (!base.salao.qr.abrirMesaPeloQr || reservaDaVez(base, mesa.id, new Date()))
+        ) {
+          throw new Error("Chame o garçom para abrir a mesa.")
+        }
+        if (base.salao.qr.aceite === "direto") {
+          const lancado = lancarNa(
+            base,
+            { mesaId: mesa.id, itens: limpos, enviarParaCozinha: true, por: POR_QR },
+            { peloQr: true },
+          )
+          await substituir(lancado.base)
+          return responder({ pedido: null, comanda: lancado.comanda })
+        }
+        const pedido: PedidoQr = {
+          id: novoId("pedido-qr")(),
+          mesaId: mesa.id,
+          comandaId: aberta?.id ?? null,
+          itens: limpos,
+          resumo,
+          total: reais(resumo.reduce((soma, item) => soma + item.total, 0)),
+          criadoEm: new Date().toISOString(),
+          status: "aguardando",
+        }
+        await substituir({ ...base, pedidosQr: [...(base.pedidosQr ?? []), pedido] })
+        return responder({ pedido, comanda: null })
+      },
+
+      /**
+       * "Chamar o garçom" ou "Pedir a conta". O chamado do mesmo tipo ainda aberto hoje não se
+       * repete. O de conta exige a comanda e marca "Pediu a conta", assinado pelo cliente.
+       */
+      async chamar(mesaId: string, tipo: Chamado["tipo"]): Promise<Chamado> {
+        const base = await carregar()
+        const mesa = mesaDoQr(base, mesaId)
+        const agora = new Date()
+        const comanda = comandaDa(base, mesa.id)
+        // A comanda aberta ainda vazia também não tem o que pagar.
+        if (tipo === "conta" && !comanda?.itens.length) {
+          throw new Error("A mesa ainda não tem conta.")
+        }
+        const pedidos =
+          comanda && tipo === "conta"
+            ? base.pedidos.map((pedido) =>
+                pedido.id === comanda.id
+                  ? { ...comContaPedida(comanda, POR_QR), atualizadoEm: agora.toISOString() }
+                  : pedido,
+              )
+            : base.pedidos
+        const aberto = base.chamados.find(
+          (chamado) =>
+            chamado.mesaId === mesa.id &&
+            chamado.tipo === tipo &&
+            !chamado.atendidoEm &&
+            isSameDay(new Date(chamado.criadoEm), agora),
+        )
+        const chamado: Chamado = aberto ?? {
+          id: novoId("chamado")(),
+          mesaId: mesa.id,
+          tipo,
+          criadoEm: agora.toISOString(),
+        }
+        await substituir({
+          ...base,
+          pedidos,
+          chamados: aberto ? base.chamados : [...base.chamados, chamado],
+        })
+        return responder(chamado)
+      },
+    },
+
+    /** Os pedidos dos clientes pelo QR que esperam o garçom aceitar. */
+    pedidosQr: {
+      async listar(): Promise<PedidoQr[]> {
+        return responder(
+          ((await carregar()).pedidosQr ?? [])
+            .filter((pedido) => pedido.status === "aguardando")
+            .toSorted((a, b) => Date.parse(a.criadoEm) - Date.parse(b.criadoEm)),
+        )
+      },
+
+      /** Lança o pedido como rodada para a cozinha, com o garçom (que abre a mesa livre). */
+      async aceitar(
+        id: string,
+        { garcom, por }: { garcom?: string; por?: string },
+      ): Promise<Pedido> {
+        const base = await carregar()
+        const pedido = aguardandoQr(base, id)
+        // Outra comanda na mesa: o pedido era de quem sentou antes.
+        if ((comandaDa(base, pedido.mesaId)?.id ?? null) !== pedido.comandaId) {
+          throw new Error("A mesa mudou depois desse pedido.")
+        }
+        const { base: lancada, comanda } = lancarNa(
+          base,
+          {
+            mesaId: pedido.mesaId,
+            itens: pedido.itens,
+            enviarParaCozinha: true,
+            ...(garcom ? { garcom } : {}),
+            ...(por ? { por } : {}),
+          },
+          { peloQr: true },
+        )
+        await substituir(resolverQr(lancada, pedido, "aceito"))
+        return responder(comanda)
+      },
+
+      async recusar(id: string): Promise<PedidoQr> {
+        const base = await carregar()
+        const nova = resolverQr(base, aguardandoQr(base, id), "recusado")
+        await substituir(nova)
+        return responder((nova.pedidosQr ?? []).find((pedido) => pedido.id === id) as PedidoQr)
+      },
+    },
+
+    chamados: {
+      /** Os chamados de hoje, abertos e atendidos, pela hora. */
+      async listar(): Promise<Chamado[]> {
+        const agora = new Date()
+        return responder(
+          (await carregar()).chamados
+            .filter((chamado) => isSameDay(new Date(chamado.criadoEm), agora))
+            .toSorted((a, b) => Date.parse(a.criadoEm) - Date.parse(b.criadoEm)),
+        )
+      },
+
+      /** Grava a hora do atendimento: o tempo de resposta é dela até o chamado. */
+      async atender(id: string): Promise<Chamado> {
+        const base = await carregar()
+        const chamado = base.chamados.find((item) => item.id === id)
+        if (!chamado) throw new Error("Chamado não encontrado")
+        if (chamado.atendidoEm) throw new Error("Esse chamado já foi atendido.")
+        const atendido = { ...chamado, atendidoEm: new Date().toISOString() }
+        await substituir({
+          ...base,
+          chamados: base.chamados.map((item) => (item.id === id ? atendido : item)),
+        })
+        return responder(atendido)
+      },
+    },
+
     salao: {
       async config(): Promise<ConfigSalao> {
         return responder((await carregar()).salao)
@@ -2308,7 +2870,13 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (comandaDa(base, id)) throw new Error("Feche a conta antes de excluir a mesa.")
         const mesa = base.mesas.find((item) => item.id === id)
         if (mesa) conferirSemReserva(base, mesa)
-        await substituir({ ...base, mesas: base.mesas.filter((mesa) => mesa.id !== id) })
+        // O chamado aberto da mesa sai junto (ninguém vai atender); o pedido que aguardava vence
+        // em `substituir`.
+        await substituir({
+          ...base,
+          mesas: base.mesas.filter((mesa) => mesa.id !== id),
+          chamados: base.chamados.filter((chamado) => chamado.mesaId !== id || chamado.atendidoEm),
+        })
       },
 
       /**
@@ -2326,96 +2894,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
        * a comanda volta para "Novo" e a cozinha vê só esta rodada.
        */
       async lancar(lancamento: LancamentoMesa): Promise<Pedido> {
-        const base = await carregar()
-        const mesa = base.mesas.find((item) => item.id === lancamento.mesaId)
-        if (!mesa) throw new Error("Mesa não encontrada")
-        if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
-        if (lancamento.itens.length === 0) throw new Error("Inclua pelo menos um item.")
-
-        const agora = new Date().toISOString()
-        const aberta = comandaDa(base, mesa.id)
-        // Na mesa livre, o lançamento abre a mesa com as regras da tela de Mesas: a reserva
-        // só se confirma lá, e o garçom tem que ser da lista do salão.
-        if (!aberta && reservaDaVez(base, mesa.id, new Date())) {
-          throw new Error(`A mesa ${mesa.numero} está reservada. Abra pela tela de Mesas.`)
-        }
-        const garcom = aberta
-          ? undefined
-          : (garcomDaLista(base, lancamento.garcom, false) ??
-            lancamento.garcom?.trim().slice(0, 80))
-        const rodada = Math.max(0, ...(aberta?.itens.map((item) => item.rodada ?? 1) ?? [])) + 1
-        const id = aberta?.id ?? proximoId(base)
-        const vaiParaCozinha = lancamento.enviarParaCozinha
-        const novos: ItemPedido[] = lancamento.itens.map((lancado, indice) => {
-          const { produtoId, nome, precoUnitario, custoUnitario, opcoes, produtosDasOpcoes } =
-            precificar(base, lancado)
-          // Como o 0 e o negativo, o que não é número vira 1.
-          const pedida = Number.isFinite(lancado.quantidade) ? Math.round(lancado.quantidade) : 1
-          const quantidade = Math.min(Math.max(pedida, 1), 999)
-          const observacao = lancado.observacao?.trim().slice(0, 140)
-          return {
-            id: `${id}-${rodada}-${indice + 1}`,
-            produtoId,
-            nome,
-            quantidade,
-            precoUnitario,
-            ...(custoUnitario !== undefined ? { custoUnitario } : {}),
-            opcoes,
-            ...(produtosDasOpcoes.length > 0 ? { produtosDasOpcoes } : {}),
-            // As escolhas ficam no item: editar abre a janela já marcada.
-            ...("escolhas" in lancado && Object.keys(lancado.escolhas).length > 0
-              ? { escolhas: lancado.escolhas }
-              : {}),
-            ...(observacao ? { observacao } : {}),
-            total: reais(precoUnitario * quantidade),
-            rodada,
-            vaiParaCozinha,
-            lancadoEm: agora,
-          }
-        })
-
-        const cliente = lancamento.clienteNome?.trim().slice(0, 80)
-        const por = lancamento.por?.trim() ? lancamento.por : (garcom ?? lancamento.garcom)
-        const comanda: Pedido = comEvento(
-          comEtapa(
-            recalcular(
-              aberta
-                ? {
-                    // Lançar de novo desfaz o "Pediu a conta" (Q23).
-                    ...semContaPedida(aberta),
-                    itens: [...aberta.itens, ...novos],
-                    status: vaiParaCozinha ? "recebido" : aberta.status,
-                    enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
-                    atualizadoEm: agora,
-                    estoqueBaixado: true,
-                  }
-                : comEvento(
-                    comandaNova(base, mesa, {
-                      id,
-                      agora,
-                      cliente,
-                      garcom,
-                      pessoas: 1,
-                      itens: novos,
-                      enviarParaCozinha: vaiParaCozinha,
-                    }),
-                    eventoAberta(agora, 1, garcom),
-                  ),
-            ),
-            agora,
-          ),
-          {
-            tipo: "rodada",
-            em: agora,
-            ...autor(por),
-            texto: `Rodada ${rodada} ${vaiParaCozinha ? "para a cozinha" : "lançada na mesa"}: ${itensEmTexto(novos)}`,
-          },
-        )
-        const comEstoque = aplicarEstoque(base, aberta, comanda, { conferir: true })
-        const pedidos = aberta
-          ? comEstoque.pedidos.map((pedido) => (pedido.id === comanda.id ? comanda : pedido))
-          : [...comEstoque.pedidos, comanda]
-        await substituir(abrirMesas({ ...comEstoque, pedidos }))
+        const { base, comanda } = lancarNa(await carregar(), lancamento)
+        await substituir(base)
         return responder(comanda)
       },
 
@@ -3389,6 +3869,14 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       await del(chave)
       await lembrar(doZero())
     },
+  })
+
+  return {
+    /** Outra aba avisou que gravou: a próxima leitura volta ao IndexedDB. */
+    esquecer() {
+      carregando = undefined
+    },
+    ...api,
   }
 }
 

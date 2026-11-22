@@ -450,6 +450,48 @@ export function useDesistirDaEspera() {
   return useMudancaNasMesas((servidor, id: string) => servidor.espera.desistir(id))
 }
 
+const chaveChamados = (segmento: SegmentoPainelId) => ["admin", segmento, "chamados"] as const
+const chavePedidosQr = (segmento: SegmentoPainelId) => ["admin", segmento, "pedidos-qr"] as const
+
+/** Os chamados de hoje (abertos e atendidos), conferidos como as mesas. */
+export function useChamados(intervalo = 10_000, { ativo = true }: { ativo?: boolean } = {}) {
+  const segmento = useSegmento()
+  return useQuery({
+    queryKey: chaveChamados(segmento),
+    queryFn: () => servidorDo(segmento).chamados.listar(),
+    refetchInterval: intervalo,
+    enabled: ativo,
+  })
+}
+
+/** Os pedidos dos clientes pelo QR que esperam o garçom aceitar. */
+export function usePedidosQr(intervalo = 10_000, { ativo = true }: { ativo?: boolean } = {}) {
+  const segmento = useSegmento()
+  return useQuery({
+    queryKey: chavePedidosQr(segmento),
+    queryFn: () => servidorDo(segmento).pedidosQr.listar(),
+    refetchInterval: intervalo,
+    enabled: ativo,
+  })
+}
+
+export function useAtenderChamado() {
+  return useMudancaNasMesas((servidor, id: string) => servidor.chamados.atender(id))
+}
+
+/** Aceitar lança a rodada (e abre a mesa livre): a comanda já fica guardada para a gaveta. */
+export function useAceitarPedidoQr() {
+  return useMudancaNasMesas(
+    (servidor, { id, ...quem }: { id: string; garcom?: string; por?: string }) =>
+      servidor.pedidosQr.aceitar(id, quem),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useRecusarPedidoQr() {
+  return useMudancaNasMesas((servidor, id: string) => servidor.pedidosQr.recusar(id))
+}
+
 export function useSentarDaEspera() {
   return useMudancaNasMesas(
     (servidor, { id, ...sentada }: Sentada & { id: string }) => servidor.espera.sentar(id, sentada),

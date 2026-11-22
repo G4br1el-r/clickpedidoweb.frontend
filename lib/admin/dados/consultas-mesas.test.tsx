@@ -8,10 +8,13 @@ import { useSegmentoAtual } from "../segmento-atual"
 import { reiniciarServidores, servidorDo, usePedido } from "./consultas"
 import {
   useAbrirMesa,
+  useAceitarPedidoQr,
   useAlterarQuantidade,
+  useAtenderChamado,
   useBloquearMesa,
   useCancelarComanda,
   useCancelarReserva,
+  useChamados,
   useChamarDaEspera,
   useConfigSalao,
   useCriarMesa,
@@ -35,9 +38,11 @@ import {
   useMesas,
   useNaoCompareceu,
   usePagar,
+  usePedidosQr,
   usePedirConta,
   usePosicionarMesas,
   useReabrirConta,
+  useRecusarPedidoQr,
   useRemoverItem,
   useReservas,
   useSalvarConfigSalao,
@@ -613,5 +618,37 @@ describe("consultas das reservas e da espera", () => {
     expect(result.current.espera.data?.[1].chamadaEm).toBe(
       new Date(2026, 10, 13, 20, 30).toISOString(),
     )
+  })
+})
+
+describe("chamados e pedidos pelo QR", () => {
+  const agua = { produtoId: "prod-agua", escolhas: {}, quantidade: 1 }
+
+  test("atender tira o chamado da lista de abertos; aceitar e recusar resolvem o pedido", async () => {
+    const api = servidorDo("pizzaria")
+    const { pedido: primeiro } = await api.qr.pedir("mesa-11", [agua])
+    const { pedido: segundo } = await api.qr.pedir("mesa-12", [agua])
+    const { result } = renderHook(
+      () => ({
+        chamados: useChamados(),
+        pedidos: usePedidosQr(),
+        atender: useAtenderChamado(),
+        aceitar: useAceitarPedidoQr(),
+        recusar: useRecusarPedidoQr(),
+      }),
+      { wrapper: envolver() },
+    )
+    await waitFor(() => expect(result.current.pedidos.data).toHaveLength(2))
+    const [chamado] = result.current.chamados.data ?? []
+
+    await act(() => result.current.atender.mutateAsync(chamado.id))
+    const comanda = await act(() =>
+      result.current.aceitar.mutateAsync({ id: primeiro?.id as string, garcom: "Rafa" }),
+    )
+    await act(() => result.current.recusar.mutateAsync(segundo?.id as string))
+
+    await waitFor(() => expect(result.current.pedidos.data).toEqual([]))
+    expect(result.current.chamados.data?.[0].atendidoEm).toBeDefined()
+    expect(comanda.mesa).toMatchObject({ id: "mesa-11", garcom: "Rafa" })
   })
 })

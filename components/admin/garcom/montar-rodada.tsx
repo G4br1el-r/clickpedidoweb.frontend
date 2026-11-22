@@ -14,6 +14,7 @@ import {
   totaisDaVenda,
 } from "@/lib/admin/regras/pdv"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { type AvisoCaixa, linhaQueMudou } from "../pdv/caixa-pdv"
 import { JanelaOpcoes } from "../pdv/janela-opcoes"
@@ -181,8 +182,10 @@ export function Bandeja({
  * A rodada que o Garçom e a comanda montam com o catálogo do balcão: inclui (com aviso para o
  * leitor de tela), abre a janela de opções e devolve os itens no formato do lançamento.
  */
-export function useRodada() {
-  const segmento = useSegmentoAtual((estado) => estado.segmento)
+export function useRodada(segmentoDeFora?: SegmentoPainelId) {
+  // A vitrine da mesa traz a loja do endereço; o painel usa a escolhida nele.
+  const doPainel = useSegmentoAtual((estado) => estado.segmento)
+  const segmento = segmentoDeFora ?? doPainel
   const [itens, setItens] = useState<(ItemBandeja & { chave: string })[]>([])
   const [aviso, setAviso] = useState<AvisoCaixa | null>(null)
   const [comOpcoes, setComOpcoes] = useState<Produto | null>(null)

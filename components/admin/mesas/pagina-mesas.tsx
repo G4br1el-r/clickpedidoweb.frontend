@@ -16,12 +16,19 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAgora } from "@/hooks/use-agora"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
-import { useFila } from "@/lib/admin/dados/consultas"
-import { useConfigSalao, useMesas, useReservas } from "@/lib/admin/dados/consultas-mesas"
+import { useFila, useLoja } from "@/lib/admin/dados/consultas"
+import {
+  useChamados,
+  useConfigSalao,
+  useMesas,
+  usePedidosQr,
+  useReservas,
+} from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
 import { useGarcomCarregado } from "@/lib/admin/garcom"
 import { usePreferenciasMesasCarregadas } from "@/lib/admin/preferencias-mesas"
 import { alertasDaMesa } from "@/lib/admin/regras/alertas-mesa"
+import { seloDaMesa } from "@/lib/admin/regras/chamados"
 import { filtrarMesas, type MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { reservaDaMesa } from "@/lib/admin/regras/reservas"
@@ -32,10 +39,12 @@ import { SeloPro } from "../campos"
 import { AtalhosMesas, FolhaAtalhos } from "./atalhos-mesas"
 import { BloquearMesa } from "./bloquear-mesa"
 import { CartaoMesa } from "./cartao-mesa"
+import { ChamadosSalao } from "./chamados"
 import { ComandaMesa } from "./comanda-mesa"
 import { ConfigurarSalao } from "./configurar-salao"
 import { LIMPAR_GRADE, useEstadoGrade, useMesaAberta, useVista, type Vista } from "./estado-grade"
 import { FiltrosMesas } from "./filtros-mesas"
+import { FolhaQr } from "./folha-qr"
 import { FormularioMesa } from "./formulario-mesa"
 import { MapaPro, MapaSalao } from "./mapa-salao"
 import { NovaMesa } from "./nova-mesa"
@@ -53,7 +62,12 @@ export function PaginaMesas() {
   const { data: mesas } = useMesas(4_000)
   const { data: salao } = useConfigSalao()
   const { data: fila } = useFila()
+  const { data: loja } = useLoja()
   const { data: reservas } = useReservas(4_000)
+  const qrLigado = salao?.funcoes.qr ?? false
+  // Com o QR desligado, o que já chegou continua atendível: as consultas ficam ligadas.
+  const { data: chamados } = useChamados(4_000)
+  const { data: pedidosQr } = usePedidosQr(4_000)
   const agora = useAgora(30_000)
   const [filtros, setFiltros] = useEstadoGrade()
   const [numeroAberto, setNumeroAberto] = useMesaAberta()
@@ -132,6 +146,10 @@ export function PaginaMesas() {
       mesa,
       comanda,
       reserva,
+      selo: seloDaMesa(
+        chamados?.filter((chamado) => chamado.mesaId === mesa.id),
+        pedidosQr?.filter((pedido) => pedido.mesaId === mesa.id),
+      ),
       estado: estadoDaMesa(mesa, comanda, {
         ...(principal ? { principal } : {}),
         ...(reserva && agora
@@ -162,9 +180,12 @@ export function PaginaMesas() {
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
+      {/* Com Chamados, as ações ficam largas: em tela média, descem para baixo do título em vez
+          de espremer o resumo numa palavra por linha. */}
       <CabecalhoPagina
         titulo="Mesas"
         vivo
+        className="md:flex-wrap md:gap-x-6 md:[&>div:first-child]:min-w-64 md:[&>div:first-child]:flex-1"
         resumo={
           mesas
             ? [
@@ -189,6 +210,17 @@ export function PaginaMesas() {
             >
               <KeyboardIcon />
             </Button>
+            {mesas && salao && (
+              <ChamadosSalao
+                mesas={mesas}
+                salao={salao}
+                chamados={chamados}
+                pedidos={pedidosQr}
+                agora={agora}
+                aoConfigurar={() => setSalaoAberto(true)}
+                rodape={<FolhaQr mesas={mesas} loja={loja?.nome ?? ""} />}
+              />
+            )}
             <ConfigurarSalao salao={salao} aberto={salaoAberto} aoMudar={setSalaoAberto} />
             <NovaMesa aberta={novaAberta} aoMudar={setNovaAberta} />
           </>
@@ -196,7 +228,12 @@ export function PaginaMesas() {
       />
 
       {mesas && agora && (
-        <NumerosSalao mesas={mesas} abertas={[...comandas.values()]} agora={agora} />
+        <NumerosSalao
+          mesas={mesas}
+          abertas={[...comandas.values()]}
+          agora={agora}
+          {...(qrLigado && chamados ? { chamados } : {})}
+        />
       )}
 
       {/* O painel de reservas fica à direita a partir de 1280 px; abaixo disso, acima da grade.

@@ -38,4 +38,14 @@ describe("TemaDaLoja", () => {
     render(<TemaDaLoja />)
     expect(document.documentElement.dataset.loja).toBeUndefined()
   })
+
+  test("na vitrine da mesa, quem veste a página é a loja da mesa: a escolhida não mexe", () => {
+    caminho.atual = "/mesa"
+    document.documentElement.dataset.loja = "adega-da-vila"
+    document.title = "Pedido na mesa"
+    useLojaAtual.setState({ id: "drogaria-bem-estar", hidratada: true })
+    render(<TemaDaLoja />)
+    expect(document.documentElement.dataset.loja).toBe("adega-da-vila")
+    expect(document.title).toBe("Pedido na mesa")
+  })
 })

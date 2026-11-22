@@ -19,6 +19,8 @@ export type MesaNaGrade = {
   alertas: AlertaMesa[]
   /** A reserva que segura a mesa agora (da antecedência até a tolerância). */
   reserva?: Reserva
+  /** O que o cliente pediu pelo QR e espera alguém ("Chamou o garçom"), de `seloDaMesa`. */
+  selo?: string | null
 }
 
 function combinaBusca({ mesa }: MesaNaGrade, busca: string) {

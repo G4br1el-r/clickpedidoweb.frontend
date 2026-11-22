@@ -415,6 +415,49 @@ for (const tema of ["light", "dark"] as const) {
     await expect(reservas).toHaveScreenshot(`painel-reservas-pro-${tema}.png`)
   })
 
+  test(`painel: folha de QR (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas")
+    await page.getByRole("button", { name: "Chamados 1 esperando" }).click({ timeout: 15_000 })
+    await page.getByRole("button", { name: "Folha de QR" }).click()
+    const folha = page.getByRole("dialog", { name: "Folha de QR" })
+    await expect(folha.getByRole("figure")).toHaveCount(19)
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    // O QR e a URL levam a porta do servidor: ficam escondidos na foto (a máscara passaria por
+    // cima do rodapé da janela, e o estilo da foto não soma com o `stylePath` da configuração).
+    await page.addStyleTag({
+      content: '[aria-label^="QR da mesa"], figcaption > span:last-child { visibility: hidden }',
+    })
+    await expect(folha).toHaveScreenshot(`painel-folha-qr-${tema}.png`)
+  })
+
+  test(`painel: lista de chamados (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas")
+    await page.getByRole("button", { name: "Chamados 1 esperando" }).click({ timeout: 15_000 })
+    const lista = page.getByRole("dialog", { name: "Chamados" })
+    await expect(lista.getByRole("listitem", { name: "Mesa 1" })).toBeVisible()
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-chamados-${tema}.png`)
+  })
+
+  test(`vitrine da mesa pelo QR (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/mesa?loja=pizzaria&mesa=mesa-11")
+    await expect(page.getByRole("heading", { level: 1, name: "Mesa 11" })).toBeVisible({
+      timeout: 15_000,
+    })
+    await page.getByRole("button", { name: "Adicionar Água sem gás" }).click()
+    await expect(
+      page.getByRole("region", { name: "Seu pedido" }).getByText("Água sem gás", { exact: true }),
+    ).toBeVisible()
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`vitrine-mesa-${tema}.png`)
+  })
+
   test(`painel: garçom (${tema})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
     await page.goto("/admin/garcom")

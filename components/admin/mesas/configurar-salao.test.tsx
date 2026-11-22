@@ -191,12 +191,11 @@ describe("Configurar salão", () => {
     expect(painel.queryByLabelText("Couvert por pessoa (R$)")).not.toBeInTheDocument()
   })
 
-  // Fase 7: as reservas entraram no painel; o QR continua fora até a Fase 8.
-  test("o QR não aparece, e reservas, QR e funções voltam iguais no que é salvo", async () => {
+  // Fase 8: o QR entrou no painel (mudança planejada; antes, "o QR não aparece").
+  test("reservas, QR e funções voltam iguais no que é salvo sem mexer neles", async () => {
     const antes = await api().salao.config()
     const { usuario, painel } = await abrirPainel()
 
-    expect(painel.queryByText(/QR/)).not.toBeInTheDocument()
     await usuario.click(painel.getByRole("switch", { name: "Limpeza depois de fechar a conta" }))
     await usuario.click(painel.getByRole("button", { name: "Salvar" }))
     await screen.findByText("Salão salvo.")
@@ -219,6 +218,35 @@ describe("Configurar salão", () => {
     await screen.findByText("Salão salvo.")
 
     expect((await api().salao.config()).funcoes).toEqual({ ...antes.funcoes, mapa: false })
+  })
+
+  test("QR na mesa, função Pro, liga e desliga aqui", async () => {
+    const antes = await api().salao.config()
+    const { usuario, painel } = await abrirPainel()
+    const qr = painel.getByRole("switch", { name: /^QR na mesa/ })
+    expect(qr).toBeChecked()
+    expect(painel.getByText(/R\$ 39,90 por mês/)).toBeInTheDocument()
+
+    await usuario.click(qr)
+    await usuario.click(painel.getByRole("button", { name: "Salvar" }))
+    await screen.findByText("Salão salvo.")
+
+    expect((await api().salao.config()).funcoes).toEqual({ ...antes.funcoes, qr: false })
+  })
+
+  test("quem aceita o pedido pelo QR e se o primeiro pedido abre a mesa", async () => {
+    const { usuario, painel } = await abrirPainel()
+    const direto = painel.getByRole("radio", { name: "Vai direto para a cozinha" })
+    const abre = painel.getByRole("switch", { name: "O primeiro pedido abre a mesa livre" })
+    expect(painel.getByRole("radio", { name: "O garçom aceita" })).toBeChecked()
+    expect(abre).toBeChecked()
+
+    await usuario.click(direto)
+    await usuario.click(abre)
+    await usuario.click(painel.getByRole("button", { name: "Salvar" }))
+    await screen.findByText("Salão salvo.")
+
+    expect((await api().salao.config()).qr).toEqual({ aceite: "direto", abrirMesaPeloQr: false })
   })
 
   test("reservas e lista de espera, função Pro, liga e desliga aqui", async () => {

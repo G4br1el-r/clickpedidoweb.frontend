@@ -99,8 +99,12 @@ export function cssDasLojas(): string {
     .join("")
 }
 
+/** A loja de cada segmento do painel: a vitrine da mesa (`/mesa?loja=pizzaria`) veste a dela. */
+const LOJA_DO_SEGMENTO = Object.fromEntries(LOJAS.map(({ loja }) => [loja.segmento, loja.id]))
+
 /**
  * Roda antes da primeira pintura: marca a loja salva na raiz, para a página já nascer nas
- * cores dela. O painel (/admin) tem as cores próprias e fica de fora.
+ * cores dela. O painel (/admin) tem as cores próprias e fica de fora; a vitrine da mesa (/mesa)
+ * nasce nas cores da loja do QR.
  */
-export const SCRIPT_LOJA = `try{if(!location.pathname.startsWith("/admin")){var s=JSON.parse(localStorage.getItem("${CHAVE}")||"{}");var id=s&&s.state&&s.state.id;if(id&&id!=="${PADRAO}"&&${JSON.stringify(LOJAS.map(({ loja }) => loja.id))}.indexOf(id)>=0)document.documentElement.dataset.loja=id}}catch(e){}`
+export const SCRIPT_LOJA = `try{var p=location.pathname;if(!p.startsWith("/admin")){var id;if(p.startsWith("/mesa")){id=${JSON.stringify(LOJA_DO_SEGMENTO)}[new URLSearchParams(location.search).get("loja")]}else{var s=JSON.parse(localStorage.getItem("${CHAVE}")||"{}");id=s&&s.state&&s.state.id}if(id&&id!=="${PADRAO}"&&${JSON.stringify(LOJAS.map(({ loja }) => loja.id))}.indexOf(id)>=0)document.documentElement.dataset.loja=id}}catch(e){}`
