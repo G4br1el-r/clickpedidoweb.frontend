@@ -1,5 +1,5 @@
 import "fake-indexeddb/auto"
-import { clear } from "idb-keyval"
+import { clear, get } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { catalogoDeTeste } from "./catalogo-de-teste"
 import { criarServidor } from "./servidor"
@@ -52,6 +52,18 @@ describe("posicionar as mesas", () => {
       [2, { x: 0, y: 8 }],
     ])
     expect(await posicoes(servidor())).toEqual({ 1: { x: 10, y: 3 }, 2: { x: 0, y: 8 } })
+  })
+
+  test("devolve pelo número mesmo quando a base guarda as mesas fora de ordem", async () => {
+    const api = servidor()
+    // A 30 é criada antes da 3: a base fica 1, 2, 30, 3.
+    const trinta = await api.mesas.criar({ numero: 30 })
+    const tres = await api.mesas.criar({ numero: 3 })
+    const movidas = await api.mesas.posicionar([
+      { id: trinta.id, posicao: { x: 10, y: 10 } },
+      { id: tres.id, posicao: { x: 20, y: 10 } },
+    ])
+    expect(movidas.map((mesa) => mesa.numero)).toEqual([3, 30])
   })
 
   test("mesa por cima de outra recusa o lote inteiro, sem gravar nada", async () => {
@@ -151,5 +163,17 @@ describe("posicionar as mesas", () => {
   test("lote vazio não muda nada", async () => {
     expect(await servidor().mesas.posicionar([])).toEqual([])
     expect(await posicoes(servidor())).toEqual({ 1: { x: 0, y: 0 }, 2: { x: 4, y: 0 } })
+  })
+
+  test("lote vazio devolve [] sem gravar a base", async () => {
+    const api = servidor()
+    await api.mesas.listar() // gera e guarda a base às 20:30
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 45))
+
+    expect(await api.mesas.posicionar([])).toEqual([])
+
+    // Sem gravação, a base guardada continua com a hora de quando foi gerada.
+    const guardado = await get<{ geradoEm: string }>("clickpedido-admin-dados:lanchonete")
+    expect(guardado?.geradoEm).toBe(AGORA.toISOString())
   })
 })

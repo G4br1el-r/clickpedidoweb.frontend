@@ -1963,6 +1963,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
       /** Grava as posições do mapa de uma vez (o editor salva em lote). */
       async posicionar(lote: { id: string; posicao: PosicaoMesa }[]): Promise<Mesa[]> {
+        // Nada a mover: não grava a base de novo.
+        if (lote.length === 0) return responder([])
         const base = await carregar()
         const novas = new Map(lote.map(({ id, posicao }) => [id, posicao]))
         if (lote.some(({ id }) => !base.mesas.some((mesa) => mesa.id === id))) {

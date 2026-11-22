@@ -139,6 +139,7 @@ describe("posicaoValida", () => {
     expect(posicaoValida(noMapa("a", -1, 0), [])).toBe(false)
     expect(posicaoValida(noMapa("a", 0, -1), [])).toBe(false)
     expect(posicaoValida(noMapa("a", 1.5, 0), [])).toBe(false)
+    expect(posicaoValida(noMapa("a", 0, 2.5), [])).toBe(false)
   })
 
   test("a retangular de 8 lugares (4 × 2) vale em (20, 0) e não em (21, 0)", () => {
