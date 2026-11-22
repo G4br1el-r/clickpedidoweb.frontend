@@ -243,7 +243,13 @@ describe("Mesas: a gaveta das mesas juntadas e transferir itens", () => {
   })
 
   test("o item que a cozinha ainda tem fica travado, com Na cozinha", async () => {
-    await mesa60(true)
+    const comanda = await mesa60(true)
+    // Uma rodada sem cozinha: o Refri dela pode sair, e o botão aparece.
+    await api().mesas.lancar({
+      mesaId: comanda.mesa?.id as string,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Refri", preco: 6 }, quantidade: 1 }],
+    })
     const usuario = await abrir("?mesa=60")
     const gaveta = within(await screen.findByRole("dialog", { name: "Mesa 60" }))
     await usuario.click(await gaveta.findByRole("button", { name: "Transferir itens" }))
@@ -251,8 +257,44 @@ describe("Mesas: a gaveta das mesas juntadas e transferir itens", () => {
       await screen.findByRole("dialog", { name: "Transferir itens da mesa 60" }),
     )
 
-    expect(janela.getByRole("spinbutton", { name: "3× Suco" })).toBeDisabled()
+    const suco = janela.getByRole("spinbutton", { name: "3× Suco" })
+    expect(suco).toBeDisabled()
+    expect(suco).toHaveAccessibleDescription("Na cozinha")
     expect(janela.getAllByText("Na cozinha")).toHaveLength(2)
+    expect(janela.getByRole("spinbutton", { name: "1× Refri" })).toBeEnabled()
+  })
+
+  test("com todos os itens na cozinha, a gaveta não oferece Transferir itens", async () => {
+    await mesa60(true)
+    await abrir("?mesa=60")
+    const gaveta = within(await screen.findByRole("dialog", { name: "Mesa 60" }))
+
+    expect(await gaveta.findByRole("button", { name: "Adicionar itens" })).toBeInTheDocument()
+    expect(gaveta.queryByRole("button", { name: "Transferir itens" })).not.toBeInTheDocument()
+  })
+
+  test("a mesma bebida em rodadas diferentes diz a rodada; levar 2 diz foram", async () => {
+    const comanda = await mesa60()
+    await api().mesas.lancar({
+      mesaId: comanda.mesa?.id as string,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Suco", preco: 9.5 }, quantidade: 2 }],
+    })
+    const usuario = await abrir("?mesa=60")
+    const gaveta = within(await screen.findByRole("dialog", { name: "Mesa 60" }))
+    await usuario.click(await gaveta.findByRole("button", { name: "Transferir itens" }))
+    const janela = within(
+      await screen.findByRole("dialog", { name: "Transferir itens da mesa 60" }),
+    )
+
+    expect(janela.getByRole("spinbutton", { name: "1× Água" })).toBeInTheDocument()
+    expect(janela.getByRole("spinbutton", { name: "3× Suco · rodada 1" })).toBeInTheDocument()
+    await usuario.type(janela.getByRole("spinbutton", { name: "2× Suco · rodada 2" }), "2")
+    await usuario.click(janela.getByRole("combobox", { name: "Para a mesa" }))
+    await usuario.click(await screen.findByRole("option", { name: "Mesa 8" }))
+    await usuario.click(janela.getByRole("button", { name: "Transferir" }))
+
+    expect(await screen.findByText("2× Suco foram para a mesa 8.")).toBeInTheDocument()
   })
 
   test("sem item e sem mesa, Transferir diz o que falta", async () => {

@@ -68,6 +68,7 @@ function Campos({
         const texto = itensEmTexto(
           escolhidos.map(({ item, quantidade }) => ({ nome: item.nome, quantidade })),
         )
+        const unidades = escolhidos.reduce((soma, { quantidade }) => soma + quantidade, 0)
         transferir.mutate(
           {
             pedidoId: comanda.id,
@@ -77,7 +78,7 @@ function Campos({
           },
           {
             onSuccess: ({ desfazer }) => {
-              avisar(`${texto} foi para a mesa ${numero}.`, desfazer)
+              avisar(`${texto} ${unidades > 1 ? "foram" : "foi"} para a mesa ${numero}.`, desfazer)
               aoFechar()
             },
             onError: (falha) => toast.error(falha.message),
@@ -96,13 +97,22 @@ function Campos({
         <ul className="flex max-h-72 flex-col gap-2 overflow-y-auto">
           {comanda.itens.map((item) => {
             const motivo = porQueNaoTransfere(comanda, item)
-            const rotulo = `${item.quantidade}× ${item.nome}`
+            // A mesma coisa em mais de uma linha (rodadas diferentes): a rodada separa as duas.
+            const repetido = comanda.itens.some(
+              (outro) => outro.id !== item.id && outro.nome === item.nome,
+            )
+            const rotulo = `${item.quantidade}× ${item.nome}${repetido ? ` · rodada ${item.rodada ?? 1}` : ""}`
+            const idMotivo = `transferir-${item.id}-motivo`
             return (
               <li key={item.id} className="flex items-center justify-between gap-3 text-sm">
                 <label htmlFor={`transferir-${item.id}`} className="min-w-0 flex-1 truncate">
                   {rotulo}
                 </label>
-                {motivo && <span className="text-xs text-muted-foreground">{travado(motivo)}</span>}
+                {motivo && (
+                  <span id={idMotivo} className="text-xs text-muted-foreground">
+                    {travado(motivo)}
+                  </span>
+                )}
                 <Input
                   id={`transferir-${item.id}`}
                   type="number"
@@ -111,6 +121,7 @@ function Campos({
                   max={item.quantidade}
                   className="w-20"
                   disabled={motivo !== null}
+                  aria-describedby={motivo ? idMotivo : undefined}
                   value={quantas[item.id] ?? ""}
                   placeholder="0"
                   onChange={(evento) => {

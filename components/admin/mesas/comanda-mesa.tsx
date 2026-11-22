@@ -56,7 +56,7 @@ import { itensPagos, resumoDaConta } from "@/lib/admin/regras/conta"
 import { cozinhaJaPreparou } from "@/lib/admin/regras/cozinha"
 import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { type EstadoMesa, estadoDaMesa } from "@/lib/admin/regras/mesas"
-import { numerosEmTexto } from "@/lib/admin/regras/movimentacoes"
+import { numerosEmTexto, porQueNaoTransfere } from "@/lib/admin/regras/movimentacoes"
 import { emReais, formatoMoeda } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
@@ -154,6 +154,8 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   const preConta = useImprimirPreConta()
   const fecharConta = useFecharConta()
   const vazia = pedido.itens.length === 0
+  // Com tudo na cozinha ou pago por item, não há o que transferir: o botão some.
+  const temTransferivel = pedido.itens.some((item) => porQueNaoTransfere(pedido, item) === null)
   const aoErrar = (erro: Error) => toast.error(erro.message)
   // Quem assina no histórico: o nome do aparelho ou, sem ele, o garçom da comanda.
   const quem = autorDaAcao(por, pedido.mesa?.garcom)
@@ -373,7 +375,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
               <PlusIcon data-icon="inline-start" />
               Adicionar itens
             </Button>
-            {!vazia && (
+            {temTransferivel && (
               <Button type="button" variant="outline" onClick={() => setTransferindo(true)}>
                 <ArrowRightLeftIcon data-icon="inline-start" />
                 Transferir itens
