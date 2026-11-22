@@ -2,6 +2,7 @@ import { act, renderHook } from "@testing-library/react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import {
   aplicarPlano,
+  CATALOGO_PRO,
   CONFIG_PADRAO,
   type Config,
   ehPro,
@@ -61,6 +62,23 @@ describe("ehPro", () => {
   test("opções gratuitas não são Pro", () => {
     expect(ehPro("cores.botao:solido")).toBe(false)
     expect(ehPro("recursos.busca")).toBe(false)
+  })
+})
+
+describe("as funções Pro do salão", () => {
+  test("mapa, reservas e QR entram no catálogo com os preços da decorrência 6", () => {
+    expect(CATALOGO_PRO["salao.mapa"]).toEqual({ nome: "Mapa do salão", preco: 19.9 })
+    expect(CATALOGO_PRO["salao.reservas"]).toEqual({
+      nome: "Reservas e lista de espera",
+      preco: 24.9,
+    })
+    expect(CATALOGO_PRO["salao.qr"]).toEqual({ nome: "QR na mesa", preco: 39.9 })
+  })
+
+  test("ligam em Configurar salão, não no site: nunca estão em uso nem vão para a sacola", () => {
+    expect(opcaoEmUso(CONFIG_PADRAO, "salao.qr")).toBe(false)
+    expect(itensDaSacola(CONFIG_PADRAO, false, [])).toEqual([])
+    expect(aplicarPlano(CONFIG_PADRAO, () => false)).toEqual(CONFIG_PADRAO)
   })
 })
 
