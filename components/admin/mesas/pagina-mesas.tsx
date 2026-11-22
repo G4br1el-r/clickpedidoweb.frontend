@@ -17,14 +17,16 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAgora } from "@/hooks/use-agora"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useFila } from "@/lib/admin/dados/consultas"
-import { useConfigSalao, useMesas } from "@/lib/admin/dados/consultas-mesas"
+import { useConfigSalao, useMesas, useReservas } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
 import { useGarcomCarregado } from "@/lib/admin/garcom"
 import { usePreferenciasMesasCarregadas } from "@/lib/admin/preferencias-mesas"
 import { alertasDaMesa } from "@/lib/admin/regras/alertas-mesa"
 import { filtrarMesas, type MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
+import { reservaDaMesa } from "@/lib/admin/regras/reservas"
 import { plural } from "@/lib/formato"
+import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { SeloPro } from "../campos"
 import { AtalhosMesas, FolhaAtalhos } from "./atalhos-mesas"
@@ -38,8 +40,11 @@ import { FormularioMesa } from "./formulario-mesa"
 import { MapaPro, MapaSalao } from "./mapa-salao"
 import { NovaMesa } from "./nova-mesa"
 import { NumerosSalao } from "./numeros-salao"
+import { PainelReservas } from "./reservas-espera"
 
-const GRADE = "grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+// As colunas seguem a largura que sobra para a grade (com o painel de reservas ao lado, a partir de
+// 1280 px, ela encolhe): o cartão fica com uns 185 px ou mais, sem cortar o nome nem a reserva.
+const GRADE = "grid grid-cols-2 gap-2.5 @xl:grid-cols-3 @min-[52rem]:grid-cols-4 @5xl:grid-cols-5"
 
 /** Mesas do salão: a grade por área, na ordem das áreas, e a comanda de cada mesa. */
 export function PaginaMesas() {
@@ -48,6 +53,7 @@ export function PaginaMesas() {
   const { data: mesas } = useMesas(4_000)
   const { data: salao } = useConfigSalao()
   const { data: fila } = useFila()
+  const { data: reservas } = useReservas(4_000)
   const agora = useAgora(30_000)
   const [filtros, setFiltros] = useEstadoGrade()
   const [numeroAberto, setNumeroAberto] = useMesaAberta()
@@ -117,10 +123,21 @@ export function PaginaMesas() {
   const linhas: MesaNaGrade[] = (mesas ?? []).map((mesa) => {
     const principal = principalDe(mesa)
     const comanda = comandaDa(principal ?? mesa)
+    // A reserva só conta na mesa sem comanda: aberta, ela já está ocupada.
+    const reserva =
+      salao && agora && !comanda && !principal
+        ? reservaDaMesa(mesa, reservas ?? [], agora, salao.reservas)
+        : undefined
     return {
       mesa,
       comanda,
-      estado: estadoDaMesa(mesa, comanda, principal ? { principal } : undefined),
+      reserva,
+      estado: estadoDaMesa(mesa, comanda, {
+        ...(principal ? { principal } : {}),
+        ...(reserva && agora
+          ? { reserva, agora, antecedenciaMin: salao?.reservas.antecedenciaMin }
+          : {}),
+      }),
       alertas: salao && agora ? alertasDaMesa(mesa, comanda, salao.alertas, agora) : [],
     }
   })
@@ -182,116 +199,136 @@ export function PaginaMesas() {
         <NumerosSalao mesas={mesas} abertas={[...comandas.values()]} agora={agora} />
       )}
 
-      {mesas && salao && mesas.length > 0 && (
-        <ToggleGroup
-          type="single"
-          variant="segmento"
-          size="sm"
-          aria-label="Vista"
-          value={noMapa ? "mapa" : "grade"}
-          disabled={editandoMapa}
-          onValueChange={(nova) => nova && mudarVista(nova as Vista)}
-        >
-          <ToggleGroupItem value="grade" className="px-3">
-            <LayoutGridIcon data-icon="inline-start" />
-            Grade
-          </ToggleGroupItem>
-          <ToggleGroupItem
-            value="mapa"
-            className="px-3"
-            aria-label={mapaLiberado ? undefined : "Mapa Pro"}
-          >
-            <MapIcon data-icon="inline-start" />
-            Mapa
-            {!mapaLiberado && <SeloPro liberada={false} />}
-          </ToggleGroupItem>
-        </ToggleGroup>
-      )}
-
-      {mesas && salao && mesas.length > 0 && !noMapa && (
-        <FiltrosMesas
-          areas={salao.areas}
-          garcons={salao.garcons}
-          comAtencao={linhas.filter((linha) => linha.alertas.length > 0).length}
-        />
-      )}
-
-      {!mesas || !salao ? (
-        <div role="status" aria-label="Carregando as mesas" className={GRADE}>
-          {Array.from({ length: 10 }, (_, indice) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: esqueleto fixo
-            <Skeleton key={indice} className="h-32 rounded-xl" />
-          ))}
-        </div>
-      ) : mesas.length === 0 ? (
-        <Empty className="border border-dashed">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <ArmchairIcon />
-            </EmptyMedia>
-            <EmptyTitle>Nenhuma mesa cadastrada</EmptyTitle>
-            <EmptyDescription>
-              Crie as mesas do salão em Nova mesa para o garçom lançar os pedidos.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
-      ) : noMapa ? (
-        <MapaSalao
-          linhas={linhas}
-          areas={salao.areas}
-          areaId={filtros.area}
-          aoMudarArea={(area) => void setFiltros({ area })}
-          agora={agora}
-          podeEditar={telaGrande}
-          editando={editandoMapa}
-          aoMudarEdicao={setEditandoMapa}
-          aoAbrir={abrirLinha}
-          aoEditar={editarLinha}
-          aoBloquear={bloquearLinha}
-        />
-      ) : grupos.length === 0 ? (
-        <Empty className="border">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <SearchXIcon />
-            </EmptyMedia>
-            <EmptyTitle>Nenhuma mesa com esses filtros</EmptyTitle>
-            <EmptyDescription>Mude a busca ou os filtros.</EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button type="button" size="sm" onClick={() => setFiltros(LIMPAR_GRADE)}>
-              Limpar filtros
-            </Button>
-          </EmptyContent>
-        </Empty>
-      ) : (
-        <div className="flex flex-col gap-6">
-          {grupos.map(({ area, linhas }) => (
-            <section
-              key={area.id}
-              aria-labelledby={`area-${area.id}`}
-              className="flex flex-col gap-2.5"
+      {/* O painel de reservas fica à direita a partir de 1280 px; abaixo disso, acima da grade.
+          Editando o mapa ele sai de cena: o mapa fica com a largura toda e, no celular deitado,
+          o painel não empurra o mapa para baixo da dobra. */}
+      <div
+        className={cn(
+          "grid gap-5 xl:items-start",
+          !editandoMapa && "xl:grid-cols-[minmax(0,1fr)_20rem]",
+        )}
+      >
+        {mesas && salao && !editandoMapa && (
+          <aside className="min-w-0 xl:sticky xl:top-4 xl:col-start-2 xl:row-start-1">
+            <PainelReservas mesas={mesas} salao={salao} aoConfigurar={() => setSalaoAberto(true)} />
+          </aside>
+        )}
+        <div className="@container flex min-w-0 flex-col gap-5 xl:col-start-1 xl:row-start-1">
+          {mesas && salao && mesas.length > 0 && (
+            <ToggleGroup
+              type="single"
+              variant="segmento"
+              size="sm"
+              aria-label="Vista"
+              value={noMapa ? "mapa" : "grade"}
+              disabled={editandoMapa}
+              onValueChange={(nova) => nova && mudarVista(nova as Vista)}
             >
-              <h2 id={`area-${area.id}`} className="text-[15px] font-semibold tracking-[-0.01em]">
-                {area.nome}
-              </h2>
-              <ul aria-labelledby={`area-${area.id}`} className={GRADE}>
-                {linhas.map((linha) => (
-                  <li key={linha.mesa.id}>
-                    <CartaoMesa
-                      {...linha}
-                      agora={agora}
-                      aoAbrir={() => abrirLinha(linha)}
-                      aoEditar={(gatilho) => editarLinha(linha, gatilho)}
-                      aoBloquear={(gatilho) => bloquearLinha(linha, gatilho)}
-                    />
-                  </li>
-                ))}
-              </ul>
-            </section>
-          ))}
+              <ToggleGroupItem value="grade" className="px-3">
+                <LayoutGridIcon data-icon="inline-start" />
+                Grade
+              </ToggleGroupItem>
+              <ToggleGroupItem
+                value="mapa"
+                className="px-3"
+                aria-label={mapaLiberado ? undefined : "Mapa Pro"}
+              >
+                <MapIcon data-icon="inline-start" />
+                Mapa
+                {!mapaLiberado && <SeloPro liberada={false} />}
+              </ToggleGroupItem>
+            </ToggleGroup>
+          )}
+
+          {mesas && salao && mesas.length > 0 && !noMapa && (
+            <FiltrosMesas
+              areas={salao.areas}
+              garcons={salao.garcons}
+              comAtencao={linhas.filter((linha) => linha.alertas.length > 0).length}
+            />
+          )}
+
+          {!mesas || !salao ? (
+            <div role="status" aria-label="Carregando as mesas" className={GRADE}>
+              {Array.from({ length: 10 }, (_, indice) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: esqueleto fixo
+                <Skeleton key={indice} className="h-32 rounded-xl" />
+              ))}
+            </div>
+          ) : mesas.length === 0 ? (
+            <Empty className="border border-dashed">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <ArmchairIcon />
+                </EmptyMedia>
+                <EmptyTitle>Nenhuma mesa cadastrada</EmptyTitle>
+                <EmptyDescription>
+                  Crie as mesas do salão em Nova mesa para o garçom lançar os pedidos.
+                </EmptyDescription>
+              </EmptyHeader>
+            </Empty>
+          ) : noMapa ? (
+            <MapaSalao
+              linhas={linhas}
+              areas={salao.areas}
+              areaId={filtros.area}
+              aoMudarArea={(area) => void setFiltros({ area })}
+              agora={agora}
+              podeEditar={telaGrande}
+              editando={editandoMapa}
+              aoMudarEdicao={setEditandoMapa}
+              aoAbrir={abrirLinha}
+              aoEditar={editarLinha}
+              aoBloquear={bloquearLinha}
+            />
+          ) : grupos.length === 0 ? (
+            <Empty className="border">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <SearchXIcon />
+                </EmptyMedia>
+                <EmptyTitle>Nenhuma mesa com esses filtros</EmptyTitle>
+                <EmptyDescription>Mude a busca ou os filtros.</EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button type="button" size="sm" onClick={() => setFiltros(LIMPAR_GRADE)}>
+                  Limpar filtros
+                </Button>
+              </EmptyContent>
+            </Empty>
+          ) : (
+            <div className="flex flex-col gap-6">
+              {grupos.map(({ area, linhas }) => (
+                <section
+                  key={area.id}
+                  aria-labelledby={`area-${area.id}`}
+                  className="flex flex-col gap-2.5"
+                >
+                  <h2
+                    id={`area-${area.id}`}
+                    className="text-[15px] font-semibold tracking-[-0.01em]"
+                  >
+                    {area.nome}
+                  </h2>
+                  <ul aria-labelledby={`area-${area.id}`} className={GRADE}>
+                    {linhas.map((linha) => (
+                      <li key={linha.mesa.id}>
+                        <CartaoMesa
+                          {...linha}
+                          agora={agora}
+                          aoAbrir={() => abrirLinha(linha)}
+                          aoEditar={(gatilho) => editarLinha(linha, gatilho)}
+                          aoBloquear={(gatilho) => bloquearLinha(linha, gatilho)}
+                        />
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          )}
         </div>
-      )}
+      </div>
 
       <FormularioMesa
         key={editandoId}

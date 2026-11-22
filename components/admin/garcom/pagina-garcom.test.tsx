@@ -133,6 +133,12 @@ describe("PaginaGarcom", () => {
     ).not.toBeInTheDocument()
   })
 
+  test("a mesa reservada diz a hora da reserva na lista (Fase 7)", async () => {
+    const usuario = await abrir()
+    await usuario.click(await screen.findByRole("combobox", { name: "Mesa" }))
+    expect(await screen.findByRole("option", { name: "Mesa 13 · reservada 20:50" })).toBeVisible()
+  })
+
   test("sem mesa não dá para lançar", async () => {
     const usuario = await abrir()
     const { simples } = await produtos()

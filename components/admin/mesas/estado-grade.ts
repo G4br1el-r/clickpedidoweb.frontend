@@ -9,12 +9,10 @@ import {
 } from "nuqs"
 import type { FiltroEstadoMesa, OrdemMesas } from "@/lib/admin/regras/filtro-mesas"
 
-/**
- * Os estados do filtro, na ordem do Select, com o rótulo de cada um. É a lista única. Reservada
- * volta com as reservas (Fase 7): antes delas, nenhuma mesa fica assim.
- */
+/** Os estados do filtro, na ordem do Select, com o rótulo de cada um. É a lista única. */
 export const ROTULOS_ESTADO = {
   livre: "Livre",
+  reservada: "Reservada",
   ocupada: "Ocupada",
   "na-cozinha": "Na cozinha",
   servir: "Servir",

@@ -408,6 +408,25 @@ describe("juntar e separar", () => {
     )
   })
 
+  test("a mesa reservada pede a confirmação e junta com ela (Fase 7)", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api)
+    const reservada = await mesaNova(api, 34)
+    await api.reservas.criar({
+      nome: "Carla",
+      inicio: new Date(2026, 10, 13, 20, 45).toISOString(),
+      pessoas: 4,
+      mesaId: reservada,
+    })
+    await expect(api.mesas.juntar(comanda.id, [reservada])).rejects.toThrow(
+      "A mesa 34 está reservada às 20:45. Confirme para juntar.",
+    )
+    const { comanda: junta } = await api.mesas.juntar(comanda.id, [reservada], {
+      confirmarReserva: true,
+    })
+    expect(junta.mesa?.juntadas).toEqual([{ id: reservada, numero: 34 }])
+  })
+
   test("recusa o que as regras da conta recusam: desconto na secundária e as duas na cozinha", async () => {
     const api = servidor()
     const { comanda } = await aberta(api, 30, X_BURGER(1))

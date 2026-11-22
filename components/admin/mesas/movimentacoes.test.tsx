@@ -99,7 +99,7 @@ describe("Mesas: mesas juntadas na grade", () => {
     const usuario = await abrir("?estado=juntada")
 
     expect(await cartao(16)).toBeInTheDocument()
-    expect(screen.getAllByRole("listitem")).toHaveLength(1)
+    expect(screen.getAllByRole("button", { name: /^Mesa \d+$/ })).toHaveLength(1)
     await usuario.click(screen.getByRole("combobox", { name: "Estado" }))
     const opcoes = within(await screen.findByRole("listbox")).getAllByRole("option")
     expect(opcoes.map((opcao) => opcao.textContent)).toContain("Juntada")

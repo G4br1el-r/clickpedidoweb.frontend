@@ -46,6 +46,15 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
+import {
+  conferirEspera,
+  conferirReserva,
+  type NovaEntradaEspera,
+  type NovaReserva,
+  reservaAtiva,
+  reservaDaMesa,
+  reservaEmConflito,
+} from "../regras/reservas"
 import { rotuloDoPagamento } from "../regras/rotulos"
 import { colide, posicaoValida, primeiraPosicaoLivre } from "../regras/salao"
 import { proximoStatus } from "../regras/status"
@@ -54,6 +63,7 @@ import { semearCustos } from "./custos-demo"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
 import { type BaseLojaV3, migrarDaVersao3 } from "./migracao"
+import { reservasDemo } from "./reservas-demo"
 import {
   type Bairro,
   type BaseLoja,
@@ -63,6 +73,7 @@ import {
   type ConfigLoja,
   type ConfigSalao,
   type DescontoConta,
+  type EntradaEspera,
   type EventoComanda,
   FORMAS_MESA,
   type FormaMesa,
@@ -75,6 +86,7 @@ import {
   type Pedido,
   type PosicaoMesa,
   type Produto,
+  type Reserva,
   type StatusPedido,
   type TipoMovimento,
 } from "./tipos"
@@ -196,6 +208,9 @@ export type AberturaMesa = {
   por?: string
 }
 
+/** Sentar quem reservou ou esperava: a mesa (a da reserva, se não vier), o garçom e quem fez. */
+export type Sentada = Omit<AberturaMesa, "pessoas" | "clienteNome"> & { mesaId?: string }
+
 export type OpcoesServidor = {
   segmento: SegmentoPainelId
   carregarCatalogo: () => Promise<CatalogoLoja>
@@ -293,19 +308,28 @@ function comandaDa(base: BaseLoja, mesaId: string) {
  * A reserva marcada da mesa que já está dentro da antecedência e ainda na tolerância. Confere
  * pelo horário, e não pelo estado da mesa: a mesa em limpeza também está reservada.
  */
-function reservaDaVez(base: BaseLoja, mesaId: string, agora: Date) {
-  const { antecedenciaMin, toleranciaMin } = base.salao.reservas
-  return base.reservas
-    .filter((item) => {
-      const inicio = Date.parse(item.inicio)
-      return (
-        item.mesaId === mesaId &&
-        item.status === "marcada" &&
-        inicio >= agora.getTime() - toleranciaMin * 60_000 &&
-        inicio - antecedenciaMin * 60_000 <= agora.getTime()
-      )
-    })
+const reservaDaVez = (base: BaseLoja, mesaId: string, agora: Date) =>
+  reservaDaMesa({ id: mesaId }, base.reservas, agora, base.salao.reservas)
+
+/** A mesa com reserva ativa (marcada, ainda na tolerância) não some por baixo dela (ponto de atenção 5). */
+function conferirSemReserva(base: BaseLoja, mesa: Mesa) {
+  const agora = new Date()
+  const reserva = base.reservas
+    .filter((item) => item.mesaId === mesa.id && reservaAtiva(item, agora, base.salao.reservas))
     .toSorted((a, b) => Date.parse(a.inicio) - Date.parse(b.inicio))[0]
+  if (reserva) {
+    throw new Error(
+      `A mesa ${mesa.numero} tem reserva às ${format(new Date(reserva.inicio), "HH:mm")}. Tire a mesa da reserva antes.`,
+    )
+  }
+}
+
+/** Sentar na mesa junto de outra diz com qual ela está, como transferir. */
+function conferirNaoJuntada(base: BaseLoja, mesaId: string) {
+  const mesa = base.mesas.find((item) => item.id === mesaId)
+  if (!mesa?.juntadaCom) return
+  const principal = base.mesas.find((item) => item.id === mesa.juntadaCom)
+  throw new Error(`A mesa ${mesa.numero} está junto com a mesa ${principal?.numero}.`)
 }
 
 /**
@@ -575,10 +599,7 @@ function mesaLivreParaReceber(
   const doGrupo = [origem.mesa?.id, ...(origem.mesa?.juntadas ?? []).map((item) => item.id)]
   if (doGrupo.includes(mesa.id)) throw new Error("Escolha outra mesa.")
   if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
-  if (mesa.juntadaCom) {
-    const principal = base.mesas.find((item) => item.id === mesa.juntadaCom)
-    throw new Error(`A mesa ${mesa.numero} está junto com a mesa ${principal?.numero}.`)
-  }
+  conferirNaoJuntada(base, mesa.id)
   if (comandaDa(base, mesa.id)) {
     throw new Error(`A mesa ${mesa.numero} já está aberta. Junte as mesas ou transfira os itens.`)
   }
@@ -589,6 +610,13 @@ function mesaLivreParaReceber(
     )
   }
   return mesa
+}
+
+/** Com as reservas ligadas, a demonstração ganha as reservas e a espera do dia. */
+function comReservasDoDia(base: BaseLoja, agora: Date): BaseLoja {
+  if (!base.salao.funcoes.reservas) return base
+  const { reservas, espera } = reservasDemo(base.mesas, agora)
+  return { ...base, reservas: [...base.reservas, ...reservas], espera: [...base.espera, ...espera] }
 }
 
 /**
@@ -672,7 +700,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       chamados: [],
     })
     // A demonstração abre com uma mesa livre sendo limpa há 3 min.
-    const base = {
+    const limpando = {
       ...aberta,
       mesas: aberta.mesas.map((mesa) =>
         catalogo.salao.limpeza && mesa.id === "mesa-9" && mesa.status === "livre"
@@ -680,6 +708,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           : mesa,
       ),
     }
+    const base = comReservasDoDia(limpando, agora)
     await salvar(base)
     return base
   }
@@ -709,13 +738,25 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             : [],
         ),
     })
-    const completa = abrirMesas({
-      ...base,
-      pedidos: [...anteriores, ...novos.map(marcarEmAndamento)],
-      reservas: base.reservas ?? [],
-      espera: base.espera ?? [],
-      chamados: base.chamados ?? [],
-    })
+    // A reserva que ficou marcada num dia que passou não veio; quem esperava foi embora.
+    const completa = comReservasDoDia(
+      abrirMesas({
+        ...base,
+        pedidos: [...anteriores, ...novos.map(marcarEmAndamento)],
+        reservas: (base.reservas ?? []).map((reserva) =>
+          reserva.status === "marcada" && new Date(reserva.inicio) < hoje
+            ? { ...reserva, status: "nao-compareceu" as const }
+            : reserva,
+        ),
+        espera: (base.espera ?? []).map((entrada) =>
+          entrada.status === "esperando" && new Date(entrada.chegouEm) < hoje
+            ? { ...entrada, status: "desistiu" as const }
+            : entrada,
+        ),
+        chamados: base.chamados ?? [],
+      }),
+      agora,
+    )
     await salvar(completa)
     return completa
   }
@@ -861,6 +902,139 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     if (!mesa) throw new Error("Mesa não encontrada")
     const nova = mudar(mesa, base)
     await substituir({ ...base, mesas: base.mesas.map((item) => (item.id === id ? nova : item)) })
+    return responder(nova)
+  }
+
+  /**
+   * Os dados da reserva conferidos como no formulário (só hoje, a partir de agora) e a mesa:
+   * existe, sem bloqueio e sem outra reserva a menos de 2 h. `antes`: a reserva sendo editada.
+   */
+  function conferirNovaReserva(
+    base: BaseLoja,
+    dados: NovaReserva,
+    antes?: Reserva,
+  ): Omit<Reserva, "id" | "status"> {
+    const agora = new Date()
+    const inicio = new Date(dados.inicio)
+    if (Number.isNaN(inicio.getTime())) throw new Error("Informe o horário.")
+    if (!isSameDay(inicio, agora)) throw new Error("Reserve para hoje.")
+    // O horário que não mudou não é conferido de novo: a reserva atrasada ainda se edita.
+    const mesmoHorario = antes?.inicio === dados.inicio
+    const { erros, reserva } = conferirReserva(
+      {
+        nome: dados.nome,
+        telefone: dados.telefone ?? "",
+        horario: format(inicio, "HH:mm"),
+        pessoas: String(dados.pessoas),
+      },
+      mesmoHorario && inicio < agora ? inicio : agora,
+    )
+    if (!reserva) throw new Error(Object.values(erros)[0])
+    if (dados.mesaId === undefined) return reserva
+    const mesa = base.mesas.find((item) => item.id === dados.mesaId)
+    if (!mesa) throw new Error("Mesa não encontrada")
+    if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
+    const conflito = reservaEmConflito(
+      mesa.id,
+      inicio,
+      base.reservas,
+      agora,
+      base.salao.reservas,
+      antes?.id,
+    )
+    if (conflito) {
+      throw new Error(
+        `A mesa ${mesa.numero} já tem reserva às ${format(new Date(conflito.inicio), "HH:mm")}.`,
+      )
+    }
+    return { ...reserva, mesaId: mesa.id }
+  }
+
+  /** Troca a reserva marcada pelo que `mudar` devolve. */
+  async function mudarReserva(
+    id: string,
+    mudar: (reserva: Reserva, base: BaseLoja) => Reserva,
+  ): Promise<Reserva> {
+    const base = await carregar()
+    const reserva = base.reservas.find((item) => item.id === id)
+    if (!reserva) throw new Error("Reserva não encontrada")
+    if (reserva.status !== "marcada") throw new Error("Essa reserva não está mais marcada.")
+    const nova = mudar(reserva, base)
+    await substituir({
+      ...base,
+      reservas: base.reservas.map((item) => (item.id === id ? nova : item)),
+    })
+    return responder(nova)
+  }
+
+  /**
+   * Abre a mesa com a comanda vazia, com as regras de "Abrir mesa": pessoas, garçom da lista e,
+   * se reservada agora, só com a confirmação. `reservaId`: a reserva que está sentando, que não
+   * pede confirmação para ela mesma. Devolve a base nova, sem gravar.
+   */
+  function abrirComanda(
+    base: BaseLoja,
+    mesaId: string,
+    { pessoas, garcom: garcomPedido, clienteNome, confirmarReserva, por }: AberturaMesa,
+    reservaId?: string,
+  ): { base: BaseLoja; comanda: Pedido } {
+    const mesa = base.mesas.find((item) => item.id === mesaId)
+    if (!mesa) throw new Error("Mesa não encontrada")
+    if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
+    if (comandaDa(base, mesa.id)) throw new Error(`A mesa ${mesa.numero} já está aberta.`)
+    if (!Number.isInteger(pessoas) || pessoas < 1 || pessoas > 99) {
+      throw new Error("Informe de 1 a 99 pessoas.")
+    }
+    const reserva = reservaDaMesa(
+      { id: mesa.id },
+      base.reservas.filter((item) => item.id !== reservaId),
+      new Date(),
+      base.salao.reservas,
+    )
+    if (reserva && !confirmarReserva) {
+      throw new Error(
+        `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}. Confirme para abrir.`,
+      )
+    }
+    const garcom = garcomDaLista(base, garcomPedido, true)
+    const agora = new Date().toISOString()
+    const id = proximoId(base)
+    const comanda = comEvento(
+      comEtapa(
+        // O couvert já entra na conta da mesa vazia.
+        recalcular(
+          comandaNova(base, mesa, {
+            id,
+            agora,
+            cliente: clienteNome?.trim().slice(0, 80),
+            garcom,
+            pessoas,
+            itens: [],
+            enviarParaCozinha: false,
+          }),
+        ),
+        agora,
+      ),
+      eventoAberta(agora, pessoas, garcom ?? por),
+    )
+    return { base: abrirMesas({ ...base, pedidos: [...base.pedidos, comanda] }), comanda }
+  }
+
+  /** Quem ainda está na fila; quem sentou ou desistiu já saiu dela. */
+  function esperando(base: BaseLoja, id: string): EntradaEspera {
+    const entrada = base.espera.find((item) => item.id === id)
+    if (!entrada) throw new Error("Não está na espera.")
+    if (entrada.status !== "esperando") throw new Error("Essa pessoa não está mais na espera.")
+    return entrada
+  }
+
+  async function mudarEspera(
+    id: string,
+    mudar: (entrada: EntradaEspera) => EntradaEspera,
+  ): Promise<EntradaEspera> {
+    const base = await carregar()
+    const nova = mudar(esperando(base, id))
+    await substituir({ ...base, espera: base.espera.map((item) => (item.id === id ? nova : item)) })
     return responder(nova)
   }
 
@@ -1801,6 +1975,144 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       },
     },
 
+    reservas: {
+      /**
+       * As reservas de hoje, pelo horário. Logo depois da meia-noite, a de ontem que ainda está na
+       * tolerância continua: ela segura a mesa, e a tela precisa vê-la para pedir a confirmação.
+       */
+      async listar(): Promise<Reserva[]> {
+        const agora = new Date()
+        const base = await carregar()
+        return responder(
+          base.reservas
+            .filter(
+              (reserva) =>
+                isSameDay(new Date(reserva.inicio), agora) ||
+                reservaAtiva(reserva, agora, base.salao.reservas),
+            )
+            .toSorted((a, b) => Date.parse(a.inicio) - Date.parse(b.inicio)),
+        )
+      },
+
+      async criar(dados: NovaReserva): Promise<Reserva> {
+        const base = await carregar()
+        const reserva: Reserva = {
+          id: novoId("reserva")(),
+          ...conferirNovaReserva(base, dados),
+          status: "marcada",
+        }
+        await substituir({ ...base, reservas: [...base.reservas, reserva] })
+        return responder(reserva)
+      },
+
+      /** Troca os dados da reserva marcada. O horário que não mudou não é conferido de novo. */
+      editar(id: string, dados: NovaReserva): Promise<Reserva> {
+        return mudarReserva(id, (reserva, base) => ({
+          id,
+          ...conferirNovaReserva(base, dados, reserva),
+          status: "marcada",
+        }))
+      },
+
+      cancelar(id: string): Promise<Reserva> {
+        return mudarReserva(id, (reserva) => ({ ...reserva, status: "cancelada" }))
+      },
+
+      /**
+       * A reserva chegou: abre a mesa (a dela, ou a escolhida agora) com o nome e as pessoas, e
+       * guarda a mesa em que sentou. A própria reserva não pede confirmação.
+       */
+      async sentar(
+        id: string,
+        { mesaId, ...abertura }: Sentada,
+      ): Promise<{ reserva: Reserva; comanda: Pedido }> {
+        const base = await carregar()
+        const reserva = base.reservas.find((item) => item.id === id)
+        if (!reserva) throw new Error("Reserva não encontrada")
+        if (reserva.status !== "marcada") throw new Error("Essa reserva não está mais marcada.")
+        const destino = mesaId ?? reserva.mesaId
+        if (!destino) throw new Error("Escolha a mesa.")
+        conferirNaoJuntada(base, destino)
+        const { base: aberta, comanda } = abrirComanda(
+          base,
+          destino,
+          { ...abertura, pessoas: reserva.pessoas, clienteNome: reserva.nome },
+          reserva.id,
+        )
+        const sentada: Reserva = { ...reserva, mesaId: destino, status: "sentou" }
+        await substituir({
+          ...aberta,
+          reservas: aberta.reservas.map((item) => (item.id === id ? sentada : item)),
+        })
+        return responder({ reserva: sentada, comanda })
+      },
+
+      /** A pessoa não veio: a mesa fica livre na hora, sem esperar a tolerância. */
+      naoCompareceu(id: string): Promise<Reserva> {
+        return mudarReserva(id, (reserva) => ({ ...reserva, status: "nao-compareceu" }))
+      },
+    },
+
+    espera: {
+      /** Quem está esperando, pela chegada. */
+      async listar(): Promise<EntradaEspera[]> {
+        return responder(
+          (await carregar()).espera
+            .filter((entrada) => entrada.status === "esperando")
+            .toSorted((a, b) => Date.parse(a.chegouEm) - Date.parse(b.chegouEm)),
+        )
+      },
+
+      async entrar(dados: NovaEntradaEspera): Promise<EntradaEspera> {
+        const { erros, entrada: conferida } = conferirEspera({
+          nome: dados.nome,
+          telefone: dados.telefone ?? "",
+          pessoas: String(dados.pessoas),
+        })
+        if (!conferida) throw new Error(Object.values(erros)[0])
+        const base = await carregar()
+        const entrada: EntradaEspera = {
+          id: novoId("espera")(),
+          ...conferida,
+          chegouEm: new Date().toISOString(),
+          status: "esperando",
+        }
+        await substituir({ ...base, espera: [...base.espera, entrada] })
+        return responder(entrada)
+      },
+
+      /** Grava a hora da chamada (o WhatsApp abre na tela; nada sai daqui). */
+      chamar(id: string): Promise<EntradaEspera> {
+        return mudarEspera(id, (entrada) => ({ ...entrada, chamadaEm: new Date().toISOString() }))
+      },
+
+      desistir(id: string): Promise<EntradaEspera> {
+        return mudarEspera(id, (entrada) => ({ ...entrada, status: "desistiu" }))
+      },
+
+      /** Abre a mesa com o nome e as pessoas de quem esperava, e tira da fila. */
+      async sentar(
+        id: string,
+        { mesaId, ...abertura }: Sentada,
+      ): Promise<{ entrada: EntradaEspera; comanda: Pedido }> {
+        const base = await carregar()
+        const entrada = esperando(base, id)
+        if (!mesaId) throw new Error("Escolha a mesa.")
+        conferirNaoJuntada(base, mesaId)
+        const { base: aberta, comanda } = abrirComanda(base, mesaId, {
+          ...abertura,
+          pessoas: entrada.pessoas,
+          clienteNome: entrada.nome,
+        })
+        const sentou: EntradaEspera = { ...entrada, status: "sentou" }
+        await substituir({
+          ...aberta,
+          espera: aberta.espera.map((item) => (item.id === id ? sentou : item)),
+        })
+        return responder({ entrada: sentou, comanda })
+      },
+    },
+
     salao: {
       async config(): Promise<ConfigSalao> {
         return responder((await carregar()).salao)
@@ -1932,6 +2244,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       bloquear(id: string, motivo?: string) {
         return mudarMesa(id, (mesa, base) => {
           if (comandaDa(base, id)) throw new Error("Feche a conta antes de bloquear a mesa.")
+          conferirSemReserva(base, mesa)
           const texto = motivo?.trim().slice(0, 80)
           return { ...mesa, bloqueio: texto ? { motivo: texto } : {} }
         })
@@ -1993,6 +2306,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       async excluir(id: string): Promise<void> {
         const base = await carregar()
         if (comandaDa(base, id)) throw new Error("Feche a conta antes de excluir a mesa.")
+        const mesa = base.mesas.find((item) => item.id === id)
+        if (mesa) conferirSemReserva(base, mesa)
         await substituir({ ...base, mesas: base.mesas.filter((mesa) => mesa.id !== id) })
       },
 
@@ -2000,46 +2315,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
        * Abre a mesa com a comanda vazia: pessoas, garçom da lista e, se quiser, o cliente.
        * Mais pessoas que lugares não recusa (a tela avisa).
        */
-      async abrir(
-        mesaId: string,
-        { pessoas, garcom: garcomPedido, clienteNome, confirmarReserva, por }: AberturaMesa,
-      ): Promise<Pedido> {
-        const base = await carregar()
-        const mesa = base.mesas.find((item) => item.id === mesaId)
-        if (!mesa) throw new Error("Mesa não encontrada")
-        if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
-        if (comandaDa(base, mesa.id)) throw new Error(`A mesa ${mesa.numero} já está aberta.`)
-        if (!Number.isInteger(pessoas) || pessoas < 1 || pessoas > 99) {
-          throw new Error("Informe de 1 a 99 pessoas.")
-        }
-        const reserva = reservaDaVez(base, mesa.id, new Date())
-        if (reserva && !confirmarReserva) {
-          throw new Error(
-            `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}. Confirme para abrir.`,
-          )
-        }
-        const garcom = garcomDaLista(base, garcomPedido, true)
-        const agora = new Date().toISOString()
-        const id = proximoId(base)
-        const comanda = comEvento(
-          comEtapa(
-            // O couvert já entra na conta da mesa vazia.
-            recalcular(
-              comandaNova(base, mesa, {
-                id,
-                agora,
-                cliente: clienteNome?.trim().slice(0, 80),
-                garcom,
-                pessoas,
-                itens: [],
-                enviarParaCozinha: false,
-              }),
-            ),
-            agora,
-          ),
-          eventoAberta(agora, pessoas, garcom ?? por),
-        )
-        await substituir(abrirMesas({ ...base, pedidos: [...base.pedidos, comanda] }))
+      async abrir(mesaId: string, abertura: AberturaMesa): Promise<Pedido> {
+        const { base, comanda } = abrirComanda(await carregar(), mesaId, abertura)
+        await substituir(base)
         return responder(comanda)
       },
 
@@ -2562,7 +2840,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       async juntar(
         pedidoId: number,
         mesaIds: string[],
-        { por }: { por?: string } = {},
+        { confirmarReserva, por }: { confirmarReserva?: boolean; por?: string } = {},
       ): Promise<{ comanda: Pedido; desfazer: string }> {
         const { base, desfazer } = await mover((base) => {
           let comanda: Pedido = comandaAberta(base, pedidoId)
@@ -2589,9 +2867,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
               if (daMesa.itens.length > 0) texto += `: ${itensEmTexto(daMesa.itens)}`
             } else {
               const reserva = reservaDaVez(base, mesa.id, new Date())
-              if (reserva) {
+              if (reserva && !confirmarReserva) {
                 throw new Error(
-                  `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}.`,
+                  `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}. Confirme para juntar.`,
                 )
               }
               const juntadas = [

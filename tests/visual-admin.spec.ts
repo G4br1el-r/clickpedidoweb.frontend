@@ -306,6 +306,77 @@ for (const tema of ["light", "dark"] as const) {
     await expect(page).toHaveScreenshot(`painel-configurar-salao-${tema}.png`)
   })
 
+  test(`painel: janela Nova reserva (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas")
+    const reservas = page.getByRole("region", { name: "Reservas e espera" })
+    await reservas.getByRole("button", { name: "Nova reserva" }).click({ timeout: 15_000 })
+    const janela = page.getByRole("dialog", { name: "Nova reserva" })
+    await janela.getByRole("textbox", { name: "Nome" }).fill("Ana Lima")
+    await janela.getByLabel("Horário").fill("21:00")
+    await janela.getByRole("spinbutton", { name: "Pessoas" }).fill("4")
+    // 4 pessoas às 21:00: a sugestão da mesa 8 aparece com o botão para usar.
+    await expect(janela.getByRole("button", { name: "Usar a mesa 8" })).toBeVisible()
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-nova-reserva-${tema}.png`)
+  })
+
+  test(`painel: Sentar a reserva (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas")
+    const reservas = page.getByRole("region", { name: "Reservas e espera" })
+    await reservas.getByRole("button", { name: "Sentar Marina Costa" }).click({ timeout: 15_000 })
+    const janela = page.getByRole("dialog", { name: "Sentar Marina Costa" })
+    await expect(janela.getByRole("combobox", { name: "Mesa" })).toHaveText(/^Mesa 13/)
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-sentar-${tema}.png`)
+  })
+
+  test(`painel: aba Espera e Entrar na espera (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas")
+    const reservas = page.getByRole("region", { name: "Reservas e espera" })
+    await reservas.getByRole("tab", { name: /^Espera/ }).click({ timeout: 15_000 })
+    const fila = reservas.getByRole("list", { name: "Lista de espera" })
+    await expect(fila.getByRole("listitem")).toHaveCount(3)
+    await expect(fila.getByText("Mesa 11 livre")).toBeVisible()
+    // Sem o anel de foco do clique na aba: a foto é da lista, não do teclado.
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur())
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(reservas).toHaveScreenshot(`painel-espera-${tema}.png`)
+
+    await reservas.getByRole("button", { name: "Entrar na espera" }).click()
+    const janela = page.getByRole("dialog", { name: "Entrar na espera" })
+    await janela.getByRole("textbox", { name: "Nome" }).fill("Ana Lima")
+    await janela.getByRole("spinbutton", { name: "Pessoas" }).fill("3")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-entrar-na-espera-${tema}.png`)
+  })
+
+  test(`painel: reservas com o cadeado Pro (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas")
+    await expect(page.getByRole("list", { name: "Salão" })).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState("networkidle")
+    // Desliga a função em Configurar salão: as reservas marcadas antes continuam no bloco.
+    await page.getByRole("button", { name: "Configurar salão" }).click()
+    const salao = page.getByRole("dialog", { name: "Configurar salão" })
+    await salao.getByRole("switch", { name: /^Reservas e lista de espera/ }).click()
+    await salao.getByRole("button", { name: "Salvar" }).click()
+    await expect(salao).toBeHidden()
+    const reservas = page.getByRole("region", { name: "Reservas e espera" })
+    await expect(reservas.getByRole("button", { name: "Abrir Configurar salão" })).toBeVisible()
+    await expect(
+      reservas.getByRole("list", { name: "Reservas ativas" }).getByRole("listitem"),
+    ).toHaveCount(2)
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(reservas).toHaveScreenshot(`painel-reservas-pro-${tema}.png`)
+  })
+
   test(`painel: garçom (${tema})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
     await page.goto("/admin/garcom")

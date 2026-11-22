@@ -166,6 +166,16 @@ describe("vista Mapa", () => {
     )
   })
 
+  test("a mesa reservada diz a hora, quem reservou e as pessoas, como no cartão (Fase 7)", async () => {
+    await abrir("?vista=mapa&area=area-varanda")
+    const varanda = await mapa("Varanda")
+    const treze = within(varanda).getByRole("button", { name: "Mesa 13" })
+    await waitFor(() =>
+      expect(treze).toHaveAccessibleDescription("Reservada 20:50, Marina Costa · 2 pessoas"),
+    )
+    expect(within(varanda).getByText("Reservada 20:50")).toBeInTheDocument()
+  })
+
   test("a mesa bloqueada diz o motivo, como no cartão", async () => {
     await abrir("?vista=mapa&area=area-balcao")
     expect(
@@ -245,6 +255,19 @@ describe("editar o mapa", () => {
     expect(await mapa("Salão")).toHaveAccessibleDescription(
       "Use Tab para escolher a mesa e as setas para mover. Com Shift, anda 4 células.",
     )
+  })
+
+  test("na edição, o painel de reservas sai de cena e volta ao cancelar", async () => {
+    const usuario = await abrir("?vista=mapa")
+    await mapa("Salão")
+    expect(
+      await screen.findByRole("region", { name: "Reservas e espera" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+
+    expect(screen.queryByRole("region", { name: "Reservas e espera" })).not.toBeInTheDocument()
+    await usuario.click(screen.getByRole("button", { name: "Cancelar" }))
+    expect(screen.getByRole("region", { name: "Reservas e espera" })).toBeInTheDocument()
   })
 
   test("no celular o mapa só é visto: não tem Editar mapa", async () => {
