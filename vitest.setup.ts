@@ -1,7 +1,11 @@
 import "@testing-library/jest-dom/vitest"
-import { cleanup } from "@testing-library/react"
+import { cleanup, configure } from "@testing-library/react"
 import { toast } from "sonner"
 import { afterEach, vi } from "vitest"
+
+// waitFor e findBy esperam até 5 s (o padrão é 1 s): a primeira leitura gera a base da
+// demonstração, que na suíte inteira passa de 1 s.
+configure({ asyncUtilTimeout: 5000 })
 
 // jsdom não implementa matchMedia; hooks de tela e animações dependem dele.
 Object.defineProperty(window, "matchMedia", {
