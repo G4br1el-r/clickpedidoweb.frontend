@@ -682,6 +682,10 @@ function AcaoSemComanda({ mesa, estado }: { mesa: Mesa; estado: EstadoMesa }) {
           <SprayCanIcon data-icon="inline-start" />
           Marcar limpa
         </Button>
+        {/* Quem chega antes da limpeza também senta: abrir tira a mesa da limpeza. */}
+        <div className="mt-3 border-t border-border/70 pt-4">
+          <AbrirMesa mesa={mesa} />
+        </div>
       </>
     )
   }

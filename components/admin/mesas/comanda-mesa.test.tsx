@@ -113,11 +113,45 @@ describe("ComandaMesa: abrir a mesa", () => {
     expect(gaveta.queryByText("A mesa 11 tem 2 lugares.")).not.toBeInTheDocument()
   })
 
-  test("sem pessoas ou sem garçom, Abrir mesa fica desabilitado", async () => {
-    const primeira = await abrirMesa(11)
-    expect(primeira.gaveta.getByRole("button", { name: "Abrir mesa" })).toBeDisabled()
-    await primeira.usuario.type(primeira.gaveta.getByRole("spinbutton", { name: "Pessoas" }), "2")
-    expect(primeira.gaveta.getByRole("button", { name: "Abrir mesa" })).toBeDisabled()
+  test("sem pessoas ou sem garçom, Abrir mesa diz o que falta e não abre", async () => {
+    const { usuario, gaveta } = await abrirMesa(11)
+    await usuario.click(gaveta.getByRole("button", { name: "Abrir mesa" }))
+    expect(gaveta.getByText("Informe de 1 a 99 pessoas.")).toBeInTheDocument()
+    expect(gaveta.getByText("Escolha o garçom.")).toBeInTheDocument()
+    expect(gaveta.getByRole("spinbutton", { name: "Pessoas" })).toHaveAttribute(
+      "aria-invalid",
+      "true",
+    )
+    await usuario.type(gaveta.getByRole("spinbutton", { name: "Pessoas" }), "2")
+    await usuario.click(gaveta.getByRole("button", { name: "Abrir mesa" }))
+    expect(gaveta.queryByText("Informe de 1 a 99 pessoas.")).not.toBeInTheDocument()
+    expect(gaveta.getByText("Escolha o garçom.")).toBeInTheDocument()
+    const mesa = (await api().mesas.listar()).find((item) => item.numero === 11)
+    expect(mesa?.status).toBe("livre")
+  })
+
+  test("sem garçons no salão, não há o campo Garçom e a mesa abre sem garçom", async () => {
+    const salao = await api().salao.config()
+    await api().salao.salvar({ ...salao, garcons: [] })
+    const { usuario, gaveta } = await abrirMesa(11)
+    expect(gaveta.queryByRole("combobox", { name: "Garçom" })).not.toBeInTheDocument()
+    await usuario.type(gaveta.getByRole("spinbutton", { name: "Pessoas" }), "2")
+    await usuario.click(gaveta.getByRole("button", { name: "Abrir mesa" }))
+    expect(await screen.findByText("Mesa 11 aberta.")).toBeInTheDocument()
+  })
+
+  test("o cliente aceita até 80 letras, como o servidor", async () => {
+    const { gaveta } = await abrirMesa(11)
+    expect(gaveta.getByRole("textbox", { name: "Cliente (opcional)" })).toHaveAttribute(
+      "maxLength",
+      "80",
+    )
+  })
+
+  test("a mesa em limpeza oferece Marcar limpa e também Abrir mesa", async () => {
+    const { gaveta } = await abrirMesa(9)
+    expect(gaveta.getByRole("button", { name: "Marcar limpa" })).toBeInTheDocument()
+    expect(gaveta.getByRole("button", { name: "Abrir mesa" })).toBeInTheDocument()
   })
 
   test("o garçom guardado neste aparelho já vem marcado", async () => {
