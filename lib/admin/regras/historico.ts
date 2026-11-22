@@ -27,6 +27,12 @@ export function eventosDaMudanca(antes: Pedido, depois: Pedido, em: string): Eve
     eventos.push({ tipo: "pago", em })
   }
   if (depois.servidoEm && !antes.servidoEm) eventos.push({ tipo: "servido", em })
+  if (depois.chegouEm && !antes.chegouEm) eventos.push({ tipo: "chegou", em })
+  // Farmácia: o controlado não sai para entrega.
+  if (antes.tipo === "entrega" && depois.tipo === "retirada") {
+    eventos.push({ tipo: "virou-retirada", em })
+  }
+  if (depois.receitaRetidaEm && !antes.receitaRetidaEm) eventos.push({ tipo: "receita-retida", em })
   if (depois.impressoEm && depois.impressoEm !== antes.impressoEm) {
     eventos.push({ tipo: "impresso", em })
   }
@@ -51,6 +57,12 @@ function textoDoEvento(evento: EventoPedido, pedido: Pedido): string {
       return "Pedido aceito"
     case "servido":
       return "Servido na mesa"
+    case "chegou":
+      return "Cliente chegou"
+    case "virou-retirada":
+      return "Trocado para retirada: controlado não sai para entrega"
+    case "receita-retida":
+      return "Receita retida no balcão"
     case "aviso":
       return `Cliente avisado no WhatsApp: “${evento.texto}”`
   }

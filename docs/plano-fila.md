@@ -40,7 +40,7 @@ Base: a [Fase 5 do plano do painel](plano-painel-admin.md#fase-5-fila-de-pedidos
 
 **Modelo**
 
-- `Pedido.historico: EventoPedido[]` (`{ tipo, em, detalhe? }`).
+- `Pedido.historico: EventoPedido[]` (`{ tipo, em, ... }`). Depois da junção com o dashboard, é o mesmo campo das etapas do dashboard (ver "Junção com o dashboard completo").
 - `Pedido.esperaAceite?: boolean`, marcado pelo servidor na chegada.
 - `Pedido.cancelamento?: { tipo: "recusa" | "cancelamento"; motivo: MotivoCancelamento; detalhe?: string; em: string }`.
 - `SituacaoPagamento` ganha `"estorno-pendente"`.
@@ -175,3 +175,25 @@ Base: a [Fase 5 do plano do painel](plano-painel-admin.md#fase-5-fila-de-pedidos
   - **Achado no caminho:** com Alertas e Impressora, o popover Este aparelho passava da altura da tela e os últimos grupos ficavam fora de alcance até no 1080p. Agora limita à altura livre e rola por dentro (E2E "sem impressora neste aparelho").
   - **Screenshots:** mudaram a fila (selo Na cozinha, Servido, impressora e os botões do topo) e as configurações da loja (vias do cupom); o painel de chamada ganhou screenshot novo. Revisados e atualizados nas 11 telas.
   - **Fica para depois:** o agente de impressão de verdade e a conexão com a impressora, com o back-end; a numeração mensal do painel de chamada da lanchonete, na fase 6.
+- **Fase 6: pronta em 21/11/2026** (branch `claude/admin-fila-fase-6`, que parte da fase 5).
+  - **Decidido no caminho:**
+    - açougue: a retirada marcada para outro dia que ninguém começou espera na faixa "Próximas retiradas" (por dia, "Amanhã, sáb., 14/11"), entre a barra e o quadro, e entra em Novos no dia. Se a loja já começou, fica no quadro. Cada linha abre os detalhes;
+    - açougue: "com o motivo no botão" virou o próprio botão: em preparo, com carne por quilo sem pesar, a ação do cartão é "Pesar" (a balança abre numa janela ali mesmo) e, pesado, volta o "Marcar como pronto". O servidor recusa pronto antes da pesagem, então o Enter, o arrastar e o lote também param. Vale para todo item por quilo, não só o "pagar após a pesagem";
+    - açougue: se a pesagem muda o total, o cliente é avisado ("foi pesado e o total ficou R$ …", marcador {total}), com o texto editável só no açougue;
+    - farmácia: a receita do pedido do site se monta do próprio pedido na demonstração (paciente, receituário do item mais exigente, prescritor de uma lista). A conferência na fila é o mesmo cartão do módulo Receitas, e a decisão vale nos dois lugares (a receita do pedido também aparece em Receitas). O aceite só sai com a receita aprovada; o bloqueio é da tela (a decisão do farmacêutico ainda mora no navegador, como no módulo Receitas);
+    - farmácia: controlado é o da Portaria 344 (listas A, B e C); antimicrobiano retém a receita mas pode ser entregue. A entrega com controlado mostra "Controlado: precisa virar retirada" e troca a ação do cartão por "Trocar para retirada" (sai a taxa e o endereço, e o cliente é avisado). O servidor recusa a saída para entrega e só conclui a retirada com a receita retida, que "Cliente retirou" pergunta e registra na linha do tempo;
+    - farmácia: a demonstração traz o pedido do site mais novo com receita esperando o aceite (a base guardada subiu para a versão 5);
+    - salão: "Chegou" é um campo do agendamento (`chegouEm`), não uma etapa nova: Agendados e Chegou são o mesmo "agendado", e Chegou segue pela ordem de chegada. "Não veio" cancela com o motivo "Cliente não veio" e conta como falta no histórico da cliente ("2 faltas" no cartão);
+    - salão: os lembretes simulados saem na véspera às 18h e 1 h antes; o cartão diz o que já saiu e quando sai o próximo. Marcado depois da hora de um lembrete, aquele não sai;
+    - salão: o agendamento pelo site pede "Confirmar horário", e o alarme do salão é sempre o suave (sem sirene). Sem o +min na barra e sem o painel de chamada;
+    - lanchonete: a numeração mensal já chegava ao painel de chamada; ganhou um teste que fixa isso.
+  - **Achado no caminho:** o axe viu o nome do botão da faixa Próximas retiradas diferente do texto na tela (o leitor de voz não acharia); agora o nome é o próprio texto.
+  - **Screenshots:** só mudou o módulo Receitas da farmácia (a receita do pedido entra em Aguardando); revisado e atualizado nas 11 telas. A fila do açougue, da farmácia e do salão não tem screenshot (o teste visual da fila é da pizzaria).
+  - **Fica para depois:** a decisão da receita e os lembretes no servidor de verdade; o teste "o desfazer do aviso traz o bairro excluído de volta" (bairros) é instável mesmo sozinho e merece correção à parte.
+- **Junção com o dashboard completo: 21/11/2026.** O main ganhou o dashboard completo enquanto a fila andava, e os dois lados tinham criado, cada um, um histórico do pedido e um motivo de cancelamento. As 6 branches receberam o main (fase 1) e depois a fase anterior, com um modelo só:
+  - `Pedido.historico` é obrigatório e guarda as etapas, desde a primeira (a chegada), e os outros eventos da linha do tempo. `comEtapa` anota a etapa nas criações (PDV, garçom, agenda, fim do dia) e `eventosDaMudanca` em toda mudança do servidor; `etapasDe()` separa só as etapas para o dashboard. A linha do tempo não repete a chegada;
+  - `Pedido.cancelamento` (tipo, motivo, detalhe e hora) no lugar de `motivoCancelamento`. Os motivos juntam as duas listas ("cliente-desistiu" virou "cliente-pediu"); o cancelamento continua pedindo o motivo, e o cancelado sem motivo da demonstração aparece como "Não informado";
+  - a urgência da fila é pelo prazo prometido, e o alerta de atrasados do dashboard usa a mesma regra. A aba Operação continua com os 40 min (`MINUTOS_DE_ATRASO`);
+  - os rótulos de origem são os do dashboard ("PDV do balcão"); o selo curto do cartão é `seloDaOrigem`;
+  - o cliente da demonstração passa pelos dois: fiel, ocasional ou de uma vez só (selos da fila) e o ritmo de sumidos e novos (aba Clientes). A base guardada subiu para a versão 7;
+  - os testes que estouravam tempo na suíte inteira ganharam 15 s (teste e gancho), e a busca do "Chegou agora" aceita mais de um pedido da demonstração. O teste de bairros passou 3 de 3 vezes sozinho. Os mínimos de cobertura subiram para 84/76/82/85.

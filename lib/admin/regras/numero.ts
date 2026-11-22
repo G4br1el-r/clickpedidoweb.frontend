@@ -1,4 +1,4 @@
-import { isSameMonth, parse } from "date-fns"
+import { addDays, isSameDay, isSameMonth, parse } from "date-fns"
 
 /**
  * Número do pedido novo. Sequencial, é o próprio id; mensal (lanchonete), segue o
@@ -22,10 +22,19 @@ export function proximoNumero({
 
 const DIAS = ["dom.", "seg.", "ter.", "qua.", "qui.", "sex.", "sáb."]
 
-/** Açougue: "Retirar sáb., 14/11", a partir do dia guardado como 2026-11-14. */
-export function textoRetirada(dia: string): string {
+/** "sáb., 14/11", a partir do dia guardado como 2026-11-14. */
+function diaEData(dia: string): string {
   const data = parse(dia, "yyyy-MM-dd", new Date())
   const dd = String(data.getDate()).padStart(2, "0")
   const mm = String(data.getMonth() + 1).padStart(2, "0")
-  return `Retirar ${DIAS[data.getDay()]}, ${dd}/${mm}`
+  return `${DIAS[data.getDay()]}, ${dd}/${mm}`
+}
+
+/** Açougue: "Retirar sáb., 14/11". */
+export const textoRetirada = (dia: string) => `Retirar ${diaEData(dia)}`
+
+/** Título de cada dia das próximas retiradas: "Amanhã, sáb., 14/11" ou "seg., 16/11". */
+export function diaDaRetirada(dia: string, agora: Date): string {
+  const amanha = isSameDay(parse(dia, "yyyy-MM-dd", agora), addDays(agora, 1))
+  return amanha ? `Amanhã, ${diaEData(dia)}` : diaEData(dia)
 }

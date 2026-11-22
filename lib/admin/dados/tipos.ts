@@ -101,7 +101,17 @@ export type EtapaDoPedido = { tipo: "etapa"; status: StatusPedido; em: string; p
 /** Uma linha do histórico do pedido: as etapas, desde a primeira, e o que mais aconteceu. */
 export type EventoPedido =
   | EtapaDoPedido
-  | { tipo: "pago" | "impresso" | "aceito" | "servido"; em: string }
+  | {
+      tipo:
+        | "pago"
+        | "impresso"
+        | "aceito"
+        | "servido"
+        | "chegou"
+        | "virou-retirada"
+        | "receita-retida"
+      em: string
+    }
   /** Mensagem que a loja mandou ao cliente (simulada): o texto que teria saído. */
   | { tipo: "aviso"; em: string; texto: string }
 
@@ -141,6 +151,10 @@ export type Pedido = {
   dataRetirada?: string
   /** Açougue: resultado da pesagem. */
   pesagem?: { totalEstimado: number; diferenca: number; pesadoEm: string }
+  /** Salão: quando a cliente chegou para o horário (sai de Agendados e vai para Chegou). */
+  chegouEm?: string
+  /** Farmácia: quando a receita do controlado ficou retida no balcão, na retirada. */
+  receitaRetidaEm?: string
   /** O estoque já saiu por este pedido (para devolver no cancelamento uma vez só). */
   estoqueBaixado?: boolean
   /** Chegou pelo site com o aceite manual ligado: espera a loja aceitar ou recusar. */
@@ -410,7 +424,9 @@ export type ConfigLoja = {
   /** Avisos automáticos ao cliente (simulados): ligado e os textos de cada etapa. */
   avisosCliente?: {
     ligado: boolean
-    textos?: Partial<Record<"aceito" | "saiu" | "pronto" | "recusado", string>>
+    textos?: Partial<
+      Record<"aceito" | "saiu" | "pronto" | "recusado" | "pesado" | "retirada", string>
+    >
   }
   /** Salão: vídeo do banner da loja (YouTube, Shorts ou Reels). */
   videoBanner?: string

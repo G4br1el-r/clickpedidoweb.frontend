@@ -5,6 +5,7 @@ import {
   finalizadosHoje,
   novosPedidos,
   pedidosDeDiasAnteriores,
+  proximasRetiradas,
   resumoDaFila,
   resumoDosItens,
   textoCobranca,
@@ -56,7 +57,7 @@ describe("colunasDaFila", () => {
     expect(resumo(colunasDaFila(fila, "pizzaria", AGORA))[0]).toEqual(["Novos", [31, 30, 11, 10]])
   })
 
-  test("salão: agendados de hoje pela hora marcada e em atendimento", () => {
+  test("salão: agendados de hoje pela hora marcada, quem chegou e quem está em atendimento", () => {
     const marcado = (id: number, status: StatusPedido, inicio: Date): Pedido => ({
       ...pedido(id, status, 60 * 24, "atendimento"),
       agendamento: { inicio: inicio.toISOString(), duracaoMin: 60 },
@@ -67,9 +68,11 @@ describe("colunasDaFila", () => {
       marcado(22, "recebido", new Date(2026, 10, 14, 10, 0)),
       marcado(23, "em-preparo", new Date(2026, 10, 13, 20, 0)),
       marcado(24, "em-preparo", new Date(2026, 10, 13, 19, 30)),
+      { ...marcado(27, "recebido", new Date(2026, 10, 13, 20, 30)), chegouEm: AGORA.toISOString() },
     ]
     expect(resumo(colunasDaFila(agenda, "salao", AGORA))).toEqual([
       ["Agendados", [21, 20]],
+      ["Chegou", [27]],
       ["Em atendimento", [24, 23]],
     ])
   })
@@ -239,5 +242,37 @@ describe("finalizadosHoje", () => {
       fechou(4, "pronto", 1),
     ]
     expect(finalizadosHoje(concluidos, criadosHoje).map((item) => item.id)).toEqual([2, 3, 1])
+  })
+})
+
+describe("proximasRetiradas", () => {
+  const marcada = (id: number, dia: string, status: StatusPedido = "recebido") => ({
+    ...pedido(id, status, 30, "retirada"),
+    dataRetirada: dia,
+  })
+
+  test("açougue: a retirada de outro dia sai das colunas e espera na faixa, por data", () => {
+    const hoje = marcada(1, "2026-11-13")
+    const sabado = marcada(2, "2026-11-14")
+    const domingo = marcada(3, "2026-11-15")
+    const sabadoCedo = { ...marcada(4, "2026-11-14"), criadoEm: "2026-11-13T10:00:00.000Z" }
+    const pedidos = [domingo, sabado, hoje, sabadoCedo]
+
+    expect(colunasDaFila(pedidos, "acougue", AGORA)[0].pedidos.map((item) => item.id)).toEqual([1])
+    expect(
+      proximasRetiradas(pedidos, AGORA).map((grupo) => [
+        grupo.dia,
+        grupo.pedidos.map((item) => item.id),
+      ]),
+    ).toEqual([
+      ["2026-11-14", [4, 2]],
+      ["2026-11-15", [3]],
+    ])
+  })
+
+  test("o que já começou a ser preparado fica no quadro, mesmo sendo para outro dia", () => {
+    const adiantado = marcada(5, "2026-11-14", "em-preparo")
+    expect(proximasRetiradas([adiantado], AGORA)).toEqual([])
+    expect(colunasDaFila([adiantado], "acougue", AGORA)[1].pedidos).toEqual([adiantado])
   })
 })

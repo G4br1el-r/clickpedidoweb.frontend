@@ -632,14 +632,31 @@ const ROTULO_DO_AVISO: Record<EtapaDoAviso, string> = {
   saiu: "Saiu para entrega",
   pronto: "Pronto para retirar",
   recusado: "Pedido recusado",
+  pesado: "Total mudou na pesagem",
+  retirada: "Controlado vira retirada",
 }
 
 /**
  * Os avisos que a loja manda sozinha ao cliente em cada etapa, com os textos editáveis. O
  * envio é simulado: a mensagem entra na linha do tempo do pedido.
  */
-function AvisosAoCliente({ controle, erros }: { controle: Controle; erros: ErrosDoFormulario }) {
+function AvisosAoCliente({
+  controle,
+  erros,
+  pesa,
+  controla,
+}: {
+  controle: Controle
+  erros: ErrosDoFormulario
+  /** Açougue: o aviso de quando a balança muda o total. */
+  pesa: boolean
+  /** Farmácia: o aviso de quando o controlado vira retirada. */
+  controla: boolean
+}) {
   const idChave = useId()
+  const etapas = ETAPAS_DO_AVISO.filter(
+    (etapa) => (etapa !== "pesado" || pesa) && (etapa !== "retirada" || controla),
+  )
   const ligado = useWatch({ control: controle, name: "avisosCliente.ligado" })
   return (
     <div className="flex flex-col gap-4">
@@ -661,7 +678,7 @@ function AvisosAoCliente({ controle, erros }: { controle: Controle; erros: Erros
           </div>
         )}
       />
-      {ETAPAS_DO_AVISO.map((etapa) => {
+      {etapas.map((etapa) => {
         const erro = erros.avisosCliente?.textos?.[etapa]
         return (
           <Controller
@@ -688,7 +705,8 @@ function AvisosAoCliente({ controle, erros }: { controle: Controle; erros: Erros
       })}
       <p className="text-[13px] text-muted-foreground">
         Marcadores: {"{nome}"} (primeiro nome), {"{numero}"}, {"{loja}"}, {"{link}"} (acompanhar o
-        pedido) e {"{motivo}"} (na recusa).
+        pedido){pesa ? ", " : " e "}
+        {"{motivo}"} (na recusa){pesa && <> e {"{total}"} (na pesagem)</>}.
       </p>
     </div>
   )
@@ -1182,7 +1200,12 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
             </Field>
           )}
         />
-        <AvisosAoCliente controle={controle} erros={erros} />
+        <AvisosAoCliente
+          controle={controle}
+          erros={erros}
+          pesa={temRecurso(segmento, "vendaPorPeso")}
+          controla={temRecurso(segmento, "medicamentos")}
+        />
       </Secao>
 
       <Secao

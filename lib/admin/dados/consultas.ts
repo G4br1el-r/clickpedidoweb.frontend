@@ -194,6 +194,30 @@ export function useServirMesa() {
   )
 }
 
+/** Salão: a cliente chegou para o horário. */
+export function useClienteChegou() {
+  return useMutacaoDePedido<number>(
+    (servidor, id) => servidor.pedidos.clienteChegou(id),
+    (pedido) => ({ ...pedido, chegouEm: new Date().toISOString() }),
+  )
+}
+
+/** Farmácia: a entrega com controlado vira retirada no balcão. */
+export function useTrocarParaRetirada() {
+  return useMutacaoDePedido<number>(
+    (servidor, id) => servidor.pedidos.trocarParaRetirada(id),
+    (pedido) => ({ ...pedido, tipo: "retirada" }),
+  )
+}
+
+/** Farmácia: o cliente retirou o controlado, com a receita retida no balcão. */
+export function useEntregarComReceitaRetida() {
+  return useMutacaoDePedido<MudancaDeEtapa>(
+    (servidor, { id, de }) => servidor.pedidos.entregarComReceitaRetida(id, de),
+    (pedido) => ({ ...pedido, status: "concluido", receitaRetidaEm: new Date().toISOString() }),
+  )
+}
+
 export function useCancelarPedido() {
   return useMutacaoDePedido<MudancaDeEtapa & MotivoEscolhido>(
     (servidor, { id, de, ...escolhido }) => servidor.pedidos.cancelar(id, de, escolhido),

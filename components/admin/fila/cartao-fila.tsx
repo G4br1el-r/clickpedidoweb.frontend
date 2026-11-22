@@ -9,30 +9,45 @@ import {
   ChefHatIcon,
   ChevronUpIcon,
   ClockIcon,
+  FileTextIcon,
   IdCardIcon,
   MapPinIcon,
   MessageCircleIcon,
   PanelRightOpenIcon,
   PrinterIcon,
   ScaleIcon,
+  ShieldAlertIcon,
   XIcon,
 } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { useState } from "react"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
 import type { MotivoEscolhido, Motoboy, Pedido } from "@/lib/admin/dados/tipos"
 import { esperaDoAceite } from "@/lib/admin/regras/aceite"
+import { textoDosLembretes } from "@/lib/admin/regras/agenda"
 import { resumoDosItens, textoCobranca, type Urgencia, urgencia } from "@/lib/admin/regras/fila"
 import { AVISO_DE_MAIORIDADE } from "@/lib/admin/regras/maioridade"
 import { linkWhatsApp, mensagemParaCliente } from "@/lib/admin/regras/mensagens"
 import { textoRetirada } from "@/lib/admin/regras/numero"
-import { itensParaPesar } from "@/lib/admin/regras/pesagem"
+import { pesagemPendente } from "@/lib/admin/regras/pesagem"
 import { type TemposDaLoja, textoDoPrazo } from "@/lib/admin/regras/prazo"
 import { rotuloCanal, seloDaOrigem } from "@/lib/admin/regras/rotulos"
 import { rotuloAcao, tomDoStatus } from "@/lib/admin/regras/status"
+import { plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { ConfirmarComMotivo } from "../pedidos/confirmar-com-motivo"
 import { Traco } from "../traco"
@@ -114,6 +129,14 @@ export function CartaoFila({
   aoCancelar,
   aoAvancar,
   aoServir,
+  aoPesar,
+  receita,
+  controlado = false,
+  aoConferirReceita,
+  aoTrocarParaRetirada,
+  aoChegou,
+  aoNaoVeio,
+  faltas = 0,
   aoAbrir,
   aoImprimir,
 }: {
@@ -145,6 +168,20 @@ export function CartaoFila({
   aoAvancar: () => void
   /** Mesa pronta: a rodada chegou à mesa. */
   aoServir?: () => void
+  /** Açougue: abre a pesagem ali mesmo. Enquanto falta pesar, é a ação do cartão. */
+  aoPesar?: () => void
+  /** Farmácia: o pedido pede receita; o aceite espera o farmacêutico aprovar. */
+  receita?: "pendente" | "aprovada" | "recusada"
+  /** Farmácia: leva controlado (Portaria 344), que não sai para entrega. */
+  controlado?: boolean
+  aoConferirReceita?: () => void
+  aoTrocarParaRetirada?: () => void
+  /** Salão: a cliente chegou para o horário. */
+  aoChegou?: () => void
+  /** Salão: a cliente não veio; o horário cancela e conta como falta. */
+  aoNaoVeio?: () => void
+  /** Salão: quantas vezes a cliente já não veio. */
+  faltas?: number
   aoAbrir: () => void
   aoImprimir: () => void
 }) {
@@ -154,7 +191,34 @@ export function CartaoFila({
   const acao = despacha ? "Despachar" : rotuloAcao(pedido.tipo, pedido.status)
   const motoboy = motoboys.find((item) => item.id === pedido.motoboyId)
   // Açougue: carne no quilo que ainda não passou pela balança.
-  const aPesar = !pedido.pesagem && itensParaPesar(pedido).length > 0
+  const aPesar = pesagemPendente(pedido)
+  // Em preparo, falta só a balança: "Marcar como pronto" espera a pesagem.
+  const pesarAgora = aPesar && pedido.status === "em-preparo" && aoPesar
+  // Farmácia: a entrega com controlado precisa virar retirada antes de qualquer etapa.
+  const viraRetirada =
+    controlado &&
+    pedido.tipo === "entrega" &&
+    ["recebido", "em-preparo", "pronto"].includes(pedido.status) &&
+    aoTrocarParaRetirada
+  // Salão: agendado que ainda não chegou espera "Cliente chegou" ou "Não veio".
+  const agendado =
+    pedido.tipo === "atendimento" &&
+    pedido.status === "recebido" &&
+    !pedido.chegouEm &&
+    !pedido.esperaAceite
+  const lembretes = agendado ? textoDosLembretes(pedido, agora) : null
+  const conferirReceita = receita !== undefined && receita !== "aprovada" && aoConferirReceita
+  const botaoTrocar = (
+    <Button
+      type="button"
+      size="sm"
+      className="min-w-[min(100%,7rem)] flex-1"
+      disabled={ocupado}
+      onClick={aoTrocarParaRetirada}
+    >
+      Trocar para retirada
+    </Button>
+  )
   const canal = pedido.mesa
     ? `Mesa ${pedido.mesa.numero}`
     : CANAL_CURTO[pedido.tipo as keyof typeof CANAL_CURTO]
@@ -250,6 +314,12 @@ export function CartaoFila({
                   Na cozinha
                 </Badge>
               )}
+              {receita && (
+                <Badge variant="outline" className="gap-1">
+                  <FileTextIcon aria-hidden="true" />
+                  Receita
+                </Badge>
+              )}
               {aPesar && (
                 <Badge variant="secondary" className="gap-1">
                   <ScaleIcon aria-hidden="true" />A pesar
@@ -279,6 +349,19 @@ export function CartaoFila({
             </CardHeader>
 
             <CardContent className="flex flex-col gap-2 px-3 text-sm">
+              {controlado && pedido.tipo === "entrega" && (
+                <p className="flex items-center gap-1.5 text-[13px] font-medium">
+                  <ShieldAlertIcon className="size-4" aria-hidden="true" />
+                  Controlado: precisa virar retirada
+                </p>
+              )}
+              {controlado && pedido.tipo === "retirada" && (
+                <p className="flex items-center gap-1.5 text-[13px] font-medium">
+                  <ShieldAlertIcon className="size-4" aria-hidden="true" />
+                  Controlado: só sai com a receita retida
+                </p>
+              )}
+              {lembretes && <p className="text-xs text-muted-foreground">{lembretes}</p>}
               {maioridade && (
                 <p className="flex items-center gap-1.5 text-[13px] font-medium">
                   <IdCardIcon className="size-4" aria-hidden="true" />
@@ -305,6 +388,9 @@ export function CartaoFila({
                 <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <span className="font-medium">{pedido.cliente.nome}</span>
                   {seloCliente && <Badge variant="secondary">{seloCliente}</Badge>}
+                  {faltas > 0 && (
+                    <Badge variant="outline">{plural(faltas, "falta", "faltas")}</Badge>
+                  )}
                 </span>
                 {pedido.mesa?.garcom && (
                   <span className="text-xs text-muted-foreground">
@@ -364,15 +450,30 @@ export function CartaoFila({
             <CardFooter className="flex-wrap gap-2 border-border/70 bg-transparent px-3 pt-3">
               {espera ? (
                 <>
-                  <Button
-                    type="button"
-                    size="sm"
-                    className="min-w-[min(100%,7rem)] flex-1"
-                    disabled={ocupado}
-                    onClick={aoAceitar}
-                  >
-                    Aceitar
-                  </Button>
+                  {viraRetirada ? (
+                    botaoTrocar
+                  ) : conferirReceita ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="min-w-[min(100%,7rem)] flex-1"
+                      disabled={ocupado}
+                      onClick={aoConferirReceita}
+                    >
+                      <FileTextIcon data-icon="inline-start" />
+                      Conferir receita
+                    </Button>
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="min-w-[min(100%,7rem)] flex-1"
+                      disabled={ocupado}
+                      onClick={aoAceitar}
+                    >
+                      {pedido.tipo === "atendimento" ? "Confirmar horário" : "Aceitar"}
+                    </Button>
+                  )}
                   <ConfirmarComMotivo
                     gatilho={
                       <Button
@@ -391,6 +492,53 @@ export function CartaoFila({
                     aoConfirmar={aoRecusar}
                   />
                 </>
+              ) : agendado && aoChegou && aoNaoVeio ? (
+                <>
+                  <Button
+                    type="button"
+                    size="sm"
+                    className="min-w-[min(100%,7rem)] flex-1"
+                    disabled={ocupado}
+                    onClick={aoChegou}
+                  >
+                    Cliente chegou
+                  </Button>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button type="button" size="sm" variant="outline" disabled={ocupado}>
+                        Não veio
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>A cliente não veio?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          O horário de #{pedido.numero} é cancelado e conta como falta de{" "}
+                          {pedido.cliente.nome}.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Voltar</AlertDialogCancel>
+                        <AlertDialogAction onClick={aoNaoVeio}>
+                          Não veio, conta falta
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
+              ) : viraRetirada ? (
+                botaoTrocar
+              ) : pesarAgora ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  className="min-w-[min(100%,7rem)] flex-1"
+                  disabled={ocupado}
+                  onClick={aoPesar}
+                >
+                  <ScaleIcon data-icon="inline-start" />
+                  Pesar
+                </Button>
               ) : acao ? (
                 <Button
                   type="button"

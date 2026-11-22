@@ -39,10 +39,10 @@ export default defineConfig({
       exclude: ["components/ui/**", "lib/mock/**", "**/*.d.ts", "**/*.test.{ts,tsx}"],
       // Mínimos medidos em 2026-11-21, arredondados para baixo. Só sobem, nunca descem.
       thresholds: {
-        statements: 83,
-        branches: 74,
-        functions: 82,
-        lines: 84,
+        statements: 84,
+        branches: 76,
+        functions: 83,
+        lines: 85,
         "lib/**": { statements: 98, branches: 94, functions: 98, lines: 98 },
       },
     },

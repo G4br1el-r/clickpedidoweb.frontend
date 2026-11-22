@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
+import type { Pedido } from "@/lib/admin/dados/tipos"
+import { useFarmacia } from "@/lib/admin/farmacia-estado"
 import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { PaginaFila } from "./pagina-fila"
@@ -478,7 +480,10 @@ describe("PaginaFila", () => {
     usePreferenciasFila.setState({ somLigado: true, simular: true })
     renderizar(300)
 
-    expect(await screen.findByText("Chegou agora", {}, { timeout: 8000 })).toBeInTheDocument()
+    // A demonstração solta um pedido a cada 300 ms: com a máquina lenta, pode já ter chegado mais de um.
+    expect(
+      (await screen.findAllByText("Chegou agora", {}, { timeout: 8000 }))[0],
+    ).toBeInTheDocument()
     expect(tocadas).toHaveBeenCalled()
   })
 
@@ -592,7 +597,10 @@ describe("PaginaFila", () => {
     )
     usePreferenciasFila.setState({ notificar: true, simular: true })
     renderizar(300)
-    expect(await screen.findByText("Chegou agora", {}, { timeout: 8000 })).toBeInTheDocument()
+    // A demonstração solta um pedido a cada 300 ms: com a máquina lenta, pode já ter chegado mais de um.
+    expect(
+      (await screen.findAllByText("Chegou agora", {}, { timeout: 8000 }))[0],
+    ).toBeInTheDocument()
     expect(avisos).not.toHaveBeenCalled()
   })
 
@@ -602,7 +610,7 @@ describe("PaginaFila", () => {
     const limpar = vi.spyOn(globalThis, "clearTimeout")
     usePreferenciasFila.setState({ simular: true })
     const { unmount } = renderizar(300)
-    await screen.findByText("Chegou agora", {}, { timeout: 8000 })
+    await screen.findAllByText("Chegou agora", {}, { timeout: 8000 })
 
     // O destaque "Chegou agora" dura 10 s.
     const destaques = criar.mock.calls.flatMap((chamada, indice) =>
@@ -651,7 +659,7 @@ describe("PaginaFila", () => {
     usePreferenciasFila.setState({ simular: true })
     renderizar(400)
 
-    await screen.findByText("Chegou agora", {}, { timeout: 8000 })
+    await screen.findAllByText("Chegou agora", {}, { timeout: 8000 })
     // Para de chegar pedido e espera todos os que chegaram saírem.
     usePreferenciasFila.setState({ simular: false })
     const chegaram = async () =>
@@ -1240,10 +1248,18 @@ describe("PaginaFila no açougue", () => {
     useSegmentoAtual.setState({ segmento: "acougue" })
     const api = servidorDo("acougue")
     const fila = await api.pedidos.listar({ status: ["recebido", "em-preparo", "pronto"] })
+    const noQuadro = (pedido: Pedido) =>
+      pedido.status !== "recebido" || !pedido.dataRetirada || pedido.dataRetirada <= "2026-11-13"
     const aPesar = fila.find(
-      (pedido) => pedido.itens.some((item) => item.pesoGramas) && !pedido.pesagem,
+      (pedido) =>
+        pedido.itens.some((item) => item.pesoGramas) && !pedido.pesagem && noQuadro(pedido),
     )
-    const comData = fila.find((pedido) => pedido.dataRetirada)
+    // A de outro dia ainda não começada espera na faixa Próximas retiradas, fora do quadro.
+    const comData = fila.find(
+      (pedido) =>
+        pedido.dataRetirada &&
+        (pedido.status !== "recebido" || pedido.dataRetirada <= "2026-11-13"),
+    )
     if (!aPesar || !comData) throw new Error("A demonstração do açougue devia ter os dois casos")
     renderizar()
 
@@ -1255,5 +1271,165 @@ describe("PaginaFila no açougue", () => {
         /^Retirar (dom|seg|ter|qua|qui|sex|sáb)\., \d{2}\/\d{2}$/,
       ),
     ).toBeInTheDocument()
+  })
+
+  test("pesar ali mesmo: em preparo, Pesar abre a balança e, pesado, o pedido pode ficar pronto", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    useSegmentoAtual.setState({ segmento: "acougue" })
+    const api = servidorDo("acougue")
+    const abertos = await api.pedidos.listar({ status: ["recebido", "em-preparo"] })
+    let pedido = abertos.find(
+      (item) =>
+        !item.pesagem &&
+        !item.esperaAceite &&
+        item.itens.some((i) => i.pesoGramas) &&
+        (!item.dataRetirada || item.dataRetirada <= "2026-11-13"),
+    )
+    if (!pedido) throw new Error("A demonstração do açougue devia ter um pedido a pesar")
+    if (pedido.status === "recebido") pedido = await api.pedidos.avancar(pedido.id, "recebido")
+    renderizar()
+
+    const cartao = within(
+      await screen.findByRole("article", { name: `#${pedido.numero}` }, { timeout: 8000 }),
+    )
+    await usuario.click(cartao.getByRole("button", { name: "Pesar" }))
+    const janela = within(await screen.findByRole("dialog", { name: `Pesar #${pedido.numero}` }))
+    for (const item of pedido.itens.filter((i) => i.pesoGramas)) {
+      await usuario.type(
+        janela.getByRole("textbox", { name: `Peso de ${item.nome}` }),
+        String((item.pesoGramas as number) * item.quantidade),
+      )
+    }
+    await usuario.click(janela.getByRole("button", { name: "Registrar pesagem" }))
+    expect(await screen.findByText("Pesagem registrada.")).toBeInTheDocument()
+    await usuario.keyboard("{Escape}")
+    expect(await cartao.findByRole("button", { name: "Marcar como pronto" })).toBeInTheDocument()
+  })
+
+  test("próximas retiradas: a de outro dia espera na faixa, por data, fora do quadro", async () => {
+    telaGrande()
+    useSegmentoAtual.setState({ segmento: "acougue" })
+    const api = servidorDo("acougue")
+    const fila = await api.pedidos.listar({ status: ["recebido"] })
+    const amanha = fila.find(
+      (pedido) => pedido.dataRetirada === "2026-11-14" && !pedido.esperaAceite,
+    )
+    if (!amanha) throw new Error("A demonstração do açougue devia ter retirada para amanhã")
+    renderizar()
+
+    const faixa = within(
+      await screen.findByRole("region", { name: "Próximas retiradas" }, { timeout: 8000 }),
+    )
+    expect(faixa.getByRole("heading", { name: "Amanhã, sáb., 14/11" })).toBeInTheDocument()
+    expect(
+      faixa.getByRole("button", { name: new RegExp(`^#${amanha.numero} `) }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("article", { name: `#${amanha.numero}` })).not.toBeInTheDocument()
+  })
+})
+
+describe("PaginaFila na farmácia", () => {
+  beforeEach(() => {
+    useSegmentoAtual.setState({ segmento: "farmacia" })
+    useFarmacia.setState(useFarmacia.getInitialState(), true)
+  })
+
+  const cartao = async (numero: number) =>
+    within(await screen.findByRole("article", { name: `#${numero}` }, { timeout: 8000 }))
+
+  test("o aceite espera a receita: conferida e aprovada ali mesmo, o pedido pode ser aceito", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    const [esperando] = (await servidorDo("farmacia").pedidos.listar()).filter(
+      (pedido) => pedido.esperaAceite,
+    )
+    renderizar()
+
+    const doPedido = await cartao(esperando.numero)
+    expect(doPedido.getByText("Receita")).toBeInTheDocument()
+    expect(doPedido.queryByRole("button", { name: "Aceitar" })).not.toBeInTheDocument()
+    await usuario.click(doPedido.getByRole("button", { name: "Conferir receita" }))
+
+    const janela = within(
+      await screen.findByRole("dialog", { name: `Receita do pedido #${esperando.numero}` }),
+    )
+    const retida = janela.queryByRole("checkbox", { name: "Via da receita retida na farmácia" })
+    if (retida) await usuario.click(retida)
+    await usuario.click(janela.getByRole("button", { name: "Aprovar" }))
+    await usuario.keyboard("{Escape}")
+    expect(await doPedido.findByRole("button", { name: "Aceitar" })).toBeInTheDocument()
+  })
+
+  test("controlado: a entrega vira retirada e só sai do balcão com a receita retida", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    const api = servidorDo("farmacia")
+    const entrega = (await api.pedidos.listar({ status: ["em-preparo"] })).find(
+      (pedido) =>
+        pedido.tipo === "entrega" &&
+        pedido.itens.some((item) => item.nome.startsWith("Metilfenidato")),
+    )
+    if (!entrega) throw new Error("A demonstração da farmácia devia ter entrega com controlado")
+    renderizar()
+
+    const doPedido = await cartao(entrega.numero)
+    expect(doPedido.getByText("Controlado: precisa virar retirada")).toBeInTheDocument()
+    await usuario.click(doPedido.getByRole("button", { name: "Trocar para retirada" }))
+    expect(
+      await screen.findByText(`#${entrega.numero} virou retirada. O cliente foi avisado.`),
+    ).toBeInTheDocument()
+    expect(await doPedido.findByText("Controlado: só sai com a receita retida")).toBeInTheDocument()
+
+    await usuario.click(doPedido.getByRole("button", { name: "Marcar como pronto" }))
+    // Pronto, o cartão muda de coluna (o antigo ainda sai animando): procura em Prontos.
+    const prontos = await coluna("Prontos")
+    const pronto = within(
+      await prontos.findByRole("article", { name: `#${entrega.numero}` }, { timeout: 4000 }),
+    )
+    await usuario.click(pronto.getByRole("button", { name: "Cliente retirou" }))
+    const pergunta = within(
+      await screen.findByRole("alertdialog", { name: "A receita ficou retida?" }),
+    )
+    await usuario.click(pergunta.getByRole("button", { name: "Retida, entregar" }))
+    await waitFor(async () =>
+      expect((await api.pedidos.buscar(entrega.id))?.receitaRetidaEm).toBeDefined(),
+    )
+  })
+})
+
+describe("PaginaFila no salão", () => {
+  beforeEach(() => {
+    // 14h de sexta: o salão está aberto e a agenda do dia está cheia (fecha às 19h).
+    vi.setSystemTime(new Date(2026, 10, 13, 14, 0))
+    useSegmentoAtual.setState({ segmento: "salao" })
+  })
+
+  test("a cliente chega e vai para Chegou; a que não veio sai e conta como falta", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const agendados = await coluna("Agendados")
+    const [primeiro, segundo] = agendados.getAllByRole("article")
+    const numero = (cartao: HTMLElement) => within(cartao).getByRole("heading").textContent ?? ""
+    const [chegou, faltou] = [numero(primeiro), numero(segundo)]
+
+    await usuario.click(within(primeiro).getByRole("button", { name: "Cliente chegou" }))
+    expect(
+      await (await coluna("Chegou")).findByRole("article", { name: chegou }),
+    ).toBeInTheDocument()
+
+    await usuario.click(within(segundo).getByRole("button", { name: "Não veio" }))
+    const pergunta = within(await screen.findByRole("alertdialog", { name: "A cliente não veio?" }))
+    await usuario.click(pergunta.getByRole("button", { name: "Não veio, conta falta" }))
+    expect(await screen.findByText(`${faltou}: não veio. Conta como falta.`)).toBeInTheDocument()
+  })
+
+  test("o prazo é o horário marcado: sem +min na barra e sem painel de chamada", async () => {
+    telaGrande()
+    renderizar()
+    await coluna("Agendados")
+    expect(screen.queryByRole("radio", { name: "+15 min" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("link", { name: "Painel de chamada" })).not.toBeInTheDocument()
   })
 })

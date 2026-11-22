@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto"
 import { clear, set } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { receitaDoPedido } from "../regras/farmacia"
 import { catalogoDeTeste } from "./catalogo-de-teste"
 import { carregarCatalogo } from "./catalogos"
 import {
@@ -456,7 +457,7 @@ describe("servidor de demonstração", () => {
     const ultimoDoFiel = fiel[0]
 
     const historico = await api.pedidos.historicoDosClientes([unico.id, ultimoDoFiel.id])
-    expect(historico[unico.id]).toEqual({ anteriores: 0, nosUltimos30: 0 })
+    expect(historico[unico.id]).toEqual({ anteriores: 0, nosUltimos30: 0, faltas: 0 })
     expect(historico[ultimoDoFiel.id].anteriores).toBe(fiel.length - 1)
   })
 
@@ -593,7 +594,83 @@ describe("servidor de demonstração", () => {
     })
   })
 
+  describe("farmácia: controlado só no balcão", () => {
+    const farmacia = () =>
+      criarServidor({
+        segmento: "farmacia",
+        carregarCatalogo: () => carregarCatalogo("farmacia"),
+        espera: 0,
+      })
+
+    /** A entrega da demonstração que leva controlado (Metilfenidato, lista A3). */
+    async function entregaComControlado(api: Servidor) {
+      const abertos = await api.pedidos.listar({ status: ["recebido", "em-preparo", "pronto"] })
+      const pedido = abertos.find(
+        (item) =>
+          item.tipo === "entrega" && item.itens.some((i) => i.nome.startsWith("Metilfenidato")),
+      )
+      if (!pedido) throw new Error("A demonstração da farmácia devia ter entrega com controlado")
+      return pedido
+    }
+
+    test("demonstração: o pedido do site mais novo que pede receita chega esperando o aceite", async () => {
+      const api = farmacia()
+      const produtos = await api.produtos.listar()
+      const esperando = (await api.pedidos.listar()).filter((pedido) => pedido.esperaAceite)
+      expect(esperando).toHaveLength(1)
+      expect(esperando[0]).toMatchObject({ origem: "site", status: "recebido" })
+      expect(receitaDoPedido(esperando[0], produtos)).not.toBeNull()
+    })
+
+    test("a entrega com controlado não sai; trocada para retirada, perde a taxa e o endereço", async () => {
+      const api = farmacia()
+      let pedido = await entregaComControlado(api)
+      while (pedido.status !== "pronto")
+        pedido = await api.pedidos.avancar(pedido.id, pedido.status)
+      await expect(api.pedidos.avancar(pedido.id, "pronto")).rejects.toThrow(
+        "Controlado não sai para entrega: troque para retirada.",
+      )
+
+      const retirada = await api.pedidos.trocarParaRetirada(pedido.id)
+      expect(retirada).toMatchObject({ tipo: "retirada", taxaEntrega: 0 })
+      expect(retirada.endereco).toBeUndefined()
+      expect(retirada.total).toBeCloseTo(pedido.total - pedido.taxaEntrega)
+      await expect(api.pedidos.trocarParaRetirada(pedido.id)).rejects.toThrow(
+        "Só a entrega que ainda não saiu vira retirada.",
+      )
+    })
+
+    test("na retirada, o controlado só sai com a receita retida", async () => {
+      const api = farmacia()
+      let pedido = await entregaComControlado(api)
+      pedido = await api.pedidos.trocarParaRetirada(pedido.id)
+      while (pedido.status !== "pronto")
+        pedido = await api.pedidos.avancar(pedido.id, pedido.status)
+      await expect(api.pedidos.avancar(pedido.id, "pronto")).rejects.toThrow(
+        "Registre a receita retida antes de entregar o controlado.",
+      )
+      const entregue = await api.pedidos.entregarComReceitaRetida(pedido.id, "pronto")
+      expect(entregue.status).toBe("concluido")
+      expect(entregue.receitaRetidaEm).toBe(AGORA.toISOString())
+    })
+  })
+
   describe("avisos ao cliente", () => {
+    test("açougue: a pesagem que muda o total avisa o cliente com o total novo", async () => {
+      const api = acougue()
+      const pedido = await aPesar(api)
+      const pesos = pesosPedidos(pedido)
+      const [primeiro] = Object.keys(pesos)
+      const pesado = await api.pedidos.registrarPesagem(pedido.id, {
+        ...pesos,
+        [primeiro]: pesos[primeiro] + 100,
+      })
+      const aviso = pesado.historico?.findLast((evento) => evento.tipo === "aviso")
+      expect(aviso && "texto" in aviso ? aviso.texto : "").toContain(
+        `Seu pedido #${pedido.numero} foi pesado e o total ficou`,
+      )
+    })
+
     test("aceitar grava na linha do tempo a mensagem que teria saído (ligado de fábrica)", async () => {
       const api = servidor()
       await api.salvarLoja({ ...(await api.loja()), aceiteManual: true })
@@ -1303,6 +1380,22 @@ describe("servidor de demonstração", () => {
       expect((await api.pedidos.marcarPago(pedido.id)).situacaoPagamento).toBe("pago")
     })
 
+    test("açougue: com item por quilo sem pesar, não fica pronto; pesado, fica", async () => {
+      const api = acougue()
+      const abertos = await api.pedidos.listar({ status: ["recebido", "em-preparo"] })
+      let pedido = abertos.find(
+        (item) => !item.pesagem && !item.esperaAceite && item.itens.some((i) => i.pesoGramas),
+      )
+      if (!pedido) throw new Error("A demonstração do açougue devia ter um pedido a pesar")
+      if (pedido.status === "recebido") pedido = await api.pedidos.avancar(pedido.id, "recebido")
+
+      await expect(api.pedidos.avancar(pedido.id, "em-preparo")).rejects.toThrow(
+        "Pese o pedido antes de marcar pronto.",
+      )
+      await api.pedidos.registrarPesagem(pedido.id, pesosPedidos(pedido))
+      expect((await api.pedidos.avancar(pedido.id, "em-preparo")).status).toBe("pronto")
+    })
+
     test("açougue: pedido encerrado não muda de valor na pesagem", async () => {
       const api = acougue()
       const cancelado = await aPesar(api)
@@ -1581,6 +1674,29 @@ describe("servidor de demonstração", () => {
       await expect(api.agendamentos.remarcar(outro.id, sabado(17))).rejects.toThrow(
         "Só dá para remarcar antes de começar.",
       )
+    })
+  })
+
+  describe("salão: cliente chegou", () => {
+    const salao = () =>
+      criarServidor({
+        segmento: "salao",
+        carregarCatalogo: () => carregarCatalogo("salao"),
+        espera: 0,
+      })
+
+    test("marca a chegada do agendado e recusa o que não está esperando", async () => {
+      const api = salao()
+      const [agendado] = (await api.pedidos.listar({ status: ["recebido"] })).filter(
+        (pedido) => !pedido.esperaAceite && !pedido.chegouEm,
+      )
+      const chegou = await api.pedidos.clienteChegou(agendado.id)
+      expect(chegou.chegouEm).toBe(AGORA.toISOString())
+      await expect(api.pedidos.clienteChegou(agendado.id)).rejects.toThrow(
+        "Só o agendado que ainda não chegou pode chegar.",
+      )
+      const atendimento = await api.pedidos.avancar(agendado.id, "recebido")
+      expect(atendimento.status).toBe("em-preparo")
     })
   })
 

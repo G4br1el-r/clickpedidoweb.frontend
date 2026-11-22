@@ -1,4 +1,10 @@
-import type { Cancelamento, MotivoCancelamento, Pedido, TipoPedido } from "../dados/tipos"
+import type {
+  Cancelamento,
+  MotivoCancelamento,
+  Pedido,
+  SomAlerta,
+  TipoPedido,
+} from "../dados/tipos"
 import type { SegmentoPainelId } from "../segmentos-painel"
 
 export type OpcaoMotivo = { id: MotivoCancelamento; rotulo: string }
@@ -51,4 +57,12 @@ export function esperaDoAceite(
   if (!pedido.esperaAceite || pedido.status !== "recebido") return null
   const minutos = Math.floor((agora.getTime() - Date.parse(pedido.criadoEm)) / 60_000)
   return { minutos, passou: minutos >= limiteMin }
+}
+
+/**
+ * O som do alarme de aceite. No salão, o agendamento pelo site só pede "Confirmar horário":
+ * não é cozinha barulhenta nem pedido esfriando, então toca o suave.
+ */
+export function somDoAlarme(segmento: SegmentoPainelId, escolhido: SomAlerta): SomAlerta {
+  return segmento === "salao" ? "suave" : escolhido
 }

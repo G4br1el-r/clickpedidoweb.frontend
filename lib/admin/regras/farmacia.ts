@@ -3,6 +3,7 @@ import type {
   DadosMedicamento,
   Lote,
   MovimentoControlado,
+  Pedido,
   Produto,
   Receita,
   TipoReceita,
@@ -26,6 +27,44 @@ export function receitaExigida(medicamento: DadosMedicamento): TipoReceita | nul
     default:
       return "simples"
   }
+}
+
+/** Do menos ao mais exigente: o pedido pede o receituário do item mais exigente. */
+const ORDEM_DA_RECEITA: TipoReceita[] = [
+  "simples",
+  "antimicrobiano",
+  "controle-especial",
+  "notificacao-b",
+  "notificacao-a",
+]
+
+const medicamentoDo = (produtoId: string | null, produtos: Produto[]) =>
+  produtos.find((produto) => produto.id === produtoId)?.medicamento
+
+/** O receituário que o pedido pede (o do item mais exigente); `null` se é tudo venda livre. */
+export function receitaDoPedido(pedido: Pedido, produtos: Produto[]): TipoReceita | null {
+  const exigidas = pedido.itens.flatMap((item) => {
+    const medicamento = medicamentoDo(item.produtoId, produtos)
+    const exigida = medicamento ? receitaExigida(medicamento) : null
+    return exigida ? [exigida] : []
+  })
+  if (exigidas.length === 0) return null
+  return exigidas.reduce((maior, tipo) =>
+    ORDEM_DA_RECEITA.indexOf(tipo) > ORDEM_DA_RECEITA.indexOf(maior) ? tipo : maior,
+  )
+}
+
+/**
+ * Os controlados do pedido (Portaria 344: listas A, B e C), pelo nome. Esses não saem para
+ * entrega: só no balcão, com a receita retida. Antimicrobiano não entra aqui.
+ */
+export function controladosDoPedido(pedido: Pedido, produtos: Produto[]): string[] {
+  return pedido.itens
+    .filter((item) => {
+      const lista = medicamentoDo(item.produtoId, produtos)?.lista
+      return lista !== undefined && lista !== "antimicrobiano"
+    })
+    .map((item) => item.nome)
 }
 
 /** Como cada receituário funciona no balcão. */

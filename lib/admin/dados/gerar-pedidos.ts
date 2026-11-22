@@ -11,6 +11,7 @@ import { uniformInt } from "pure-rand/distribution/uniformInt"
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus"
 import type { RandomGenerator } from "pure-rand/types/RandomGenerator"
 import { horariosLivres } from "../regras/agenda"
+import { receitaDoPedido } from "../regras/farmacia"
 import { calcularPesagem } from "../regras/pesagem"
 import { proximoStatus } from "../regras/status"
 import { SEGMENTOS_PAINEL, type SegmentoPainelId, temModulo, temRecurso } from "../segmentos-painel"
@@ -750,7 +751,26 @@ export function gerarPedidos({
       pedidos.push(novo)
     }
   }
-  return pedidos
+  return comReceitaParaConferir(pedidos, catalogo, segmento)
+}
+
+/**
+ * Farmácia (aceite manual): o pedido do site mais novo que pede receita e não começou chega
+ * esperando o aceite, que só sai depois de o farmacêutico conferir a receita.
+ */
+function comReceitaParaConferir(
+  pedidos: Pedido[],
+  catalogo: CatalogoLoja,
+  segmento: SegmentoPainelId,
+): Pedido[] {
+  if (!temRecurso(segmento, "medicamentos") || !catalogo.loja.aceiteManual) return pedidos
+  const alvo = pedidos.findLast(
+    (pedido) =>
+      pedido.origem === "site" &&
+      pedido.status === "recebido" &&
+      receitaDoPedido(pedido, catalogo.produtos) !== null,
+  )
+  return pedidos.map((pedido) => (pedido === alvo ? { ...pedido, esperaAceite: true } : pedido))
 }
 
 export type OpcoesPedidoAgora = Omit<OpcoesGeracao, "de"> & {

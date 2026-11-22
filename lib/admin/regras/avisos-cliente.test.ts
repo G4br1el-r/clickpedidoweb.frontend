@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { Pedido } from "../dados/tipos"
-import { avisoDaMudanca, textoDoAviso } from "./avisos-cliente"
+import { AVISOS_DE_FABRICA, avisoDaMudanca, textoDoAviso } from "./avisos-cliente"
 import { PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
 
 const PEDIDO: Pedido = {
@@ -52,6 +52,41 @@ describe("textoDoAviso", () => {
       }),
     ).toBe(
       "Olá, Ana! #1412 na Casa da Pizza: Acabou a massa. Veja: https://loja.exemplo/pedido/abc",
+    )
+  })
+})
+
+describe("aviso da pesagem", () => {
+  const pesagem = { totalEstimado: 80, diferenca: 4.5, pesadoEm: "" }
+
+  test("açougue: pesou e o total mudou, avisa o cliente; pesou e ficou igual, não", () => {
+    expect(avisoDaMudanca(PEDIDO, { ...PEDIDO, total: 84.5, pesagem })).toBe("pesado")
+    expect(avisoDaMudanca(PEDIDO, { ...PEDIDO, pesagem: { ...pesagem, diferenca: 0 } })).toBeNull()
+  })
+
+  test("o texto de fábrica diz o total novo", () => {
+    expect(
+      textoDoAviso(
+        AVISOS_DE_FABRICA.pesado,
+        { ...PEDIDO, total: 84.5, pesagem },
+        {
+          loja: "Açougue Sabor da Carne",
+          endereco: "",
+        },
+      ),
+    ).toBe("Olá, Ana! Seu pedido #1412 foi pesado e o total ficou R$ 84,50.")
+  })
+})
+
+describe("aviso da farmácia", () => {
+  test("a entrega que vira retirada (controlado) avisa o cliente para buscar no balcão", () => {
+    const entrega = { ...PEDIDO, tipo: "entrega" as const }
+    const retirada = { ...PEDIDO, tipo: "retirada" as const }
+    expect(avisoDaMudanca(entrega, retirada)).toBe("retirada")
+    expect(
+      textoDoAviso(AVISOS_DE_FABRICA.retirada, retirada, { loja: "Farmácia Vida", endereco: "" }),
+    ).toBe(
+      "Olá, Ana! Seu pedido #1412 tem remédio controlado, que só sai no balcão com a receita retida. Ele fica para retirar na Farmácia Vida.",
     )
   })
 })

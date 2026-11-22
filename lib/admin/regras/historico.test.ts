@@ -15,6 +15,29 @@ describe("eventosDaMudanca", () => {
     expect(linhaDoTempo({ ...pronta, historico: eventos }).at(-1)?.texto).toBe("Servido na mesa")
   })
 
+  test("farmácia: a entrega que vira retirada e a receita retida no balcão entram na linha do tempo", () => {
+    const entrega: Pedido = { ...recebido, tipo: "entrega" }
+    const virou = eventosDaMudanca(entrega, { ...entrega, tipo: "retirada" }, EM)
+    expect(virou).toEqual([{ tipo: "virou-retirada", em: EM }])
+    expect(linhaDoTempo({ ...entrega, historico: virou }).at(-1)?.texto).toBe(
+      "Trocado para retirada: controlado não sai para entrega",
+    )
+
+    const retirada: Pedido = { ...recebido, tipo: "retirada", status: "pronto" }
+    const retida = eventosDaMudanca(retirada, { ...retirada, receitaRetidaEm: EM }, EM)
+    expect(retida).toEqual([{ tipo: "receita-retida", em: EM }])
+    expect(linhaDoTempo({ ...retirada, historico: retida }).at(-1)?.texto).toBe(
+      "Receita retida no balcão",
+    )
+  })
+
+  test('salão: a cliente que chega vira o evento "Cliente chegou"', () => {
+    const marcado: Pedido = { ...recebido, tipo: "atendimento" }
+    const eventos = eventosDaMudanca(marcado, { ...marcado, chegouEm: EM }, EM)
+    expect(eventos).toEqual([{ tipo: "chegou", em: EM }])
+    expect(linhaDoTempo({ ...marcado, historico: eventos }).at(-1)?.texto).toBe("Cliente chegou")
+  })
+
   test("a troca de etapa vira um evento com a etapa nova e a hora", () => {
     const depois: Pedido = { ...recebido, status: "em-preparo" }
 

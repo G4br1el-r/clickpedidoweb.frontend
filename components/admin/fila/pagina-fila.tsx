@@ -27,6 +27,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -40,8 +47,10 @@ import {
   useAvancarEmLote,
   useAvancarPedido,
   useCancelarPedido,
+  useClienteChegou,
   useDefinirEntrega,
   useDespachar,
+  useEntregarComReceitaRetida,
   useFila,
   useHistoricoDosClientes,
   useLoja,
@@ -53,6 +62,7 @@ import {
   useServirMesa,
   useSimularCancelamento,
   useSimularPedido,
+  useTrocarParaRetirada,
   useVoltarPedido,
 } from "@/lib/admin/dados/consultas"
 import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
@@ -63,21 +73,24 @@ import type {
   StatusPedido,
   TipoPedido,
 } from "@/lib/admin/dados/tipos"
+import { useFarmacia } from "@/lib/admin/farmacia-estado"
 import {
   usePreferenciasCarregadas,
   usePreferenciasFila,
   useSomDoAparelho,
 } from "@/lib/admin/preferencias-fila"
-import { alarmeTocando } from "@/lib/admin/regras/aceite"
+import { alarmeTocando, somDoAlarme } from "@/lib/admin/regras/aceite"
 import { type HistoricoCliente, seloDoCliente } from "@/lib/admin/regras/clientes"
 import { estaNaCozinha } from "@/lib/admin/regras/cozinha"
 import { entregasParaAgrupar, situacaoDosMotoboys } from "@/lib/admin/regras/despacho"
+import { controladosDoPedido, receitaDoPedido } from "@/lib/admin/regras/farmacia"
 import {
   type ColunaFila,
   colunasDaFila,
   finalizadosHoje,
   novosPedidos,
   pedidosDeDiasAnteriores,
+  proximasRetiradas,
   resumoDaFila,
 } from "@/lib/admin/regras/fila"
 import { filtrarPedidos } from "@/lib/admin/regras/filtro-pedidos"
@@ -96,14 +109,17 @@ import {
   tomDoStatus,
 } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
-import { temModulo } from "@/lib/admin/segmentos-painel"
+import { type SegmentoPainelId, temModulo } from "@/lib/admin/segmentos-painel"
 import { liberarSom, somBloqueado, tocarAlerta } from "@/lib/admin/som"
 import { plural } from "@/lib/formato"
+import { receitaDoPedidoDemo } from "@/lib/mock/admin/farmacia"
 import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { CartaoReceita } from "../farmacia/pagina-receitas"
 import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
+import { PesagemPedido } from "../pedidos/pesagem-pedido"
 import { Traco } from "../traco"
 import { AjudaAtalhos } from "./ajuda-atalhos"
 import { AjustePrazo } from "./ajuste-prazo"
@@ -122,6 +138,7 @@ import { JanelaDespacho } from "./janela-despacho"
 import { MetricasFila } from "./metricas-fila"
 import { PainelMotoboys } from "./painel-motoboys"
 import { PausaPedidos } from "./pausa-pedidos"
+import { ProximasRetiradas } from "./proximas-retiradas"
 import { useAlertasSecundarios } from "./use-alertas-secundarios"
 import { useAtalhosDaFila } from "./use-atalhos-da-fila"
 import { useTelaAcesa } from "./use-tela-acesa"
@@ -208,7 +225,11 @@ function AvisoSomBloqueado({ somLigado }: { somLigado: boolean }) {
 }
 
 /** Detecta pedidos que chegaram desde a última leitura: destaque no cartão e alerta sonoro. */
-function useChegadas(pedidos: Pedido[] | undefined, aoChegar: (chegaram: Pedido[]) => void) {
+function useChegadas(
+  pedidos: Pedido[] | undefined,
+  segmento: SegmentoPainelId,
+  aoChegar: (chegaram: Pedido[]) => void,
+) {
   const conhecidos = useRef<Set<number> | null>(null)
   const [novos, setNovos] = useState<ReadonlySet<number>>(new Set())
   const somLigado = usePreferenciasFila((estado) => estado.somLigado)
@@ -230,7 +251,7 @@ function useChegadas(pedidos: Pedido[] | undefined, aoChegar: (chegaram: Pedido[
     if (conhecidos.current) {
       const chegaram = novosPedidos(conhecidos.current, pedidos)
       if (chegaram.length > 0) {
-        if (somLigado) tocarAlerta(tipoSom)
+        if (somLigado) tocarAlerta(somDoAlarme(segmento, tipoSom))
         avisar(pedidos.filter((pedido) => chegaram.includes(pedido.id)))
         setNovos((atuais) => new Set([...atuais, ...chegaram]))
         const relogio = setTimeout(() => {
@@ -241,7 +262,7 @@ function useChegadas(pedidos: Pedido[] | undefined, aoChegar: (chegaram: Pedido[
       }
     }
     conhecidos.current = new Set(pedidos.map((pedido) => pedido.id))
-  }, [pedidos, somLigado, tipoSom])
+  }, [pedidos, somLigado, tipoSom, segmento])
 
   return novos
 }
@@ -253,6 +274,16 @@ type AcoesDoCartao = {
   cancelar: (pedido: Pedido, escolhido: MotivoEscolhido) => void
   avancar: (pedido: Pedido) => void
   servir: (pedido: Pedido) => void
+  /** Açougue: abre a balança do pedido ali mesmo. */
+  pesar: (pedido: Pedido) => void
+  /** Farmácia: a receita do pedido (sem receita, `undefined`) e se leva controlado. */
+  receitaDe: (pedido: Pedido) => "pendente" | "aprovada" | "recusada" | undefined
+  controlado: (pedido: Pedido) => boolean
+  conferirReceita: (pedido: Pedido) => void
+  trocarParaRetirada: (pedido: Pedido) => void
+  /** Salão: a cliente chegou, ou não veio (cancela e conta como falta). */
+  chegou: (pedido: Pedido) => void
+  naoVeio: (pedido: Pedido) => void
   abrir: (pedido: Pedido) => void
   imprimir: (pedido: Pedido) => void
   /** A loja tem motoboys: a entrega pronta se despacha. */
@@ -347,6 +378,14 @@ function Coluna({
                 naCozinha={estaNaCozinha(pedido)}
                 aoAvancar={() => acoes.avancar(pedido)}
                 aoServir={() => acoes.servir(pedido)}
+                aoPesar={() => acoes.pesar(pedido)}
+                receita={acoes.receitaDe(pedido)}
+                controlado={acoes.controlado(pedido)}
+                aoConferirReceita={() => acoes.conferirReceita(pedido)}
+                aoTrocarParaRetirada={() => acoes.trocarParaRetirada(pedido)}
+                aoChegou={() => acoes.chegou(pedido)}
+                aoNaoVeio={() => acoes.naoVeio(pedido)}
+                faltas={historico?.[pedido.id]?.faltas ?? 0}
                 aoAbrir={() => acoes.abrir(pedido)}
                 aoImprimir={() => acoes.imprimir(pedido)}
               />
@@ -416,7 +455,7 @@ export function PaginaFila({
   const enviadosParaImprimir = useRef(new Set<number>())
   const marcarNaAba = useTituloDaAba(fila, preferencias.piscarAba)
   useTelaAcesa(preferencias.telaAcesa)
-  const novos = useChegadas(fila, (chegaram) => {
+  const novos = useChegadas(fila, segmento, (chegaram) => {
     avisarChegada(chegaram, usePreferenciasFila.getState())
     marcarNaAba(chegaram)
     if (!loja?.impressaoAutomatica) return
@@ -431,9 +470,12 @@ export function PaginaFila({
   const tocando = Boolean(fila && alarmeTocando(fila))
   useEffect(() => {
     if (!tocando || !preferencias.somLigado) return
-    const relogio = setInterval(() => tocarAlerta(somDoAparelho), intervaloAlarme)
+    const relogio = setInterval(
+      () => tocarAlerta(somDoAlarme(segmento, somDoAparelho)),
+      intervaloAlarme,
+    )
     return () => clearInterval(relogio)
-  }, [tocando, preferencias.somLigado, somDoAparelho, intervaloAlarme])
+  }, [tocando, preferencias.somLigado, somDoAparelho, intervaloAlarme, segmento])
 
   // Demonstração: um pedido novo chega de tempos em tempos.
   // A cada 5 pedidos simulados, um cliente cancela pelo site.
@@ -463,20 +505,42 @@ export function PaginaFila({
   const [despachando, setDespachando] = useState<Pedido[] | null>(null)
   const [bairrosAberto, setBairrosAberto] = useState(false)
   const [conferindo, setConferindo] = useState<Pedido | null>(null)
+  // Açougue: a balança aberta pelo cartão. Guarda o id: o pedido vem da fila, já pesado.
+  const [pesando, setPesando] = useState<number | null>(null)
+  // Farmácia: a receita aberta para conferir (pelo id do pedido) e a retirada do controlado.
+  const decisoes = useFarmacia((estado) => estado.decisoes)
+  const [conferindoReceita, setConferindoReceita] = useState<number | null>(null)
+  const [retendo, setRetendo] = useState<Pedido | null>(null)
+  const trocar = useTrocarParaRetirada()
+  const chegou = useClienteChegou()
+  const entregarRetida = useEntregarComReceitaRetida()
+  const receitaDe = (pedido: Pedido) => {
+    const tipo = receitaDoPedido(pedido, produtos)
+    if (!tipo) return undefined
+    return decisoes[`rec-pedido-${pedido.id}`]?.situacao ?? "pendente"
+  }
+  const controlado = (pedido: Pedido) => controladosDoPedido(pedido, produtos).length > 0
   // Adega: os produtos alcoólicos do cardápio dizem que pedido pede documento.
   const { data: produtos = [] } = useProdutos()
   const comAlcool = (pedido: Pedido) => pedidoComAlcool(pedido, produtos)
   const despachar = useDespachar()
   const motoboyVoltou = useMotoboyVoltou()
   const acoes: AcoesDoCartao = {
-    aceitar: (pedido) =>
+    aceitar: (pedido) => {
+      // Farmácia: o pedido com receita só entra depois de o farmacêutico aprovar.
+      const receita = receitaDe(pedido)
+      if (receita && receita !== "aprovada") {
+        toast.error(`Confira a receita de #${pedido.numero} antes de aceitar.`)
+        return
+      }
       aceitar.mutate(pedido.id, {
         ...avisoDeErro,
         onSuccess: (aceito) => {
           toast.success(`#${aceito.numero} aceito.`)
           mostrarAviso(aceito)
         },
-      }),
+      })
+    },
     recusar: (pedido, escolhido) =>
       recusar.mutate(
         { id: pedido.id, ...escolhido },
@@ -504,12 +568,42 @@ export function PaginaFila({
         setConferindo(pedido)
         return
       }
+      // Farmácia: o controlado só sai do balcão com a receita retida.
+      if (pedido.tipo === "retirada" && pedido.status === "pronto" && controlado(pedido)) {
+        setRetendo(pedido)
+        return
+      }
       avancarDeVez(pedido)
     },
     abrir: (pedido) => abrirPedido(pedido.id),
     imprimir: impressao.imprimir,
     despacha,
     comAlcool,
+    pesar: (pedido) => setPesando(pedido.id),
+    receitaDe,
+    controlado,
+    conferirReceita: (pedido) => setConferindoReceita(pedido.id),
+    chegou: (pedido) =>
+      chegou.mutate(pedido.id, {
+        ...avisoDeErro,
+        onSuccess: (chegada) => toast(`#${chegada.numero}: cliente chegou.`),
+      }),
+    naoVeio: (pedido) =>
+      cancelar.mutate(
+        { id: pedido.id, de: pedido.status, motivo: "cliente-nao-veio" },
+        {
+          ...avisoDeErro,
+          onSuccess: (faltou) => toast(`#${faltou.numero}: não veio. Conta como falta.`),
+        },
+      ),
+    trocarParaRetirada: (pedido) =>
+      trocar.mutate(pedido.id, {
+        ...avisoDeErro,
+        onSuccess: (trocado) => {
+          toast.success(`#${trocado.numero} virou retirada. O cliente foi avisado.`)
+          mostrarAviso(trocado)
+        },
+      }),
     servir: (pedido) =>
       servir.mutate(pedido.id, {
         ...avisoDeErro,
@@ -673,13 +767,15 @@ export function PaginaFila({
         vivo
         acoes={
           <>
-            {/* A TV virada ao cliente: só os números do balcão, numa aba que vai para a outra tela. */}
-            <Button variant="outline" size="sm" asChild>
-              <a href="/admin/chamada" target="_blank" rel="noreferrer">
-                <TvIcon data-icon="inline-start" />
-                Painel de chamada
-              </a>
-            </Button>
+            {/* A TV virada ao cliente: só os números do balcão. O salão chama pelo nome. */}
+            {segmento !== "salao" && (
+              <Button variant="outline" size="sm" asChild>
+                <a href="/admin/chamada" target="_blank" rel="noreferrer">
+                  <TvIcon data-icon="inline-start" />
+                  Painel de chamada
+                </a>
+              </Button>
+            )}
             {/* Tela cheia é para o monitor do balcão: no celular não serve. */}
             <Button
               type="button"
@@ -754,7 +850,8 @@ export function PaginaFila({
               </Button>
             )}
           </div>
-          {loja && <AjustePrazo loja={loja} comEntrega={temEntrega} />}
+          {/* No salão o prazo é o horário marcado: o tempo por canal e o +min não se aplicam. */}
+          {loja && segmento !== "salao" && <AjustePrazo loja={loja} comEntrega={temEntrega} />}
         </div>
 
         {/* Faixas 2 e 3: a régua e as ferramentas. No celular, recolhidas no Mais. */}
@@ -825,6 +922,14 @@ export function PaginaFila({
           </div>
         )}
       </section>
+
+      {fila && agora && (
+        <ProximasRetiradas
+          grupos={proximasRetiradas(fila, agora)}
+          agora={agora}
+          aoAbrir={(pedido) => abrirPedido(pedido.id)}
+        />
+      )}
 
       {!colunas || !agora ? (
         <div role="status" aria-label="Carregando a fila" className="grid gap-3 lg:grid-cols-4">
@@ -943,6 +1048,85 @@ export function PaginaFila({
           }
         />
       )}
+      <Dialog
+        open={conferindoReceita !== null}
+        onOpenChange={(aberta) => !aberta && setConferindoReceita(null)}
+      >
+        <DialogContent className="max-h-[90dvh] overflow-y-auto sm:max-w-xl">
+          {fila
+            ?.filter((pedido) => pedido.id === conferindoReceita)
+            .map((pedido) => {
+              const tipo = receitaDoPedido(pedido, produtos)
+              if (!tipo || !agora) return null
+              const receita = receitaDoPedidoDemo(pedido, produtos, tipo)
+              return (
+                <div key={pedido.id} className="flex flex-col gap-4">
+                  <DialogHeader>
+                    <DialogTitle>Receita do pedido #{pedido.numero}</DialogTitle>
+                    <DialogDescription>
+                      Aprovada, o pedido pode ser aceito. Recusada, recuse o pedido com o motivo.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <CartaoReceita
+                    receita={receita}
+                    produtos={produtos}
+                    agora={agora}
+                    decisao={decisoes[receita.id]}
+                  />
+                </div>
+              )
+            })}
+        </DialogContent>
+      </Dialog>
+      <AlertDialog open={retendo !== null} onOpenChange={(aberto) => !aberto && setRetendo(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>A receita ficou retida?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O pedido #{retendo?.numero} leva controlado (
+              {retendo ? controladosDoPedido(retendo, produtos).join(", ") : ""}): só sai do balcão
+              com a via da receita retida na farmácia.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (retendo) {
+                  entregarRetida.mutate(
+                    { id: retendo.id, de: retendo.status },
+                    {
+                      ...avisoDeErro,
+                      onSuccess: (entregue) =>
+                        toast.success(`#${entregue.numero} entregue. Receita retida registrada.`),
+                    },
+                  )
+                }
+                setRetendo(null)
+              }}
+            >
+              Retida, entregar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <Dialog open={pesando !== null} onOpenChange={(aberta) => !aberta && setPesando(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>
+              Pesar #{fila?.find((pedido) => pedido.id === pesando)?.numero}
+            </DialogTitle>
+            <DialogDescription>
+              O peso da balança refaz o valor. Se o total mudar, o cliente fica sabendo.
+            </DialogDescription>
+          </DialogHeader>
+          {fila
+            ?.filter((pedido) => pedido.id === pesando)
+            .map((pedido) => (
+              <PesagemPedido key={pedido.id} pedido={pedido} loja={loja?.nome ?? ""} />
+            ))}
+        </DialogContent>
+      </Dialog>
       {despachando && (
         <JanelaDespacho
           pedidos={despachando}

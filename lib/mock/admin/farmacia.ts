@@ -4,6 +4,7 @@ import type {
   DadosMedicamento,
   Lote,
   MovimentoControlado,
+  Pedido,
   Produto,
   Receita,
 } from "@/lib/admin/dados/tipos"
@@ -1586,4 +1587,41 @@ export function movimentosDemo(agora: Date): MovimentoControlado[] {
     ),
     movimento("mov-16", "fluoxetina-20", 1, "perda", 1, "Embalagem avariada"),
   ]
+}
+
+const PRESCRITORES_DOS_PEDIDOS: Receita["prescritor"][] = [
+  { nome: "Dra. Luísa Andrade", conselho: "CRM", numero: "156230", uf: "SP" },
+  { nome: "Dr. Marcos Teixeira", conselho: "CRM", numero: "98417", uf: "SP" },
+  { nome: "Dra. Helena Prado", conselho: "CRM", numero: "174902", uf: "SP" },
+]
+
+/**
+ * A receita que o cliente mandou com o pedido do site (foto no checkout). Na demonstração
+ * ela se monta do pedido: o paciente é o cliente e o receituário é o que os itens pedem.
+ * Emitida no dia do pedido, por um prescritor com registro válido.
+ */
+export function receitaDoPedidoDemo(
+  pedido: Pedido,
+  produtos: Produto[],
+  tipo: Receita["tipo"],
+): Receita {
+  const comReceita = pedido.itens.filter((item) => {
+    const medicamento = produtos.find((produto) => produto.id === item.produtoId)?.medicamento
+    return medicamento && medicamento.tarja !== "sem-tarja"
+  })
+  return {
+    id: `rec-pedido-${pedido.id}`,
+    recebidaEm: pedido.criadoEm,
+    canal: "site",
+    pedidoNumero: pedido.numero,
+    paciente: { nome: pedido.cliente.nome, telefone: pedido.cliente.telefone },
+    prescritor: PRESCRITORES_DOS_PEDIDOS[pedido.id % PRESCRITORES_DOS_PEDIDOS.length],
+    tipo,
+    emitidaEm: format(new Date(pedido.criadoEm), "yyyy-MM-dd"),
+    itens: comReceita.map((item) => ({
+      produtoId: item.produtoId ?? item.id,
+      quantidade: item.quantidade,
+      posologia: "Conforme a orientação médica.",
+    })),
+  }
 }

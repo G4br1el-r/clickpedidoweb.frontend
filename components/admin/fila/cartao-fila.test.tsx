@@ -1,6 +1,6 @@
-import { render, screen } from "@testing-library/react"
+import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, test } from "vitest"
+import { describe, expect, test, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import type { Pedido } from "@/lib/admin/dados/tipos"
 import { AGORA_DE_TESTE as AGORA, PEDIDOS_DE_TESTE } from "@/lib/admin/regras/pedidos-de-teste"
@@ -129,5 +129,194 @@ describe("CartaoFila: cozinha", () => {
   test("o pedido na tela da cozinha leva o selo Na cozinha", () => {
     renderizar(PEDIDO, AGORA, null, false, false, true)
     expect(screen.getByText("Na cozinha")).toBeInTheDocument()
+  })
+})
+
+describe("CartaoFila: açougue", () => {
+  const PICANHA = {
+    id: "p1",
+    produtoId: "picanha",
+    nome: "Picanha",
+    quantidade: 1,
+    precoUnitario: 60,
+    opcoes: [],
+    total: 60,
+    pesoGramas: 1000,
+    precoKg: 60,
+  }
+
+  function comPesagem(pedido: Pedido, aoPesar: () => void) {
+    const nada = () => {}
+    return render(
+      <TooltipProvider>
+        <CartaoFila
+          pedido={pedido}
+          agora={AGORA}
+          tempos={TEMPOS}
+          motoboys={[]}
+          novo={false}
+          ocupado={false}
+          limiteAceiteMin={5}
+          aoAceitar={nada}
+          aoRecusar={nada}
+          aoCancelar={nada}
+          aoAvancar={nada}
+          aoPesar={aoPesar}
+          aoAbrir={nada}
+          aoImprimir={nada}
+        />
+      </TooltipProvider>,
+    )
+  }
+
+  test("em preparo com carne por quilo sem pesar: o botão é Pesar, não Marcar como pronto", async () => {
+    const aoPesar = vi.fn()
+    comPesagem({ ...PEDIDO, tipo: "retirada", itens: [PICANHA] }, aoPesar)
+    expect(screen.queryByRole("button", { name: "Marcar como pronto" })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Pesar" }))
+    expect(aoPesar).toHaveBeenCalled()
+  })
+
+  test("pesado, volta o Marcar como pronto", () => {
+    comPesagem(
+      {
+        ...PEDIDO,
+        tipo: "retirada",
+        itens: [{ ...PICANHA, pesoReal: 1000 }],
+        pesagem: { totalEstimado: 60, diferenca: 0, pesadoEm: AGORA.toISOString() },
+      },
+      vi.fn(),
+    )
+    expect(screen.getByRole("button", { name: "Marcar como pronto" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Pesar" })).not.toBeInTheDocument()
+  })
+})
+
+describe("CartaoFila: farmácia", () => {
+  function naFarmacia(pedido: Pedido, extra: Partial<Parameters<typeof CartaoFila>[0]> = {}) {
+    const nada = () => {}
+    return render(
+      <TooltipProvider>
+        <CartaoFila
+          pedido={pedido}
+          agora={AGORA}
+          tempos={TEMPOS}
+          motoboys={[]}
+          novo={false}
+          ocupado={false}
+          limiteAceiteMin={5}
+          aoAceitar={nada}
+          aoRecusar={nada}
+          aoCancelar={nada}
+          aoAvancar={nada}
+          aoAbrir={nada}
+          aoImprimir={nada}
+          {...extra}
+        />
+      </TooltipProvider>,
+    )
+  }
+  const ESPERANDO: Pedido = { ...PEDIDO, status: "recebido", esperaAceite: true, tipo: "retirada" }
+
+  test("pede receita: selo Receita e, antes do aceite, Conferir receita no lugar de Aceitar", async () => {
+    const conferir = vi.fn()
+    naFarmacia(ESPERANDO, { receita: "pendente", aoConferirReceita: conferir })
+    expect(screen.getByText("Receita")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Aceitar" })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Conferir receita" }))
+    expect(conferir).toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Recusar" })).toBeInTheDocument()
+  })
+
+  test("receita aprovada: volta o Aceitar", () => {
+    naFarmacia(ESPERANDO, { receita: "aprovada", aoConferirReceita: vi.fn() })
+    expect(screen.getByRole("button", { name: "Aceitar" })).toBeInTheDocument()
+  })
+
+  test("entrega com controlado: avisa que precisa virar retirada e troca dali", async () => {
+    const trocar = vi.fn()
+    naFarmacia(
+      { ...ESPERANDO, tipo: "entrega" },
+      { receita: "pendente", controlado: true, aoTrocarParaRetirada: trocar },
+    )
+    expect(screen.getByText("Controlado: precisa virar retirada")).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Conferir receita" })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Trocar para retirada" }))
+    expect(trocar).toHaveBeenCalled()
+    expect(screen.getByRole("button", { name: "Recusar" })).toBeInTheDocument()
+  })
+
+  test("entrega com controlado já aceita: Trocar para retirada no lugar da etapa", () => {
+    naFarmacia(
+      { ...PEDIDO, tipo: "entrega", status: "pronto" },
+      { controlado: true, aoTrocarParaRetirada: vi.fn() },
+    )
+    expect(screen.getByRole("button", { name: "Trocar para retirada" })).toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: /Saiu para entrega|Despachar/ }),
+    ).not.toBeInTheDocument()
+  })
+})
+
+describe("CartaoFila: salão", () => {
+  const MARCADO: Pedido = {
+    ...PEDIDO,
+    tipo: "atendimento",
+    status: "recebido",
+    criadoEm: new Date(2026, 10, 10, 9, 0).toISOString(),
+    agendamento: { inicio: new Date(2026, 10, 13, 21, 0).toISOString(), duracaoMin: 60 },
+  }
+  function noSalao(pedido: Pedido, extra: Partial<Parameters<typeof CartaoFila>[0]> = {}) {
+    const nada = () => {}
+    return render(
+      <TooltipProvider>
+        <CartaoFila
+          pedido={pedido}
+          agora={AGORA}
+          tempos={TEMPOS}
+          motoboys={[]}
+          novo={false}
+          ocupado={false}
+          limiteAceiteMin={5}
+          aoAceitar={nada}
+          aoRecusar={nada}
+          aoCancelar={nada}
+          aoAvancar={nada}
+          aoAbrir={nada}
+          aoImprimir={nada}
+          {...extra}
+        />
+      </TooltipProvider>,
+    )
+  }
+
+  test("agendado pelo site: Confirmar horário no lugar de Aceitar", () => {
+    noSalao({ ...MARCADO, esperaAceite: true })
+    expect(screen.getByRole("button", { name: "Confirmar horário" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Aceitar" })).not.toBeInTheDocument()
+  })
+
+  test("agendado: Cliente chegou, Não veio, os lembretes e as faltas da cliente", async () => {
+    const chegou = vi.fn()
+    const naoVeio = vi.fn()
+    noSalao(MARCADO, { aoChegou: chegou, aoNaoVeio: naoVeio, faltas: 2 })
+    expect(screen.getByText("2 faltas")).toBeInTheDocument()
+    expect(screen.getByText("Lembretes: véspera enviado · 1 h antes enviado")).toBeInTheDocument()
+    await userEvent.click(screen.getByRole("button", { name: "Cliente chegou" }))
+    expect(chegou).toHaveBeenCalled()
+
+    await userEvent.click(screen.getByRole("button", { name: "Não veio" }))
+    const pergunta = screen.getByRole("alertdialog", { name: "A cliente não veio?" })
+    await userEvent.click(within(pergunta).getByRole("button", { name: "Não veio, conta falta" }))
+    expect(naoVeio).toHaveBeenCalled()
+  })
+
+  test("chegou: o próximo passo é iniciar o atendimento", () => {
+    noSalao(
+      { ...MARCADO, chegouEm: AGORA.toISOString() },
+      { aoChegou: vi.fn(), aoNaoVeio: vi.fn() },
+    )
+    expect(screen.getByRole("button", { name: "Iniciar atendimento" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Cliente chegou" })).not.toBeInTheDocument()
   })
 })

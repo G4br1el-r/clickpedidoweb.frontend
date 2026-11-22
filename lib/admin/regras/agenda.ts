@@ -1,4 +1,4 @@
-import { addDays, addMinutes, endOfDay, startOfDay } from "date-fns"
+import { addDays, addMinutes, endOfDay, format, setHours, startOfDay } from "date-fns"
 import type { HorarioFuncionamento, Pedido, StatusPedido } from "../dados/tipos"
 import { filtrarPedidos } from "./filtro-pedidos"
 
@@ -164,4 +164,29 @@ export function listaDaAgenda(pedidos: Pedido[], { busca, status, de, ate }: Fil
     ...(busca ? { busca } : {}),
     ...(status ? { status } : {}),
   }).toSorted((a, b) => inicioDe(a) - inicioDe(b))
+}
+
+/** Os lembretes que a loja manda sozinha (simulados): na véspera às 18h e 1 h antes. */
+function lembretesDoAgendamento(pedido: Pedido) {
+  if (!pedido.agendamento) return []
+  const inicio = new Date(pedido.agendamento.inicio)
+  const vespera = setHours(startOfDay(addDays(inicio, -1)), 18)
+  const criado = Date.parse(pedido.criadoEm)
+  return [
+    { nome: "véspera", em: vespera },
+    { nome: "1 h antes", em: addMinutes(inicio, -60) },
+  ].filter((lembrete) => lembrete.em.getTime() >= criado)
+}
+
+/**
+ * "Lembretes: véspera enviado · 1 h antes às 14:00": o que já saiu e quando sai o próximo.
+ * Marcado depois da hora de um lembrete, aquele não sai. Sem nenhum, `null`.
+ */
+export function textoDosLembretes(pedido: Pedido, agora: Date): string | null {
+  const lembretes = lembretesDoAgendamento(pedido)
+  if (lembretes.length === 0) return null
+  const partes = lembretes.map(({ nome, em }) =>
+    em <= agora ? `${nome} enviado` : `${nome} às ${format(em, "HH:mm")}`,
+  )
+  return `Lembretes: ${partes.join(" · ")}`
 }

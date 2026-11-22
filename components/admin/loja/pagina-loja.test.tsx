@@ -279,6 +279,42 @@ describe("PaginaLoja: recursos de cada loja", () => {
     )
   })
 
+  test("açougue: o aviso da pesagem, com o total novo; a pizzaria não pesa e não tem esse aviso", async () => {
+    useSegmentoAtual.setState({ segmento: "acougue" })
+    const usuario = await abrir()
+    const pesado = secao("Fila e pedidos").getByRole("textbox", { name: "Total mudou na pesagem" })
+    expect(pesado).toHaveValue(
+      "Olá, {nome}! Seu pedido #{numero} foi pesado e o total ficou {total}.",
+    )
+    await usuario.clear(pesado)
+    await usuario.type(pesado, "Pesado: {{total}")
+    await usuario.click(screen.getByRole("button", { name: "Salvar alterações" }))
+    await waitFor(async () =>
+      expect((await servidorDo("acougue").loja()).avisosCliente?.textos?.pesado).toBe(
+        "Pesado: {total}",
+      ),
+    )
+  })
+
+  test("pizzaria: sem o aviso da pesagem nem o do controlado", async () => {
+    await abrir()
+    const fila = secao("Fila e pedidos")
+    expect(fila.queryByRole("textbox", { name: "Total mudou na pesagem" })).not.toBeInTheDocument()
+    expect(
+      fila.queryByRole("textbox", { name: "Controlado vira retirada" }),
+    ).not.toBeInTheDocument()
+  })
+
+  test("farmácia: o aviso de quando o controlado vira retirada", async () => {
+    useSegmentoAtual.setState({ segmento: "farmacia" })
+    await abrir()
+    expect(
+      secao("Fila e pedidos").getByRole("textbox", { name: "Controlado vira retirada" }),
+    ).toHaveValue(
+      "Olá, {nome}! Seu pedido #{numero} tem remédio controlado, que só sai no balcão com a receita retida. Ele fica para retirar na {loja}.",
+    )
+  })
+
   test("salão: vídeo do banner só com link do YouTube, Shorts ou Reels; sem vitrines", async () => {
     useSegmentoAtual.setState({ segmento: "salao" })
     const usuario = await abrir()
