@@ -20,7 +20,7 @@ import { resumoDaConta } from "@/lib/admin/regras/conta"
 import { precoDeBalcao } from "@/lib/admin/regras/pdv"
 import { ehSegmentoPainel, type SegmentoPainelId } from "@/lib/admin/segmentos-painel"
 import { emReais, plural } from "@/lib/formato"
-import { ehLojaId, LOJAS, useLojaAtual } from "@/lib/loja-atual"
+import { LOJAS } from "@/lib/loja-atual"
 
 function Indisponivel() {
   return (
@@ -318,12 +318,19 @@ function VitrineDaLoja({ segmento, mesaId }: { segmento: SegmentoPainelId; mesaI
   // O que o garçom faz em outra aba aparece aqui na hora.
   useAoVivo()
   const { data, isError } = useMesaQr(segmento, mesaId, 4_000)
-  const escolher = useLojaAtual((estado) => estado.escolher)
-  // As cores são as da vitrine desta loja.
+  // As cores são as da vitrine desta loja, só nesta página: a loja escolhida na vitrine (e a
+  // sacola dela) fica como estava.
   useEffect(() => {
+    const raiz = document.documentElement
+    const antes = raiz.dataset.loja
     const loja = LOJAS.find((item) => item.loja.segmento === segmento)?.loja.id
-    if (ehLojaId(loja)) escolher(loja)
-  }, [segmento, escolher])
+    if (!loja || loja === LOJAS[0].loja.id) delete raiz.dataset.loja
+    else raiz.dataset.loja = loja
+    return () => {
+      if (antes === undefined) delete raiz.dataset.loja
+      else raiz.dataset.loja = antes
+    }
+  }, [segmento])
 
   if (isError) return <Indisponivel />
   if (!data) {

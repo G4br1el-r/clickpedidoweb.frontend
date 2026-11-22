@@ -6,6 +6,7 @@ import { clear } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { useLojaAtual } from "@/lib/loja-atual"
+import { useSacola } from "@/lib/sacola"
 import { VitrineMesa } from "./vitrine-mesa"
 
 function renderizar(mesaId = "mesa-11", segmento = "pizzaria") {
@@ -23,6 +24,8 @@ beforeEach(async () => {
   await clear()
   reiniciarServidores()
   useLojaAtual.setState({ ...useLojaAtual.getInitialState(), id: "adega-da-vila" }, true)
+  useSacola.setState(useSacola.getInitialState(), true)
+  document.documentElement.dataset.loja = "adega-da-vila"
 })
 
 afterEach(() => {
@@ -37,8 +40,29 @@ describe("VitrineMesa", () => {
     expect(screen.getByText("Peça daqui e pague na mesa, com o garçom.")).toBeInTheDocument()
     expect(screen.queryByText(/entrega/i)).not.toBeInTheDocument()
     expect(screen.queryByText(/pix|cartão online/i)).not.toBeInTheDocument()
-    // As cores da vitrine são as da loja da mesa.
-    expect(useLojaAtual.getState().id).toBe("casa-da-pizza")
+  })
+
+  test("veste as cores da loja da mesa sem trocar a loja salva da vitrine nem a sacola", async () => {
+    useSacola.getState().adicionar({
+      produtoId: "vinho-1",
+      nome: "Vinho tinto da adega",
+      imagem: { src: "/x.png", width: 1, height: 1 },
+      precoUnitario: 80,
+      quantidade: 1,
+      resumo: [],
+    })
+    const salva = localStorage.getItem("clickpedido-loja")
+    const { unmount } = renderizar()
+    await screen.findByRole("heading", { level: 1, name: "Mesa 11" })
+
+    // A Casa da Pizza é a loja padrão: as cores dela são as da raiz, sem `data-loja`.
+    expect(document.documentElement.dataset.loja).toBeUndefined()
+    expect(useLojaAtual.getState().id).toBe("adega-da-vila")
+    expect(localStorage.getItem("clickpedido-loja")).toBe(salva)
+    expect(useSacola.getState().itens.map((item) => item.nome)).toEqual(["Vinho tinto da adega"])
+
+    unmount()
+    expect(document.documentElement.dataset.loja).toBe("adega-da-vila")
   })
 
   test("o produto vai para o pedido, e pedir para a mesa espera o garçom aceitar", async () => {

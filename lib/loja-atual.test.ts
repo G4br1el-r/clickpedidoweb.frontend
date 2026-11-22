@@ -92,4 +92,19 @@ describe("cores da loja", () => {
     new Function(SCRIPT_LOJA)()
     expect(document.documentElement.dataset.loja).toBeUndefined()
   })
+
+  test("na vitrine da mesa, o script marca a loja do QR, não a salva", () => {
+    localStorage.setItem(
+      "clickpedido-loja",
+      JSON.stringify({ state: { id: "drogaria-bem-estar" }, version: 1 }),
+    )
+    window.history.pushState({}, "", "/mesa?loja=adega&mesa=mesa-1")
+    new Function(SCRIPT_LOJA)()
+    expect(document.documentElement.dataset.loja).toBe("adega-da-vila")
+
+    delete document.documentElement.dataset.loja
+    window.history.pushState({}, "", "/mesa?loja=pizzaria&mesa=mesa-1")
+    new Function(SCRIPT_LOJA)()
+    expect(document.documentElement.dataset.loja).toBeUndefined()
+  })
 })

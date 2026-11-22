@@ -16,7 +16,7 @@ function ajustarTitulo(nome: string) {
 /**
  * Mantém a raiz com a loja escolhida (as cores vêm de `cssDasLojas`) e o título da aba com o
  * nome dela. Antes de ler a loja salva não mexe em nada: quem pinta primeiro é o SCRIPT_LOJA.
- * No painel (/admin), as cores são as do painel.
+ * No painel (/admin), as cores são as do painel; na vitrine da mesa (/mesa), as da loja da mesa.
  */
 export function TemaDaLoja() {
   const id = useLojaAtual((estado) => estado.id)
@@ -24,7 +24,8 @@ export function TemaDaLoja() {
   const caminho = usePathname()
 
   useEffect(() => {
-    if (!hidratada) return
+    // A vitrine da mesa veste a loja da mesa (a do QR), sem trocar a escolhida.
+    if (!hidratada || caminho.startsWith("/mesa")) return
     const raiz = document.documentElement
     const noPainel = caminho.startsWith("/admin")
     if (noPainel || id === LOJAS[0].loja.id) delete raiz.dataset.loja
