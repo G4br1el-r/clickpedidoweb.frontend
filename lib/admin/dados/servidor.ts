@@ -47,7 +47,7 @@ import {
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
 import { rotuloDoPagamento } from "../regras/rotulos"
-import { mesasSeCruzam, primeiraPosicaoLivre } from "../regras/salao"
+import { colide, mesasSeCruzam, posicaoValida, primeiraPosicaoLivre } from "../regras/salao"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearCustos } from "./custos-demo"
@@ -73,6 +73,7 @@ import {
   type MovimentoEstoque,
   type PagamentoConta,
   type Pedido,
+  type PosicaoMesa,
   type Produto,
   type StatusPedido,
   type TipoMovimento,
@@ -1962,6 +1963,33 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           }
         })
         return responder({ mesa: base.mesas.find((mesa) => mesa.id === id) as Mesa, desfazer })
+      },
+
+      /** Grava as posições do mapa de uma vez (o editor salva em lote). */
+      async posicionar(lote: { id: string; posicao: PosicaoMesa }[]): Promise<Mesa[]> {
+        const base = await carregar()
+        const novas = new Map(lote.map(({ id, posicao }) => [id, posicao]))
+        if (lote.some(({ id }) => !base.mesas.some((mesa) => mesa.id === id))) {
+          throw new Error("Mesa não encontrada")
+        }
+        const areas = new Set(base.mesas.filter((mesa) => novas.has(mesa.id)).map((m) => m.areaId))
+        if (areas.size > 1) throw new Error("Salve as posições de uma área por vez.")
+        const mesas = base.mesas.map((mesa) => {
+          const posicao = novas.get(mesa.id)
+          return posicao ? { ...mesa, posicao } : mesa
+        })
+        // Confere contra o resultado final: trocar duas mesas de lugar no mesmo lote vale.
+        for (const mesa of mesas.filter((item) => novas.has(item.id))) {
+          if (!posicaoValida(mesa, [])) throw new Error(`A mesa ${mesa.numero} sai do mapa.`)
+          const embaixo = mesas.find((outra) => colide(mesa, [outra]))
+          if (embaixo) {
+            throw new Error(`A mesa ${mesa.numero} ficaria sobre a mesa ${embaixo.numero}.`)
+          }
+        }
+        await substituir({ ...base, mesas })
+        return responder(
+          mesas.filter((mesa) => novas.has(mesa.id)).toSorted((a, b) => a.numero - b.numero),
+        )
       },
 
       async excluir(id: string): Promise<void> {
