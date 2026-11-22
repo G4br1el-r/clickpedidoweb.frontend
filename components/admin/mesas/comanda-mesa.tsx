@@ -42,6 +42,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useLoja, usePedido } from "@/lib/admin/dados/consultas"
 import {
@@ -317,89 +318,104 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
         </SheetDescription>
       </SheetHeader>
 
-      <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
-        {vazia ? (
-          <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-balance text-muted-foreground">
-            A comanda está vazia. Libere a mesa ou lance itens pelo Garçom.
-          </p>
-        ) : (
-          <ul
-            aria-label="Itens da comanda"
-            className="-mt-2 flex flex-col divide-y divide-border/70 border-b border-border/70"
-          >
-            <AnimatePresence initial={false}>
-              {pedido.itens.map((item) => (
-                <motion.li
-                  key={item.id}
-                  aria-label={item.nome}
-                  layout={semMovimento ? false : "position"}
-                  initial={semMovimento ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                  transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="flex items-start gap-3 py-3"
-                >
-                  <div className="flex min-w-0 flex-1 flex-col text-sm">
-                    <span className="font-medium">{item.nome}</span>
-                    {item.opcoes.length > 0 && (
-                      <span className="text-xs text-muted-foreground">
-                        {item.opcoes.join(" · ")}
+      <Tabs defaultValue="itens" className="min-h-0 flex-1 gap-0">
+        <TabsList className="mx-4 mt-3 grid w-auto grid-cols-3">
+          <TabsTrigger value="itens">Itens</TabsTrigger>
+          <TabsTrigger value="conta">Conta</TabsTrigger>
+          <TabsTrigger value="historico">Histórico</TabsTrigger>
+        </TabsList>
+        <TabsContent value="itens" className="flex flex-col gap-5 overflow-y-auto p-4">
+          {vazia ? (
+            <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-balance text-muted-foreground">
+              A comanda está vazia. Libere a mesa ou lance itens pelo Garçom.
+            </p>
+          ) : (
+            <ul
+              aria-label="Itens da comanda"
+              className="-mt-2 flex flex-col divide-y divide-border/70 border-b border-border/70"
+            >
+              <AnimatePresence initial={false}>
+                {pedido.itens.map((item) => (
+                  <motion.li
+                    key={item.id}
+                    aria-label={item.nome}
+                    layout={semMovimento ? false : "position"}
+                    initial={semMovimento ? { opacity: 0 } : { opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, transition: { duration: 0.12 } }}
+                    transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+                    className="flex items-start gap-3 py-3"
+                  >
+                    <div className="flex min-w-0 flex-1 flex-col text-sm">
+                      <span className="font-medium">{item.nome}</span>
+                      {item.opcoes.length > 0 && (
+                        <span className="text-xs text-muted-foreground">
+                          {item.opcoes.join(" · ")}
+                        </span>
+                      )}
+                      {item.observacao && (
+                        <span className="text-xs italic">“{item.observacao}”</span>
+                      )}
+                      <span className="text-xs text-muted-foreground tabular-nums">
+                        {emReais(item.precoUnitario)} cada · {emReais(item.total)}
                       </span>
-                    )}
-                    {item.observacao && <span className="text-xs italic">“{item.observacao}”</span>}
-                    <span className="text-xs text-muted-foreground tabular-nums">
-                      {emReais(item.precoUnitario)} cada · {emReais(item.total)}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      className="max-md:size-10"
-                      variant="outline"
-                      aria-label="Menos um"
-                      disabled={item.quantidade <= 1}
-                      onClick={() => comConfirmacao(item, (motivo) => diminuir(item, motivo))}
-                    >
-                      <MinusIcon />
-                    </Button>
-                    <span className="w-7 text-center text-sm font-medium tabular-nums">
-                      {item.quantidade}
-                    </span>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      className="max-md:size-10"
-                      variant="outline"
-                      aria-label="Mais um"
-                      disabled={item.quantidade >= 999}
-                      onClick={() =>
-                        alterar.mutate(
-                          { pedidoId: pedido.id, itemId: item.id, quantidade: item.quantidade + 1 },
-                          { onError: aoErrar },
-                        )
-                      }
-                    >
-                      <PlusIcon />
-                    </Button>
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      className="max-md:size-10"
-                      variant="ghost"
-                      aria-label="Remover"
-                      onClick={() => comConfirmacao(item, (motivo) => tirar(item, motivo))}
-                    >
-                      <Trash2Icon />
-                    </Button>
-                  </div>
-                </motion.li>
-              ))}
-            </AnimatePresence>
-          </ul>
-        )}
-        <ItemAvulso mesaId={mesa.id} />
-      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        className="max-md:size-10"
+                        variant="outline"
+                        aria-label="Menos um"
+                        disabled={item.quantidade <= 1}
+                        onClick={() => comConfirmacao(item, (motivo) => diminuir(item, motivo))}
+                      >
+                        <MinusIcon />
+                      </Button>
+                      <span className="w-7 text-center text-sm font-medium tabular-nums">
+                        {item.quantidade}
+                      </span>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        className="max-md:size-10"
+                        variant="outline"
+                        aria-label="Mais um"
+                        disabled={item.quantidade >= 999}
+                        onClick={() =>
+                          alterar.mutate(
+                            {
+                              pedidoId: pedido.id,
+                              itemId: item.id,
+                              quantidade: item.quantidade + 1,
+                            },
+                            { onError: aoErrar },
+                          )
+                        }
+                      >
+                        <PlusIcon />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        className="max-md:size-10"
+                        variant="ghost"
+                        aria-label="Remover"
+                        onClick={() => comConfirmacao(item, (motivo) => tirar(item, motivo))}
+                      >
+                        <Trash2Icon />
+                      </Button>
+                    </div>
+                  </motion.li>
+                ))}
+              </AnimatePresence>
+            </ul>
+          )}
+          <ItemAvulso mesaId={mesa.id} />
+        </TabsContent>
+        <TabsContent value="conta" className="flex flex-col gap-5 overflow-y-auto p-4" />
+        <TabsContent value="historico" className="flex flex-col gap-5 overflow-y-auto p-4" />
+      </Tabs>
 
       <SheetFooter className="gap-3 border-t border-border/70">
         {/* O total fica sempre à vista, junto das ações que fecham a mesa. */}

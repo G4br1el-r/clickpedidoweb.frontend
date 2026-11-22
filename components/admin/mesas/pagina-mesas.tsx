@@ -28,7 +28,7 @@ import { BloquearMesa } from "./bloquear-mesa"
 import { CartaoMesa } from "./cartao-mesa"
 import { ComandaMesa } from "./comanda-mesa"
 import { ConfigurarSalao } from "./configurar-salao"
-import { LIMPAR_GRADE, useEstadoGrade } from "./estado-grade"
+import { LIMPAR_GRADE, useEstadoGrade, useMesaAberta } from "./estado-grade"
 import { FiltrosMesas } from "./filtros-mesas"
 import { FormularioMesa } from "./formulario-mesa"
 import { NovaMesa } from "./nova-mesa"
@@ -44,7 +44,7 @@ export function PaginaMesas() {
   const { data: fila } = useFila()
   const agora = useAgora(30_000)
   const [filtros, setFiltros] = useEstadoGrade()
-  const [abertaId, setAbertaId] = useState<string | null>(null)
+  const [numeroAberto, setNumeroAberto] = useMesaAberta()
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [bloqueandoId, setBloqueandoId] = useState<string | null>(null)
   // O botão ⋯ que abriu Editar ou Bloquear: o foco volta a ele quando a janela fecha.
@@ -63,13 +63,14 @@ export function PaginaMesas() {
       const status = comandaDa(mesa)?.status
       return mesa.status === "ocupada" && (status === "recebido" || status === "em-preparo")
     }).length ?? 0
-  const aberta = mesas?.find((mesa) => mesa.id === abertaId) ?? null
+  // Número que não existe no endereço não abre nada.
+  const aberta = mesas?.find((mesa) => mesa.numero === numeroAberto) ?? null
   const editando = mesas?.find((mesa) => mesa.id === editandoId)
   const bloqueando = mesas?.find((mesa) => mesa.id === bloqueandoId)
 
   function abrirPeloNumero(numero: number) {
     const mesa = mesas?.find((candidata) => candidata.numero === numero)
-    if (mesa) setAbertaId(mesa.id)
+    if (mesa) void setNumeroAberto(mesa.numero)
     else toast.error(`Não existe a mesa ${numero}.`)
   }
 
@@ -199,7 +200,7 @@ export function PaginaMesas() {
                     <CartaoMesa
                       {...linha}
                       agora={agora}
-                      aoAbrir={() => setAbertaId(linha.mesa.id)}
+                      aoAbrir={() => void setNumeroAberto(linha.mesa.numero)}
                       aoEditar={(gatilho) => {
                         setGatilhoMenu(gatilho)
                         setEditandoId(linha.mesa.id)
@@ -232,7 +233,7 @@ export function PaginaMesas() {
           focoAoFechar={gatilhoMenu}
         />
       )}
-      <ComandaMesa mesa={aberta} aoFechar={() => setAbertaId(null)} />
+      <ComandaMesa mesa={aberta} aoFechar={() => void setNumeroAberto(null)} />
       <AtalhosMesas
         aoAbrirMesa={abrirPeloNumero}
         aoNovaMesa={() => setNovaAberta(true)}

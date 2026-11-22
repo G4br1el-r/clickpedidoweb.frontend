@@ -85,7 +85,18 @@ async function abrir(endereco?: string, aoMudarUrl?: OnUrlUpdateFunction) {
   )
   // A grade tem uma lista por área; o Salão é a primeira da demonstração. Com filtro no
   // endereço o Salão pode sumir, e então vale a barra de filtros, que aparece com a grade.
-  if (endereco) await screen.findByRole("searchbox", { name: "Buscar mesa" }, { timeout: 8000 })
+  // Com ?mesa= a gaveta abre por cima e esconde o resto: vale ela, ou a grade se não abrir.
+  if (endereco?.includes("mesa=")) {
+    await waitFor(
+      () => {
+        if (!screen.queryByRole("dialog") && !screen.queryByRole("searchbox")) {
+          throw new Error("A tela ainda não carregou")
+        }
+      },
+      { timeout: 8000 },
+    )
+  } else if (endereco)
+    await screen.findByRole("searchbox", { name: "Buscar mesa" }, { timeout: 8000 })
   else await screen.findByRole("list", { name: "Salão" }, { timeout: 8000 })
   return usuario
 }
@@ -385,6 +396,59 @@ describe("PaginaMesas", () => {
     )
     expect(await screen.findByText("Mesa 60 excluída.")).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /^Mesa 60\b/ })).not.toBeInTheDocument()
+  })
+})
+
+describe("PaginaMesas: a comanda no endereço e as abas", () => {
+  test("clicar na mesa 60 grava ?mesa=60, e fechar a gaveta tira o parâmetro", async () => {
+    await mesaOcupada()
+    const aoMudarUrl = vi.fn()
+    const usuario = await abrir(undefined, aoMudarUrl)
+    await usuario.click(await cartao(60))
+    expect(await screen.findByRole("dialog", { name: /^Mesa 60/ })).toBeInTheDocument()
+    expect(aoMudarUrl).toHaveBeenLastCalledWith(
+      expect.objectContaining({ queryString: "?mesa=60" }),
+    )
+
+    await usuario.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(aoMudarUrl).toHaveBeenLastCalledWith(expect.objectContaining({ queryString: "" }))
+  })
+
+  test("o endereço ?mesa=60 abre a gaveta da mesa 60", async () => {
+    await mesaOcupada()
+    await abrir("?mesa=60")
+    expect(await screen.findByRole("dialog", { name: /^Mesa 60/ })).toBeInTheDocument()
+  })
+
+  test("a mesa que não existe no endereço não abre nada", async () => {
+    await abrir("?mesa=999")
+    expect(await screen.findByRole("list", { name: "Salão" })).toBeInTheDocument()
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+  })
+
+  test("a comanda tem as abas Itens, Conta e Histórico e começa em Itens", async () => {
+    await mesaOcupada()
+    const usuario = await abrir()
+    await usuario.click(await cartao(60))
+    const abas = comanda().getAllByRole("tab")
+    expect(abas.map((aba) => aba.textContent)).toEqual(["Itens", "Conta", "Histórico"])
+    expect(comanda().getByRole("tab", { name: "Itens" })).toHaveAttribute("aria-selected", "true")
+    expect(comanda().getByRole("tabpanel", { name: "Itens" })).toContainElement(
+      comanda().getByRole("list", { name: "Itens da comanda" }),
+    )
+  })
+
+  test("o atalho do número também grava ?mesa=", async () => {
+    await mesaOcupada()
+    const aoMudarUrl = vi.fn()
+    const usuario = await abrir(undefined, aoMudarUrl)
+    await cartao(60)
+    await usuario.keyboard("60{Enter}")
+    expect(await screen.findByRole("dialog", { name: /^Mesa 60/ })).toBeInTheDocument()
+    expect(aoMudarUrl).toHaveBeenLastCalledWith(
+      expect.objectContaining({ queryString: "?mesa=60" }),
+    )
   })
 })
 
