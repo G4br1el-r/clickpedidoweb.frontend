@@ -153,6 +153,9 @@ describe("PaginaBairros", () => {
         screen.queryByRole("row", { name: new RegExp(`^Selecionar ${bairro.nome}\\b`) }),
       ).not.toBeInTheDocument(),
     )
+    // A linha some antes de o servidor responder. Sem esperar o aviso, ele chega no teste
+    // seguinte, com o Desfazer deste.
+    expect(await screen.findByText(`${bairro.nome} excluído.`)).toBeInTheDocument()
   })
 
   test("o desfazer do aviso traz o bairro excluído de volta, com a mesma taxa", async () => {

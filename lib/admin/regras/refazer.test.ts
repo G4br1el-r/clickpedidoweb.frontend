@@ -58,6 +58,7 @@ const ENTREGA: Pedido = {
   criadoEm: as("20:00"),
   atualizadoEm: as("20:30"),
   enviarParaCozinha: true,
+  historico: [],
 }
 
 describe("refazer", () => {

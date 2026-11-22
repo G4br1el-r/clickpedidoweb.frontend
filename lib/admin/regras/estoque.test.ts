@@ -100,12 +100,12 @@ describe("consumoDoPedido", () => {
 describe("resumoDoEstoque", () => {
   test("controlados, baixos, zerados (com negativos) e o valor parado pelo custo", () => {
     const resumo = resumoDoEstoque([
-      produto("a", { estoque: controle({ quantidade: 10, custo: 2.5 }) }),
-      produto("b", { estoque: controle({ quantidade: 2, custo: 10 }) }),
-      produto("c", { estoque: controle({ quantidade: 0, custo: 4 }) }),
-      produto("d", { estoque: controle({ quantidade: -1, custo: 4 }) }),
+      produto("a", { custo: 2.5, estoque: controle({ quantidade: 10 }) }),
+      produto("b", { custo: 10, estoque: controle({ quantidade: 2 }) }),
+      produto("c", { custo: 4, estoque: controle({ quantidade: 0 }) }),
+      produto("d", { custo: 4, estoque: controle({ quantidade: -1 }) }),
       produto("e", { estoque: controle({ quantidade: 5 }) }),
-      produto("f", { estoque: controle({ controlar: false, quantidade: 100, custo: 9 }) }),
+      produto("f", { custo: 9, estoque: controle({ controlar: false, quantidade: 100 }) }),
       produto("g"),
     ])
     // Valor: 10 × 2,50 + 2 × 10 = R$ 45 (sem custo e negativo não somam).

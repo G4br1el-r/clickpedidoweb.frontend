@@ -1,6 +1,10 @@
 import { describe, expect, test } from "vitest"
 import { statusPelasRodadas } from "../regras/cozinha"
+import { clientesDos90Dias, reguaDeClientes, sumidos } from "../regras/dashboard/clientes"
+import { MOTIVOS_CANCELAMENTO } from "../regras/rotulos"
+import { proximoStatus } from "../regras/status"
 import { catalogoDeTeste as catalogo } from "./catalogo-de-teste"
+import { carregarCatalogo } from "./catalogos"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
 import type { Pedido } from "./tipos"
 
@@ -120,6 +124,25 @@ describe("gerarPedidos", () => {
     }
   })
 
+  test("o item leva o custo do produto; produto sem custo, item sem custo", () => {
+    const comCusto = catalogo()
+    const [primeiro, ...resto] = comCusto.produtos
+    comCusto.produtos = [{ ...primeiro, custo: 7.25 }, ...resto.map(({ custo: _, ...p }) => p)]
+    const itens = gerarPedidos({
+      catalogo: comCusto,
+      segmento: "lanchonete",
+      de: new Date(2026, 10, 9),
+      agora: AGORA,
+    }).flatMap((pedido) => pedido.itens)
+
+    const doPrimeiro = itens.filter((item) => item.produtoId === primeiro.id)
+    expect(doPrimeiro.length).toBeGreaterThan(0)
+    for (const item of doPrimeiro) expect(item.custoUnitario).toBe(7.25)
+    for (const item of itens.filter((item) => item.produtoId !== primeiro.id)) {
+      expect(item).not.toHaveProperty("custoUnitario")
+    }
+  })
+
   test("um pedido de 2 lanches entregue custa R$ 51", () => {
     const pedidos = gerarPedidos({
       catalogo: catalogo(),
@@ -165,6 +188,118 @@ describe("gerarPedidos", () => {
     for (const pedido of pedidos.filter((pedido) => dia(pedido) < 13)) {
       expect(["concluido", "cancelado"]).toContain(pedido.status)
     }
+  })
+
+  test("cada pedido traz as etapas por que passou, da criação até a atual, sem passar de agora", () => {
+    const pedidos = ["lanchonete", "salao"].flatMap((segmento) =>
+      gerarPedidos({
+        catalogo: catalogo(),
+        segmento: segmento as "lanchonete" | "salao",
+        de: new Date(2026, 10, 7),
+        agora: AGORA,
+      }),
+    )
+
+    for (const pedido of pedidos) {
+      const { historico } = pedido
+      expect(historico[0].em).toBe(pedido.criadoEm)
+      expect(historico.at(-1)?.status).toBe(pedido.status)
+      if (pedido.status === "concluido" || pedido.status === "cancelado") {
+        expect(historico.at(-1)?.em).toBe(pedido.atualizadoEm)
+      }
+      historico.forEach((etapa, indice) => {
+        expect(Date.parse(etapa.em)).toBeLessThanOrEqual(AGORA.getTime())
+        if (indice === 0) return
+        const antes = historico[indice - 1]
+        expect(Date.parse(etapa.em)).toBeGreaterThanOrEqual(Date.parse(antes.em))
+        const permitidas = [
+          proximoStatus(pedido.tipo, antes.status),
+          "cancelado",
+          ...(antes.status === "aguardando-pagamento" ? ["recebido"] : []),
+          // A mesa pronta só conclui ao fechar a conta.
+          ...(pedido.tipo === "mesa" && antes.status === "pronto" ? ["concluido"] : []),
+        ]
+        expect(permitidas).toContain(etapa.status)
+      })
+    }
+  })
+
+  test("uma entrega concluída passa por todas as etapas, cada uma levando alguns minutos", () => {
+    const pedidos = gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "lanchonete",
+      de: new Date(2026, 10, 9),
+      agora: AGORA,
+    })
+    const entregues = pedidos.filter(
+      (pedido) => pedido.tipo === "entrega" && pedido.status === "concluido",
+    )
+    expect(entregues.length).toBeGreaterThan(0)
+    for (const pedido of entregues) {
+      const etapas = pedido.historico.map((etapa) => etapa.status)
+      expect(etapas.slice(-5)).toEqual([
+        "recebido",
+        "em-preparo",
+        "pronto",
+        "saiu-para-entrega",
+        "concluido",
+      ])
+      const minutos = pedido.historico
+        .slice(1)
+        .map(
+          (etapa, indice) =>
+            (Date.parse(etapa.em) - Date.parse(pedido.historico[indice].em)) / 60_000,
+        )
+      for (const duracao of minutos) expect(duracao).toBeGreaterThan(0)
+    }
+  })
+
+  test("os cancelados trazem um motivo que faz sentido; alguns ficam sem motivo", () => {
+    const cancelados = gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "lanchonete",
+      de: new Date(2026, 9, 15),
+      agora: AGORA,
+    }).filter((pedido) => pedido.status === "cancelado")
+
+    const motivos = cancelados.map((pedido) => pedido.motivoCancelamento)
+    expect(motivos).toContain(undefined)
+    expect(new Set(motivos).size).toBeGreaterThan(3)
+    for (const pedido of cancelados) {
+      if (pedido.motivoCancelamento)
+        expect(MOTIVOS_CANCELAMENTO).toContain(pedido.motivoCancelamento)
+      if (pedido.motivoCancelamento === "fora-da-area") expect(pedido.tipo).toBe("entrega")
+      // Cancelado antes de pagar online: o pagamento não foi aprovado.
+      if (pedido.historico.at(-2)?.status === "aguardando-pagamento") {
+        expect(pedido.motivoCancelamento).toBe("pagamento-nao-aprovado")
+      }
+    }
+    for (const pedido of gerarPedidos({
+      catalogo: catalogo(),
+      segmento: "lanchonete",
+      de: new Date(2026, 10, 9),
+      agora: AGORA,
+    }).filter((item) => item.status !== "cancelado")) {
+      expect(pedido).not.toHaveProperty("motivoCancelamento")
+    }
+  })
+
+  test("os clientes têm ritmos diferentes: uns sumiram, uns são novos e uns pediram uma vez só", async () => {
+    // O catálogo de verdade: com 42 clientes, todos os ritmos aparecem.
+    const loja = await carregarCatalogo("lanchonete")
+    const pedidos = gerarPedidos({
+      catalogo: loja,
+      segmento: "lanchonete",
+      de: new Date(2026, 7, 16),
+      agora: AGORA,
+    })
+    const clientes = clientesDos90Dias(pedidos, AGORA, loja.loja.telefone)
+    const regua = reguaDeClientes(clientes, AGORA)
+
+    expect(sumidos(clientes, AGORA).length).toBeGreaterThan(0)
+    expect(regua.novos).toBeGreaterThan(0)
+    expect(clientes.some((cliente) => cliente.pedidos === 1)).toBe(true)
+    expect(regua.recorrentes).toBeLessThan(100)
   })
 
   test("a demonstração abre com pedidos em todas as etapas, inclusive mesa aberta", () => {

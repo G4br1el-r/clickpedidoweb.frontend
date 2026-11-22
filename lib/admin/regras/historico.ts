@@ -294,3 +294,9 @@ export function linhaDoTempo(
         : Math.round((Date.parse(passo.em) - Date.parse(passos[indice - 1].em)) / 60_000),
   }))
 }
+
+/** Anota a etapa atual do pedido no histórico, se ela ainda não for a última anotada. */
+export function comEtapa(pedido: Pedido, em: string): Pedido {
+  if (pedido.historico.at(-1)?.status === pedido.status) return pedido
+  return { ...pedido, historico: [...pedido.historico, { status: pedido.status, em }] }
+}

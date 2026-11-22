@@ -1,7 +1,7 @@
 "use client"
 
 import { Skeleton } from "@/components/ui/skeleton"
-import { usePedidos } from "@/lib/admin/dados/consultas"
+import { useMotoboys, usePedidos } from "@/lib/admin/dados/consultas"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { FiltroPeriodo, usePeriodo } from "../visao-geral/filtro-periodo"
 import { DetalhesPedido } from "./detalhes-pedido"
@@ -31,6 +31,7 @@ export function PaginaPedidos() {
   const { data: pedidos } = usePedidos(periodo ? { de: periodo.de, ate: periodo.ate } : undefined, {
     ativo: Boolean(periodo),
   })
+  const { data: motoboys } = useMotoboys()
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
@@ -39,7 +40,7 @@ export function PaginaPedidos() {
         resumo="Toque num pedido para ver os detalhes, avançar ou chamar o motoboy."
       />
       <FiltroPeriodo />
-      {pedidos ? <ListaPedidos pedidos={pedidos} /> : <EsqueletoLista />}
+      {pedidos ? <ListaPedidos pedidos={pedidos} motoboys={motoboys} /> : <EsqueletoLista />}
       <DetalhesPedido />
     </div>
   )

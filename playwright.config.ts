@@ -30,8 +30,9 @@ export default defineConfig({
   workers: 4,
   timeout: 45_000,
   reporter: [["line"]],
-  expect: { toHaveScreenshot: { stylePath: "./tests/screenshot.css" } },
   outputDir: "test-results",
+  // O aviso de segurança do Next aparece no modo dev mesmo com `devIndicators: false`.
+  expect: { toHaveScreenshot: { stylePath: "./tests/sem-avisos-do-next.css" } },
   use: {
     baseURL: endereco,
     locale: "pt-BR",

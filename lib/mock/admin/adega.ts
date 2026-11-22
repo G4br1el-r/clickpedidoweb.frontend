@@ -346,6 +346,7 @@ export const catalogoAdega: CatalogoLoja = {
     ],
     cidadesAtendidas: [],
     pagamentoOnlineConectado: true,
+    taxasPagamento: { pixOnline: 0.99, cartaoOnline: 4.49, maquininha: 2.19 },
     pagamentos: {
       pix: true,
       "cartao-online": true,

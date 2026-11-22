@@ -40,7 +40,21 @@ function pedido(
     situacaoPagamento: "pago",
     criadoEm: criadoEm.toISOString(),
     atualizadoEm: criadoEm.toISOString(),
+    historico: [{ status, em: criadoEm.toISOString() }],
     enviarParaCozinha: true,
+  }
+}
+
+/** Um pedido concluído no Pix com um item, para montar casos de teste na hora. */
+export function pedidoDeTeste(
+  id: number,
+  criadoEm: Date,
+  total: number,
+  mudancas: Partial<Pedido> = {},
+): Pedido {
+  return {
+    ...pedido(id, criadoEm, "retirada", "concluido", "pix", total, [item("Coca", 1, total)]),
+    ...mudancas,
   }
 }
 

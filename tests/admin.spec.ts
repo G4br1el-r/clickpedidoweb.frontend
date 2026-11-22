@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises"
 import { expect, type Page, test } from "@playwright/test"
 import { caixa, esperarAnimacoes, verificarAcessibilidade } from "./apoio"
 
@@ -8,6 +9,7 @@ test.beforeEach(async ({ page }) => {
       localStorage.removeItem("clickpedido-admin")
       localStorage.removeItem("clickpedido-admin-segmento")
       localStorage.removeItem("clickpedido-admin-farmacia")
+      localStorage.removeItem("clickpedido-admin-metas")
       sessionStorage.setItem("admin-limpo", "1")
     }
   })
@@ -79,6 +81,182 @@ test("a visão geral troca o período pelo atalho e alterna o gráfico", async (
   await verificarAcessibilidade(page)
 })
 
+test("visão geral: as abas ficam no endereço, a meta se define e o alerta leva ao estoque", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin")
+  await expect(page.getByRole("region", { name: "Hoje" })).toBeVisible({ timeout: 15_000 })
+  const abas = page.getByRole("tablist", { name: "Abas da visão geral" })
+
+  await abas.getByRole("tab", { name: "Vendas" }).click()
+  await expect(page).toHaveURL(/aba=vendas/)
+  await expect(page.getByRole("region", { name: "Canais de venda" })).toBeVisible()
+  await abas.getByRole("tab", { name: "Financeiro" }).click()
+  await expect(page).toHaveURL(/aba=financeiro/)
+  await expect(page.getByRole("region", { name: "Formas de pagamento" })).toBeVisible()
+  await abas.getByRole("tab", { name: "Resumo" }).click()
+  await expect(page).not.toHaveURL(/aba=/)
+
+  const meta = page.getByRole("region", { name: "Meta do mês" })
+  await meta.getByRole("button", { name: "Definir meta" }).click()
+  await meta.getByRole("textbox", { name: "Faturamento do mês" }).fill("60000")
+  await meta.getByRole("button", { name: "Salvar meta" }).click()
+  await expect(meta.getByText("Vendido no mês")).toBeVisible()
+  await verificarAcessibilidade(page)
+
+  const faixa = page.getByRole("region", { name: "Precisa de atenção" })
+  await faixa.getByRole("link", { name: "Ver estoque" }).first().click()
+  await expect(page).toHaveURL(/\/admin\/estoque$/)
+})
+
+test("aba Vendas: da origem aos pedidos filtrados, com a etiqueta para tirar o filtro", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin?aba=vendas")
+  await expect(page.getByRole("region", { name: "Quando a loja vende" })).toBeVisible({
+    timeout: 15_000,
+  })
+  await expect(page.getByRole("table", { name: "Pedidos por dia da semana e hora" })).toBeVisible()
+  await expect(page.locator(".barras-atual .recharts-bar-rectangle").first()).toBeVisible()
+  await verificarAcessibilidade(page)
+
+  await page
+    .getByRole("region", { name: "Origem dos pedidos" })
+    .getByRole("link", { name: "Site" })
+    .click()
+  await expect(page).toHaveURL(/\/admin\/pedidos\?origem=site&de=2026-11-07&ate=2026-11-13/)
+  await expect(page.getByRole("button", { name: /07\/11 a 13\/11 · 7 dias/ })).toBeVisible()
+  await expect(page.getByRole("table")).toBeVisible()
+  await page.getByRole("button", { name: "Tirar o filtro Origem: Site" }).click()
+  await expect(page).not.toHaveURL(/origem=/)
+})
+
+test("abas Produtos e Financeiro: do produto e da forma de pagamento aos pedidos", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin?aba=produtos")
+  const ranking = page.getByRole("region", { name: "Mais vendidos" })
+  await expect(ranking).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByRole("region", { name: "Curva ABC" })).toBeVisible()
+  await verificarAcessibilidade(page)
+
+  const primeiro = ranking.getByRole("link").first()
+  const nome = (await primeiro.textContent()) ?? ""
+  await primeiro.click()
+  await expect(page).toHaveURL(/\/admin\/pedidos\?busca=.+&de=2026-11-07&ate=2026-11-13/)
+  await expect(page.getByRole("searchbox")).toHaveValue(nome)
+  await expect(page.getByRole("table")).toBeVisible()
+
+  await page.goto("/admin?aba=financeiro")
+  await expect(page.getByRole("region", { name: "Do bruto ao líquido" })).toBeVisible({
+    timeout: 15_000,
+  })
+  await expect(page.getByRole("region", { name: "Taxas por forma" })).toBeVisible()
+  await verificarAcessibilidade(page)
+  await page
+    .getByRole("region", { name: "Formas de pagamento" })
+    .getByRole("link", { name: "Dinheiro" })
+    .click()
+  await expect(page).toHaveURL(/\/admin\/pedidos\?pagamento=dinheiro&de=2026-11-07&ate=2026-11-13/)
+})
+
+test("abas Clientes e Operação: o WhatsApp do sumido, o cliente e o motivo levando aos pedidos", async ({
+  page,
+}) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin?aba=clientes")
+  const melhores = page.getByRole("region", { name: "Melhores clientes" })
+  await expect(melhores).toBeVisible({ timeout: 15_000 })
+  await expect(page.getByText("Últimos 90 dias, até hoje")).toBeVisible()
+  await verificarAcessibilidade(page)
+
+  // O WhatsApp abre com a mensagem pronta; o teste não sai da página.
+  const chamar = page
+    .getByRole("region", { name: "Sumidos" })
+    .getByRole("link", { name: /^Chamar .+ no WhatsApp$/ })
+    .first()
+  await expect(chamar).toHaveAttribute("href", /^https:\/\/wa\.me\/55\d+\?text=Oi%2C/)
+
+  await melhores.getByRole("link").first().click()
+  await expect(page).toHaveURL(/\/admin\/pedidos\?cliente=\d+/)
+  await expect(page.getByRole("button", { name: /^Tirar o filtro Cliente: / })).toBeVisible()
+  await expect(page.getByRole("table")).toBeVisible()
+
+  await page.goto("/admin?aba=operacao")
+  await expect(page.getByRole("table", { name: "Tempo por etapa" })).toBeVisible({
+    timeout: 15_000,
+  })
+  await verificarAcessibilidade(page)
+  await page
+    .getByRole("region", { name: "Cancelamentos por motivo" })
+    .getByRole("link")
+    .first()
+    .click()
+  await expect(page).toHaveURL(
+    /\/admin\/pedidos\?status=cancelado&motivo=[a-z-]+&de=2026-11-07&ate=2026-11-13/,
+  )
+  await expect(page.getByRole("button", { name: /^Tirar o filtro Motivo: / })).toBeVisible()
+})
+
+test("aba Entrega: o motoboy e o bairro levando às entregas deles", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin?aba=entrega")
+  const bairros = page.getByRole("table", { name: "Por bairro" })
+  await expect(bairros).toBeVisible({ timeout: 15_000 })
+  await verificarAcessibilidade(page)
+
+  // A tabela por bairro sai em CSV para o Excel em português.
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Baixar CSV: Por bairro" }).click(),
+  ])
+  expect(download.suggestedFilename()).toBe("casa-da-pizza-entrega-2026-11-07-a-2026-11-13.csv")
+  const conteudo = await readFile((await download.path()) as string)
+  expect(conteudo.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]))
+  expect(conteudo.toString("utf8", 3)).toMatch(
+    /^Bairro;Pedidos;Faturamento;Taxas;Ticket;Tempo \(min\)\r\n[^;]+;\d+;\d+,\d{2};/,
+  )
+
+  const motoboy = page.getByRole("region", { name: "Por motoboy" }).getByRole("link").first()
+  const nome = (await motoboy.textContent()) ?? ""
+  await motoboy.click()
+  await expect(page).toHaveURL(
+    /\/admin\/pedidos\?canal=entrega&motoboy=[\w-]+&de=2026-11-07&ate=2026-11-13/,
+  )
+  await expect(page.getByRole("button", { name: `Tirar o filtro Motoboy: ${nome}` })).toBeVisible()
+  await expect(page.getByRole("table")).toBeVisible()
+
+  await page.goto("/admin?aba=entrega")
+  const bairro = page.getByRole("table", { name: "Por bairro" }).getByRole("link").first()
+  const qual = (await bairro.textContent()) ?? ""
+  await bairro.click()
+  await expect(page).toHaveURL(/\/admin\/pedidos\?canal=entrega&bairro=.+&de=2026-11-07/)
+  await expect(page.getByRole("button", { name: `Tirar o filtro Bairro: ${qual}` })).toBeVisible()
+})
+
+for (const [segmento, id, aba, titulo] of [
+  ["salao", "agenda", "Agenda", "Agenda do período"],
+  ["farmacia", "farmacia", "Farmácia", "Validade dos lotes"],
+  ["acougue", "pesagem", "Pesagem", "Balança do período"],
+] as const) {
+  test(`aba ${aba} no segmento ${segmento}: abre pela barra e passa no axe`, async ({ page }) => {
+    await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+    await noSegmento(page, segmento)
+    await page.goto("/admin")
+    await expect(page.getByRole("region", { name: "Hoje" })).toBeVisible({ timeout: 15_000 })
+    await page
+      .getByRole("tablist", { name: "Abas da visão geral" })
+      .getByRole("tab", { name: aba })
+      .click()
+    await expect(page).toHaveURL(new RegExp(`aba=${id}`))
+    await expect(page.getByRole("region", { name: titulo })).toBeVisible({ timeout: 15_000 })
+    await verificarAcessibilidade(page)
+  })
+}
+
 test("do gráfico aos pedidos do dia: filtrar, abrir e avançar", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
   await page.goto("/admin")
@@ -109,6 +287,35 @@ test("do gráfico aos pedidos do dia: filtrar, abrir e avançar", async ({ page 
   // Voltar no navegador fecha os detalhes.
   await page.goBack()
   await expect(detalhes).toBeHidden()
+})
+
+test("cancelar com o motivo e guardar as taxas de pagamento da loja", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/pedidos?data=2026-11-13&status=recebido")
+  await page
+    .getByRole("button", { name: /^Abrir o pedido/ })
+    .first()
+    .click({ timeout: 15_000 })
+  const detalhes = page.getByRole("dialog", { name: /^Pedido #/ })
+  await detalhes.getByRole("button", { name: "Cancelar pedido" }).click()
+  const confirmacao = page.getByRole("alertdialog")
+  await confirmacao.getByRole("radio", { name: "Cliente desistiu" }).click()
+  await expect(confirmacao.getByRole("radio", { name: "Cliente desistiu" })).toBeChecked()
+  await verificarAcessibilidade(page)
+  await confirmacao.getByRole("button", { name: "Sim, cancelar" }).click()
+  await expect(detalhes.getByText("Motivo: Cliente desistiu")).toBeVisible()
+
+  await page.goto("/admin/loja")
+  const taxas = page.getByRole("region", { name: "Taxas de pagamento" })
+  await taxas.getByRole("textbox", { name: "Cartão na maquininha" }).fill("3,5")
+  await page.getByRole("button", { name: "Salvar alterações" }).click()
+  await expect(page.getByText("Configurações salvas.")).toBeVisible()
+  await page.reload()
+  await expect(
+    page
+      .getByRole("region", { name: "Taxas de pagamento" })
+      .getByRole("textbox", { name: "Cartão na maquininha" }),
+  ).toHaveValue("3,5 %", { timeout: 15_000 })
 })
 
 test("fila: avançar, tirar da fila e desligar a entrega sem esconder entregas", async ({

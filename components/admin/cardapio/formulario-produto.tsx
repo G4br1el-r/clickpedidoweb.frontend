@@ -164,6 +164,7 @@ type Valores = {
   preco: number
   precoOriginal?: number
   precoBalcao?: number
+  custo?: number
   imagem?: string
   ativo: boolean
   disponivel: boolean
@@ -187,6 +188,7 @@ function valoresIniciais(produto: Produto | undefined): Valores {
     preco: produto?.preco as number,
     precoOriginal: produto?.precoOriginal,
     precoBalcao: produto?.precoBalcao,
+    custo: produto?.custo,
     imagem: produto?.imagem,
     ativo: produto?.ativo ?? true,
     disponivel: produto?.disponivel ?? true,
@@ -211,17 +213,20 @@ function CampoDinheiro({
   id,
   erro,
   placeholder,
+  descricao,
 }: {
   control: Control<Valores>
   nome:
     | "preco"
     | "precoOriginal"
     | "precoBalcao"
+    | "custo"
     | `grupos.${number}.itens.${number}.precoAdicional`
   rotulo: string
   id: string
   erro?: string
   placeholder?: string
+  descricao?: string
 }) {
   return (
     <Field data-invalid={Boolean(erro)}>
@@ -248,6 +253,7 @@ function CampoDinheiro({
           />
         )}
       />
+      {descricao && <FieldDescription>{descricao}</FieldDescription>}
       {erro && <FieldError>{erro}</FieldError>}
     </Field>
   )
@@ -624,6 +630,7 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
       preco: valores.preco,
       ...(valores.oferta && valores.precoOriginal ? { precoOriginal: valores.precoOriginal } : {}),
       ...(campos.precoBalcao && valores.precoBalcao ? { precoBalcao: valores.precoBalcao } : {}),
+      ...(valores.custo !== undefined ? { custo: valores.custo } : {}),
       ...(valores.imagem ? { imagem: valores.imagem } : {}),
       ativo: valores.ativo,
       disponivel: valores.disponivel,
@@ -634,6 +641,9 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
       ...(campos.duracao && valores.duracaoMin ? { duracaoMin: valores.duracaoMin } : {}),
       ...(temCozinha && valores.preparoMin ? { preparoMin: valores.preparoMin } : {}),
       ...(campos.video && valores.videoUrl ? { videoUrl: valores.videoUrl } : {}),
+      // O que este formulário não edita continua como estava.
+      ...(produto?.medicamento ? { medicamento: produto.medicamento } : {}),
+      ...(produto?.estoque ? { estoque: produto.estoque } : {}),
       grupos: campos.grupos
         ? (valores.grupos ?? []).map((grupo, indiceGrupo) => ({
             ...grupo,
@@ -817,6 +827,14 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
                 erro={erros.precoBalcao?.message}
               />
             )}
+            <CampoDinheiro
+              control={control}
+              nome="custo"
+              rotulo="Custo"
+              id="produto-custo"
+              descricao="Para a margem. Em branco, o produto fica sem custo."
+              erro={erros.custo?.message}
+            />
             {campos.duracao && (
               <CampoInteiro
                 control={control}

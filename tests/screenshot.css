@@ -1,8 +1,0 @@
-/*
- * Aplicado só nos screenshots (`stylePath` em playwright.config.ts). A camada de
- * desenvolvimento do Next (selo de "Insights", aviso de segurança) não é da tela testada
- * e aparece mesmo com `devIndicators: false`.
- */
-nextjs-portal {
-  display: none !important;
-}

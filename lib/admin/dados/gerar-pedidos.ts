@@ -1,6 +1,7 @@
 import {
   addDays,
   addMinutes,
+  differenceInCalendarDays,
   format,
   isSameDay,
   isSameMonth,
@@ -12,12 +13,15 @@ import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus"
 import type { RandomGenerator } from "pure-rand/types/RandomGenerator"
 import { horariosLivres } from "../regras/agenda"
 import { calcularPesagem } from "../regras/pesagem"
+import { proximoStatus } from "../regras/status"
 import { SEGMENTOS_PAINEL, type SegmentoPainelId, temModulo, temRecurso } from "../segmentos-painel"
 import type {
   CatalogoLoja,
+  EtapaDoPedido,
   FormaPagamento,
   ItemPedido,
   Mesa,
+  MotivoCancelamento,
   MotivoRefazer,
   OrigemPedido,
   Pedido,
@@ -203,6 +207,7 @@ function montarItem(
     nome: produto.nome,
     quantidade,
     precoUnitario,
+    ...(produto.custo !== undefined ? { custoUnitario: produto.custo } : {}),
     opcoes,
     total: reais(precoUnitario * quantidade),
     ...(pesoGramas ? { pesoGramas, precoKg: precoBase } : {}),
@@ -220,6 +225,174 @@ function statusPorIdade(tipo: TipoPedido, idade: number, online: boolean): Statu
   if (idade < 40) return "pronto"
   if (tipo === "entrega" && idade < 75) return "saiu-para-entrega"
   return "concluido"
+}
+
+/** Minutos sorteados para sair de cada etapa (o que vem depois decide, na entrega e na mesa). */
+const MINUTOS_PARA_SAIR: Record<string, [number, number]> = {
+  "aguardando-pagamento": [1, 4],
+  recebido: [1, 6],
+  "em-preparo": [10, 30],
+  "pronto:saiu-para-entrega": [2, 15],
+  "pronto:concluido": [3, 20],
+  "mesa:pronto": [30, 90],
+  "saiu-para-entrega": [10, 30],
+  cancelado: [2, 20],
+}
+
+/** Em andamento hoje, a etapa muda nas idades de `statusPorIdade`, em minutos. */
+const IDADE_DA_ETAPA: Partial<Record<StatusPedido, number>> = {
+  recebido: 3,
+  "em-preparo": 8,
+  pronto: 25,
+  "saiu-para-entrega": 40,
+}
+
+/**
+ * Histórico de status gerado: as etapas da fila, da criação até a atual. Encerrado, os
+ * tempos sorteados se ajustam para terminar em `atualizado`; em andamento, cada etapa
+ * começa na idade em que a fila a mostra. Usa um sorteador próprio, para não mudar os
+ * outros sorteios do dia.
+ */
+function historicoGerado({
+  id,
+  tipo,
+  status,
+  online,
+  criado,
+  atualizado,
+  agendamento,
+}: {
+  id: number
+  tipo: TipoPedido
+  status: StatusPedido
+  online: boolean
+  criado: Date
+  atualizado: Date
+  agendamento?: Pedido["agendamento"]
+}): EtapaDoPedido[] {
+  // Salão: o atendimento começa e termina na hora marcada; cancelado, nem começou.
+  if (agendamento) {
+    const inicio = new Date(agendamento.inicio)
+    const etapas: [StatusPedido, Date][] =
+      status === "cancelado"
+        ? [
+            ["recebido", criado],
+            ["cancelado", atualizado],
+          ]
+        : ([
+            ["recebido", criado],
+            ["em-preparo", inicio],
+            ["concluido", addMinutes(inicio, agendamento.duracaoMin)],
+          ].slice(0, ["recebido", "em-preparo", "concluido"].indexOf(status) + 1) as [
+            StatusPedido,
+            Date,
+          ][])
+    return etapas.map(([etapa, em]) => ({ status: etapa, em: em.toISOString() }))
+  }
+  const sorte = sorteadorDaSemente((Math.floor(criado.getTime() / 1000) + id) | 0)
+  const caminho: StatusPedido[] = online ? ["aguardando-pagamento", "recebido"] : ["recebido"]
+  for (;;) {
+    const ultimo = caminho.at(-1) as StatusPedido
+    const proximo =
+      proximoStatus(tipo, ultimo) ?? (tipo === "mesa" && ultimo === "pronto" ? "concluido" : null)
+    if (!proximo) break
+    caminho.push(proximo)
+  }
+  const ate =
+    status === "cancelado"
+      ? [...caminho.slice(0, sorte.inteiro(1, Math.min(3, caminho.length - 1))), status]
+      : caminho.slice(0, caminho.indexOf(status) + 1)
+
+  if (status !== "concluido" && status !== "cancelado") {
+    return ate.map((etapa, indice) => ({
+      status: etapa,
+      em: addMinutes(criado, indice === 0 ? 0 : (IDADE_DA_ETAPA[etapa] ?? 0)).toISOString(),
+    }))
+  }
+  const minutos = ate.slice(1).map((etapa, indice) => {
+    const antes = ate[indice]
+    const faixa =
+      MINUTOS_PARA_SAIR[etapa === "cancelado" ? etapa : `${tipo}:${antes}`] ??
+      MINUTOS_PARA_SAIR[`${antes}:${etapa}`] ??
+      MINUTOS_PARA_SAIR[antes]
+    return sorte.inteiro(...faixa)
+  })
+  const total = minutos.reduce((soma, valor) => soma + valor, 0)
+  const escala = total > 0 ? (atualizado.getTime() - criado.getTime()) / total : 0
+  let decorrido = 0
+  return ate.map((etapa, indice) => {
+    if (indice > 0) decorrido += minutos[indice - 1]
+    const em =
+      indice === ate.length - 1 ? atualizado : new Date(criado.getTime() + decorrido * escala)
+    return { status: etapa, em: em.toISOString() }
+  })
+}
+
+const comMotivo = (motivo: MotivoCancelamento | undefined) =>
+  motivo ? { motivoCancelamento: motivo } : {}
+
+/** De quantos dias para cá os clientes "sumidos" deixaram de pedir. */
+const SUMIDO_HA = 40
+/** De quantos dias para cá os clientes "novos" começaram a pedir. */
+const NOVO_HA = 20
+
+/**
+ * Ritmo dos clientes da demonstração, para a aba Clientes ter o que mostrar: 1 em 7 sumiu
+ * (não pede há 40 dias), 1 em 9 é novo (começou há 20 dias). O pedido que sai deles vai
+ * para um cliente de uma vez só, com nome e telefone de um sorteador próprio do pedido.
+ */
+function clienteDaDemonstracao(
+  cliente: Pedido["cliente"],
+  clientes: Pedido["cliente"][],
+  criado: Date,
+  agora: Date,
+  id: number,
+): Pedido["cliente"] {
+  const indice = clientes.indexOf(cliente)
+  const dias = differenceInCalendarDays(agora, criado)
+  const sumiu = indice % 7 === 3 && dias < SUMIDO_HA
+  const novo = indice % 9 === 5 && dias > NOVO_HA
+  if (!sumiu && !novo) return cliente
+  const proprio = sorteadorDaSemente((id * 104_729 + 17) | 0)
+  const nome = proprio.um(clientes).nome.split(" ")[0]
+  const sobrenome = proprio.um(clientes).nome.split(" ").at(-1)
+  return {
+    nome: `${nome} ${sobrenome}`,
+    telefone: `1299${String(proprio.inteiro(0, 9_999_999)).padStart(7, "0")}`,
+  }
+}
+
+/** Motivos sorteados para os cancelados, com o peso de cada um. */
+const MOTIVOS_SORTEADOS: [MotivoCancelamento | undefined, number][] = [
+  [undefined, 20],
+  ["cliente-desistiu", 25],
+  ["demora", 15],
+  ["sem-estoque", 15],
+  ["fora-da-area", 10],
+  ["loja-fechou", 5],
+  ["pagamento-nao-aprovado", 5],
+  ["outro", 5],
+]
+
+/**
+ * Motivo de um cancelado gerado. Quem cancelou antes de pagar online teve o pagamento
+ * recusado; fora da área só vale para entrega. Uns ficam sem motivo, como na loja com pressa.
+ */
+function motivoGerado(id: number, tipo: TipoPedido, historico: EtapaDoPedido[]) {
+  if (historico.at(-2)?.status === "aguardando-pagamento") return "pagamento-nao-aprovado"
+  const sorte = sorteadorDaSemente((id * 7919) | 0)
+  const validos = MOTIVOS_SORTEADOS.filter(
+    ([motivo]) => motivo !== "fora-da-area" || tipo === "entrega",
+  )
+  let resto = sorte.inteiro(
+    1,
+    validos.reduce((soma, [, peso]) => soma + peso, 0),
+  )
+  for (const [motivo, peso] of validos) {
+    resto -= peso
+    if (resto <= 0) return motivo
+  }
+  return undefined
 }
 
 function formaDePagamento(
@@ -344,7 +517,13 @@ export function gerarPedidos({
           : !vivo && tipo !== "entrega" && temPdv && sorte.chance(35)
             ? "pdv"
             : "site"
-      const cliente = sorte.um(catalogo.clientes)
+      const cliente = clienteDaDemonstracao(
+        sorte.um(catalogo.clientes),
+        catalogo.clientes,
+        criado,
+        agora,
+        id,
+      )
 
       const itens = Array.from({ length: sorte.inteiro(1, salao ? 2 : 3) }, (_, indice) =>
         montarItem(sorte, sorte.um(produtos), `${id}-${indice + 1}`, segmento, origem !== "site"),
@@ -417,9 +596,18 @@ export function gerarPedidos({
       }
 
       const encerrado = status === "concluido" || status === "cancelado"
-      const atualizado = encerrado
+      let atualizado = encerrado
         ? new Date(Math.min(addMinutes(criado, sorte.inteiro(30, 70)).getTime(), agora.getTime()))
         : criado
+      // A venda do PDV conclui na hora; o atendimento do salão, quando termina.
+      const vendaNaHora = origem === "pdv" && status === "concluido" && !agendamento
+      if (vendaNaHora) atualizado = criado
+      if (agendamento && status === "concluido") {
+        atualizado = addMinutes(new Date(agendamento.inicio), agendamento.duracaoMin)
+      }
+      const historico: EtapaDoPedido[] = vendaNaHora
+        ? [{ status, em: criado.toISOString() }]
+        : historicoGerado({ id, tipo, status, online, criado, atualizado, agendamento })
       let situacaoPagamento: SituacaoPagamento
       if (status === "cancelado") situacaoPagamento = "cancelado"
       else if (aposPesagem && status !== "concluido") situacaoPagamento = "pendente"
@@ -468,6 +656,8 @@ export function gerarPedidos({
         ...(sorte.chance(15) ? { observacao: sorte.um(OBSERVACOES) } : {}),
         criadoEm: criado.toISOString(),
         atualizadoEm: atualizado.toISOString(),
+        historico,
+        ...(status === "cancelado" ? comMotivo(motivoGerado(id, tipo, historico)) : {}),
         ...(encerrado ? { impressoEm: addMinutes(criado, 1).toISOString() } : {}),
         enviarParaCozinha: true,
         ...(agendamento ? { agendamento } : {}),
@@ -736,6 +926,7 @@ export function gerarPedidoAgora({
     ...(pagamento === "dinheiro" && sorte.chance(50) ? { trocoPara: trocoPara(total) } : {}),
     criadoEm: agora.toISOString(),
     atualizadoEm: agora.toISOString(),
+    historico: [{ status: "recebido", em: agora.toISOString() }],
     enviarParaCozinha: true,
     ...(agendamento ? { agendamento } : {}),
   }

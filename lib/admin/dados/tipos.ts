@@ -24,8 +24,21 @@ export type FormaPagamento =
 
 export type SituacaoPagamento = "pendente" | "pago" | "na-entrega" | "cancelado"
 
+/** Por que o pedido foi cancelado. Sem o campo no pedido, "Não informado". */
+export type MotivoCancelamento =
+  | "cliente-desistiu"
+  | "sem-estoque"
+  | "fora-da-area"
+  | "pagamento-nao-aprovado"
+  | "demora"
+  | "loja-fechou"
+  | "outro"
+
 /** Por onde o pedido entrou. "painel": agendamento marcado pela própria loja. */
 export type OrigemPedido = "site" | "pdv" | "garcom" | "painel"
+
+/** Uma mudança de etapa do pedido: para onde foi e quando. */
+export type EtapaDoPedido = { status: StatusPedido; em: string }
 
 export type ItemPedido = {
   id: string
@@ -34,6 +47,8 @@ export type ItemPedido = {
   nome: string
   quantidade: number
   precoUnitario: number
+  /** Custo de uma unidade (ou de 1 kg) na hora da venda, copiado do produto. Sem custo, fica de fora da margem. */
+  custoUnitario?: number
   /** Resumo das opções escolhidas, já em texto. Exemplo: "1º sabor: Calabresa". */
   opcoes: string[]
   /** Combos: produtos ligados às opções escolhidas (cada um sai 1 por unidade do item). */
@@ -159,6 +174,8 @@ export type Pedido = {
   refacoes?: Refacao[]
   /** Vias da cozinha já impressas: "rodada:praça". Outro aparelho não imprime de novo. */
   viasImpressas?: string[]
+  /** Cada etapa por que o pedido passou, da primeira à atual. */
+  historico: EtapaDoPedido[]
   impressoEm?: string
   /** Mesa: se a rodada vai para a cozinha. */
   enviarParaCozinha: boolean
@@ -168,6 +185,8 @@ export type Pedido = {
   dataRetirada?: string
   /** Açougue: resultado da pesagem. */
   pesagem?: { totalEstimado: number; diferenca: number; pesadoEm: string }
+  /** Cancelado: o motivo escolhido. Sem o campo, "Não informado". */
+  motivoCancelamento?: MotivoCancelamento
   /** O estoque já saiu por este pedido (para devolver no cancelamento uma vez só). */
   estoqueBaixado?: boolean
 }
@@ -232,6 +251,8 @@ export type Produto = {
   grupos: GrupoOpcao[]
   /** Farmácia: dados do medicamento. Sem o campo, é um item de venda livre (higiene, beleza). */
   medicamento?: DadosMedicamento
+  /** Custo de uma unidade (ou de 1 kg): a margem das vendas e o valor parado em estoque. */
+  custo?: number
   /** Controle de estoque do produto; sem o campo, não é controlado. */
   estoque?: ControleEstoque
   /** Cozinha: a praça que prepara, no lugar da praça da categoria. */
@@ -245,8 +266,6 @@ export type ControleEstoque = {
   controlar: boolean
   quantidade: number
   minimo: number
-  /** Custo de uma unidade (ou de 1 kg), para o valor parado em estoque. */
-  custo?: number
   /** Zerou, esgota no cardápio; a entrada seguinte devolve. */
   esgotarAoZerar: boolean
   /** O estoque (e não a pessoa) esgotou o produto: só esse volta sozinho. */
@@ -385,6 +404,17 @@ export type Praca = {
 /** Quando o ticket pede atenção, quando atrasa e quanto o pronto fica na tela, em minutos. */
 export type TemposCozinha = { atencaoMin: number; atrasoMin: number; prontoFicaMin: number }
 
+/**
+ * Taxa cobrada por forma de pagamento, em % do valor. Dinheiro e Pix no balcão não têm taxa;
+ * forma sem taxa informada conta como 0%.
+ */
+export type TaxasPagamento = {
+  pixOnline?: number
+  cartaoOnline?: number
+  /** Cartão na entrega ou no balcão, na maquininha. */
+  maquininha?: number
+}
+
 export type ConfigLoja = {
   nome: string
   slogan: string
@@ -417,6 +447,7 @@ export type ConfigLoja = {
   pagamentos: Record<FormaPagamento, boolean>
   /** Conta de pagamento online (Mercado Pago) conectada: libera Pix e cartão online. */
   pagamentoOnlineConectado?: boolean
+  taxasPagamento?: TaxasPagamento
   /** Salão: quantos atendimentos cabem ao mesmo tempo. Sem o campo, 1. */
   capacidadeAtendimentos?: number
   impressaoAutomatica: boolean

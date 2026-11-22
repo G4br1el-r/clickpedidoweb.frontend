@@ -48,6 +48,7 @@ const pedido = (extra: Partial<Pedido>): Pedido => {
     criadoEm: as("20:00"),
     atualizadoEm: as("20:00"),
     enviarParaCozinha: true,
+    historico: [],
     ...extra,
   }
 }
