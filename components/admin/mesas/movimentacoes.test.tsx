@@ -90,6 +90,11 @@ describe("Mesas: mesas juntadas na grade", () => {
     expect(await screen.findByRole("dialog", { name: "Mesa 15" })).toBeInTheDocument()
   })
 
+  test("o leitor de tela não lê o total da principal no cartão da 16", async () => {
+    await abrir()
+    expect(await cartao(16)).toHaveAccessibleDescription("Com a mesa 15, 6 lugares")
+  })
+
   test("o filtro de estado oferece Juntada, e ?estado=juntada mostra só a 16", async () => {
     const usuario = await abrir("?estado=juntada")
 

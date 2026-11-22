@@ -319,7 +319,8 @@ export function CartaoMesa({
             mesa.clienteNome,
             ocupada ? garcom : null,
             ocupada ? pessoas : null,
-            comanda ? emReais(comanda.total) : null,
+            // A secundária mostra a comanda da principal: o total é lido lá, não aqui.
+            comanda && ocupada ? emReais(comanda.total) : null,
             ...alertas.map((item) => item.texto),
           ]
             .filter(Boolean)
