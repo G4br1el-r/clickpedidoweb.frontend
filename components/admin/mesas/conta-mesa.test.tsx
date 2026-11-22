@@ -170,6 +170,23 @@ describe("ComandaMesa: a aba Conta", () => {
     expect(conta.pagamentos).toMatchObject([{ forma: "dinheiro", recebido: 100, troco: 35.6 }])
   })
 
+  test("dinheiro acima do saldo: a tela mostra o mesmo troco que o servidor grava", async () => {
+    await mesaComConta()
+    const { usuario, gaveta } = await abrirConta()
+    await usuario.click(gaveta.getByRole("button", { name: "Fechar conta" }))
+    await usuario.click(janelaReceber().getByRole("radio", { name: "Dinheiro" }))
+    const valor = janelaReceber().getByRole("textbox", { name: "Valor" })
+    await usuario.clear(valor)
+    await usuario.type(valor, "70")
+    await usuario.type(janelaReceber().getByRole("textbox", { name: "Valor recebido" }), "100")
+    // Abate só o saldo de R$ 64,40: o troco é 100 − 64,40.
+    expect(janelaReceber().getByText("Troco: R$ 35,60")).toBeInTheDocument()
+    await usuario.click(janelaReceber().getByRole("button", { name: nome("Receber R$ 70,00") }))
+    expect(await screen.findByText("Conta da mesa 70 fechada.")).toBeInTheDocument()
+    const [conta] = await api().pedidos.listar({ status: ["concluido"] })
+    expect(conta.pagamentos).toMatchObject([{ valor: 64.4, recebido: 100, troco: 35.6 }])
+  })
+
   test("cartão pede crédito ou débito antes de receber", async () => {
     await mesaComConta()
     const { usuario, gaveta } = await abrirConta()

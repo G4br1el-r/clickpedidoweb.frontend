@@ -9,6 +9,7 @@ import {
   pagoNoDiaSemTaxa,
   resumoDaConta,
   taxaSobre,
+  trocoDoPagamento,
   valorDosItens,
 } from "./conta"
 import { pedidoDeTeste } from "./pedidos-de-teste"
@@ -219,5 +220,15 @@ describe("comTotais", () => {
       }),
     })
     expect(comTotais(comanda)).toMatchObject({ subtotal: 87.45, desconto: 10, total: 95.7 })
+  })
+})
+
+describe("trocoDoPagamento", () => {
+  test("o troco é o recebido menos o que abate do saldo (no máximo o saldo)", () => {
+    expect(trocoDoPagamento({ valor: 66.67, saldo: 100, recebido: 80 })).toBe(13.33)
+    // A parte de R$ 60,00 numa conta com R$ 50,00 de saldo abate só 50.
+    expect(trocoDoPagamento({ valor: 60, saldo: 50, recebido: 100 })).toBe(50)
+    expect(trocoDoPagamento({ valor: 50, saldo: 50, recebido: 50 })).toBe(0)
+    expect(trocoDoPagamento({ valor: 50, saldo: 50, recebido: 40 })).toBe(0)
   })
 })

@@ -21,7 +21,7 @@ import { usePagar } from "@/lib/admin/dados/consultas-mesas"
 import type { PagamentoMesa } from "@/lib/admin/dados/servidor"
 import type { CartaoPagamento, Mesa, Pedido } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
-import { emCentavos, resumoDaConta, valorDosItens } from "@/lib/admin/regras/conta"
+import { resumoDaConta, trocoDoPagamento, valorDosItens } from "@/lib/admin/regras/conta"
 import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { sugestoesDeTroco } from "@/lib/checkout"
 import { emReais } from "@/lib/formato"
@@ -106,7 +106,7 @@ function Formulario({
   const dinheiro = forma === "dinheiro"
   const troco =
     dinheiro && valor !== undefined && recebido !== undefined
-      ? (emCentavos(recebido) - emCentavos(valor)) / 100
+      ? trocoDoPagamento({ valor, saldo, recebido })
       : 0
   const pronto =
     forma !== null &&

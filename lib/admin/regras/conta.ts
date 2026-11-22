@@ -115,6 +115,23 @@ export function dividirIgualmente(valor: number, partes: number): number[] {
     emReais(indice === partes - 1 ? centavos - parte * (partes - 1) : parte),
   )
 }
+/**
+ * O troco no dinheiro: o que o cliente entregou menos o que abate do saldo. A parte acima do
+ * saldo não abate (vira troco também). A mesma conta na tela e no servidor.
+ */
+export function trocoDoPagamento({
+  valor,
+  saldo,
+  recebido,
+}: {
+  valor: number
+  saldo: number
+  recebido: number
+}): number {
+  const abate = Math.min(emCentavos(valor), emCentavos(saldo))
+  return emReais(Math.max(emCentavos(recebido) - abate, 0))
+}
+
 /** Os itens já cobertos por pagamentos por item. */
 export function itensPagos(conta: Pick<ContaDaMesa, "pagamentos">): Set<string> {
   return new Set((conta.pagamentos ?? []).flatMap((pagamento) => pagamento.itens ?? []))

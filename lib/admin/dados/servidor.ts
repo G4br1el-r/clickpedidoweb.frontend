@@ -14,6 +14,7 @@ import {
   erroDoDesconto,
   itensPagos,
   resumoDaConta,
+  trocoDoPagamento,
   valorDosItens,
 } from "../regras/conta"
 import { cozinhaJaPreparou, depoisDeTirar, itensDaCozinha } from "../regras/cozinha"
@@ -1053,7 +1054,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const valor = Math.min(pedido, saldo)
     const recebido = dinheiro ? (pagamento.recebido ?? pedido) : valor
     if (recebido < pedido) throw new Error("O valor recebido é menor que o da parte.")
-    const troco = reais(recebido - valor)
+    const troco = trocoDoPagamento({ valor, saldo, recebido })
     const agora = new Date().toISOString()
     const novo: PagamentoConta = {
       id: `pag-${crypto.randomUUID().slice(0, 8)}`,
