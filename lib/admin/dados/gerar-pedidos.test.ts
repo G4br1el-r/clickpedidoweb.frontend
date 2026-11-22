@@ -515,24 +515,30 @@ describe("comandas de mesa ao vivo", () => {
     )
   }
 
-  test("abre 8 comandas, nas mesas 1 a 8, com pessoas entre 1 e os lugares da mesa", async () => {
+  // Fase 5: a comanda mais nova senta na 15, junta com a 16, e a 8 fica livre.
+  test("abre 8 comandas, nas mesas 1 a 7 e 15, com pessoas entre 1 e os lugares da mesa", async () => {
     const catalogo = await carregarCatalogo("acougue")
     const abertas = await comandasAbertas()
-    expect(abertas.map((pedido) => pedido.mesa?.id).sort()).toEqual([
-      "mesa-1",
-      "mesa-2",
-      "mesa-3",
-      "mesa-4",
-      "mesa-5",
-      "mesa-6",
-      "mesa-7",
-      "mesa-8",
-    ])
+    expect(
+      abertas.map((pedido) => pedido.mesa?.numero).sort((a, b) => (a ?? 0) - (b ?? 0)),
+    ).toEqual([1, 2, 3, 4, 5, 6, 7, 15])
     for (const pedido of abertas) {
       const lugares = catalogo.mesas.find((mesa) => mesa.id === pedido.mesa?.id)?.lugares as number
       expect(pedido.mesa?.pessoas).toBeGreaterThanOrEqual(1)
       expect(pedido.mesa?.pessoas).toBeLessThanOrEqual(lugares)
     }
+  })
+
+  test("a comanda mais nova senta na mesa 15, junta com a 16; só ela tem mesas juntadas", async () => {
+    const abertas = await comandasAbertas()
+    const juntas = abertas.filter((pedido) => pedido.mesa?.juntadas)
+    expect(juntas).toHaveLength(1)
+    expect(juntas[0].mesa).toMatchObject({
+      id: "mesa-15",
+      numero: 15,
+      juntadas: [{ id: "mesa-16", numero: 16 }],
+    })
+    expect(juntas[0].criadoEm).toBe(new Date(2026, 10, 13, 20, 23).toISOString())
   })
 
   test("uma comanda aberta já pagou metade em Pix, há 5 min", async () => {
@@ -606,7 +612,8 @@ describe("comandas de mesa ao vivo", () => {
       [5, 118, 3, 153.8],
       [6, 200, 4, 252],
       [7, 112, 1, 131.2],
-      [8, 93, 2, 118.3],
+      // Fase 5: a última senta na mesa 15 (6 lugares), junta com a 16: 93 + 9,30 + 6 × 8.
+      [15, 93, 6, 150.3],
     ])
   })
 

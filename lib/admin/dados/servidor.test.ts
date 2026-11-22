@@ -297,6 +297,14 @@ describe("servidor de demonstração", () => {
       expect(mesa9?.limpezaDesde).toBeUndefined()
     })
 
+    test("a mesa 16 está junto com a 15, que tem a comanda; a 8 fica livre", async () => {
+      const { mesas } = await salaoCheio()
+      const mesa16 = mesas.find((mesa) => mesa.id === "mesa-16")
+      expect(mesa16).toMatchObject({ status: "livre", juntadaCom: "mesa-15" })
+      expect(mesas.find((mesa) => mesa.id === "mesa-15")?.status).toBe("ocupada")
+      expect(mesas.find((mesa) => mesa.id === "mesa-8")?.status).toBe("livre")
+    })
+
     test("a mesa 9 está em limpeza há 3 min; a 20 continua bloqueada e nunca recebe comanda", async () => {
       const { mesas, base } = await salaoCheio()
       const mesa9 = mesas.find((mesa) => mesa.id === "mesa-9")
