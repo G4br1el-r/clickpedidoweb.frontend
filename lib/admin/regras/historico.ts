@@ -48,6 +48,8 @@ function textoDoEvento(evento: EventoPedido, pedido: Pedido): string {
       return "Cupom impresso"
     case "aceito":
       return "Pedido aceito"
+    case "aviso":
+      return `Cliente avisado no WhatsApp: “${evento.texto}”`
   }
 }
 

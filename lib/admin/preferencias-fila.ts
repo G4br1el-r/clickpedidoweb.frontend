@@ -5,6 +5,7 @@ import { create } from "zustand"
 import { persist } from "zustand/middleware"
 import { useLoja } from "./dados/consultas"
 import type { SomAlerta } from "./dados/tipos"
+import type { ChaveDoAlerta } from "./regras/alertas-fila"
 
 /** Avisos que se ligam e desligam no menu "Este aparelho". */
 export type ChaveDoAparelho = "notificar" | "piscarAba" | "vibrar" | "telaAcesa" | "compacto"
@@ -25,6 +26,12 @@ type Preferencias = {
   telaAcesa: boolean
   /** Cada pedido numa linha, que abre ao tocar. */
   compacto: boolean
+  /** Alertas secundários, cada um com a sua chave. */
+  alertas: Record<ChaveDoAlerta, boolean>
+  /** Pronto parado há mais destes minutos avisa. */
+  paradoMin: number
+  ligarAlerta: (chave: ChaveDoAlerta, ligado: boolean) => void
+  definirParadoMin: (minutos: number) => void
   ligarSom: (ligado: boolean) => void
   escolherSom: (tipo: SomAlerta | null) => void
   ligarSimulacao: (ligada: boolean) => void
@@ -43,6 +50,11 @@ export const usePreferenciasFila = create<Preferencias>()(
       vibrar: false,
       telaAcesa: false,
       compacto: false,
+      alertas: { parado: true, atraso: true, pago: true, cancelou: true },
+      paradoMin: 10,
+      ligarAlerta: (chave, ligado) =>
+        set((estado) => ({ alertas: { ...estado.alertas, [chave]: ligado } })),
+      definirParadoMin: (paradoMin) => set({ paradoMin }),
       ligarSom: (somLigado) => set({ somLigado }),
       escolherSom: (tipoSom) => set({ tipoSom }),
       ligarSimulacao: (simular) => set({ simular }),
@@ -61,6 +73,8 @@ export const usePreferenciasFila = create<Preferencias>()(
         vibrar,
         telaAcesa,
         compacto,
+        alertas,
+        paradoMin,
       }) => ({
         somLigado,
         tipoSom,
@@ -70,6 +84,8 @@ export const usePreferenciasFila = create<Preferencias>()(
         vibrar,
         telaAcesa,
         compacto,
+        alertas,
+        paradoMin,
       }),
     },
   ),

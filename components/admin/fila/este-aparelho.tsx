@@ -180,6 +180,58 @@ export function EsteAparelho({ loja }: { loja: ConfigLoja | undefined }) {
             recusa={recusas.vibrar}
           />
         </Grupo>
+        <Grupo titulo="Alertas">
+          <Linha
+            id="alerta-parado"
+            rotulo="Pronto parado"
+            detalhe={`Quando um pronto passa de ${preferencias.paradoMin} min sem sair.`}
+            marcada={preferencias.alertas.parado}
+            aoMudar={(ligado) => preferencias.ligarAlerta("parado", ligado)}
+          />
+          <Select
+            value={String(preferencias.paradoMin)}
+            onValueChange={(minutos) => preferencias.definirParadoMin(Number(minutos))}
+          >
+            <SelectTrigger
+              size="sm"
+              aria-label="Minutos do pronto parado"
+              className="mb-1 w-32"
+              disabled={!preferencias.alertas.parado}
+            >
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectGroup>
+                {[5, 10, 15, 20].map((minutos) => (
+                  <SelectItem key={minutos} value={String(minutos)}>
+                    {minutos} min
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+          <Linha
+            id="alerta-atraso"
+            rotulo="Prestes a atrasar"
+            detalhe="5 minutos antes do prazo prometido."
+            marcada={preferencias.alertas.atraso}
+            aoMudar={(ligado) => preferencias.ligarAlerta("atraso", ligado)}
+          />
+          <Linha
+            id="alerta-pago"
+            rotulo="Pagamento online confirmado"
+            detalhe="Quando o Pix ou o cartão online cai."
+            marcada={preferencias.alertas.pago}
+            aoMudar={(ligado) => preferencias.ligarAlerta("pago", ligado)}
+          />
+          <Linha
+            id="alerta-cancelou"
+            rotulo="Cliente cancelou"
+            detalhe="Quando o cliente cancela pelo site."
+            marcada={preferencias.alertas.cancelou}
+            aoMudar={(ligado) => preferencias.ligarAlerta("cancelou", ligado)}
+          />
+        </Grupo>
         <Grupo titulo="Tela">
           <Linha
             id="tela-acesa"

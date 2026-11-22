@@ -2,11 +2,28 @@
 
 import NumberFlow from "@number-flow/react"
 import { startOfDay } from "date-fns"
-import { ArchiveIcon, ChevronDownIcon, InboxIcon, ListChecksIcon, VolumeXIcon } from "lucide-react"
+import {
+  ArchiveIcon,
+  ChevronDownIcon,
+  InboxIcon,
+  ListChecksIcon,
+  MapPinIcon,
+  VolumeXIcon,
+} from "lucide-react"
 import { AnimatePresence } from "motion/react"
 import { parseAsStringLiteral, useQueryState, useQueryStates } from "nuqs"
-import { useEffect, useEffectEvent, useRef, useState } from "react"
+import { type ReactNode, useEffect, useEffectEvent, useRef, useState } from "react"
 import { toast } from "sonner"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
@@ -22,16 +39,20 @@ import {
   useAvancarPedido,
   useCancelarPedido,
   useDefinirEntrega,
+  useDespachar,
   useFila,
   useHistoricoDosClientes,
   useLoja,
   useMotoboys,
+  useMotoboyVoltou,
   usePedidos,
   useReabrirPedido,
   useRecusarPedido,
+  useSimularCancelamento,
   useSimularPedido,
   useVoltarPedido,
 } from "@/lib/admin/dados/consultas"
+import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import type {
   MotivoEscolhido,
   Pedido,
@@ -46,6 +67,7 @@ import {
 } from "@/lib/admin/preferencias-fila"
 import { alarmeTocando } from "@/lib/admin/regras/aceite"
 import { type HistoricoCliente, seloDoCliente } from "@/lib/admin/regras/clientes"
+import { entregasParaAgrupar, situacaoDosMotoboys } from "@/lib/admin/regras/despacho"
 import {
   type ColunaFila,
   colunasDaFila,
@@ -55,6 +77,7 @@ import {
   resumoDaFila,
 } from "@/lib/admin/regras/fila"
 import { filtrarPedidos } from "@/lib/admin/regras/filtro-pedidos"
+import { pedidoComAlcool } from "@/lib/admin/regras/maioridade"
 import {
   FILTROS_DA_FILA,
   type FiltroDaFila,
@@ -88,9 +111,13 @@ import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
 import { EsteAparelho } from "./este-aparelho"
 import { FerramentasFila, PARAMETROS_FILA } from "./ferramentas-fila"
+import { GavetaBairros } from "./gaveta-bairros"
 import { GavetaFinalizados } from "./gaveta-finalizados"
+import { JanelaDespacho } from "./janela-despacho"
 import { MetricasFila } from "./metricas-fila"
+import { PainelMotoboys } from "./painel-motoboys"
 import { PausaPedidos } from "./pausa-pedidos"
+import { useAlertasSecundarios } from "./use-alertas-secundarios"
 import { useAtalhosDaFila } from "./use-atalhos-da-fila"
 import { useTelaAcesa } from "./use-tela-acesa"
 import { useTituloDaAba } from "./use-titulo-da-aba"
@@ -103,10 +130,16 @@ const _SONS: { valor: SomAlerta; rotulo: string }[] = [
 ]
 
 /** Quanto tempo o "Chegou agora" fica no cartão. */
+/** Entrega pronta, que espera o motoboy. */
+const prontaParaDespachar = (pedido: Pedido) =>
+  pedido.tipo === "entrega" && pedido.status === "pronto" && !pedido.esperaAceite
+
 /** Seleção dos pedidos para as ações em lote. */
 type SelecaoDaFila = { ativa: boolean; ids: ReadonlySet<number>; alternar: (id: number) => void }
 
 const DESTAQUE_MS = 10_000
+/** Demonstração: de quantos em quantos pedidos simulados um cliente cancela. */
+const CANCELA_A_CADA = 5
 /** Quanto tempo o "Desfazer" fica no aviso depois de avançar. */
 const DESFAZER_MS = 6_000
 
@@ -216,6 +249,10 @@ type AcoesDoCartao = {
   avancar: (pedido: Pedido) => void
   abrir: (pedido: Pedido) => void
   imprimir: (pedido: Pedido) => void
+  /** A loja tem motoboys: a entrega pronta se despacha. */
+  despacha: boolean
+  /** Adega: o pedido leva bebida alcoólica (+18). */
+  comAlcool: (pedido: Pedido) => boolean
 }
 
 function Coluna({
@@ -232,6 +269,7 @@ function Coluna({
   selecao,
   acoes,
   comTitulo,
+  topo,
 }: {
   coluna: ColunaFila
   agora: Date
@@ -246,6 +284,8 @@ function Coluna({
   selecao: SelecaoDaFila
   acoes: AcoesDoCartao
   comTitulo: boolean
+  /** O que vem antes dos cartões (os motoboys, em A caminho). */
+  topo?: ReactNode
 }) {
   // Com as colunas lado a lado, o cartão se arrasta para a coluna seguinte ou a anterior.
   const soltavel = useColunaSoltavel(coluna.status, comTitulo)
@@ -268,6 +308,7 @@ function Coluna({
           </span>
         </h2>
       )}
+      {topo}
       {coluna.pedidos.length === 0 ? (
         <p className="rounded-xl border border-dashed border-border px-3 py-8 text-center text-[13px] text-muted-foreground">
           Nenhum pedido aqui.
@@ -295,6 +336,8 @@ function Coluna({
                 aoAceitar={() => acoes.aceitar(pedido)}
                 aoRecusar={(escolhido) => acoes.recusar(pedido, escolhido)}
                 aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
+                despacha={acoes.despacha && pedido.tipo === "entrega" && pedido.status === "pronto"}
+                maioridade={acoes.comAlcool(pedido)}
                 aoAvancar={() => acoes.avancar(pedido)}
                 aoAbrir={() => acoes.abrir(pedido)}
                 aoImprimir={() => acoes.imprimir(pedido)}
@@ -354,6 +397,7 @@ export function PaginaFila({
   const cancelar = useCancelarPedido()
   const definirEntrega = useDefinirEntrega()
   const simularPedido = useSimularPedido()
+  const simularCancelamento = useSimularCancelamento()
   const [, abrirPedido] = usePedidoAberto()
   const preferencias = usePreferenciasFila()
   const somDoAparelho = useSomDoAparelho()
@@ -382,62 +426,114 @@ export function PaginaFila({
   }, [tocando, preferencias.somLigado, somDoAparelho, intervaloAlarme])
 
   // Demonstração: um pedido novo chega de tempos em tempos.
+  // A cada 5 pedidos simulados, um cliente cancela pelo site.
   const simular = simularPedido.mutate
+  const cancelarPeloCliente = simularCancelamento.mutate
   useEffect(() => {
     if (!preferencias.simular) return
-    const relogio = setInterval(() => simular(), intervaloSimulacao)
+    let vezes = 0
+    const relogio = setInterval(() => {
+      vezes += 1
+      if (vezes % CANCELA_A_CADA === 0) cancelarPeloCliente()
+      else simular()
+    }, intervaloSimulacao)
     return () => clearInterval(relogio)
-  }, [preferencias.simular, intervaloSimulacao, simular])
+  }, [preferencias.simular, intervaloSimulacao, simular, cancelarPeloCliente])
 
   const avisoDeErro = { onError: (erro: Error) => toast.error(erro.message) }
+  /** A mudança mandou aviso ao cliente (simulado): mostra a mensagem que teria saído. */
+  const mostrarAviso = (pedido: Pedido) => {
+    const ultimo = pedido.historico?.at(-1)
+    if (ultimo?.tipo === "aviso" && ultimo.em === pedido.atualizadoEm) {
+      toast("Cliente avisado no WhatsApp", { description: ultimo.texto })
+    }
+  }
+  // Despacho: com motoboys, a entrega pronta sai pela janela de despacho.
+  const despacha = temModulo(segmento, "motoboys")
+  const [despachando, setDespachando] = useState<Pedido[] | null>(null)
+  const [bairrosAberto, setBairrosAberto] = useState(false)
+  const [conferindo, setConferindo] = useState<Pedido | null>(null)
+  // Adega: os produtos alcoólicos do cardápio dizem que pedido pede documento.
+  const { data: produtos = [] } = useProdutos()
+  const comAlcool = (pedido: Pedido) => pedidoComAlcool(pedido, produtos)
+  const despachar = useDespachar()
+  const motoboyVoltou = useMotoboyVoltou()
   const acoes: AcoesDoCartao = {
     aceitar: (pedido) =>
       aceitar.mutate(pedido.id, {
         ...avisoDeErro,
-        onSuccess: (aceito) => toast.success(`#${aceito.numero} aceito.`),
+        onSuccess: (aceito) => {
+          toast.success(`#${aceito.numero} aceito.`)
+          mostrarAviso(aceito)
+        },
       }),
     recusar: (pedido, escolhido) =>
       recusar.mutate(
         { id: pedido.id, ...escolhido },
-        { ...avisoDeErro, onSuccess: (recusado) => toast(`#${recusado.numero} recusado.`) },
+        {
+          ...avisoDeErro,
+          onSuccess: (recusado) => {
+            toast(`#${recusado.numero} recusado.`)
+            mostrarAviso(recusado)
+          },
+        },
       ),
     cancelar: (pedido, escolhido) =>
       cancelar.mutate(
         { id: pedido.id, de: pedido.status, ...escolhido },
         { ...avisoDeErro, onSuccess: (cancelado) => toast(`#${cancelado.numero} cancelado.`) },
       ),
-    avancar: (pedido) =>
-      avancar.mutate(
-        { id: pedido.id, de: pedido.status },
-        {
-          ...avisoDeErro,
-          // 6 s para desfazer: o toque errado no pico volta o pedido para a coluna de antes.
-          onSuccess: (atualizado) =>
-            toast.success(
-              `#${atualizado.numero}: ${rotuloStatus(atualizado.tipo, atualizado.status)}`,
-              {
-                duration: DESFAZER_MS,
-                action: {
-                  label: "Desfazer",
-                  onClick: () =>
-                    voltar.mutate(
-                      { id: atualizado.id, de: atualizado.status },
-                      {
-                        ...avisoDeErro,
-                        onSuccess: (voltou) =>
-                          toast(
-                            `#${voltou.numero} de volta: ${rotuloStatus(voltou.tipo, voltou.status)}`,
-                          ),
-                      },
-                    ),
-                },
-              },
-            ),
-        },
-      ),
+    avancar: (pedido) => {
+      // Entrega pronta com motoboys: avançar é despachar (escolher quem leva).
+      if (despacha && pedido.tipo === "entrega" && pedido.status === "pronto") {
+        setDespachando([pedido])
+        return
+      }
+      // Retirada com bebida alcoólica: antes de entregar, confere o documento.
+      if (pedido.tipo === "retirada" && pedido.status === "pronto" && comAlcool(pedido)) {
+        setConferindo(pedido)
+        return
+      }
+      avancarDeVez(pedido)
+    },
     abrir: (pedido) => abrirPedido(pedido.id),
     imprimir: impressao.imprimir,
+    despacha,
+    comAlcool,
   }
+  function avancarDeVez(pedido: Pedido) {
+    avancar.mutate(
+      { id: pedido.id, de: pedido.status },
+      {
+        ...avisoDeErro,
+        // 6 s para desfazer: o toque errado no pico volta o pedido para a coluna de antes.
+        onSuccess: (atualizado) => {
+          mostrarAviso(atualizado)
+          toast.success(
+            `#${atualizado.numero}: ${rotuloStatus(atualizado.tipo, atualizado.status)}`,
+            {
+              duration: DESFAZER_MS,
+              action: {
+                label: "Desfazer",
+                onClick: () =>
+                  voltar.mutate(
+                    { id: atualizado.id, de: atualizado.status },
+                    {
+                      ...avisoDeErro,
+                      onSuccess: (voltou) =>
+                        toast(
+                          `#${voltou.numero} de volta: ${rotuloStatus(voltou.tipo, voltou.status)}`,
+                        ),
+                    },
+                  ),
+              },
+            },
+          )
+        },
+      },
+    )
+  }
+
   // O cartão que está sendo mexido fica com os botões travados até o servidor responder.
   const emAndamento = [avancar, aceitar, recusar, cancelar].find((mutacao) => mutacao.isPending)
   const idEmAndamento =
@@ -466,6 +562,23 @@ export function PaginaFila({
         )
       : null
   const finalizados = finalizadosHoje(concluidos, criadosHoje)
+  useAlertasSecundarios({ fila, criadosHoje, agora, tempos })
+  // Motoboys: quem está na rua, quem está livre (desde a última entrega de hoje) e quem não veio.
+  const situacoes = situacaoDosMotoboys(motoboys ?? [], [...(fila ?? []), ...concluidos])
+  const painelMotoboys = agora ? (
+    <PainelMotoboys
+      situacoes={situacoes}
+      agora={agora}
+      ocupado={motoboyVoltou.isPending}
+      aoVoltar={(motoboyId) =>
+        motoboyVoltou.mutate(motoboyId, {
+          ...avisoDeErro,
+          onSuccess: (entregues) =>
+            toast(`${plural(entregues.length, "entrega concluída", "entregas concluídas")}.`),
+        })
+      }
+    />
+  ) : null
   // Soltar noutra coluna: a seguinte avança, a anterior volta; pular etapa não move.
   const aoSoltar = (pedido: Pedido, para: StatusPedido) => {
     if (para === pedido.status) return
@@ -641,6 +754,18 @@ export function PaginaFila({
                   <ListChecksIcon data-icon="inline-start" />
                   Selecionar
                 </Toggle>
+                {despacha && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    aria-haspopup="dialog"
+                    onClick={() => setBairrosAberto(true)}
+                  >
+                    <MapPinIcon data-icon="inline-start" />
+                    Por bairro
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="outline"
@@ -697,6 +822,7 @@ export function PaginaFila({
                 selecao={selecao}
                 acoes={acoes}
                 comTitulo
+                topo={coluna.status === "saiu-para-entrega" ? painelMotoboys : undefined}
               />
             ))}
           </div>
@@ -704,8 +830,13 @@ export function PaginaFila({
       ) : (
         <Tabs defaultValue={colunas[0].id}>
           <TabsList className="sem-barra w-full justify-start overflow-x-auto">
+            {/* A tinta a 60% do shadcn não chega a 4,5:1 sobre o trilho: aqui fica a 80%. */}
             {colunas.map((coluna) => (
-              <TabsTrigger key={coluna.id} value={coluna.id} className="gap-1.5">
+              <TabsTrigger
+                key={coluna.id}
+                value={coluna.id}
+                className="gap-1.5 text-foreground/80 dark:text-foreground/80"
+              >
                 <Traco tom={tomDoStatus(coluna.status)} className="h-3" />
                 {coluna.titulo}
                 <span className="text-xs tabular-nums text-muted-foreground">
@@ -730,6 +861,7 @@ export function PaginaFila({
                 selecao={selecao}
                 acoes={acoes}
                 comTitulo={false}
+                topo={coluna.status === "saiu-para-entrega" ? painelMotoboys : undefined}
               />
             </TabsContent>
           ))}
@@ -741,6 +873,14 @@ export function PaginaFila({
           quantos={selecionados.length}
           ocupado={avancarEmLote.isPending}
           aoLimpar={limparSelecao}
+          {...(despacha && selecionados.some(prontaParaDespachar)
+            ? {
+                aoDespachar: () => {
+                  setDespachando(selecionados.filter(prontaParaDespachar))
+                  limparSelecao()
+                },
+              }
+            : {})}
           aoImprimir={() => {
             for (const pedido of selecionados) impressao.imprimir(pedido)
           }}
@@ -761,6 +901,69 @@ export function PaginaFila({
           }
         />
       )}
+      {despachando && (
+        <JanelaDespacho
+          pedidos={despachando}
+          mesmoBairro={[
+            ...new Map(
+              despachando
+                .flatMap((pedido) => entregasParaAgrupar(pedido, fila ?? []))
+                .filter((pedido) => !despachando.some((escolhido) => escolhido.id === pedido.id))
+                .map((pedido) => [pedido.id, pedido]),
+            ).values(),
+          ]}
+          situacoes={situacoes}
+          comAlcool={comAlcool}
+          nomeLoja={loja?.nome ?? ""}
+          ocupado={despachar.isPending}
+          aoDespachar={async (ids, motoboyId) => {
+            try {
+              const { despachados, pulados } = await despachar.mutateAsync({ ids, motoboyId })
+              for (const pedido of despachados) mostrarAviso(pedido)
+              if (pulados > 0)
+                toast(`${plural(pulados, "pedido ficou", "pedidos ficaram")} de fora.`)
+              return despachados
+            } catch (erro) {
+              toast.error((erro as Error).message)
+              return []
+            }
+          }}
+          aoFechar={() => setDespachando(null)}
+        />
+      )}
+      <GavetaBairros
+        fila={fila ?? []}
+        aberta={bairrosAberto}
+        aoMudar={setBairrosAberto}
+        aoAbrirPedido={(pedido) => {
+          setBairrosAberto(false)
+          abrirPedido(pedido.id)
+        }}
+      />
+      <AlertDialog
+        open={conferindo !== null}
+        onOpenChange={(aberto) => !aberto && setConferindo(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Conferiu o documento?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O pedido #{conferindo?.numero} tem bebida alcoólica: só sai para maior de 18.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Voltar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (conferindo) avancarDeVez(conferindo)
+                setConferindo(null)
+              }}
+            >
+              Conferi, entregar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <AjudaAtalhos aberta={ajudaAberta} aoMudar={setAjudaAberta} />
       <GavetaFinalizados
         pedidos={finalizados}

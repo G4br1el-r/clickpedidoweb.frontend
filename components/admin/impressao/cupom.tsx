@@ -4,6 +4,7 @@ import { format } from "date-fns"
 import { type Ref, useRef } from "react"
 import { useReactToPrint } from "react-to-print"
 import type { Pedido } from "@/lib/admin/dados/tipos"
+import { AVISO_DE_MAIORIDADE } from "@/lib/admin/regras/maioridade"
 import { enderecoEmTexto, formatarTelefone } from "@/lib/admin/regras/mensagens"
 import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import { emReais } from "@/lib/formato"
@@ -47,10 +48,13 @@ export function Cupom({
   pedido,
   loja,
   area,
+  maioridade = false,
 }: {
   pedido: Pedido
   loja: string
   area: Ref<HTMLDivElement>
+  /** Adega: bebida alcoólica, a via do entregador lembra de conferir o documento. */
+  maioridade?: boolean
 }) {
   const troco = pedido.trocoPara ? pedido.trocoPara - pedido.total : 0
   return (
@@ -63,6 +67,7 @@ export function Cupom({
           {pedido.mesa ? ` ${pedido.mesa.numero}` : ""} ·{" "}
           {format(new Date(pedido.criadoEm), "dd/MM/yyyy HH:mm")}
         </p>
+        {maioridade && <p className="text-center font-bold">{AVISO_DE_MAIORIDADE}</p>}
         <hr className="border-dashed border-black" />
         {pedido.itens.map((item) => (
           <div key={item.id}>

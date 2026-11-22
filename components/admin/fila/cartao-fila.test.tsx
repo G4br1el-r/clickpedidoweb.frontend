@@ -21,6 +21,7 @@ function renderizar(
   agora = AGORA,
   seloCliente: string | null = null,
   compacto = false,
+  maioridade = false,
 ) {
   const nada = () => {}
   return render(
@@ -32,6 +33,7 @@ function renderizar(
         seloCliente={seloCliente}
         nomeLoja="Casa da Pizza"
         compacto={compacto}
+        maioridade={maioridade}
         motoboys={[]}
         novo={false}
         ocupado={false}
@@ -111,5 +113,12 @@ describe("CartaoFila: compacto", () => {
     expect(screen.getByRole("button", { name: "Marcar como pronto" })).toBeInTheDocument()
     await usuario.click(screen.getByRole("button", { name: "Recolher #1412" }))
     expect(screen.queryByRole("button", { name: "Marcar como pronto" })).not.toBeInTheDocument()
+  })
+})
+
+describe("CartaoFila: adega", () => {
+  test("pedido com bebida alcoólica avisa para conferir o documento", () => {
+    renderizar(PEDIDO, AGORA, null, false, true)
+    expect(screen.getByText("+18: conferir documento")).toBeInTheDocument()
   })
 })

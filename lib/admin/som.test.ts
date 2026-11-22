@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { liberarSom, somBloqueado, tocarAlerta } from "./som"
+import { liberarSom, somBloqueado, tocarAlerta, tocarAviso } from "./som"
 
 /**
  * AudioContext de mentira: anota as notas tocadas (frequência e forma da onda), as subidas
@@ -138,5 +138,19 @@ describe("tocarAlerta", () => {
     )
     tocarAlerta("suave")
     expect(retomar).toHaveBeenCalled()
+  })
+})
+
+describe("tocarAviso", () => {
+  test("cada alerta secundário tem duas notas suaves próprias, mais baixas que o alerta de pedido", () => {
+    const tocadas = (chave: Parameters<typeof tocarAviso>[0]) => {
+      const notas = simularAudio()
+      tocarAviso(chave)
+      return { frequencias: notas.map((nota) => nota.frequencia), volumes: new Set(notas.volumes) }
+    }
+    expect(tocadas("parado")).toEqual({ frequencias: [660, 660], volumes: new Set([0.2]) })
+    expect(tocadas("atraso").frequencias).toEqual([988, 784])
+    expect(tocadas("pago").frequencias).toEqual([784, 1175])
+    expect(tocadas("cancelou").frequencias).toEqual([523, 392])
   })
 })

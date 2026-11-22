@@ -8,6 +8,7 @@ import {
   CalendarIcon,
   ChevronUpIcon,
   ClockIcon,
+  IdCardIcon,
   MapPinIcon,
   MessageCircleIcon,
   PanelRightOpenIcon,
@@ -24,6 +25,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import type { MotivoEscolhido, Motoboy, Pedido } from "@/lib/admin/dados/tipos"
 import { esperaDoAceite } from "@/lib/admin/regras/aceite"
 import { resumoDosItens, textoCobranca, type Urgencia, urgencia } from "@/lib/admin/regras/fila"
+import { AVISO_DE_MAIORIDADE } from "@/lib/admin/regras/maioridade"
 import { linkWhatsApp, mensagemParaCliente } from "@/lib/admin/regras/mensagens"
 import { textoRetirada } from "@/lib/admin/regras/numero"
 import { itensParaPesar } from "@/lib/admin/regras/pesagem"
@@ -103,6 +105,8 @@ export function CartaoFila({
   nomeLoja = "",
   compacto = false,
   selecao,
+  despacha = false,
+  maioridade = false,
   aoAceitar,
   aoRecusar,
   aoCancelar,
@@ -126,6 +130,10 @@ export function CartaoFila({
   compacto?: boolean
   /** Seleção para ações em lote: a caixa aparece no modo de seleção; Shift+clique marca. */
   selecao?: { ativa: boolean; marcado: boolean; alternar: () => void }
+  /** Entrega pronta numa loja com motoboys: o botão vira "Despachar". */
+  despacha?: boolean
+  /** Adega: o pedido tem bebida alcoólica e só sai com documento (+18). */
+  maioridade?: boolean
   aoAceitar: () => void
   aoRecusar: (escolhido: MotivoEscolhido) => void
   aoCancelar: (escolhido: MotivoEscolhido) => void
@@ -135,7 +143,8 @@ export function CartaoFila({
 }) {
   const semMovimento = useReducedMotion()
   const espera = esperaDoAceite(pedido, agora, limiteAceiteMin)
-  const acao = rotuloAcao(pedido.tipo, pedido.status)
+  // Entrega pronta, com motoboys: a próxima etapa é despachar (escolher quem leva).
+  const acao = despacha ? "Despachar" : rotuloAcao(pedido.tipo, pedido.status)
   const motoboy = motoboys.find((item) => item.id === pedido.motoboyId)
   // Açougue: carne no quilo que ainda não passou pela balança.
   const aPesar = !pedido.pesagem && itensParaPesar(pedido).length > 0
@@ -257,6 +266,12 @@ export function CartaoFila({
             </CardHeader>
 
             <CardContent className="flex flex-col gap-2 px-3 text-sm">
+              {maioridade && (
+                <p className="flex items-center gap-1.5 text-[13px] font-medium">
+                  <IdCardIcon className="size-4" aria-hidden="true" />
+                  {AVISO_DE_MAIORIDADE}
+                </p>
+              )}
               {espera && (
                 // A loja nunca recusa sozinha: passou do limite, o aviso só fica mais forte.
                 <p

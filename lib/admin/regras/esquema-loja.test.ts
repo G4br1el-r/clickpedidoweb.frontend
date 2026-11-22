@@ -41,6 +41,17 @@ describe("esquemaLoja", () => {
     })
   })
 
+  test("avisos ao cliente: ligado ou não, textos de até 500 caracteres", () => {
+    const avisos = { ligado: false, textos: { saiu: "  Saiu, {nome}!  " } }
+    expect(esquemaLoja.parse({ ...VALIDA, avisosCliente: avisos }).avisosCliente).toEqual({
+      ligado: false,
+      textos: { saiu: "Saiu, {nome}!" },
+    })
+    expect(
+      erros({ ...VALIDA, avisosCliente: { ligado: true, textos: { pronto: "x".repeat(501) } } }),
+    ).toEqual({ "avisosCliente.textos.pronto": "Até 500 caracteres." })
+  })
+
   test("dados da loja: nome, telefones com DDD", () => {
     expect(erros({ ...VALIDA, nome: " ", telefone: "1234", whatsapp: "99" })).toEqual({
       nome: "Informe o nome da loja.",

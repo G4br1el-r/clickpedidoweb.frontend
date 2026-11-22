@@ -251,6 +251,141 @@ describe("PaginaFila", () => {
     expect(ajuda.getByText("Avançar o pedido em foco")).toBeInTheDocument()
   })
 
+  test("despachar a entrega pronta com o motoboy sugerido e chamar no WhatsApp", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const prontos = await coluna("Prontos")
+    const despachar = await prontos.findByRole("button", { name: "Despachar" }, { timeout: 8000 })
+    const cartao = despachar.closest("article") as HTMLElement
+    const numero = within(cartao).getByRole("heading").textContent ?? ""
+
+    await usuario.click(despachar)
+    const janela = within(await screen.findByRole("dialog", { name: `Despachar ${numero}` }))
+    const sugerido = janela.getByRole("radio", { checked: true })
+    const nome = sugerido.getAttribute("aria-label") ?? ""
+    await usuario.click(janela.getByRole("button", { name: "Despachar" }))
+
+    const chamar = await janela.findByRole("link", { name: `Chamar ${nome} no WhatsApp` })
+    expect(chamar.getAttribute("href")).toMatch(/^https:\/\/wa\.me\/55\d+\?text=/)
+    await usuario.click(janela.getByRole("button", { name: "Fechar" }))
+    expect(
+      await (await coluna("A caminho")).findByRole("heading", { name: numero }),
+    ).toBeInTheDocument()
+  })
+
+  test("motoboy voltou: as entregas dele saem de A caminho e ele fica disponível", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const caminho = await coluna("A caminho")
+    const motoboys = within(caminho.getByRole("list", { name: "Motoboys" }))
+    const [voltou] = motoboys.getAllByRole("button", { name: /^.+ voltou$/ })
+    const nome = (voltou.getAttribute("aria-label") ?? "").replace(" voltou", "")
+    const antes = caminho.getAllByRole("article").length
+
+    await usuario.click(voltou)
+    await waitFor(() =>
+      expect((caminho.queryAllByRole("article") ?? []).length).toBeLessThan(antes),
+    )
+    const linha = motoboys.getAllByRole("listitem").find((item) => item.textContent?.includes(nome))
+    expect(linha).toHaveTextContent(/disponível/i)
+  })
+
+  test("Por bairro: as entregas em andamento agrupadas, do bairro com mais ao com menos", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+    await usuario.click(screen.getByRole("button", { name: "Por bairro" }))
+    const gaveta = within(await screen.findByRole("dialog", { name: "Entregas por bairro" }))
+    const grupos = gaveta.getAllByRole("region")
+    expect(grupos.length).toBeGreaterThan(0)
+    const quantos = grupos.map((grupo) => within(grupo).getAllByRole("listitem").length)
+    expect(quantos).toEqual([...quantos].sort((a, b) => b - a))
+    expect(within(grupos[0]).getAllByRole("listitem")[0]).toHaveTextContent(/^#\d+/)
+  })
+
+  test("aceitar mostra a mensagem que teria saído para o cliente", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    const novo = await servidorDo("pizzaria").pedidos.simular()
+    renderizar()
+    const cartao = (
+      await (await coluna("Novos")).findByRole("heading", { name: `#${novo.numero}` })
+    ).closest("article") as HTMLElement
+    await usuario.click(within(cartao).getByRole("button", { name: "Aceitar" }))
+
+    const aviso = (await screen.findByText("Cliente avisado no WhatsApp")).closest("li")
+    expect(aviso).toHaveTextContent(`Seu pedido #${novo.numero} na Casa da Pizza foi aceito`)
+  })
+
+  test("alerta secundário: pronto parado avisa uma vez, agrupado", async () => {
+    telaGrande()
+    renderizar()
+    await coluna("Prontos")
+    expect(
+      await screen.findByText(/pronto há \d+ min|pedidos prontos parados/, {}, { timeout: 8000 }),
+    ).toBeInTheDocument()
+  })
+
+  test("alerta secundário desligado no Este aparelho não avisa", async () => {
+    telaGrande()
+    usePreferenciasFila.setState({
+      alertas: { parado: false, atraso: false, pago: true, cancelou: true },
+    })
+    renderizar()
+    await coluna("Prontos")
+    await new Promise((pronto) => setTimeout(pronto, 300))
+    expect(screen.queryByText(/pronto há \d+ min|pedidos prontos parados/)).not.toBeInTheDocument()
+    const menu = await abrirEsteAparelho()
+    expect(menu.getByRole("switch", { name: "Pronto parado" })).not.toBeChecked()
+    expect(menu.getByRole("switch", { name: "Cliente cancelou" })).toBeChecked()
+  })
+
+  test("demonstração: de vez em quando o cliente cancela, e a fila avisa", async () => {
+    telaGrande()
+    usePreferenciasFila.setState({ simular: true })
+    renderizar(100)
+    expect(
+      await screen.findByText(/o cliente cancelou|cancelados pelo cliente/, {}, { timeout: 8000 }),
+    ).toBeInTheDocument()
+  })
+
+  test("adega: retirada com bebida alcoólica pede o documento antes de entregar", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    useSegmentoAtual.setState({ segmento: "adega" })
+    const api = servidorDo("adega")
+    const alcoolicos = new Set(
+      (await api.produtos.listar())
+        .filter((produto) => produto.alcoolico)
+        .map((produto) => produto.id),
+    )
+    const comAlcool = (await api.pedidos.listar({ status: ["em-preparo", "pronto"] })).find(
+      (pedido) =>
+        pedido.tipo === "retirada" &&
+        pedido.itens.some((item) => item.produtoId !== null && alcoolicos.has(item.produtoId)),
+    )
+    if (!comAlcool) throw new Error("A demonstração da adega devia ter retirada com álcool")
+    if (comAlcool.status === "em-preparo") await api.pedidos.avancar(comAlcool.id, "em-preparo")
+    renderizar()
+
+    const prontos = await coluna("Prontos")
+    const cartao = (await prontos.findByRole("heading", { name: `#${comAlcool.numero}` })).closest(
+      "article",
+    ) as HTMLElement
+    expect(within(cartao).getByText("+18: conferir documento")).toBeInTheDocument()
+    await usuario.click(within(cartao).getByRole("button", { name: "Cliente retirou" }))
+    const pergunta = within(
+      await screen.findByRole("alertdialog", { name: "Conferiu o documento?" }),
+    )
+    await usuario.click(pergunta.getByRole("button", { name: "Conferi, entregar" }))
+    await waitFor(async () =>
+      expect((await api.pedidos.buscar(comAlcool.id))?.status).toBe("concluido"),
+    )
+  })
+
   test("no celular, as colunas viram abas com a contagem", async () => {
     renderizar()
     const aba = await screen.findByRole("tab", { name: /Novos/ }, { timeout: 8000 })

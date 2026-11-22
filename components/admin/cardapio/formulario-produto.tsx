@@ -166,6 +166,7 @@ type Valores = {
   disponivel: boolean
   destaque: boolean
   oferta: boolean
+  alcoolico: boolean
   unidade: "un" | "kg"
   duracaoMin?: number
   videoUrl: string
@@ -186,6 +187,7 @@ function valoresIniciais(produto: Produto | undefined): Valores {
     disponivel: produto?.disponivel ?? true,
     destaque: produto?.destaque ?? false,
     oferta: produto?.oferta ?? false,
+    alcoolico: produto?.alcoolico ?? false,
     unidade: produto?.unidade ?? "un",
     duracaoMin: produto?.duracaoMin,
     videoUrl: produto?.videoUrl ?? "",
@@ -620,6 +622,7 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
       disponivel: valores.disponivel,
       destaque: valores.destaque,
       oferta: valores.oferta,
+      ...(campos.maioridade && valores.alcoolico ? { alcoolico: true } : {}),
       ordem,
       unidade: campos.unidade ? (valores.unidade ?? "un") : "un",
       ...(campos.duracao && valores.duracaoMin ? { duracaoMin: valores.duracaoMin } : {}),
@@ -882,6 +885,15 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
                   ["ativo", "Visível", "Desligado, some do cardápio."],
                   ["destaque", "Destaque", "Entra na vitrine de destaques."],
                   ["oferta", "Oferta", "Mostra o preço “de” riscado e o desconto."],
+                  ...(campos.maioridade
+                    ? ([
+                        [
+                          "alcoolico",
+                          "Bebida alcoólica (+18)",
+                          "O pedido com ela pede documento na entrega e na retirada.",
+                        ],
+                      ] as const)
+                    : []),
                 ] as const
               ).map(([nome, rotulo, descricao]) => (
                 <Controller

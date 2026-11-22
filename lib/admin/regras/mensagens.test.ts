@@ -3,6 +3,7 @@ import type { Pedido } from "../dados/tipos"
 import {
   formatarTelefone,
   linkWhatsApp,
+  mensagemDaRota,
   mensagemParaCliente,
   mensagemParaMotoboy,
 } from "./mensagens"
@@ -129,5 +130,62 @@ describe("mensagemParaMotoboy", () => {
     const mensagem = mensagemParaMotoboy(retirada, { loja: "Casa da Pizza" })
     expect(mensagem).not.toContain("Endereço:")
     expect(mensagem).not.toContain("Mapa:")
+  })
+})
+
+describe("mensagemDaRota", () => {
+  test("uma entrega só é a mensagem de sempre", () => {
+    expect(mensagemDaRota([ENTREGA], { loja: "Casa da Pizza" })).toBe(
+      mensagemParaMotoboy(ENTREGA, { loja: "Casa da Pizza" }),
+    )
+  })
+
+  test("várias entregas numa rota: cada uma numerada, com endereço, cobrança e mapa", () => {
+    const paga: Pedido = {
+      ...ENTREGA,
+      numero: 13,
+      cliente: { nome: "Bruno Lima", telefone: "12991230002" },
+      endereco: {
+        cep: "12630-000",
+        logradouro: "Rua B",
+        numero: "7",
+        bairro: "Centro",
+        cidade: "Lorena",
+      },
+      situacaoPagamento: "pago",
+      pagamento: "pix",
+    }
+    expect(mensagemDaRota([ENTREGA, paga], { loja: "Casa da Pizza" })).toBe(
+      [
+        "*Casa da Pizza* · rota com 2 entregas",
+        "",
+        "1) #12 · Ana Souza · (12) 99123-0001",
+        "Endereço: Rua das Flores, 45 - Centro, Cachoeira Paulista",
+        "Referência: Portão azul",
+        "Cobrar R$ 51,00 em dinheiro · levar R$ 49,00 de troco",
+        "Mapa: https://www.google.com/maps/search/?api=1&query=Rua%20das%20Flores%2C%2045%20-%20Centro%2C%20Cachoeira%20Paulista",
+        "",
+        "2) #13 · Bruno Lima · (12) 99123-0002",
+        "Endereço: Rua B, 7 - Centro, Lorena",
+        "Já pago online. Não cobrar.",
+        "Mapa: https://www.google.com/maps/search/?api=1&query=Rua%20B%2C%207%20-%20Centro%2C%20Lorena",
+      ].join("\n"),
+    )
+  })
+})
+
+describe("mensagem do motoboy com bebida alcoólica", () => {
+  test("pede para conferir o documento na entrega, na mensagem e em cada entrega da rota", () => {
+    expect(mensagemParaMotoboy(ENTREGA, { loja: "Adega", maioridade: true })).toContain(
+      "+18: conferir documento na entrega",
+    )
+    const outra = { ...ENTREGA, id: 99, numero: 13 }
+    const rota = mensagemDaRota([ENTREGA, outra], {
+      loja: "Adega",
+      maioridade: (pedido) => pedido.numero === 13,
+    })
+    const [, primeira, segunda] = rota.split("\n\n")
+    expect(primeira).not.toContain("+18")
+    expect(segunda).toContain("+18: conferir documento na entrega")
   })
 })

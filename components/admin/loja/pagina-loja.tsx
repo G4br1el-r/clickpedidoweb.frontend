@@ -8,6 +8,7 @@ import {
   type Control,
   Controller,
   type FieldError as ErroDoCampo,
+  type FieldErrors,
   useForm,
   useWatch,
 } from "react-hook-form"
@@ -32,6 +33,7 @@ import { useAgora } from "@/hooks/use-agora"
 import { useLoja } from "@/lib/admin/dados/consultas"
 import { useConectarPagamento, useSalvarLoja } from "@/lib/admin/dados/consultas-entrega"
 import type { ConfigLoja, FormaPagamento, SomAlerta, TaxasPagamento } from "@/lib/admin/dados/tipos"
+import { avisosDaLoja, ETAPAS_DO_AVISO, type EtapaDoAviso } from "@/lib/admin/regras/avisos-cliente"
 import { esquemaLoja, type FormularioLoja } from "@/lib/admin/regras/esquema-loja"
 import { copiarParaTodos, textoDoHorario } from "@/lib/admin/regras/loja"
 import { rotuloTaxa } from "@/lib/admin/regras/rotulos"
@@ -46,6 +48,7 @@ import { Cupom, pedidoDeTeste, useImpressora } from "../impressao/cupom"
 import { Traco } from "../traco"
 
 type Controle = Control<FormularioLoja, unknown, ConfigLoja>
+type ErrosDoFormulario = FieldErrors<FormularioLoja>
 
 const DIAS = ["domingo", "segunda", "terça", "quarta", "quinta", "sexta", "sábado"]
 /** Na tela, a semana começa na segunda. */
@@ -559,7 +562,76 @@ const PAGAMENTOS: { forma: FormaPagamento; rotulo: string; online?: boolean }[] 
 const valoresIniciais = (loja: ConfigLoja): FormularioLoja => ({
   ...loja,
   videoBanner: loja.videoBanner ?? "",
+  // Os avisos ao cliente aparecem com os textos de fábrica no que a loja não mudou.
+  avisosCliente: avisosDaLoja(loja),
 })
+
+const ROTULO_DO_AVISO: Record<EtapaDoAviso, string> = {
+  aceito: "Pedido aceito",
+  saiu: "Saiu para entrega",
+  pronto: "Pronto para retirar",
+  recusado: "Pedido recusado",
+}
+
+/**
+ * Os avisos que a loja manda sozinha ao cliente em cada etapa, com os textos editáveis. O
+ * envio é simulado: a mensagem entra na linha do tempo do pedido.
+ */
+function AvisosAoCliente({ controle, erros }: { controle: Controle; erros: ErrosDoFormulario }) {
+  const idChave = useId()
+  const ligado = useWatch({ control: controle, name: "avisosCliente.ligado" })
+  return (
+    <div className="flex flex-col gap-4">
+      <Controller
+        control={controle}
+        name="avisosCliente.ligado"
+        render={({ field }) => (
+          <div className="flex min-h-14 items-center justify-between gap-4 border-b border-border/70 py-3">
+            <div className="flex min-w-0 flex-col gap-0.5">
+              <label htmlFor={idChave} className="text-sm font-medium">
+                Avisar o cliente no WhatsApp
+              </label>
+              <span className="text-[13px] text-muted-foreground">
+                Em cada etapa, a mensagem sai sozinha. Por enquanto é simulada: entra na linha do
+                tempo do pedido.
+              </span>
+            </div>
+            <Switch id={idChave} checked={Boolean(field.value)} onCheckedChange={field.onChange} />
+          </div>
+        )}
+      />
+      {ETAPAS_DO_AVISO.map((etapa) => {
+        const erro = erros.avisosCliente?.textos?.[etapa]
+        return (
+          <Controller
+            key={etapa}
+            control={controle}
+            name={`avisosCliente.textos.${etapa}`}
+            render={({ field }) => (
+              <Field data-invalid={Boolean(erro)}>
+                <FieldLabel htmlFor={`aviso-${etapa}`}>{ROTULO_DO_AVISO[etapa]}</FieldLabel>
+                <Textarea
+                  id={`aviso-${etapa}`}
+                  rows={2}
+                  maxLength={500}
+                  disabled={!ligado}
+                  aria-invalid={Boolean(erro)}
+                  {...field}
+                  value={field.value ?? ""}
+                />
+                {erro && <FieldError>{erro.message}</FieldError>}
+              </Field>
+            )}
+          />
+        )
+      })}
+      <p className="text-[13px] text-muted-foreground">
+        Marcadores: {"{nome}"} (primeiro nome), {"{numero}"}, {"{loja}"}, {"{link}"} (acompanhar o
+        pedido) e {"{motivo}"} (na recusa).
+      </p>
+    </div>
+  )
+}
 
 /**
  * Barra de salvar: flutua no pé da tela enquanto houver alteração, diz em que seções e
@@ -1037,6 +1109,7 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
             </Field>
           )}
         />
+        <AvisosAoCliente controle={controle} erros={erros} />
       </Secao>
 
       <Secao

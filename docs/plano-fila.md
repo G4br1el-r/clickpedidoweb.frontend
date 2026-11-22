@@ -154,3 +154,13 @@ Base: a [Fase 5 do plano do painel](plano-painel-admin.md#fase-5-fila-de-pedidos
     - arrastar usa o ponteiro para escolher a coluna e não rola a página sozinho; no celular e no tablet (abas) não arrasta.
   - **Achado no caminho:** no celular de 320 px, com o Mais aberto, os botões da faixa de ferramentas passavam da tela; agora quebram linha (E2E confere a largura da página contra a da tela).
   - **Screenshots:** além da fila, mudaram os nomes dos clientes nas telas que os mostram (pedidos, visão geral, cozinha, mesas e comanda, agenda, pesagem); revisadas por amostra (os valores, itens e status ficaram iguais) e atualizadas.
+- **Fase 4: pronta em 19/11/2026** (branch `claude/admin-fila-fase-4`, que parte da fase 3).
+  - **Decidido no caminho:**
+    - a situação do motoboy sai dos pedidos (em rota, disponível desde a última entrega de hoje); ausente é o desligado no cadastro. A sugestão é o disponível livre há mais tempo;
+    - com motoboys, a entrega pronta não "sai para entrega" direto: avançar, Enter e arrastar abrem o despacho. As prontas do mesmo bairro aparecem para levar junto (desmarcadas). Despachar em lote vem da seleção;
+    - "Motoboy voltou" dá como entregue (e cobrado) tudo o que ele levava, inclusive o que já estava na rua;
+    - os avisos ao cliente vêm ligados de fábrica, com textos de fábrica editáveis em Configurações → Fila e pedidos (até 500 caracteres; {nome}, {numero}, {loja}, {link}, {motivo}). O envio é simulado: entra na linha do tempo e a fila mostra a mensagem;
+    - os alertas secundários são deste aparelho (Este aparelho → Alertas), ligados de fábrica; tocam o som suave só com o alerta sonoro ligado; vários do mesmo tipo juntos viram um aviso. Na demonstração, a cada 5 pedidos simulados um cliente cancela pelo site;
+    - +18: o produto alcoólico se marca no cardápio só na adega (recurso "maioridade"); na demonstração, por categoria (cervejas, copão, caipirinhas, drinks, destilados e combos). O pedido pede documento quando algum item ou produto de combo é alcoólico.
+  - **Achado no caminho:** as abas inativas da fila no celular não chegavam a 4,5:1 de contraste (o axe só via com as abas na tela); agora a 80%.
+  - **Fica para depois:** o mapa de verdade das entregas (geocodificação) e o envio real das mensagens, com o back-end.

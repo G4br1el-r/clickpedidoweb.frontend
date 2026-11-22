@@ -49,6 +49,18 @@ describe("eventosDaMudanca", () => {
 })
 
 describe("linhaDoTempo", () => {
+  test("o aviso ao cliente entra com o texto que teria saído", () => {
+    const avisado: Pedido = {
+      ...recebido,
+      criadoEm: "2026-11-13T23:02:00.000Z",
+      historico: [{ tipo: "aviso", em: "2026-11-13T23:05:00.000Z", texto: "Olá, Ana! Saiu." }],
+    }
+    expect(linhaDoTempo(avisado).at(-1)).toEqual({
+      texto: "Cliente avisado no WhatsApp: “Olá, Ana! Saiu.”",
+      em: "2026-11-13T23:05:00.000Z",
+    })
+  })
+
   test("começa na chegada e segue os eventos, com o nome de cada etapa no canal do pedido", () => {
     const retirada: Pedido = {
       ...recebido,

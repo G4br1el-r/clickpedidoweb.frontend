@@ -96,7 +96,11 @@ export type MotivoCancelamento =
 export type EtapaDoPedido = { tipo: "etapa"; status: StatusPedido; em: string }
 
 /** Uma linha do histórico do pedido: as etapas, desde a primeira, e o que mais aconteceu. */
-export type EventoPedido = EtapaDoPedido | { tipo: "pago" | "impresso" | "aceito"; em: string }
+export type EventoPedido =
+  | EtapaDoPedido
+  | { tipo: "pago" | "impresso" | "aceito"; em: string }
+  /** Mensagem que a loja mandou ao cliente (simulada): o texto que teria saído. */
+  | { tipo: "aviso"; em: string; texto: string }
 
 export type Pedido = {
   id: number
@@ -150,6 +154,8 @@ export type Cancelamento = {
   /** Texto do "Outro motivo". */
   detalhe?: string
   em: string
+  /** Quem cancelou foi o cliente (pelo site), e não a loja. */
+  porCliente?: boolean
 }
 
 /** O que a pessoa escolhe ao recusar ou cancelar. */
@@ -191,6 +197,8 @@ export type UnidadeVenda = "un" | "kg"
 export type Produto = {
   id: string
   categoriaId: string
+  /** Adega: bebida alcoólica, só para maior de 18 (o pedido pede documento). */
+  alcoolico?: boolean
   nome: string
   descricao: string
   /** Preço do cardápio; na venda por quilo, o preço do quilo. */
@@ -392,6 +400,11 @@ export type ConfigLoja = {
   acrescimoPrazoMin?: number
   /** Pausa de pedidos: até quando e se vale para a loja toda ou só para a entrega. */
   pausa?: PausaPedidos
+  /** Avisos automáticos ao cliente (simulados): ligado e os textos de cada etapa. */
+  avisosCliente?: {
+    ligado: boolean
+    textos?: Partial<Record<"aceito" | "saiu" | "pronto" | "recusado", string>>
+  }
   /** Salão: vídeo do banner da loja (YouTube, Shorts ou Reels). */
   videoBanner?: string
   vitrines: {
