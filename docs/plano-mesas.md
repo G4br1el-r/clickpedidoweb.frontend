@@ -1180,7 +1180,7 @@ Situação: pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilha
 
 **Decisões de detalhe desta fase** (decorrem de Q6, Q10, Q12, Q15, Q22, Q23, Q28, Q29, Q36 e Q38)
 
-- **Item preparado:** é o item que foi para a cozinha e é de uma rodada anterior à última rodada da cozinha, ou da última rodada com a comanda em preparo ou pronta. É a mesma leitura da tela da cozinha, que mostra as rodadas anteriores como já servidas. O item lançado sem cozinha (bebida pronta) nunca conta como preparado: sai devolvendo o estoque, sem motivo. A regra mora em `cozinhaJaPreparou` (`lib/admin/regras/cozinha.ts`), que passa a contar as rodadas anteriores.
+- **Item preparado:** é o item que foi para a cozinha e é de uma rodada anterior à última rodada da cozinha, ou da última rodada com a comanda em preparo ou pronta. É a mesma leitura da tela da cozinha, que mostra as rodadas anteriores como já servidas. O item lançado sem cozinha (bebida pronta) nunca conta como preparado: sai devolvendo o estoque, sem motivo. A regra mora em `cozinhaJaPreparou` (`lib/admin/regras/cozinha.ts`), que passa a contar as rodadas anteriores. Tirar inteira a rodada que está na cozinha devolve a comanda a "pronto" (`depoisDeTirar`): a rodada anterior continua preparada e não volta para "A fazer". Sem nada pronto na mesa, o `servirDesde` sai. Na cozinha, a comanda conta os 15 min de "Prontos" desde o evento `pronta`, e não desde a última mudança.
 - **Abrir mesa:**
   - `mesas.abrir` cria a comanda vazia (status "pronto", sem cozinha), com `mesa.pessoas` e `mesa.garcom`;
   - pessoas de 1 a 99 ("Informe de 1 a 99 pessoas.");
@@ -1191,14 +1191,16 @@ Situação: pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilha
 - **Lançar:**
   - "Adicionar itens" na comanda usa o seletor e a bandeja do Garçom, extraídos para `components/admin/garcom/montar-rodada.tsx`. Os botões continuam "Enviar para a cozinha" e "Lançar na mesa" (os nomes de hoje, que o Garçom e os testes já usam);
   - o lançamento vai com o garçom da comanda;
-  - lançar numa mesa com a conta pedida limpa `contaPedidaEm`, a tela avisa "A mesa 1 tinha pedido a conta e voltou para Ocupada." e a mesa volta ao estado do lançamento (Na cozinha ou Ocupada).
+  - lançar numa mesa com a conta pedida limpa `contaPedidaEm`, a tela avisa "A mesa 1 tinha pedido a conta e voltou para Ocupada." e a mesa volta ao estado do lançamento (Na cozinha ou Ocupada). Vale também para o item avulso;
+  - **lançar na mesa livre (pelo Garçom) abre a mesa com as regras de abrir** (decidido na revisão): grava o evento `aberta` com o garçom, `pessoas: 1`, recusa garçom fora da lista quando o salão tem garçons ("Esse garçom não está na lista do salão.", sem diferenciar acento e maiúscula) e recusa a mesa reservada dentro da antecedência ("A mesa 3 está reservada. Abra pela tela de Mesas."). Sem nome, continua lançando sem garçom;
+  - sem `por`, o evento da rodada leva o garçom do lançamento.
 - **Editar item (Q29):** troca a observação e, no item do cardápio, as opções (o preço é refeito no servidor). As escolhas passam a ser guardadas no item (`ItemPedido.escolhas`) para a janela abrir marcada. Item já preparado recusa: "A cozinha já preparou Calabresa. Tire com motivo e lance de novo.". Item sem escolhas guardadas (lançado antes desta fase) só troca a observação.
 - **Tirar e diminuir (Q10, Q38):**
   - item preparado só sai com motivo ("Diga o motivo para tirar o que a cozinha já preparou."), aparado e cortado em 140;
   - diminuir um item preparado é tirar parte dele, com a mesma regra;
   - item preparado não aumenta: "A cozinha já preparou Calabresa. Lance de novo para pedir mais.";
   - no estoque, o item não preparado devolve (movimento "devolucao", como hoje). O preparado não volta: a venda é desfeita e o mesmo tanto sai como **perda**, com o motivo. São dois movimentos com o saldo igual ao de antes, para o histórico do estoque continuar somando certo.
-- **Cancelar comanda (Q36):** comanda vazia continua saindo por "Liberar mesa". Com itens, "Cancelar comanda" exige motivo, deixa a comanda cancelada com `motivoCancelamento: "outro"` e o texto em `detalheCancelamento`, aplica o estoque item a item (preparado vira perda) e libera a mesa sem passar pela limpeza. Em Pedidos, o detalhe mostra "Motivo: Outro · Cliente foi embora".
+- **Cancelar comanda (Q36):** comanda vazia continua saindo por "Liberar mesa". Com itens, "Cancelar comanda" exige motivo, deixa a comanda cancelada com `motivoCancelamento: "outro"` e o texto em `detalheCancelamento`, aplica o estoque item a item (preparado vira perda) e libera a mesa sem passar pela limpeza. Em Pedidos, o detalhe mostra "Motivo: Outro · Cliente foi embora". A comanda aberta não se cancela por Pedidos: o painel troca "Cancelar pedido" por "Cancele pela tela de Mesas." com o link "Abrir a mesa 5", e o servidor recusa `pedidos.cancelar` na comanda de mesa (decidido na revisão: é o caminho mais simples, e a regra de Q36 fica num lugar só).
 - **Servir:** a cozinha, ao marcar pronta uma comanda de mesa, preenche `servirDesde` (se já houver, fica o mais antigo). "Marcar servido" limpa o campo. Fica no topo da comanda e no menu ⋯ da mesa em "Servir".
 - **Pediu a conta:** "Pediu a conta" na aba Conta grava `contaPedidaEm` (se já houver, fica o primeiro). Lançar depois limpa.
 - **Histórico (Q10):** `Pedido.eventos`, do mais antigo para o mais novo, com `tipo`, `em`, `por` (opcional) e `texto` pronto. Nesta fase:
@@ -1215,7 +1217,7 @@ Situação: pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilha
   | `servida`       | "Rodada servida"                                 |
   | `conta-pedida`  | "Pediu a conta"                                  |
 
-  O `por` é o garçom escolhido ao abrir (no evento `aberta`) e, nas outras ações da tela de Mesas, o nome guardado neste aparelho (`useGarcom`), quando houver. A comanda antiga, sem `eventos`, mostra "Sem histórico registrado.".
+  O `por` é o garçom escolhido ao abrir (no evento `aberta`) e, nas outras ações da tela de Mesas, o nome guardado neste aparelho (`useGarcom`) e, sem ele, o garçom da comanda (`autorDaAcao`). A comanda antiga, sem `eventos`, mostra "Sem histórico registrado.".
 - **Abas e endereço (Q28):** a gaveta ganha as abas Itens / Conta / Histórico. O rodapé com o total, "Imprimir conta" e "Fechar conta" fica fora das abas, à vista. Nesta fase a aba Conta mostra os itens somados, o total, "Pediu a conta" e "Cancelar comanda". A mesa aberta vai para o endereço pelo número (`?mesa=3`), com nuqs. Número que não existe no endereço não abre nada.
 - **Garçons:**
   - no Garçom, "Seu nome" continua um campo de texto (o nome fica no aparelho), agora com os garçons ativos do salão em botões logo abaixo, que preenchem o campo (um `datalist` mudaria o papel do campo para combobox e quebraria os testes do Garçom);
@@ -1394,26 +1396,38 @@ pedirConta(pedidoId, por?): Promise<Pedido>
 - [ ] `pnpm test:e2e:rapido`, revisando os screenshots que mudaram (`painel-mesas-*` pelo botão de atalhos no cabeçalho, `painel-comanda-*` pelas abas).
 - [ ] Registrar a "Situação" no fim desta seção.
 
-Situação: implementada em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. Faltam o E2E rápido completo e a revisão dos screenshots.
+Situação: pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. O PR sai depois que as Fases 1 e 2 estiverem no `main`.
 
+- **O que a revisão pegou** (cada correção com o teste vermelho antes):
+  - tirar a rodada nova (ainda na cozinha) fazia a rodada anterior, já preparada, voltar a "não preparada": ela reaparecia em "A fazer" e saía sem motivo, devolvendo o estoque. Agora a comanda volta a "pronto" quando a rodada da cozinha sai inteira (`depoisDeTirar`), o "Servir" sai quando não sobra nada pronto, e a cozinha conta os 15 min de "Prontos" desde o evento `pronta`. Vale também para base antiga, sem marca nova no item;
+  - em Pedidos, "Cancelar pedido" cancelava a comanda aberta sem motivo escrito, sem perda e sem evento. Escolhi o caminho mais simples: o painel mostra "Cancele pela tela de Mesas." com o link "Abrir a mesa 5", e o servidor recusa;
+  - "Menos um", "Remover", o item avulso e o Garçom gravavam eventos sem quem fez. Agora as ações assinam com o nome do aparelho ou o garçom da comanda (`autorDaAcao`), e o servidor usa o `garcom` do lançamento quando falta `por`;
+  - o item avulso limpava "Pediu a conta" sem o aviso. Ele passa pelo mesmo lançamento do "Adicionar itens" (`useLancarNaComanda`);
+  - "Editar" não trocava as opções (Q29): a `JanelaOpcoes` abre marcada, com "Salvar";
+  - lançar pelo Garçom em mesa livre abria sem as regras de abrir mesa (ver "Lançar" nas decisões);
+  - menores: a mesa em limpeza com reserva abria sem confirmação; `abrir` não aceitava `por`; a conferência do "Abrir mesa" estava no componente (foi para `conferirAbertura`, e o botão diz o que falta ao tentar abrir); o campo Garçom aparecia vazio sem garçons; o cliente aceitava 60 letras e o servidor 80; a mesa em Limpeza não oferecia "Abrir mesa"; as janelas de motivo abriam com o foco no "Voltar", e "Tirar" fechava antes da resposta, perdendo o motivo em erro; o "Menos um" perguntava "Tirar Pizza da comanda?"; "Pediu a conta" aparecia na comanda vazia; `servirDesde` sobrava depois de tirar a rodada pronta; a gaveta continuava estreita no desktop; o botão do garçom no Garçom não marcava "rafa"; o histórico usava o índice invertido como chave; `?mesa=999` ficava no endereço.
 - **Mudou fora do plano:**
   - a conta pedida limpa ao lançar entrou na Tarefa 24 (e não na 32), junto com o teste antigo que a fixava;
   - a confirmação com motivo do item preparado entrou na Tarefa 25, para o commit do servidor continuar verde;
-  - "Editar" na comanda troca só a observação. O servidor já troca as opções (e guarda as escolhas no item), mas a janela de opções com valores iniciais fica para depois;
   - "Seu nome" no Garçom usa botões, não `datalist` (ver as decisões);
+  - "Abrir mesa" valida ao enviar, com a mensagem no campo, em vez de deixar o botão desabilitado sem dizer por quê;
   - os testes de `comanda-mesa.test.tsx` têm 15 s de limite: cada um monta a tela inteira.
 - **Testes antigos que mudaram (mudança de comportamento planejada):**
   - "o resumo conta a rodada na cozinha… mesmo com a conta pedida" virou "a rodada lançada depois de pedir a conta limpa o pedido" (Q23);
-  - "tirar ou diminuir o que a cozinha já preparou pede confirmação" passa a digitar o motivo (Q10, Q38);
+  - "tirar ou diminuir o que a cozinha já preparou pede confirmação" passa a digitar o motivo (Q10, Q38) e, no "Menos um", procura o título "Tirar 1 Pizza?";
+  - "sem pessoas ou sem garçom, Abrir mesa fica desabilitado" virou "Abrir mesa diz o que falta e não abre";
   - "o erro do servidor ao editar" usa a mesa livre 12, porque a 3 está ocupada e o número dela agora trava;
   - a tabela do menu ⋯ em `cartao-mesa.test.tsx` ganha "Marcar servido" em Servir.
+  - Os testes do Garçom continuam passando sem mudança: os nomes usados (Rafa) estão na lista do salão.
 - **Fica para depois:**
-  - a janela de opções ao editar o item (servidor pronto);
-  - a confirmação de reserva na tela, com as reservas (Fase 7);
+  - a confirmação de reserva na tela, com as reservas (Fase 7). Até lá, o Garçom recusa a mesa reservada e manda abrir pela tela de Mesas;
   - "Imprimir conta" ainda não marca "Pediu a conta": entra com a pré-conta (Fase 4);
   - aumentar a quantidade de um item não preparado não entra no histórico.
-- **Testes e cobertura:** 1412 testes no Vitest; os mínimos de cobertura subiram para 83/75/81/84 no geral, e `lib/**` continua em 98/94/98/98. O E2E novo passou em `desktop-1920` e `celular-390`.
-- **Telas que mudam no visual:** `painel-mesas-*` (botão "Atalhos do teclado" no cabeçalho), `painel-comanda-*` (abas, "Adicionar itens", "Editar" nos itens), a gaveta da mesa livre (formulário "Abrir mesa" no lugar do convite ao Garçom) e o Garçom (botões dos garçons abaixo de "Seu nome").
+- **Screenshots:**
+  - mudaram nas 11 telas: `painel-mesas-*` (botão "Atalhos do teclado"), `painel-comanda-*` (abas, "Adicionar itens", gaveta mais larga, "Mais um" desabilitado no que a cozinha preparou), `painel-nova-mesa-*` e `painel-configurar-salao-*` no celular (o cabeçalho novo por trás da janela) e `painel-garcom-*` (os garçons abaixo de "Seu nome");
+  - entraram `painel-abrir-mesa-*`, `painel-adicionar-itens-*` e `painel-atalhos-mesas-*`;
+  - todas as diferenças foram revisadas (claro e escuro, celular e desktop, e uma amostra de cada tamanho) antes de atualizar.
+- **Testes e cobertura:** 1444 testes no Vitest e 450 no E2E rápido (`celular-390` e `desktop-1920`, 28 pulados, nenhuma falha). A cobertura ficou em 83,38/75,78/81,92/84,44 no geral: os mínimos continuam 83/75/81/84, e `lib/**` em 98/94/98/98.
 
 ## Fase 4: conta
 
