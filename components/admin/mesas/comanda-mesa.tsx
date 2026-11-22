@@ -4,6 +4,7 @@ import NumberFlow from "@number-flow/react"
 import { format } from "date-fns"
 import {
   ArrowRightLeftIcon,
+  CombineIcon,
   ConciergeBellIcon,
   GiftIcon,
   LockOpenIcon,
@@ -13,6 +14,7 @@ import {
   PrinterIcon,
   ReceiptIcon,
   RotateCcwIcon,
+  SplitIcon,
   SprayCanIcon,
   Trash2Icon,
 } from "lucide-react"
@@ -48,6 +50,7 @@ import {
   useMarcarServido,
   useReabrirConta,
   useRemoverItem,
+  useSepararMesas,
   useUltimaConta,
 } from "@/lib/admin/dados/consultas-mesas"
 import type { ItemPedido, Mesa, Pedido } from "@/lib/admin/dados/tipos"
@@ -69,10 +72,12 @@ import { EditarItem } from "./editar-item"
 import { ConfirmarExclusaoMesa } from "./excluir-mesa"
 import { HistoricoComanda } from "./historico-comanda"
 import { PAPEL_80MM, PreConta } from "./impressao-conta"
+import { JuntarMesas } from "./juntar-mesas"
 import { MotivoConta } from "./motivo-conta"
 import { type ParteDaConta, ReceberConta } from "./receber-conta"
 import { TirarItem } from "./tirar-item"
 import { TransferirItens } from "./transferir-itens"
+import { TransferirMesa } from "./transferir-mesa"
 
 function ItemAvulso({ mesa, comanda }: { mesa: Mesa; comanda: Pedido }) {
   const [nome, setNome] = useState("")
@@ -196,6 +201,9 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   const pagos = itensPagos(pedido)
   const juntadas = (pedido.mesa?.juntadas ?? []).map((junta) => junta.numero)
   const [transferindo, setTransferindo] = useState(false)
+  const [movendo, setMovendo] = useState<"transferir" | "juntar" | null>(null)
+  const separar = useSepararMesas()
+  const avisar = useAvisoComDesfazer()
 
   return (
     <>
@@ -240,6 +248,42 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
             .filter(Boolean)
             .join(" · ")}
         </SheetDescription>
+        {/* Transferir, juntar e separar também pela gaveta, como no menu ⋯ da grade. */}
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setMovendo("transferir")}
+          >
+            <ArrowRightLeftIcon data-icon="inline-start" />
+            Transferir mesa
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setMovendo("juntar")}>
+            <CombineIcon data-icon="inline-start" />
+            Juntar mesas
+          </Button>
+          {juntadas.length > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={separar.isPending}
+              onClick={() =>
+                separar.mutate(
+                  { pedidoId: pedido.id, ...quem },
+                  {
+                    onSuccess: ({ desfazer }) => avisar("Mesas separadas.", desfazer),
+                    onError: aoErrar,
+                  },
+                )
+              }
+            >
+              <SplitIcon data-icon="inline-start" />
+              Separar
+            </Button>
+          )}
+        </div>
       </SheetHeader>
 
       <Tabs defaultValue="itens" className="min-h-0 flex-1 gap-0">
@@ -522,6 +566,19 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
         comanda={pedido}
         aberta={transferindo}
         aoMudar={setTransferindo}
+      />
+      <TransferirMesa
+        mesa={mesa}
+        comanda={pedido}
+        aberta={movendo === "transferir"}
+        aoMudar={(aberta) => !aberta && setMovendo(null)}
+        aoTransferir={aoFechar}
+      />
+      <JuntarMesas
+        mesa={mesa}
+        comanda={pedido}
+        aberta={movendo === "juntar"}
+        aoMudar={(aberta) => !aberta && setMovendo(null)}
       />
       <ReceberConta
         mesa={mesa}

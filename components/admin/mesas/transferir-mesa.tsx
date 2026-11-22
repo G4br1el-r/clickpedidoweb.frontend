@@ -34,10 +34,12 @@ function Campos({
   mesa,
   comanda,
   aoFechar,
+  aoTransferir,
 }: {
   mesa: Mesa
   comanda: Pedido
   aoFechar: () => void
+  aoTransferir: (() => void) | undefined
 }) {
   const { data: mesas } = useMesas()
   const transferir = useTransferirMesa()
@@ -66,6 +68,7 @@ function Campos({
             onSuccess: ({ desfazer }) => {
               avisar(`Mesa ${mesa.numero} transferida para a mesa ${numero}.`, desfazer)
               aoFechar()
+              aoTransferir?.()
             },
             onError: (falha) => toast.error(falha.message),
           },
@@ -116,6 +119,7 @@ export function TransferirMesa({
   aberta,
   aoMudar,
   focoAoFechar,
+  aoTransferir,
 }: {
   mesa: Mesa
   comanda: Pedido
@@ -123,11 +127,18 @@ export function TransferirMesa({
   aoMudar: (aberta: boolean) => void
   /** Para onde o foco volta quando a janela fecha (o botão ⋯ da mesa). */
   focoAoFechar?: HTMLElement | null
+  /** Depois de transferir: a gaveta da mesa que ficou livre fecha. */
+  aoTransferir?: () => void
 }) {
   return (
     <Dialog open={aberta} onOpenChange={aoMudar}>
       <DialogContent onCloseAutoFocus={devolverFocoA(focoAoFechar)} className="sm:max-w-sm">
-        <Campos mesa={mesa} comanda={comanda} aoFechar={() => aoMudar(false)} />
+        <Campos
+          mesa={mesa}
+          comanda={comanda}
+          aoFechar={() => aoMudar(false)}
+          aoTransferir={aoTransferir}
+        />
       </DialogContent>
     </Dialog>
   )

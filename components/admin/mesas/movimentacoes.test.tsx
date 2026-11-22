@@ -217,6 +217,39 @@ describe("Mesas: a gaveta das mesas juntadas e transferir itens", () => {
     expect(await within(gaveta).findByText(/Junto com a mesa 16/)).toBeInTheDocument()
   })
 
+  test("na gaveta da mesa 1, Transferir mesa leva a comanda para a 8 e fecha a gaveta", async () => {
+    const usuario = await abrir("?mesa=1")
+    const gaveta = within(await screen.findByRole("dialog", { name: "Mesa 1" }))
+    await usuario.click(await gaveta.findByRole("button", { name: "Transferir mesa" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Transferir a mesa 1" }))
+    await usuario.click(janela.getByRole("combobox", { name: "Para a mesa" }))
+    await usuario.click(await screen.findByRole("option", { name: "Mesa 8" }))
+    await usuario.click(janela.getByRole("button", { name: "Transferir" }))
+
+    expect(await screen.findByText("Mesa 1 transferida para a mesa 8.")).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(await cartao(8)).toHaveAccessibleDescription(/^Pediu a conta/)
+  })
+
+  test("na gaveta da mesa 1, Juntar mesas abre a janela de juntar", async () => {
+    const usuario = await abrir("?mesa=1")
+    const gaveta = within(await screen.findByRole("dialog", { name: "Mesa 1" }))
+    expect(gaveta.queryByRole("button", { name: "Separar" })).not.toBeInTheDocument()
+    await usuario.click(await gaveta.findByRole("button", { name: "Juntar mesas" }))
+
+    expect(await screen.findByRole("dialog", { name: "Juntar à mesa 1" })).toBeInTheDocument()
+  })
+
+  test("na gaveta da mesa 15, Separar solta a 16", async () => {
+    const usuario = await abrir("?mesa=15")
+    const gaveta = await screen.findByRole("dialog", { name: "Mesa 15" })
+    await usuario.click(await within(gaveta).findByRole("button", { name: "Separar" }))
+
+    expect(await screen.findByText("Mesas separadas.")).toBeInTheDocument()
+    await waitFor(() => expect(gaveta).not.toHaveAccessibleDescription(/Junto com a mesa 16/))
+    expect(within(gaveta).queryByRole("button", { name: "Separar" })).not.toBeInTheDocument()
+  })
+
   test("transferir 1 de 3 Sucos da mesa 60 para a 8: a linha se divide e o aviso tem Desfazer", async () => {
     const comanda = await mesa60()
     const usuario = await abrir("?mesa=60")
