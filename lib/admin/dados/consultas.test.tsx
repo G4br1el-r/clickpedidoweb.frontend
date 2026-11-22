@@ -20,6 +20,7 @@ import {
   usePedido,
   usePedidos,
   useSimularPedido,
+  useSincronizarAbas,
 } from "./consultas"
 
 function envolver() {
@@ -152,6 +153,37 @@ describe("consultas do painel", () => {
 
     await act(() => result.current.avancar.mutateAsync({ id, de: "recebido" }))
     await waitFor(() => expect(result.current.pedido.data?.status).toBe("em-preparo"))
+  })
+
+  test("o que muda numa aba aparece nas outras abas abertas, sem esperar a próxima leitura", async () => {
+    // Duas abas: cada uma com o seu React Query, ouvindo as outras.
+    const abaA = renderHook(
+      () => {
+        useSincronizarAbas()
+        return { pedidos: usePedidos(), avancar: useAvancarPedido() }
+      },
+      { wrapper: envolver() },
+    )
+    const abaB = renderHook(
+      () => {
+        useSincronizarAbas()
+        return usePedidos()
+      },
+      { wrapper: envolver() },
+    )
+    await waitFor(() => expect(abaB.result.current.data?.length).toBeGreaterThan(0))
+    const novo = abaA.result.current.pedidos.data?.find(
+      (pedido) => pedido.status === "recebido" && !pedido.esperaAceite,
+    )
+    if (!novo) throw new Error("A demonstração devia ter um pedido recebido")
+
+    await act(() => abaA.result.current.avancar.mutateAsync({ id: novo.id, de: "recebido" }))
+
+    await waitFor(() =>
+      expect(abaB.result.current.data?.find((pedido) => pedido.id === novo.id)?.status).toBe(
+        "em-preparo",
+      ),
+    )
   })
 
   test("fechar a loja e desligar a entrega aparecem na configuração", async () => {

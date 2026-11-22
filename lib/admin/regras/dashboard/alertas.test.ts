@@ -46,9 +46,18 @@ describe("alertasDoPainel", () => {
   })
 
   test("na cozinha, o pedido fica atrasado a partir de 25 minutos", () => {
+    // Entrega: o prazo prometido (40 min) ainda não passou; só a cozinha atrasou.
     const pedidos = [
-      pedido(1, minutosAtras(30), 50, { status: "em-preparo", enviarParaCozinha: true }),
-      pedido(2, minutosAtras(30), 50, { status: "pronto", enviarParaCozinha: true }),
+      pedido(1, minutosAtras(30), 50, {
+        tipo: "entrega",
+        status: "em-preparo",
+        enviarParaCozinha: true,
+      }),
+      pedido(2, minutosAtras(30), 50, {
+        tipo: "entrega",
+        status: "pronto",
+        enviarParaCozinha: true,
+      }),
     ]
 
     expect(alertasDoPainel(entrada({ pedidos }))[0]?.texto).toBe("1 pedido atrasado")

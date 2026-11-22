@@ -204,14 +204,17 @@ function montarItem(
   }
 }
 
+/** Em que minuto, depois da chegada, o pedido de comida gerado entra em cada etapa. */
+const MINUTO_DA_ETAPA = { "em-preparo": 8, pronto: 25, "saiu-para-entrega": 40 } as const
+
 /** Status de um pedido de comida pela idade, em minutos, quando ainda é de hoje. */
 function statusPorIdade(tipo: TipoPedido, idade: number, online: boolean): StatusPedido {
   if (online && idade < 3) return "aguardando-pagamento"
-  if (idade < 8) return "recebido"
-  if (idade < 25) return "em-preparo"
+  if (idade < MINUTO_DA_ETAPA["em-preparo"]) return "recebido"
+  if (idade < MINUTO_DA_ETAPA.pronto) return "em-preparo"
   // A mesa fica aberta até fechar a conta.
   if (tipo === "mesa") return idade < 120 ? "pronto" : "concluido"
-  if (idade < 40) return "pronto"
+  if (idade < MINUTO_DA_ETAPA["saiu-para-entrega"]) return "pronto"
   if (tipo === "entrega" && idade < 75) return "saiu-para-entrega"
   return "concluido"
 }

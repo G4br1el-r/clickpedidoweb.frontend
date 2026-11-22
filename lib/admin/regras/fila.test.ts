@@ -11,6 +11,7 @@ import {
 import { AGORA_DE_TESTE as AGORA, PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
 
 const base = PEDIDOS_DE_TESTE[2]
+const LOJA = { tempoEntrega: "40–60 min", tempoRetirada: "20 min" }
 function pedido(
   id: number,
   status: StatusPedido,
@@ -82,7 +83,7 @@ describe("colunasDaFila", () => {
     }
     const [agendados] = colunasDaFila([hoje, ontem], "salao", AGORA)
     expect(agendados.pedidos.map((item) => item.id)).toEqual([25, 26])
-    expect(urgencia(ontem, AGORA)).toBe("atrasado")
+    expect(urgencia(ontem, AGORA, LOJA)).toBe("atrasado")
   })
 })
 
@@ -130,10 +131,18 @@ describe("pedidos de dias anteriores", () => {
 })
 
 describe("urgencia", () => {
-  test("âmbar a partir de 25 minutos e vermelho a partir de 40", () => {
-    expect(urgencia(pedido(1, "recebido", 24), AGORA)).toBe("normal")
-    expect(urgencia(pedido(1, "em-preparo", 25), AGORA)).toBe("atencao")
-    expect(urgencia(pedido(1, "pronto", 40), AGORA)).toBe("atrasado")
+  test("pelo prazo prometido: âmbar nos 10 últimos minutos e vermelho quando passa", () => {
+    // Entrega em até 60 min; retirada em até 20.
+    expect(urgencia(pedido(1, "recebido", 49), AGORA, LOJA)).toBe("normal")
+    expect(urgencia(pedido(1, "em-preparo", 50), AGORA, LOJA)).toBe("atencao")
+    expect(urgencia(pedido(1, "pronto", 60), AGORA, LOJA)).toBe("atrasado")
+    expect(urgencia(pedido(1, "recebido", 9, "retirada"), AGORA, LOJA)).toBe("normal")
+    expect(urgencia(pedido(1, "recebido", 10, "retirada"), AGORA, LOJA)).toBe("atencao")
+  })
+
+  test("a retirada marcada para um dia não atrasa pelo relógio", () => {
+    const marcada = { ...pedido(1, "recebido", 300, "retirada"), dataRetirada: "2026-11-13" }
+    expect(urgencia(marcada, AGORA, LOJA)).toBe("normal")
   })
 
   test("no salão, atrasa quem passou da hora marcada e não começou", () => {
@@ -141,7 +150,7 @@ describe("urgencia", () => {
       ...pedido(1, "recebido", 120, "atendimento"),
       agendamento: { inicio: new Date(2026, 10, 13, 20, 0).toISOString(), duracaoMin: 60 },
     }
-    expect(urgencia(atrasado, AGORA)).toBe("atrasado")
+    expect(urgencia(atrasado, AGORA, LOJA)).toBe("atrasado")
   })
 })
 

@@ -77,6 +77,26 @@ function renderizar(intervaloSimulacao = 60_000) {
   )
 }
 
+/** Aba do navegador escondida (outra aba na frente) ou à vista. */
+function abaEscondida(escondida: boolean) {
+  Object.defineProperty(document, "hidden", { configurable: true, get: () => escondida })
+}
+
+/** Abre o menu com as preferências deste aparelho (som, avisos, demonstração). */
+async function abrirEsteAparelho(usuario = userEvent.setup()) {
+  // No celular, as ferramentas ficam no Mais.
+  const botao = await screen.findByRole(
+    "button",
+    { name: /^(Mais|Este aparelho)$/ },
+    { timeout: 8000 },
+  )
+  if (botao.textContent === "Mais") await usuario.click(botao)
+  await usuario.click(
+    await screen.findByRole("button", { name: "Este aparelho" }, { timeout: 8000 }),
+  )
+  return within(await screen.findByRole("dialog", { name: "Este aparelho" }))
+}
+
 const coluna = async (nome: string) =>
   within(await screen.findByRole("region", { name: new RegExp(`^${nome}`) }, { timeout: 8000 }))
 
@@ -93,6 +113,7 @@ beforeEach(async () => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  abaEscondida(false)
 })
 
 describe("PaginaFila", () => {
@@ -176,6 +197,120 @@ describe("PaginaFila", () => {
 
     expect(await screen.findByText("Chegou agora", {}, { timeout: 8000 })).toBeInTheDocument()
     expect(tocadas).toHaveBeenCalled()
+  })
+
+  test("com a aba escondida, o pedido novo vira notificação do sistema", async () => {
+    telaGrande()
+    const avisos: { titulo: string; corpo?: string }[] = []
+    vi.stubGlobal(
+      "Notification",
+      class {
+        static permission = "granted"
+        constructor(titulo: string, opcoes?: { body?: string }) {
+          avisos.push({ titulo, ...(opcoes?.body ? { corpo: opcoes.body } : {}) })
+        }
+      },
+    )
+    abaEscondida(true)
+    usePreferenciasFila.setState({ notificar: true, simular: true })
+    renderizar(300)
+
+    await waitFor(() => expect(avisos.length).toBeGreaterThan(0), { timeout: 8000 })
+    expect(avisos[0].titulo).toMatch(/^Pedido novo #\d+$/)
+    expect(avisos[0].corpo).toBeTruthy()
+  })
+
+  test("ligar a notificação pede licença ao navegador; negada, a chave fica desligada", async () => {
+    const usuario = userEvent.setup()
+    let resposta: NotificationPermission = "denied"
+    vi.stubGlobal("Notification", {
+      permission: "default",
+      requestPermission: vi.fn(async () => resposta),
+    })
+    renderizar()
+    const menu = await abrirEsteAparelho(usuario)
+    const chave = menu.getByRole("switch", { name: "Notificação do sistema" })
+
+    await usuario.click(chave)
+    expect(
+      await screen.findByText(
+        "O navegador bloqueou as notificações. Libere nas configurações do site.",
+      ),
+    ).toBeInTheDocument()
+    expect(chave).toHaveAttribute("aria-checked", "false")
+
+    resposta = "granted"
+    await usuario.click(chave)
+    await waitFor(() => expect(chave).toHaveAttribute("aria-checked", "true"))
+  })
+
+  test("com Vibrar ligado, o celular vibra quando chega pedido", async () => {
+    telaGrande()
+    const vibrar = vi.fn(() => true)
+    Object.defineProperty(navigator, "vibrate", { configurable: true, value: vibrar })
+    usePreferenciasFila.setState({ vibrar: true, simular: true })
+    renderizar(300)
+
+    await waitFor(() => expect(vibrar).toHaveBeenCalled(), { timeout: 8000 })
+    Reflect.deleteProperty(navigator, "vibrate")
+  })
+
+  test("com a aba escondida, o título pisca com os pedidos esperando; ao voltar, para", async () => {
+    telaGrande()
+    document.title = "Fila de pedidos"
+    abaEscondida(true)
+    usePreferenciasFila.setState({ piscarAba: true, simular: true })
+    renderizar(300)
+
+    await waitFor(() => expect(document.title).toMatch(/^🔔 \d+ novos?$/), { timeout: 8000 })
+
+    abaEscondida(false)
+    act(() => {
+      document.dispatchEvent(new Event("visibilitychange"))
+    })
+    await waitFor(() => expect(document.title).toBe("Fila de pedidos"))
+  })
+
+  test("Tela sempre acesa segura a tela enquanto a fila está aberta e solta ao sair", async () => {
+    telaGrande()
+    const soltar = vi.fn(async () => {})
+    const pedir = vi.fn(async () => ({ release: soltar }))
+    Object.defineProperty(navigator, "wakeLock", { configurable: true, value: { request: pedir } })
+    usePreferenciasFila.setState({ telaAcesa: true })
+    const { unmount } = renderizar()
+
+    await waitFor(() => expect(pedir).toHaveBeenCalledWith("screen"), { timeout: 8000 })
+    unmount()
+    await waitFor(() => expect(soltar).toHaveBeenCalled())
+    Reflect.deleteProperty(navigator, "wakeLock")
+  })
+
+  test("sem suporte do navegador, Tela sempre acesa não liga e diz por quê", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    const menu = await abrirEsteAparelho(usuario)
+    const chave = menu.getByRole("switch", { name: "Tela sempre acesa" })
+    await usuario.click(chave)
+    expect(await screen.findByText("Este navegador não deixa a tela acesa.")).toBeInTheDocument()
+    expect(chave).toHaveAttribute("aria-checked", "false")
+  })
+
+  test("com a aba à vista, não manda notificação", async () => {
+    telaGrande()
+    const avisos = vi.fn()
+    vi.stubGlobal(
+      "Notification",
+      class {
+        static permission = "granted"
+        constructor() {
+          avisos()
+        }
+      },
+    )
+    usePreferenciasFila.setState({ notificar: true, simular: true })
+    renderizar(300)
+    expect(await screen.findByText("Chegou agora", {}, { timeout: 8000 })).toBeInTheDocument()
+    expect(avisos).not.toHaveBeenCalled()
   })
 
   test("sair da fila com um destaque na tela desliga o relógio do destaque", async () => {
@@ -282,15 +417,127 @@ describe("PaginaFila", () => {
     expect(screen.queryByText("Pelo horário")).not.toBeInTheDocument()
   })
 
+  test("acréscimo no prazo: +15 min soma ao prazo dos pedidos novos; tocar de novo tira", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    // Pizzaria: entrega em 35–50 min, retirada em 20–30 min.
+    expect(await screen.findByText("Entrega 50 min · Retirada 30 min", {}, { timeout: 8000 }))
+    const mais15 = screen.getByRole("radio", { name: "+15 min" })
+
+    await usuario.click(mais15)
+    expect(await screen.findByText("Entrega 65 min · Retirada 45 min")).toBeInTheDocument()
+    expect(mais15).toHaveAttribute("aria-checked", "true")
+    expect((await servidorDo("pizzaria").loja()).acrescimoPrazoMin).toBe(15)
+
+    await usuario.click(mais15)
+    expect(await screen.findByText("Entrega 50 min · Retirada 30 min")).toBeInTheDocument()
+  })
+
+  test("pausar a loja por 15 min mostra até quando e o que o cliente vê; retomar tira", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(
+      await screen.findByRole("button", { name: "Pausar pedidos" }, { timeout: 8000 }),
+    )
+    await usuario.click(await screen.findByRole("menuitem", { name: "Loja toda por 15 min" }))
+
+    expect(await screen.findByText("Loja pausada até 20:45 · 15 min")).toBeInTheDocument()
+    expect(screen.getByText("O cliente vê: Loja ocupada, volte às 20:45")).toBeInTheDocument()
+    expect((await servidorDo("pizzaria").loja()).pausa?.so).toBe("loja")
+
+    await usuario.click(screen.getByRole("button", { name: "Retomar" }))
+    await waitFor(() =>
+      expect(screen.queryByText("Loja pausada até 20:45 · 15 min")).not.toBeInTheDocument(),
+    )
+    expect(screen.getByRole("button", { name: "Pausar pedidos" })).toBeInTheDocument()
+  })
+
+  test("no celular, a régua e as ferramentas ficam no Mais; o estado da loja fica à vista", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    const mais = await screen.findByRole("button", { name: "Mais" }, { timeout: 8000 })
+    expect(mais).toHaveAttribute("aria-expanded", "false")
+    expect(await screen.findByRole("button", { name: "Pausar pedidos" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: /^Atrasados/ })).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Este aparelho" })).not.toBeInTheDocument()
+
+    await usuario.click(mais)
+    expect(mais).toHaveAttribute("aria-expanded", "true")
+    expect(screen.getByRole("button", { name: /^Atrasados/ })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Este aparelho" })).toBeInTheDocument()
+  })
+
+  test("do tablet em diante, a régua e as ferramentas ficam sempre à vista", async () => {
+    telaGrande()
+    renderizar()
+    expect(
+      await screen.findByRole("button", { name: /^Atrasados/ }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Este aparelho" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Mais" })).not.toBeInTheDocument()
+  })
+
+  test("métricas: tocar em Atrasados mostra só os atrasados; tocar de novo mostra todos", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const atrasados = await screen.findByRole("button", { name: /^Atrasados/ }, { timeout: 8000 })
+    await waitFor(() => expect(screen.getAllByRole("article").length).toBeGreaterThan(0))
+    // Os dígitos rolam à parte; o número vai por escrito para o leitor de tela.
+    const total = Number(within(atrasados).getByText(/^\d+$/, { selector: ".sr-only" }).textContent)
+    expect(total).toBeGreaterThan(0)
+    const todos = screen.getAllByRole("article").length
+
+    await usuario.click(atrasados)
+    expect(atrasados).toHaveAttribute("aria-pressed", "true")
+    await waitFor(() => expect(screen.getAllByRole("article")).toHaveLength(total))
+    for (const cartao of screen.getAllByRole("article"))
+      expect(cartao).toHaveTextContent(/atrasado/)
+
+    await usuario.click(atrasados)
+    expect(atrasados).toHaveAttribute("aria-pressed", "false")
+    await waitFor(() => expect(screen.getAllByRole("article")).toHaveLength(todos))
+  })
+
+  test("métricas: concluídos e cancelados levam à lista de pedidos filtrada", async () => {
+    telaGrande()
+    renderizar()
+    expect(
+      await screen.findByRole("link", { name: /^Concluídos/ }, { timeout: 8000 }),
+    ).toHaveAttribute("href", "/admin/pedidos?status=concluido")
+    expect(screen.getByRole("link", { name: /^Cancelados/ })).toHaveAttribute(
+      "href",
+      "/admin/pedidos?status=cancelado",
+    )
+    expect(screen.getByText("Preparo médio")).toBeInTheDocument()
+  })
+
   test("o aparelho que não escolheu o som usa o som da loja", async () => {
     telaGrande()
     const api = servidorDo("pizzaria")
     await api.salvarLoja({ ...(await api.loja()), som: "suave" })
     renderizar()
     await coluna("Novos")
-    expect(screen.getByRole("combobox", { name: "Tipo do alerta" })).toHaveTextContent(
+    const menu = await abrirEsteAparelho()
+    expect(menu.getByRole("combobox", { name: "Tipo do alerta" })).toHaveTextContent(
       "Padrão da loja (Suave)",
     )
+  })
+
+  test("Este aparelho reúne o som, os avisos e a demonstração", async () => {
+    renderizar()
+    const menu = await abrirEsteAparelho()
+    for (const nome of [
+      "Alerta sonoro",
+      "Notificação do sistema",
+      "Título da aba piscando",
+      "Vibrar",
+      "Tela sempre acesa",
+      "Simular pedidos chegando",
+    ]) {
+      expect(menu.getByRole("switch", { name: nome })).toBeInTheDocument()
+    }
+    expect(menu.getByRole("button", { name: "Testar" })).toBeInTheDocument()
   })
 
   test("Detalhes abre o painel do pedido", async () => {
@@ -397,9 +644,10 @@ describe("PaginaFila: aceite manual", () => {
     await servidor.salvarLoja({ ...(await servidor.loja()), som: "sirene" })
     renderizar()
 
+    const menu = await abrirEsteAparelho()
     await waitFor(
       () =>
-        expect(screen.getByRole("combobox", { name: "Tipo do alerta" })).toHaveTextContent(
+        expect(menu.getByRole("combobox", { name: "Tipo do alerta" })).toHaveTextContent(
           "Padrão da loja (Sirene)",
         ),
       { timeout: 8000 },

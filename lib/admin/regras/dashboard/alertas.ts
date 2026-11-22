@@ -70,7 +70,7 @@ export function alertasDoPainel({
   const atrasados = pedidos.filter(
     (pedido) =>
       EM_ANDAMENTO.includes(pedido.status) &&
-      (urgencia(pedido, agora) === "atrasado" ||
+      (urgencia(pedido, agora, loja) === "atrasado" ||
         (naCozinha(pedido) && urgenciaNaCozinha(pedido, agora) === "atrasado")),
   ).length
   if (atrasados > 0)

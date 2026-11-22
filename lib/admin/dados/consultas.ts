@@ -1,12 +1,13 @@
 "use client"
 
 import { type QueryKey, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { useEffect } from "react"
 import { proximoStatus } from "../regras/status"
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { carregarCatalogo } from "./catalogos"
 import { criarServidor, type FiltroPedidos, type Servidor, type VendaPdv } from "./servidor"
-import type { ConfigLoja, MotivoEscolhido, Pedido, StatusPedido } from "./tipos"
+import type { ConfigLoja, MotivoEscolhido, PausaPedidos, Pedido, StatusPedido } from "./tipos"
 
 /** Espera de rede simulada: dá para ver os estados de carregamento; zero nos testes. */
 const ESPERA = process.env.NODE_ENV === "test" ? 0 : 250
@@ -190,22 +191,40 @@ export function useCozinha(intervalo = 4_000) {
   return usePedidos({ status: ["recebido", "em-preparo", "pronto"] }, { atualizarACada: intervalo })
 }
 
-function useMudancaNaLoja(acao: (servidor: Servidor, valor: boolean) => Promise<ConfigLoja>) {
+function useMudancaNaLoja<T>(acao: (servidor: Servidor, valor: T) => Promise<ConfigLoja>) {
   const segmento = useSegmento()
   const cliente = useQueryClient()
   const chave = chaves.loja(segmento)
   return useMutation({
-    mutationFn: (valor: boolean) => acao(servidorDo(segmento), valor),
+    mutationFn: (valor: T) => acao(servidorDo(segmento), valor),
     onSuccess: (loja) => cliente.setQueryData(chave, loja),
   })
 }
 
 export function useDefinirAberta() {
-  return useMudancaNaLoja((servidor, aberta) => servidor.definirAberta(aberta))
+  return useMudancaNaLoja((servidor, aberta: boolean) => servidor.definirAberta(aberta))
 }
 
 export function useDefinirEntrega() {
-  return useMudancaNaLoja((servidor, entrega) => servidor.definirEntrega(entrega))
+  return useMudancaNaLoja((servidor, entrega: boolean) => servidor.definirEntrega(entrega))
+}
+
+/** Para de receber pedidos por um tempo: todos ou só os de entrega. */
+export function usePausar() {
+  return useMudancaNaLoja(
+    (servidor, { minutos, so }: { minutos: number; so: PausaPedidos["so"] }) =>
+      servidor.pausar(minutos, so),
+  )
+}
+
+/** Volta a receber pedidos antes da hora. */
+export function useRetomar() {
+  return useMudancaNaLoja((servidor, _: undefined) => servidor.retomar())
+}
+
+/** Minutos a mais no prazo dos pedidos novos (0 volta ao normal). */
+export function useDefinirAcrescimo() {
+  return useMudancaNaLoja((servidor, minutos: number) => servidor.definirAcrescimo(minutos))
 }
 
 /** Demonstração: um pedido novo chega agora. */
@@ -260,4 +279,34 @@ export function useRegistrarPesagem() {
     (servidor, { id, pesos }) => servidor.pedidos.registrarPesagem(id, pesos),
     (pedido) => pedido,
   )
+}
+
+/** Canal entre as abas do painel abertas neste navegador. */
+const CANAL_DAS_ABAS = "clickpedido-admin"
+
+/**
+ * Abas do mesmo navegador ficam em dia: toda mudança que dá certo numa aba avisa as outras,
+ * que esquecem a base guardada em memória e leem de novo. Aceitar numa aba para o alarme nas
+ * outras. Entre aparelhos diferentes, só com o back-end.
+ */
+export function useSincronizarAbas() {
+  const cliente = useQueryClient()
+  useEffect(() => {
+    if (typeof BroadcastChannel === "undefined") return
+    const canal = new BroadcastChannel(CANAL_DAS_ABAS)
+    canal.onmessage = (evento: MessageEvent<{ segmento?: SegmentoPainelId }>) => {
+      const segmento = evento.data?.segmento
+      if (!segmento) return
+      servidores.delete(segmento)
+      void cliente.invalidateQueries({ queryKey: chaves.tudo(segmento) })
+    }
+    const parar = cliente.getMutationCache().subscribe((mudanca) => {
+      if (mudanca.type !== "updated" || mudanca.action.type !== "success") return
+      canal.postMessage({ segmento: useSegmentoAtual.getState().segmento })
+    })
+    return () => {
+      parar()
+      canal.close()
+    }
+  }, [cliente])
 }

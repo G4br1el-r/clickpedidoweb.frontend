@@ -3,6 +3,7 @@
 import type { ReactNode } from "react"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { useConfigCarregada } from "@/lib/admin/config"
+import { useSincronizarAbas } from "@/lib/admin/dados/consultas"
 import { useSegmentoCarregado } from "@/lib/admin/segmento-atual"
 import { cn } from "@/lib/utils"
 import { BarraLateralAdmin } from "./barra-lateral-admin"
@@ -11,6 +12,8 @@ import { BarraLateralAdmin } from "./barra-lateral-admin"
 export function ShellAdmin({ className, children }: { className?: string; children: ReactNode }) {
   useConfigCarregada()
   useSegmentoCarregado()
+  // O que muda numa aba do painel aparece nas outras abas deste navegador.
+  useSincronizarAbas()
 
   return (
     <SidebarProvider className={cn("bg-sidebar", className)}>

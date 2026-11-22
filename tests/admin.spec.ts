@@ -966,8 +966,10 @@ test("fila: pedido do site espera aceite; aceitar e recusar com motivo", async (
   await page.goto("/admin/fila")
   const novos = page.getByRole("region", { name: /^Novos, / })
   await expect(novos).toBeVisible({ timeout: 15_000 })
-  // A simulação já vem ligada de fábrica.
+  // A simulação já vem ligada de fábrica, no menu deste aparelho.
+  await page.getByRole("button", { name: "Este aparelho" }).click()
   await expect(page.getByRole("switch", { name: "Simular pedidos chegando" })).toBeChecked()
+  await page.keyboard.press("Escape")
 
   await page.clock.fastForward(61_000)
   const esperando = novos.getByRole("article").filter({ hasText: "Esperando aceite" }).first()
@@ -989,6 +991,69 @@ test("fila: pedido do site espera aceite; aceitar e recusar com motivo", async (
   await dialogo.getByRole("button", { name: "Sim, recusar" }).click()
   await expect(page.getByRole("heading", { name: numeroRecusado, exact: true })).toHaveCount(0)
   // Sem axe aqui: com o relógio controlado as animações param no meio (cartão transparente).
+})
+
+test("fila: pausar, acrescentar ao prazo e filtrar os atrasados pela régua", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/fila")
+  await expect(page.getByRole("article").first()).toBeVisible({ timeout: 15_000 })
+
+  // Pausa de 15 min: mostra até quando e o que o cliente vê; Retomar volta.
+  await page.getByRole("button", { name: "Pausar pedidos" }).click()
+  await page.getByRole("menuitem", { name: "Loja toda por 15 min" }).click()
+  await expect(page.getByText("Loja pausada até 20:45 · 15 min")).toBeVisible()
+  await expect(page.getByText("O cliente vê: Loja ocupada, volte às 20:45")).toBeVisible()
+  await page.getByRole("button", { name: "Retomar" }).click()
+  await expect(page.getByRole("button", { name: "Pausar pedidos" })).toBeVisible()
+
+  // Cozinha cheia: +15 min no prazo dos pedidos novos.
+  await page.getByRole("radio", { name: "+15 min" }).click()
+  await expect(page.getByText("Entrega 65 min · Retirada 45 min")).toBeVisible()
+
+  // A régua filtra a fila; no celular, ela fica no Mais.
+  const mais = page.getByRole("button", { name: "Mais" })
+  if (await mais.isVisible()) await mais.click()
+  const atrasados = page.getByRole("button", { name: /^Atrasados/ })
+  await atrasados.click()
+  await expect(atrasados).toHaveAttribute("aria-pressed", "true")
+  await expect(page.getByText("Só os atrasados")).toBeVisible()
+  await esperarAnimacoes(page)
+  await verificarAcessibilidade(page)
+  await page.getByRole("button", { name: "Ver todos" }).click()
+  await expect(atrasados).toHaveAttribute("aria-pressed", "false")
+})
+
+test("fila: aceitar numa aba tira o aceite pendente da outra aba", async ({
+  page,
+  context,
+}, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a fila usa abas")
+  const relogio = new Date("2026-11-13T20:30:00-03:00")
+  await page.clock.install({ time: relogio })
+  await page.goto("/admin/fila")
+  const novos = page.getByRole("region", { name: /^Novos, / })
+  await expect(novos).toBeVisible({ timeout: 15_000 })
+  await page.clock.fastForward(61_000)
+  const esperando = novos.getByRole("article").filter({ hasText: "Esperando aceite" }).first()
+  await expect(esperando).toBeVisible({ timeout: 10_000 })
+  const numero = (await esperando.getByRole("heading").textContent()) ?? ""
+
+  // Outra aba do mesmo navegador, aberta depois: vê o pedido esperando.
+  const outraAba = await context.newPage()
+  await outraAba.clock.install({ time: relogio })
+  await outraAba.goto("/admin/fila")
+  const naOutra = outraAba
+    .getByRole("region", { name: /^Novos, / })
+    .getByRole("article")
+    .filter({ has: outraAba.getByRole("heading", { name: numero, exact: true }) })
+  await expect(naOutra).toContainText("Esperando aceite", { timeout: 15_000 })
+
+  await esperando.getByRole("button", { name: "Aceitar" }).click()
+  // A outra aba fica sabendo na hora, sem recarregar.
+  await expect(naOutra.getByRole("button", { name: "Iniciar preparo" })).toBeVisible({
+    timeout: 4_000,
+  })
+  await expect(naOutra).not.toContainText("Esperando aceite")
 })
 
 test("fila: pedidos de dias anteriores saem do quadro e se resolvem de uma vez", async ({

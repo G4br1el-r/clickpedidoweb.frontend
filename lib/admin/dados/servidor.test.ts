@@ -452,6 +452,61 @@ describe("servidor de demonstração", () => {
     expect((await api.pedidos.listar())[0].id).toBe(novo.id)
   })
 
+  describe("prazo prometido", () => {
+    test("o acréscimo da hora fica guardado; só +10, +15, +30 ou nenhum", async () => {
+      const api = servidor()
+      expect((await api.definirAcrescimo(15)).acrescimoPrazoMin).toBe(15)
+      expect((await servidor().loja()).acrescimoPrazoMin).toBe(15)
+      expect((await api.definirAcrescimo(0)).acrescimoPrazoMin).toBe(0)
+      await expect(api.definirAcrescimo(7)).rejects.toThrow("Escolha +10, +15 ou +30 min.")
+    })
+
+    test("o pedido que chega grava o prazo do canal com o acréscimo", async () => {
+      const api = servidor()
+      const antes = await api.pedidos.simular()
+      await api.definirAcrescimo(15)
+      const depois = await api.pedidos.simular()
+      // Lanchonete de teste: entrega em 40 min, retirada em 20.
+      const esperado = { entrega: 40, retirada: 20 } as Record<string, number>
+      expect(antes.prazoMin).toBe(esperado[antes.tipo])
+      expect(depois.prazoMin).toBe(esperado[depois.tipo] + 15)
+    })
+  })
+
+  describe("pausa de pedidos", () => {
+    test("pausa por 15, 30 ou 60 min, da loja toda ou só da entrega; retomar tira", async () => {
+      const api = servidor()
+      const loja = await api.pausar(15, "loja")
+      expect(loja.pausa).toEqual({ ate: new Date(2026, 10, 13, 20, 45).toISOString(), so: "loja" })
+      expect((await servidor().loja()).pausa?.so).toBe("loja")
+      expect((await api.pausar(60, "entrega")).pausa?.so).toBe("entrega")
+      expect((await api.retomar()).pausa).toBeUndefined()
+      await expect(api.pausar(20, "loja")).rejects.toThrow("Pause por 15, 30 ou 60 min.")
+    })
+
+    test("com a loja pausada, nenhum pedido chega; passou a hora, volta sozinha", async () => {
+      const api = servidor()
+      await api.pausar(15, "loja")
+      await expect(api.pedidos.simular()).rejects.toThrow("A loja está pausada até 20:45.")
+      vi.setSystemTime(new Date(2026, 10, 13, 20, 46))
+      expect((await api.pedidos.simular()).status).toBeDefined()
+    })
+
+    test("com só a entrega pausada, não chega pedido de entrega", async () => {
+      const api = servidor()
+      await api.pausar(30, "entrega")
+      const chegaram: string[] = []
+      for (let vez = 0; vez < 12; vez += 1) {
+        try {
+          chegaram.push((await api.pedidos.simular()).tipo)
+        } catch (erro) {
+          expect((erro as Error).message).toBe("A entrega está pausada até 21:00.")
+        }
+      }
+      expect(chegaram).not.toContain("entrega")
+    })
+  })
+
   describe("aceite manual", () => {
     test("com o aceite manual ligado, o pedido do site chega esperando aceite", async () => {
       const api = servidor()

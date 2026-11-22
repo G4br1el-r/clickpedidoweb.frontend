@@ -22,6 +22,7 @@ import { esperaDoAceite } from "@/lib/admin/regras/aceite"
 import { textoCobranca, type Urgencia, urgencia } from "@/lib/admin/regras/fila"
 import { textoRetirada } from "@/lib/admin/regras/numero"
 import { itensParaPesar } from "@/lib/admin/regras/pesagem"
+import { type TemposDaLoja, textoDoPrazo } from "@/lib/admin/regras/prazo"
 import { rotuloCanal } from "@/lib/admin/regras/rotulos"
 import { rotuloAcao, tomDoStatus } from "@/lib/admin/regras/status"
 import { cn } from "@/lib/utils"
@@ -37,8 +38,8 @@ const ANEL_URGENCIA: Record<Urgencia, string> = {
   atrasado: "ring-(--tom-cancelado)/45",
 }
 
-function Tempo({ pedido, agora }: { pedido: Pedido; agora: Date }) {
-  const nivel = urgencia(pedido, agora)
+function Tempo({ pedido, agora, tempos }: { pedido: Pedido; agora: Date; tempos: TemposDaLoja }) {
+  const nivel = urgencia(pedido, agora, tempos)
   if (pedido.agendamento) {
     return (
       <span
@@ -54,6 +55,7 @@ function Tempo({ pedido, agora }: { pedido: Pedido; agora: Date }) {
     )
   }
   const minutos = Math.max(0, Math.floor((agora.getTime() - Date.parse(pedido.criadoEm)) / 60_000))
+  const prazo = textoDoPrazo(pedido, tempos, agora)
   const Icone = nivel === "normal" ? ClockIcon : AlertTriangleIcon
   return (
     <span
@@ -66,8 +68,19 @@ function Tempo({ pedido, agora }: { pedido: Pedido; agora: Date }) {
       )}
     >
       <Icone className="size-3.5" aria-hidden="true" />
-      {format(new Date(pedido.criadoEm), "HH:mm")} · {minutos} min
-      {nivel === "atrasado" && <span className="sr-only">, atrasado</span>}
+      {prazo ? (
+        <>
+          <span aria-hidden="true">
+            até {prazo.ate} · {prazo.resta}
+          </span>
+          <span className="sr-only">{prazo.completo}</span>
+        </>
+      ) : (
+        <>
+          {format(new Date(pedido.criadoEm), "HH:mm")} · {minutos} min
+          {nivel === "atrasado" && <span className="sr-only">, atrasado</span>}
+        </>
+      )}
     </span>
   )
 }
@@ -80,6 +93,7 @@ export function CartaoFila({
   novo,
   ocupado,
   limiteAceiteMin,
+  tempos,
   aoAceitar,
   aoRecusar,
   aoCancelar,
@@ -93,6 +107,8 @@ export function CartaoFila({
   novo: boolean
   ocupado: boolean
   limiteAceiteMin: number
+  /** Tempos de entrega e retirada da loja: dão o prazo prometido. */
+  tempos: TemposDaLoja
   aoAceitar: () => void
   aoRecusar: (escolhido: MotivoEscolhido) => void
   aoCancelar: (escolhido: MotivoEscolhido) => void
@@ -126,7 +142,7 @@ export function CartaoFila({
       <Card
         className={cn(
           "gap-3 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 transition-[box-shadow] duration-200",
-          ANEL_URGENCIA[espera?.passou ? "atrasado" : urgencia(pedido, agora)],
+          ANEL_URGENCIA[espera?.passou ? "atrasado" : urgencia(pedido, agora, tempos)],
           novo && "ring-2 ring-(--atencao)/55",
           espera?.passou && "ring-2",
         )}
@@ -166,7 +182,7 @@ export function CartaoFila({
             </span>
           )}
           <span className="ml-auto text-xs text-muted-foreground">
-            <Tempo pedido={pedido} agora={agora} />
+            <Tempo pedido={pedido} agora={agora} tempos={tempos} />
           </span>
         </CardHeader>
 
@@ -276,47 +292,50 @@ export function CartaoFila({
           ) : (
             <span className="flex-1 text-xs text-muted-foreground">Fecha em Mesas</span>
           )}
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="outline"
-            aria-label={`${pedido.impressoEm ? "Reimprimir" : "Imprimir"} cupom de #${pedido.numero}`}
-            onClick={aoImprimir}
-          >
-            <PrinterIcon />
-          </Button>
-          <Button
-            type="button"
-            size="icon-sm"
-            variant="outline"
-            aria-label="Detalhes"
-            title={`Detalhes de #${pedido.numero}`}
-            onClick={aoAbrir}
-          >
-            <PanelRightOpenIcon />
-          </Button>
-          {/* Quem espera aceite se recusa; o resto se cancela, sempre com motivo. */}
-          {!espera && (
-            <ConfirmarComMotivo
-              gatilho={
-                <Button
-                  type="button"
-                  size="icon-sm"
-                  variant="ghost"
-                  className="text-muted-foreground hover:text-destructive"
-                  aria-label={`Cancelar pedido #${pedido.numero}`}
-                  title={`Cancelar #${pedido.numero}`}
-                  disabled={ocupado}
-                >
-                  <XIcon />
-                </Button>
-              }
-              titulo={`Cancelar o pedido #${pedido.numero}?`}
-              descricao="O pedido sai da fila e da cozinha. Se já estava pago, fica marcado para devolver ao cliente."
-              confirmar="Sim, cancelar"
-              aoConfirmar={aoCancelar}
-            />
-          )}
+          {/* Os ícones andam juntos: sem lugar, descem inteiros para a linha de baixo. */}
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              aria-label={`${pedido.impressoEm ? "Reimprimir" : "Imprimir"} cupom de #${pedido.numero}`}
+              onClick={aoImprimir}
+            >
+              <PrinterIcon />
+            </Button>
+            <Button
+              type="button"
+              size="icon-sm"
+              variant="outline"
+              aria-label="Detalhes"
+              title={`Detalhes de #${pedido.numero}`}
+              onClick={aoAbrir}
+            >
+              <PanelRightOpenIcon />
+            </Button>
+            {/* Quem espera aceite se recusa; o resto se cancela, sempre com motivo. */}
+            {!espera && (
+              <ConfirmarComMotivo
+                gatilho={
+                  <Button
+                    type="button"
+                    size="icon-sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-destructive"
+                    aria-label={`Cancelar pedido #${pedido.numero}`}
+                    title={`Cancelar #${pedido.numero}`}
+                    disabled={ocupado}
+                  >
+                    <XIcon />
+                  </Button>
+                }
+                titulo={`Cancelar o pedido #${pedido.numero}?`}
+                descricao="O pedido sai da fila e da cozinha. Se já estava pago, fica marcado para devolver ao cliente."
+                confirmar="Sim, cancelar"
+                aoConfirmar={aoCancelar}
+              />
+            )}
+          </div>
         </CardFooter>
       </Card>
     </motion.article>
