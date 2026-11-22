@@ -46,6 +46,12 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
+import {
+  conferirReserva,
+  type NovaReserva,
+  reservaDaMesa,
+  reservaEmConflito,
+} from "../regras/reservas"
 import { rotuloDoPagamento } from "../regras/rotulos"
 import { colide, posicaoValida, primeiraPosicaoLivre } from "../regras/salao"
 import { proximoStatus } from "../regras/status"
@@ -75,6 +81,7 @@ import {
   type Pedido,
   type PosicaoMesa,
   type Produto,
+  type Reserva,
   type StatusPedido,
   type TipoMovimento,
 } from "./tipos"
@@ -293,20 +300,8 @@ function comandaDa(base: BaseLoja, mesaId: string) {
  * A reserva marcada da mesa que já está dentro da antecedência e ainda na tolerância. Confere
  * pelo horário, e não pelo estado da mesa: a mesa em limpeza também está reservada.
  */
-function reservaDaVez(base: BaseLoja, mesaId: string, agora: Date) {
-  const { antecedenciaMin, toleranciaMin } = base.salao.reservas
-  return base.reservas
-    .filter((item) => {
-      const inicio = Date.parse(item.inicio)
-      return (
-        item.mesaId === mesaId &&
-        item.status === "marcada" &&
-        inicio >= agora.getTime() - toleranciaMin * 60_000 &&
-        inicio - antecedenciaMin * 60_000 <= agora.getTime()
-      )
-    })
-    .toSorted((a, b) => Date.parse(a.inicio) - Date.parse(b.inicio))[0]
-}
+const reservaDaVez = (base: BaseLoja, mesaId: string, agora: Date) =>
+  reservaDaMesa({ id: mesaId }, base.reservas, agora, base.salao.reservas)
 
 /**
  * O garçom pela lista do salão, com o nome escrito como lá (sem diferenciar acento e
@@ -861,6 +856,68 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     if (!mesa) throw new Error("Mesa não encontrada")
     const nova = mudar(mesa, base)
     await substituir({ ...base, mesas: base.mesas.map((item) => (item.id === id ? nova : item)) })
+    return responder(nova)
+  }
+
+  /**
+   * Os dados da reserva conferidos como no formulário (só hoje, a partir de agora) e a mesa:
+   * existe, sem bloqueio e sem outra reserva a menos de 2 h. `antes`: a reserva sendo editada.
+   */
+  function conferirNovaReserva(
+    base: BaseLoja,
+    dados: NovaReserva,
+    antes?: Reserva,
+  ): Omit<Reserva, "id" | "status"> {
+    const agora = new Date()
+    const inicio = new Date(dados.inicio)
+    if (Number.isNaN(inicio.getTime())) throw new Error("Informe o horário.")
+    if (!isSameDay(inicio, agora)) throw new Error("Reserve para hoje.")
+    // O horário que não mudou não é conferido de novo: a reserva atrasada ainda se edita.
+    const mesmoHorario = antes?.inicio === dados.inicio
+    const { erros, reserva } = conferirReserva(
+      {
+        nome: dados.nome,
+        telefone: dados.telefone ?? "",
+        horario: format(inicio, "HH:mm"),
+        pessoas: String(dados.pessoas),
+      },
+      mesmoHorario && inicio < agora ? inicio : agora,
+    )
+    if (!reserva) throw new Error(Object.values(erros)[0])
+    if (dados.mesaId === undefined) return reserva
+    const mesa = base.mesas.find((item) => item.id === dados.mesaId)
+    if (!mesa) throw new Error("Mesa não encontrada")
+    if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
+    const conflito = reservaEmConflito(
+      mesa.id,
+      inicio,
+      base.reservas,
+      agora,
+      base.salao.reservas,
+      antes?.id,
+    )
+    if (conflito) {
+      throw new Error(
+        `A mesa ${mesa.numero} já tem reserva às ${format(new Date(conflito.inicio), "HH:mm")}.`,
+      )
+    }
+    return { ...reserva, mesaId: mesa.id }
+  }
+
+  /** Troca a reserva marcada pelo que `mudar` devolve. */
+  async function mudarReserva(
+    id: string,
+    mudar: (reserva: Reserva, base: BaseLoja) => Reserva,
+  ): Promise<Reserva> {
+    const base = await carregar()
+    const reserva = base.reservas.find((item) => item.id === id)
+    if (!reserva) throw new Error("Reserva não encontrada")
+    if (reserva.status !== "marcada") throw new Error("Essa reserva não está mais marcada.")
+    const nova = mudar(reserva, base)
+    await substituir({
+      ...base,
+      reservas: base.reservas.map((item) => (item.id === id ? nova : item)),
+    })
     return responder(nova)
   }
 
@@ -1798,6 +1855,47 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             agendamento: { ...pedido.agendamento, inicio: novoInicio.toISOString() },
           }
         })
+      },
+    },
+
+    reservas: {
+      /** As reservas de hoje, pelo horário. */
+      async listar(): Promise<Reserva[]> {
+        const agora = new Date()
+        return responder(
+          (await carregar()).reservas
+            .filter((reserva) => isSameDay(new Date(reserva.inicio), agora))
+            .toSorted((a, b) => Date.parse(a.inicio) - Date.parse(b.inicio)),
+        )
+      },
+
+      async criar(dados: NovaReserva): Promise<Reserva> {
+        const base = await carregar()
+        const reserva: Reserva = {
+          id: novoId("reserva")(),
+          ...conferirNovaReserva(base, dados),
+          status: "marcada",
+        }
+        await substituir({ ...base, reservas: [...base.reservas, reserva] })
+        return responder(reserva)
+      },
+
+      /** Troca os dados da reserva marcada. O horário que não mudou não é conferido de novo. */
+      editar(id: string, dados: NovaReserva): Promise<Reserva> {
+        return mudarReserva(id, (reserva, base) => ({
+          id,
+          ...conferirNovaReserva(base, dados, reserva),
+          status: "marcada",
+        }))
+      },
+
+      cancelar(id: string): Promise<Reserva> {
+        return mudarReserva(id, (reserva) => ({ ...reserva, status: "cancelada" }))
+      },
+
+      /** A pessoa não veio: a mesa fica livre na hora, sem esperar a tolerância. */
+      naoCompareceu(id: string): Promise<Reserva> {
+        return mudarReserva(id, (reserva) => ({ ...reserva, status: "nao-compareceu" }))
       },
     },
 
