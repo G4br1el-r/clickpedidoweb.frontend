@@ -906,25 +906,55 @@ export function criarServidor({
   }
 
   /**
-   * Cada chamada espera a vez (`exclusivo`): ler, mudar e gravar não se cruzam com a gravação de
+   * Cada gravação espera a vez (`exclusivo`): ler, mudar e gravar não se cruzam com a gravação de
    * outra aba ou de outra chamada desta. Nenhuma chamada chama outra por aqui, então a vez não
-   * se prende nela mesma.
+   * se prende nela mesma. A leitura não espera: a gravação só troca a cópia em memória depois de
+   * pronta, e a leitura que pega a de antes vê a nova na próxima consulta. Esperar deixaria a
+   * tela inteira em fila atrás de cada gravação.
    */
-  function naVez<A extends unknown[], R>(fazer: (...argumentos: A) => Promise<R>) {
+  function naVez<A extends unknown[], R>(fazer: (...argumentos: A) => Promise<R>, ler: boolean) {
     return async (...argumentos: A): Promise<R> => {
-      const resultado = await exclusivo(chave, () => fazer(...argumentos))
+      const resultado = await (ler
+        ? fazer(...argumentos)
+        : exclusivo(chave, () => fazer(...argumentos)))
       if (espera > 0) await new Promise((pronto) => setTimeout(pronto, espera))
       return resultado
     }
   }
 
-  function cadaUmNaVez<T extends object>(alvo: T): T {
+  /** As chamadas que só leem. Qualquer outra (inclusive uma nova, esquecida aqui) espera a vez. */
+  const LEITURAS = new Set([
+    "base",
+    "loja",
+    "pedidos.listar",
+    "pedidos.buscar",
+    "produtos.listar",
+    "categorias.listar",
+    "pdv.ultimasVendas",
+    "agendamentos.horarios",
+    "reservas.listar",
+    "espera.listar",
+    "qr.mesa",
+    "pedidosQr.listar",
+    "chamados.listar",
+    "salao.config",
+    "mesas.listar",
+    "mesas.ultimaConta",
+    "estoque.movimentos",
+    "motoboys.listar",
+    "bairros.listar",
+  ])
+
+  function cadaUmNaVez<T extends object>(alvo: T, caminho = ""): T {
     return Object.fromEntries(
       Object.entries(alvo).map(([nome, valor]) => [
         nome,
         typeof valor === "function"
-          ? naVez(valor as (...argumentos: unknown[]) => Promise<unknown>)
-          : cadaUmNaVez(valor as object),
+          ? naVez(
+              valor as (...argumentos: unknown[]) => Promise<unknown>,
+              LEITURAS.has(`${caminho}${nome}`),
+            )
+          : cadaUmNaVez(valor as object, `${caminho}${nome}.`),
       ]),
     ) as T
   }

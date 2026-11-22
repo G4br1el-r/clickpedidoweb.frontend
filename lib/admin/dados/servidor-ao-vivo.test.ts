@@ -1,6 +1,7 @@
 import "fake-indexeddb/auto"
 import { clear } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
+import { exclusivo } from "./bloqueio"
 import { catalogoDeTeste } from "./catalogo-de-teste"
 import { criarServidor } from "./servidor"
 
@@ -58,6 +59,27 @@ describe("duas abas sobre a mesma base", () => {
     await Promise.all([api.mesas.criar({ numero: 30 }), api.mesas.criar({ numero: 31 })])
 
     expect(await numeros(aba())).toEqual([1, 2, 30, 31])
+  })
+
+  test("enquanto outra aba grava, a leitura não espera; a gravação espera a vez", async () => {
+    const api = aba()
+    await api.mesas.listar()
+    let liberar = () => {}
+    // Outra aba no meio de uma gravação: segura a vez da base.
+    const outra = exclusivo(
+      "clickpedido-admin-dados:lanchonete",
+      () => new Promise<void>((pronto) => (liberar = pronto)),
+    )
+    let gravou = false
+    const gravacao = api.mesas.criar({ numero: 30 }).then(() => (gravou = true))
+
+    expect(await numeros(api)).toEqual([1, 2])
+    expect(gravou).toBe(false)
+
+    liberar()
+    await outra
+    await gravacao
+    expect(await numeros(api)).toEqual([1, 2, 30])
   })
 
   test("a outra aba já lê o que foi gravado, sem recarregar", async () => {
