@@ -1700,6 +1700,30 @@ reabrir(pedidoId, { motivo, por? }): Promise<Pedido>
 - [ ] O E2E rápido e os screenshots (`painel-mesas-*`, `painel-comanda-*` e os de Pedidos e Início) ficam para a revisão.
 - [ ] Registrar a "Situação" no fim desta seção.
 
+Situação: implementada em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. Falta a revisão, o E2E rápido completo e os screenshots.
+
+- **Mudou fora do plano:**
+  - o `rotuloDoPagamento` ("Cartão de crédito") entrou na Tarefa 36, porque o texto do evento de pagamento depende dele;
+  - a previsão da tela (`useAlterarQuantidade`, `useRemoverItem`) passou a usar `comTotais`: sem isso, o total da comanda com taxa caía e voltava ao mudar a quantidade (teste novo em `consultas-mesas.test.tsx`, com o servidor sem responder);
+  - "Marcar como pago" em Pedidos sai na comanda de mesa aberta, e o aviso junta os dois caminhos: "Receba ou cancele a conta pela tela de Mesas.";
+  - a comanda aberta já soma o couvert, mesmo vazia;
+  - "Por item" e "Dividir igualmente" só aparecem com saldo; as partes da divisão são do total;
+  - na lista de definição do resumo, "Tirar taxa" e "Tirar couvert" ficam dentro do `dd` (o axe do E2E recusou o botão solto);
+  - a demonstração ganhou a conta fechada no roteiro ao vivo (há 20 min, aberta 90 min antes) e a parcial na comanda de 80 min. O sorteio do dia muda com isso: as pessoas no salão da pizzaria passam de 21 para 16.
+- **Testes antigos que mudaram (mudança de comportamento planejada):**
+  - `mesaOcupada` em `pagina-mesas.test.tsx`, dois testes de `consultas-mesas.test.tsx` e um de `pagina-garcom.test.tsx` desligam a taxa e o couvert da pizzaria na montagem: eles conferem a soma dos itens (decorrência 3);
+  - "a faixa Números do salão…" e "a conta fechada hoje entra no faturamento…": a demonstração passou a ter conta fechada hoje (o faturamento vem de `indicadoresSalao` sobre a própria demonstração, como na Tarefa 16; permanência e giro com valores literais);
+  - "imprimir a conta e fechar…": "Imprimir pré-conta" e a janela "Receber da mesa 60";
+  - "a comanda de mesa aberta não se cancela aqui": o aviso agora é "Receba ou cancele a conta pela tela de Mesas.";
+  - E2E "salão: o garçom lança…": a janela é "Receber da mesa 90".
+- **Fica para depois:**
+  - desfazer a cortesia;
+  - cancelar a comanda que já tem pagamento (hoje cancela e os pagamentos ficam registrados nela);
+  - o filtro de forma em Pedidos continua pela forma do maior pagamento (não há "Misto" no filtro);
+  - o faturamento geral do Início continua com a taxa dentro; a taxa aparece à parte em Financeiro.
+- **Screenshots que vão mudar** (ninguém atualizou ainda): `painel-comanda-*` (aba Conta nova, rodapé com saldo, "Imprimir pré-conta", botão "Cortesia" nos itens, total com taxa e couvert), `painel-mesas-*` (totais das comandas da demonstração com taxa e couvert, a comanda com a conta parcial, números do salão com faturamento e pessoas), `painel-adicionar-itens-*` e `painel-abrir-mesa-*` se mostrarem total, e os de Pedidos (`Misto`) e Início (Financeiro com a taxa) que usam a demonstração de hoje.
+- **Testes e cobertura:** 1513 testes no Vitest; o E2E novo e o de "salão: o garçom lança…" passaram em `desktop-1920`. A cobertura ficou em 83,88/76,53/82,32/84,92 no geral e 98,19/95,31/98,73/98,86 em `lib/**`: os mínimos subiram para 83/76/82/84 e 98/95/98/98.
+
 ## Fase 5: movimentações
 
 **Desenho:** transferir, juntar e separar, transferir itens (com quantidade parcial), desfazer por 6 s, o ticket da cozinha "Mesa 3 + 4" e o cenário de demonstração com um par de mesas juntadas.
