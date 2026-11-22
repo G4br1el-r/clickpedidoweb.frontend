@@ -20,7 +20,7 @@ const ALERTAS: Record<SomAlerta, Nota[]> = {
 }
 
 /** Os outros eventos da cozinha, cada um com um som que não se confunde com o de novo. */
-export type SomDeEvento = "cancelado" | "atrasado"
+export type SomDeEvento = "cancelado" | "atrasado" | "chamada"
 
 const EVENTOS: Record<SomDeEvento, Nota[]> = {
   // Dois tons alternados, como um alarme: pede o Ciente.
@@ -32,6 +32,11 @@ const EVENTOS: Record<SomDeEvento, Nota[]> = {
   })),
   // Um toque curto e grave: avisa sem assustar.
   atrasado: [{ frequencia: 392, inicio: 0, duracao: 0.2, onda: "triangle" }],
+  // Painel de chamada: dois tons de sino subindo, para o cliente ouvir de longe.
+  chamada: [
+    { frequencia: 783.99, inicio: 0, duracao: 0.35, onda: "sine" },
+    { frequencia: 1046.5, inicio: 0.3, duracao: 0.5, onda: "sine" },
+  ],
 }
 
 let contexto: AudioContext | undefined

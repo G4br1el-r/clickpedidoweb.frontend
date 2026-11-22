@@ -236,6 +236,8 @@ export type Produto = {
   estoque?: ControleEstoque
   /** Cozinha: a praça que prepara, no lugar da praça da categoria. */
   pracaId?: string
+  /** Cozinha (Pro): quanto o produto leva para ficar pronto, em minutos. */
+  preparoMin?: number
 }
 
 /** Estoque de um produto, na unidade dele (peças ou kg). */

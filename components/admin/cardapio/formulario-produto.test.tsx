@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { useConfig } from "@/lib/admin/config"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
@@ -197,6 +198,33 @@ describe("FormularioProduto: salvar", () => {
           ?.pracaId,
       ).toBe("praca-montagem"),
     )
+  })
+
+  test("com o Pro, o tempo de preparo fica salvo no produto", async () => {
+    useConfig.setState({ pro: true })
+    const usuario = userEvent.setup()
+    const [primeiro] = await servidorDo("pizzaria").produtos.listar()
+    abrir("pizzaria", primeiro.id)
+    const painel = await formulario()
+    await usuario.type(await painel.findByLabelText("Tempo de preparo (min)"), "20")
+    await usuario.click(painel.getByRole("button", { name: "Salvar produto" }))
+    await waitFor(async () =>
+      expect(
+        (await servidorDo("pizzaria").produtos.listar()).find((item) => item.id === primeiro.id)
+          ?.preparoMin,
+      ).toBe(20),
+    )
+    useConfig.setState({ pro: false })
+  })
+
+  test("sem o Pro, o tempo de preparo mostra o cadeado no lugar do campo", async () => {
+    const [primeiro] = await servidorDo("pizzaria").produtos.listar()
+    abrir("pizzaria", primeiro.id)
+    const painel = await formulario()
+    expect(painel.queryByLabelText("Tempo de preparo (min)")).not.toBeInTheDocument()
+    expect(
+      painel.getByRole("button", { name: /^Contratar o Tempo de preparo por produto/ }),
+    ).toBeInTheDocument()
   })
 
   test("salão, sem praças, não tem o campo Praça", async () => {

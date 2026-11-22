@@ -102,6 +102,12 @@ export function esquemaProduto(segmento: SegmentoPainelId) {
       oferta: z.boolean(),
       // Cozinha: "categoria" (ou vazio) segue a praça da categoria.
       pracaId: z.string().optional(),
+      preparoMin: z
+        .number({ error: "Use de 1 a 120 minutos." })
+        .int("Use de 1 a 120 minutos.")
+        .min(1, "Use de 1 a 120 minutos.")
+        .max(120, "Use de 1 a 120 minutos.")
+        .optional(),
       ...(campos.precoBalcao
         ? { precoBalcao: dinheiro("Informe o preço de balcão.").gt(0).optional() }
         : {}),

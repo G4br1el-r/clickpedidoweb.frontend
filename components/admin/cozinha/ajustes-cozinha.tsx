@@ -21,6 +21,7 @@ import {
 import { TEMPOS_PADRAO } from "@/lib/admin/regras/cozinha"
 import { esquemaTemposCozinha } from "@/lib/admin/regras/esquema-loja"
 import { tocarAlerta, tocarSom } from "@/lib/admin/som"
+import { RecursoPro } from "../recurso-pro"
 import { PracasDaCozinha } from "./pracas-da-cozinha"
 
 /** Uma parte dos ajustes: título e explicação à esquerda, o conteúdo à direita. */
@@ -282,7 +283,12 @@ export function AjustesCozinha() {
         titulo="Vias da cozinha"
         descricao="A via impressa de cada praça, sem preço, para quem prepara."
       >
-        <ViasDaCozinha />
+        <RecursoPro
+          chave="cozinha.via"
+          descricao="A via de cada praça sai sozinha na impressora quando a rodada chega."
+        >
+          <ViasDaCozinha />
+        </RecursoPro>
       </SecaoAjuste>
       <SecaoAjuste
         titulo="Sons deste aparelho"

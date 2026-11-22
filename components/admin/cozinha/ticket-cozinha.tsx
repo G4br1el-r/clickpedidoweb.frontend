@@ -86,11 +86,14 @@ function Itens({
   bloqueado,
   cancelado,
   aoRiscar,
+  espera,
 }: {
   itens: ItemPedido[]
   bloqueado: boolean
   cancelado: boolean
   aoRiscar: (item: ItemPedido, feito: boolean) => void
+  /** Com tempo de preparo: quantos minutos cada item ainda espera para começar. */
+  espera?: Record<string, number> | null
 }) {
   return (
     <ul aria-label="Para preparar" className="-mx-1.5 flex flex-col gap-0.5">
@@ -126,6 +129,11 @@ function Itens({
                 {item.opcoes.length > 0 && (
                   <span className="text-sm leading-normal text-muted-foreground">
                     {item.opcoes.join(" · ")}
+                  </span>
+                )}
+                {espera && !feito && item.id in espera && (
+                  <span className="text-sm leading-normal font-medium text-(--tom-preparo-texto)">
+                    {espera[item.id] > 0 ? `Comece em ${espera[item.id]} min` : "Comece agora"}
                   </span>
                 )}
                 {item.observacao && (
@@ -168,6 +176,7 @@ export function TicketCozinha({
   compacto = false,
   aoRefazer,
   aoEntregar,
+  disparo,
 }: {
   ticket: Ticket
   agora: Date
@@ -198,6 +207,8 @@ export function TicketCozinha({
   aoRefazer?: () => void
   /** Refazer pronto da entrega ou da retirada: a cozinha entrega e ele sai do quadro. */
   aoEntregar?: () => void
+  /** Tempo de preparo (Pro): quantos minutos cada item espera, contando da chegada. */
+  disparo?: Record<string, number> | null
 }) {
   const semMovimento = useReducedMotion()
   const { pedido, rodada, itens } = ticket
@@ -215,6 +226,15 @@ export function TicketCozinha({
   const outras = (ticket.outras ?? []).map((outra) => `${outra.nome} ${outra.faltam}`).join(", ")
   const aguardando = (ticket.outras ?? []).map((outra) => outra.nome).join(", ")
   const avisados = mensagensPendentes(pedido).filter((mensagem) => mensagem.rodada === rodada)
+  // Disparo: o que falta esperar agora. Quando ninguém mais espera, as marcas somem.
+  const decorrido = Math.max(0, minutosNaCozinha(ticket, agora, tempos))
+  const restante = disparo
+    ? Object.fromEntries(
+        Object.entries(disparo).map(([id, minutos]) => [id, Math.max(0, minutos - decorrido)]),
+      )
+    : null
+  const esperaAgora =
+    restante && !pronto && Object.values(restante).some((minutos) => minutos > 0) ? restante : null
 
   return (
     <motion.article
@@ -423,6 +443,7 @@ export function TicketCozinha({
           bloqueado={ocupado || cancelado}
           cancelado={cancelado}
           aoRiscar={aoRiscar}
+          espera={esperaAgora}
         />
       )}
       {outras && !pronto && (

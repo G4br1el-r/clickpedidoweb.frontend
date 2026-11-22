@@ -9,6 +9,7 @@ import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { useConfig } from "@/lib/admin/config"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import type { Produto } from "@/lib/admin/dados/tipos"
 import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
@@ -137,6 +138,8 @@ beforeEach(async () => {
   reiniciarServidores()
   useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
   usePreferenciasFila.setState({ ...usePreferenciasFila.getInitialState(), simular: false }, true)
+  // Os recursos Pro da cozinha ficam liberados; os testes do cadeado desligam.
+  useConfig.setState({ pro: true, compradas: [] })
   impressas.length = 0
 })
 
@@ -871,6 +874,19 @@ describe("PaginaCozinha: vias da cozinha", () => {
     ])
   })
 
+  test("sem o Pro da via, a chave ligada no aparelho não imprime sozinha", async () => {
+    useConfig.setState({ pro: false, compradas: [] })
+    telaGrande()
+    usePreferenciasFila.setState({ imprimirVias: true })
+    renderizar(200)
+    await coluna("A fazer")
+    await esperar(400)
+    await lancarNaMesa(86, ["cat-calzones"])
+    await ticket("Mesa 86")
+    await esperar(600)
+    expect(impressas).toEqual([])
+  })
+
   test("sem a chave do aparelho, nada sai; Reimprimir via imprime a da praça na hora", async () => {
     telaGrande()
     await lancarNaMesa(85, ["cat-calzones", "cat-massas"])
@@ -1496,5 +1512,100 @@ describe("PaginaCozinha: desempenho", () => {
         "listitem",
       ),
     ).toHaveLength(5)
+  })
+})
+
+describe("PaginaCozinha: plano Pro", () => {
+  test("sem o Pro, a aba Desempenho mostra o cadeado, e Contratar libera", async () => {
+    useConfig.setState({ pro: false, compradas: [] })
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("tab", { name: "Desempenho" }))
+    await usuario.click(
+      await screen.findByRole("button", { name: /^Contratar o Desempenho da cozinha/ }),
+    )
+    expect(await screen.findByText("Tempo até pronto", {}, { timeout: 8000 })).toBeInTheDocument()
+    // A faixa do turno é grátis: continua no Quadro.
+    expect(useConfig.getState().compradas).toEqual(["cozinha.desempenho"])
+  })
+
+  test("sem o Pro, uma segunda praça e a via impressa sozinha ficam com cadeado", async () => {
+    useConfig.setState({ pro: false, compradas: [] })
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("tab", { name: "Ajustes" }))
+    const pracas = within(await screen.findByRole("region", { name: "Praças" }))
+    expect(pracas.queryByRole("button", { name: "Nova praça" })).not.toBeInTheDocument()
+    expect(
+      pracas.getByRole("button", { name: /^Contratar o Mais de uma praça/ }),
+    ).toBeInTheDocument()
+    const vias = within(screen.getByRole("region", { name: "Vias da cozinha" }))
+    expect(vias.queryByRole("switch")).not.toBeInTheDocument()
+    expect(
+      vias.getByRole("button", { name: /^Contratar o Via da cozinha impressa/ }),
+    ).toBeInTheDocument()
+  })
+
+  test("com tempo de preparo, cada item diz quando começar para tudo ficar pronto junto", async () => {
+    telaGrande()
+    const lista = await api().produtos.listar()
+    const [demorado, rapido] = lista.filter(
+      (produto) => produto.grupos.length === 0 && produto.disponivel,
+    )
+    await api().produtos.salvar({ ...demorado, preparoMin: 20 })
+    await api().produtos.salvar({ ...rapido, preparoMin: 8 })
+    const mesa = await api().mesas.criar({ numero: 88 })
+    await api().mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [
+        { produtoId: demorado.id, escolhas: {}, quantidade: 1 },
+        { produtoId: rapido.id, escolhas: {}, quantidade: 1 },
+      ],
+    })
+    renderizar()
+    const doTicket = within(await ticket("Mesa 88"))
+    expect(doTicket.getByText("Comece agora")).toBeInTheDocument()
+    expect(doTicket.getByText("Comece em 12 min")).toBeInTheDocument()
+  })
+  test("com tempo de preparo maior que o atraso da loja, o ticket ainda não está atrasado", async () => {
+    telaGrande()
+    const [lento] = (await api().produtos.listar()).filter(
+      (produto) => produto.grupos.length === 0 && produto.disponivel,
+    )
+    await api().produtos.salvar({ ...lento, preparoMin: 30 })
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 5))
+    const mesa = await api().mesas.criar({ numero: 89 })
+    await api().mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [{ produtoId: lento.id, escolhas: {}, quantidade: 1 }],
+    })
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 30))
+    renderizar()
+    // 25 min na cozinha: atrasado pela loja (25), mas o preparo é de 30.
+    expect(await ticket("Mesa 89")).toHaveAttribute("data-urgencia", "normal")
+
+    useConfig.setState({ pro: false, compradas: [] })
+    await waitFor(async () =>
+      expect(await ticket("Mesa 89")).toHaveAttribute("data-urgencia", "atrasado"),
+    )
+  })
+  test("o menu do cabeçalho leva ao Modo TV, com a praça do aparelho, e ao Painel de chamada", async () => {
+    telaGrande()
+    usePreferenciasFila.setState({ praca: "praca-forno" })
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("button", { name: "Mais telas da cozinha" }))
+    expect(await screen.findByRole("menuitem", { name: /Modo TV/ })).toHaveAttribute(
+      "href",
+      "/admin/cozinha/tv?praca=praca-forno",
+    )
+    expect(screen.getByRole("menuitem", { name: /Painel de chamada/ })).toHaveAttribute(
+      "href",
+      "/admin/cozinha/chamada",
+    )
   })
 })

@@ -95,6 +95,15 @@ describe("tocarSom", () => {
     ])
   })
 
+  test("chamada: dois tons subindo, de sino, para o cliente ouvir de longe", () => {
+    const notas = simularAudio()
+    tocarSom("chamada")
+    expect(notas).toEqual([
+      { frequencia: 783.99, onda: "sine" },
+      { frequencia: 1046.5, onda: "sine" },
+    ])
+  })
+
   test("atrasado: um toque curto e grave", () => {
     const notas = simularAudio()
     tocarSom("atrasado")

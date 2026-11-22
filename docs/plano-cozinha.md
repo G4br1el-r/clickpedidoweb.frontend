@@ -497,3 +497,25 @@ A fase sai em dois commits, com revisão entre eles: **5a** (praças, expediçã
 1. **Regras:** páginas da TV; números da chamada; disparo dos itens; tempos do ticket com preparo; chaves Pro fora da sacola.
 2. **Tela:** cadeado e Contratar em cada recurso; TV paginando; chamada com o som; campo de preparo e "Comece em".
 3. **E2E e screenshots:** a TV e a chamada no desktop; o cadeado da aba Desempenho.
+
+**Na implementação (8)**
+
+- O cadeado (`RecursoPro`) fica no lugar do recurso, com o nome, "· Pro", para que serve e o botão "Contratar o … · R$ …/mês", que contrata só aquele recurso. No lugar de um botão (Nova praça, campo do produto), uma linha só do `sm` em diante.
+- As telas de TV e chamada moram em `app/admin/[modulo]/tv` e `.../chamada`, só para `cozinha`: uma pasta fixa `cozinha` ao lado da rota dinâmica podia esconder `/admin/cozinha`.
+- O som de chamada toca com o "Alerta sonoro" do aparelho ligado, como os outros sons.
+
+## Fase 9: segmentos
+
+**Desenho** (das decisões 31 a 34)
+
+- **Leitura do item** (`leituraDoItem`), usada no ticket:
+  - **Pizzaria:** os sabores viram frações ("½ Calabresa", "½ Portuguesa"); a borda que não é a tradicional fica em destaque, no tom de atenção; a opção "Tamanho", se houver, vai para o topo do item. Um sabor só fica como veio.
+  - **Adega:** cada escolha do combo vira uma linha com a quantidade do item ("2× Red Bull").
+  - **Açougue:** "Peso: 1,5 kg", o peso pedido da linha toda; as opções do corte em letra maior. O pedido a pagar depois da pesagem ganha o botão "Pesar" no ticket, que abre a pesagem que já existe.
+  - **Lanchonete:** o número do pedido (que recomeça no mês) fica grande no ticket, para chamar.
+
+**Fronteiras de teste**
+
+1. **Regra:** a leitura do item em cada segmento.
+2. **Tela:** o ticket da pizzaria com frações e borda, o combo aberto da adega, o peso e o Pesar do açougue, o número grande da lanchonete.
+3. **E2E e screenshots:** o ticket da pizzaria meio a meio e o do açougue com o Pesar.

@@ -182,6 +182,13 @@ export const CATALOGO_PRO: Record<string, { nome: string; preco: number }> = {
   "conversa.resumoNoChat": { nome: "Resumo do pedido no chat", preco: 9.9 },
   "recursos.fidelidade": { nome: "Cartão fidelidade", preco: 29.9 },
   "recursos.popupPromocao": { nome: "Promoção ao entrar", preco: 14.9 },
+  // Cozinha: recursos de operação, não campos da aparência (não entram na sacola sozinhos).
+  "cozinha.pracas": { nome: "Mais de uma praça", preco: 19.9 },
+  "cozinha.tv": { nome: "Modo TV", preco: 14.9 },
+  "cozinha.chamada": { nome: "Painel de chamada", preco: 14.9 },
+  "cozinha.desempenho": { nome: "Desempenho da cozinha", preco: 19.9 },
+  "cozinha.tempoPreparo": { nome: "Tempo de preparo por produto", preco: 9.9 },
+  "cozinha.via": { nome: "Via da cozinha impressa", preco: 9.9 },
 }
 
 /** Preço mensal do pacote com todos os recursos Pro. */
@@ -437,7 +444,10 @@ export function opcaoEmUso(config: Config, chave: string) {
   const { secao, campo, valor } = partes(chave)
   if (campo === "bloco")
     return config.inicio.blocos.some((bloco) => bloco.id === valor && bloco.ativo)
-  const atual = (config as unknown as Secoes)[secao][campo]
+  // Recurso que não é campo da configuração (os da cozinha): nunca está "em uso" aqui.
+  const daSecao = (config as unknown as Partial<Secoes>)[secao]
+  if (!daSecao) return false
+  const atual = daSecao[campo]
   if (valor === undefined) return atual !== false && atual !== null && atual !== undefined
   return atual === valor
 }

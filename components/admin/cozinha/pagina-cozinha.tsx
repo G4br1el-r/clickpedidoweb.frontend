@@ -1,7 +1,14 @@
 "use client"
 
 import NumberFlow from "@number-flow/react"
-import { ChefHatIcon, ClipboardListIcon, MaximizeIcon } from "lucide-react"
+import {
+  ChefHatIcon,
+  ClipboardListIcon,
+  MaximizeIcon,
+  MegaphoneIcon,
+  MoreHorizontalIcon,
+  TvIcon,
+} from "lucide-react"
 import { AnimatePresence } from "motion/react"
 import { parseAsStringLiteral, useQueryState } from "nuqs"
 import { useRef, useState } from "react"
@@ -14,6 +21,12 @@ import {
   DrawerHeader,
   DrawerTitle,
 } from "@/components/ui/drawer"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Label } from "@/components/ui/label"
 import {
@@ -30,6 +43,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAgora } from "@/hooks/use-agora"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
+import { useOpcaoPro } from "@/lib/admin/config"
 import {
   useAvancarTicket,
   useAvisarSobreRodada,
@@ -66,11 +80,13 @@ import {
   type TicketCozinha as Ticket,
 } from "@/lib/admin/regras/cozinha"
 import { type VisaoDePraca, viasDoTicket } from "@/lib/admin/regras/pracas"
+import { disparoDosItens, temposDoTicket } from "@/lib/admin/regras/preparo"
 import { esgotados, resumoDeProducao } from "@/lib/admin/regras/producao"
 import { tomDoStatus } from "@/lib/admin/regras/status"
 import { tocarAlerta } from "@/lib/admin/som"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { useFilaDeVias } from "../impressao/via-cozinha"
+import { RecursoPro } from "../recurso-pro"
 import { Traco } from "../traco"
 import { AjustesCozinha } from "./ajustes-cozinha"
 import { AtalhosCozinha } from "./atalhos-cozinha"
@@ -136,6 +152,7 @@ function Coluna({
   compacto,
   aoRefazer,
   aoEntregar,
+  produtosComPreparo,
   comTitulo,
 }: {
   coluna: ColunaCozinha
@@ -160,6 +177,8 @@ function Coluna({
   compacto: boolean
   aoRefazer: (ticket: Ticket) => void
   aoEntregar: (ticket: Ticket) => void
+  /** Com o tempo de preparo liberado (Pro): o cardápio, para o disparo e os tempos. */
+  produtosComPreparo: Produto[] | null
   comTitulo: boolean
 }) {
   return (
@@ -188,7 +207,12 @@ function Coluna({
               key={ticket.id}
               ticket={ticket}
               agora={agora}
-              tempos={tempos}
+              tempos={
+                produtosComPreparo ? temposDoTicket(ticket, produtosComPreparo, tempos) : tempos
+              }
+              disparo={
+                produtosComPreparo ? disparoDosItens(ticket.itens, produtosComPreparo) : null
+              }
               prazos={prazos}
               praca={praca ? { nome: praca, aoPronto: () => aoProntoNaPraca(ticket) } : undefined}
               ocupado={emAndamento === ticket.id}
@@ -268,6 +292,9 @@ export function PaginaCozinha({
   const [resumoAberto, setResumoAberto] = useState(false)
   const [ajudaAberta, setAjudaAberta] = useState(false)
   const [refazendo, setRefazendo] = useState<Ticket | null>(null)
+  const preparoLiberado = useOpcaoPro("cozinha.tempoPreparo").liberada
+  const viaLiberada = useOpcaoPro("cozinha.via").liberada
+  const produtosComPreparo = preparoLiberado ? (produtos ?? []) : null
   // A última ação com Desfazer ainda na tela: o Z do teclado desfaz.
   const ultimoDesfazer = useRef<{ id: string | number; desfazer: () => void } | null>(null)
   const [destaque, setDestaque] = useState<string | null>(null)
@@ -322,7 +349,8 @@ export function PaginaCozinha({
     pracas,
     viaDaCozinha: loja?.viaDaCozinha,
     pracaDoAparelho: pracaAtual?.id ?? "todas",
-    ligado: imprimirVias,
+    // Imprimir sozinho é do plano Pro; o Reimprimir manual continua grátis.
+    ligado: imprimirVias && viaLiberada,
     imprimir: vias.imprimir,
   })
   const aoReimprimir = (ticket: Ticket) =>
@@ -470,15 +498,47 @@ export function PaginaCozinha({
             : "Carregando a cozinha…"
         }
         acoes={
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => void quadro.current?.requestFullscreen?.()}
-          >
-            <MaximizeIcon data-icon="inline-start" />
-            Tela cheia
-          </Button>
+          <>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void quadro.current?.requestFullscreen?.()}
+            >
+              <MaximizeIcon data-icon="inline-start" />
+              Tela cheia
+            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon-sm"
+                  aria-label="Mais telas da cozinha"
+                >
+                  <MoreHorizontalIcon />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="min-w-52">
+                <DropdownMenuItem asChild>
+                  <a
+                    href={
+                      pracaAtual ? `/admin/cozinha/tv?praca=${pracaAtual.id}` : "/admin/cozinha/tv"
+                    }
+                  >
+                    <TvIcon />
+                    Modo TV
+                  </a>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="/admin/cozinha/chamada">
+                    <MegaphoneIcon />
+                    Painel de chamada
+                  </a>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </>
         }
       />
 
@@ -507,7 +567,12 @@ export function PaginaCozinha({
           <HistoricoCozinha aoReimprimir={aoReimprimir} aoRefazer={setRefazendo} />
         </TabsContent>
         <TabsContent value="desempenho">
-          <DesempenhoCozinha />
+          <RecursoPro
+            chave="cozinha.desempenho"
+            descricao="Tempo até pronto, % no prazo, retrabalho, movimento por hora e os tempos por praça e produto, de hoje a 30 dias."
+          >
+            <DesempenhoCozinha />
+          </RecursoPro>
         </TabsContent>
         <TabsContent value="ajustes">
           <AjustesCozinha />
@@ -648,6 +713,7 @@ export function PaginaCozinha({
                       compacto={compacto}
                       aoRefazer={setRefazendo}
                       aoEntregar={aoEntregar}
+                      produtosComPreparo={produtosComPreparo}
                       comTitulo
                     />
                   ))}
@@ -691,6 +757,7 @@ export function PaginaCozinha({
                         compacto={compacto}
                         aoRefazer={setRefazendo}
                         aoEntregar={aoEntregar}
+                        produtosComPreparo={produtosComPreparo}
                         comTitulo={false}
                       />
                     </TabsContent>

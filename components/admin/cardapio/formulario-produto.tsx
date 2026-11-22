@@ -103,7 +103,8 @@ import { prepararFoto } from "@/lib/admin/imagem"
 import { opcaoDoProduto } from "@/lib/admin/regras/cardapio"
 import { camposDoProduto, esquemaProduto } from "@/lib/admin/regras/esquema-produto"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
-import { temRecurso } from "@/lib/admin/segmentos-painel"
+import { temModulo, temRecurso } from "@/lib/admin/segmentos-painel"
+import { RecursoPro } from "../recurso-pro"
 import { Traco } from "../traco"
 import { useProdutoAberto } from "./pagina-cardapio"
 
@@ -170,6 +171,7 @@ type Valores = {
   oferta: boolean
   unidade: "un" | "kg"
   duracaoMin?: number
+  preparoMin?: number
   videoUrl: string
   grupos: ValoresGrupo[]
 }
@@ -192,6 +194,7 @@ function valoresIniciais(produto: Produto | undefined): Valores {
     oferta: produto?.oferta ?? false,
     unidade: produto?.unidade ?? "un",
     duracaoMin: produto?.duracaoMin,
+    preparoMin: produto?.preparoMin,
     videoUrl: produto?.videoUrl ?? "",
     grupos: (produto?.grupos ?? []).map(({ ordem, itens, ...grupo }) => ({
       ...grupo,
@@ -258,7 +261,7 @@ function CampoInteiro({
   erro,
 }: {
   control: Control<Valores>
-  nome: `grupos.${number}.${"minimo" | "maximo" | "gratisAte"}` | "duracaoMin"
+  nome: `grupos.${number}.${"minimo" | "maximo" | "gratisAte"}` | "duracaoMin" | "preparoMin"
   rotulo: string
   id: string
   erro?: string
@@ -572,6 +575,7 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
   const { data: produtos = [] } = useProdutos()
   const { data: loja } = useLoja()
   const pracas = loja?.pracas ?? []
+  const temCozinha = temModulo(segmento, "cozinha")
   const salvar = useSalvarProduto()
   const replicar = useReplicarOpcoes()
   const esquema = useMemo(() => esquemaProduto(segmento), [segmento])
@@ -628,6 +632,7 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
       ordem,
       unidade: campos.unidade ? (valores.unidade ?? "un") : "un",
       ...(campos.duracao && valores.duracaoMin ? { duracaoMin: valores.duracaoMin } : {}),
+      ...(temCozinha && valores.preparoMin ? { preparoMin: valores.preparoMin } : {}),
       ...(campos.video && valores.videoUrl ? { videoUrl: valores.videoUrl } : {}),
       grupos: campos.grupos
         ? (valores.grupos ?? []).map((grupo, indiceGrupo) => ({
@@ -820,6 +825,23 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
                 id="produto-duracao"
                 erro={erros.duracaoMin?.message}
               />
+            )}
+            {temCozinha && (
+              <div className="sm:col-span-2">
+                <RecursoPro
+                  chave="cozinha.tempoPreparo"
+                  compacto
+                  descricao="Quanto o produto leva na cozinha: cada item diz quando começar para tudo ficar pronto junto."
+                >
+                  <CampoInteiro
+                    control={control}
+                    nome="preparoMin"
+                    rotulo="Tempo de preparo (min)"
+                    id="produto-preparo"
+                    erro={erros.preparoMin?.message}
+                  />
+                </RecursoPro>
+              </div>
             )}
           </div>
         </Secao>

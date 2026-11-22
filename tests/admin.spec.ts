@@ -371,6 +371,11 @@ test("cozinha: a faixa do turno no Quadro e a aba Desempenho do mês", async ({ 
   await expect(faixa).toHaveScreenshot("cozinha-turno.png")
 
   await page.getByRole("tab", { name: "Desempenho" }).click()
+  // O Desempenho é do plano Pro: o cadeado mostra o preço e o Contratar libera.
+  const contratar = page.getByRole("button", { name: /^Contratar o Desempenho da cozinha/ })
+  await esperarAnimacoes(page)
+  await expect(contratar.locator("..")).toHaveScreenshot("cozinha-desempenho-cadeado.png")
+  await contratar.click()
   await page.getByRole("radio", { name: "30 dias" }).click()
   await expect(page.getByRole("list", { name: "Por praça" })).toBeVisible()
   await verificarAcessibilidade(page)
@@ -378,6 +383,29 @@ test("cozinha: a faixa do turno no Quadro e a aba Desempenho do mês", async ({ 
   await esperarAnimacoes(page)
   await page.mouse.move(0, 0)
   await expect(page).toHaveScreenshot("cozinha-desempenho.png", { fullPage: true })
+})
+
+test("Pro: o modo TV pagina o quadro e o painel de chamada mostra os números", async ({
+  page,
+}, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "TV e chamada são telas grandes")
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha/tv")
+  await page.getByRole("button", { name: /^Contratar o Modo TV/ }).click()
+  const tv = page.getByRole("main", { name: "Cozinha na TV" })
+  await expect(tv.getByRole("region", { name: /^A fazer/ })).toBeVisible({ timeout: 15_000 })
+  await expect(tv.getByRole("button")).toHaveCount(0)
+  await verificarAcessibilidade(page)
+  await esperarAnimacoes(page)
+  await expect(page).toHaveScreenshot("cozinha-tv.png")
+
+  await page.goto("/admin/cozinha/chamada")
+  await page.getByRole("button", { name: /^Contratar o Painel de chamada/ }).click()
+  const chamada = page.getByRole("main", { name: "Chamada de pedidos" })
+  await expect(chamada.getByRole("region", { name: "Pode retirar" })).toBeVisible()
+  await verificarAcessibilidade(page)
+  await esperarAnimacoes(page)
+  await expect(page).toHaveScreenshot("cozinha-chamada.png")
 })
 
 test("praças: o Forno e a Montagem fazem a sua parte, e a expedição vê pronto", async ({

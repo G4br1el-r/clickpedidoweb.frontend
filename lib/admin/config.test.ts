@@ -412,3 +412,21 @@ describe("useMudancasPendentes", () => {
     expect(result.current).toBe(false)
   })
 })
+
+describe("recursos Pro da cozinha", () => {
+  test("estão no catálogo com nome e preço, e não são campos da aparência: nunca entram na sacola sozinhos", () => {
+    for (const chave of [
+      "cozinha.pracas",
+      "cozinha.tv",
+      "cozinha.chamada",
+      "cozinha.desempenho",
+      "cozinha.tempoPreparo",
+      "cozinha.via",
+    ]) {
+      expect(ehPro(chave)).toBe(true)
+      expect(opcaoEmUso(CONFIG_PADRAO, chave)).toBe(false)
+      expect(reverterOpcao(CONFIG_PADRAO, chave)).toBe(CONFIG_PADRAO)
+    }
+    expect(itensDaSacola(CONFIG_PADRAO, false, [])).toEqual([])
+  })
+})

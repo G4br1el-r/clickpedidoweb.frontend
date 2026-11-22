@@ -25,6 +25,7 @@ import { useSalvarPracas } from "@/lib/admin/dados/consultas-entrega"
 import { type Categoria, CORES_DE_PRACA, type Praca } from "@/lib/admin/dados/tipos"
 import { esquemaPracas } from "@/lib/admin/regras/esquema-loja"
 import { plural } from "@/lib/formato"
+import { RecursoPro } from "../recurso-pro"
 import { NOME_DA_COR, TracoDePraca } from "./traco-de-praca"
 
 const novaPraca = (): Praca => ({
@@ -212,6 +213,19 @@ export function PracasDaCozinha() {
     return undefined
   }
 
+  const botaoNova = (
+    <Button
+      type="button"
+      variant="outline"
+      size="sm"
+      className="self-start"
+      onClick={() => setAberta({ praca: novaPraca(), nova: true })}
+    >
+      <PlusIcon data-icon="inline-start" />
+      Nova praça
+    </Button>
+  )
+
   return (
     <div className="flex flex-col gap-3">
       {pracas.length > 0 && (
@@ -242,16 +256,17 @@ export function PracasDaCozinha() {
           ))}
         </ul>
       )}
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="self-start"
-        onClick={() => setAberta({ praca: novaPraca(), nova: true })}
-      >
-        <PlusIcon data-icon="inline-start" />
-        Nova praça
-      </Button>
+      {pracas.length > 0 ? (
+        <RecursoPro
+          chave="cozinha.pracas"
+          compacto
+          descricao="Divida a cozinha em praças, cada uma com a sua tela, via e som."
+        >
+          {botaoNova}
+        </RecursoPro>
+      ) : (
+        botaoNova
+      )}
       {aberta && (
         <JanelaPraca
           praca={aberta.praca}
