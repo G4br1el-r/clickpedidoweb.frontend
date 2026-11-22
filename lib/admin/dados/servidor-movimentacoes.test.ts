@@ -737,3 +737,46 @@ describe("marcar limpa", () => {
     )
   })
 })
+
+describe("ids depois de juntar (achado da revisão)", () => {
+  // A comanda juntada sai de Pedidos: o id e o número dela não voltam a ser usados.
+  test("duas junções seguidas não repetem o id; tirar uma linha não tira a outra", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api, 30, X_BURGER(1))
+    const { mesaId: m31, comanda: c31 } = await aberta(api, 31, REFRI(1))
+    await api.mesas.juntar(comanda.id, [m31])
+    const { mesaId: m32, comanda: c32 } = await aberta(api, 32, REFRI(2))
+
+    expect(c32.id).toBe(c31.id + 1)
+    expect(c32.numero).toBe(c31.numero + 1)
+
+    const { comanda: junta } = await api.mesas.juntar(comanda.id, [m32])
+    const ids = junta.itens.map((item) => item.id)
+    expect(new Set(ids).size).toBe(3)
+
+    const doisRefris = junta.itens.find((item) => item.quantidade === 2) as { id: string }
+    const tirada = await api.mesas.removerItem(comanda.id, doisRefris.id)
+    expect(tirada.itens.map((item) => `${item.quantidade}× ${item.nome}`)).toEqual([
+      "1× X-Burger",
+      "1× Refri lata",
+    ])
+  })
+
+  test("abrir a mesa e transferir itens para a mesa livre também não repetem o id", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api, 30, X_BURGER(1))
+    const { mesaId: m31, comanda: c31 } = await aberta(api, 31, REFRI(1))
+    await api.mesas.juntar(comanda.id, [m31])
+
+    const livre = await mesaNova(api, 32)
+    const { destino } = await api.mesas.transferirItens(comanda.id, {
+      mesaDestinoId: livre,
+      itens: [{ itemId: comanda.itens[0].id, quantidade: 1 }],
+    })
+    expect(destino.id).toBe(c31.id + 1)
+
+    const vazia = await mesaNova(api, 33)
+    const aberta33 = await api.mesas.abrir(vazia, { pessoas: 2, garcom: "Rafa" })
+    expect(aberta33.id).toBe(c31.id + 2)
+  })
+})

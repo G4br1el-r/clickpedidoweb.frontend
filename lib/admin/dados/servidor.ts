@@ -251,6 +251,24 @@ function abrirMesas(base: BaseLoja): BaseLoja {
 
 const reais = (valor: number) => Math.round(valor * 100) / 100
 
+/**
+ * O pedido mais novo que a base já teve: o de maior id em Pedidos ou o que já saiu de lá (a
+ * comanda juntada). O id e o número do pedido novo seguem dele, nunca do último da lista.
+ */
+function ultimoPedido(
+  base: BaseLoja,
+): { id: number; numero: number; criadoEm: string } | undefined {
+  const maior = base.pedidos.reduce<Pedido | undefined>(
+    (atual, pedido) => (!atual || pedido.id > atual.id ? pedido : atual),
+    undefined,
+  )
+  const saiu = base.ultimoPedido
+  return saiu && (!maior || saiu.id > maior.id) ? saiu : maior
+}
+
+/** Id do pedido criado agora: um a mais que o do pedido mais novo que a base já teve. */
+const proximoId = (base: BaseLoja) => (ultimoPedido(base)?.id ?? 0) + 1
+
 /** Valor em reais e centavos, sem fração de centavo. */
 const emCentavosExatos = (valor: number) => Number.isInteger(Number((valor * 100).toFixed(6)))
 
@@ -651,7 +669,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const anteriores = base.pedidos.map((pedido) =>
       new Date(pedido.criadoEm) < hoje ? encerrar(pedido, momento) : pedido,
     )
-    const ultimo = anteriores.at(-1)
+    const ultimo = ultimoPedido({ ...base, pedidos: anteriores })
     const novos = gerarPedidos({
       catalogo: base,
       segmento,
@@ -889,7 +907,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     proximoNumero({
       id,
       mensal: temRecurso(segmento, "numeroMensal"),
-      ultimo: base.pedidos.at(-1),
+      ultimo: ultimoPedido(base),
       agora: new Date(),
     })
 
@@ -1331,7 +1349,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       async simular(): Promise<Pedido> {
         const base = await carregar()
         const agora = new Date()
-        const ultimo = base.pedidos.at(-1)
+        const ultimo = ultimoPedido(base)
         const novo = {
           ...gerarPedidoAgora({
             catalogo: base,
@@ -1588,8 +1606,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const agora = new Date().toISOString()
         const clienteNome = venda.clienteNome?.trim().slice(0, 80)
         const observacao = venda.observacao?.trim().slice(0, 280)
-        const ultimo = base.pedidos.at(-1)
-        const id = (ultimo?.id ?? 0) + 1
+        const id = proximoId(base)
         const pedido: Pedido = comEtapa(
           {
             id,
@@ -1692,7 +1709,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         conferirHorario(base, inicio, duracaoMin)
 
         const agora = new Date().toISOString()
-        const id = (base.pedidos.at(-1)?.id ?? 0) + 1
+        const id = proximoId(base)
         const itens: ItemPedido[] = servicos.map((servico, indice) => ({
           id: `${id}-${indice + 1}`,
           produtoId: servico.id,
@@ -1941,7 +1958,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         }
         const garcom = garcomDaLista(base, garcomPedido, true)
         const agora = new Date().toISOString()
-        const id = (base.pedidos.at(-1)?.id ?? 0) + 1
+        const id = proximoId(base)
         const comanda = comEvento(
           comEtapa(
             // O couvert já entra na conta da mesa vazia.
@@ -1987,7 +2004,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           : (garcomDaLista(base, lancamento.garcom, false) ??
             lancamento.garcom?.trim().slice(0, 80))
         const rodada = Math.max(0, ...(aberta?.itens.map((item) => item.rodada ?? 1) ?? [])) + 1
-        const id = aberta?.id ?? (base.pedidos.at(-1)?.id ?? 0) + 1
+        const id = aberta?.id ?? proximoId(base)
         const vaiParaCozinha = lancamento.enviarParaCozinha
         const novos: ItemPedido[] = lancamento.itens.map((lancado, indice) => {
           const { produtoId, nome, precoUnitario, custoUnitario, opcoes, produtosDasOpcoes } =
@@ -2536,9 +2553,20 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             throw new Error("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
           }
           const junta = { ...comanda, atualizadoEm: agora }
+          // A comanda que sai de Pedidos pode ser a mais nova: o id e o número dela ficam guardados.
+          const ultimo = ultimoPedido(base)
           return {
             nova: {
               ...base,
+              ...(ultimo
+                ? {
+                    ultimoPedido: {
+                      id: ultimo.id,
+                      numero: ultimo.numero,
+                      criadoEm: ultimo.criadoEm,
+                    },
+                  }
+                : {}),
               pedidos: base.pedidos
                 .filter((pedido) => !saem.includes(pedido.id))
                 .map((pedido) => (pedido.id === junta.id ? junta : pedido)),
@@ -2629,7 +2657,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
               texto: `Transferiu ${texto} para a mesa ${mesa.numero}`,
             },
           )
-          const id = aberta?.id ?? (base.pedidos.at(-1)?.id ?? 0) + 1
+          const id = aberta?.id ?? proximoId(base)
           destinoId = id
           const garcom = origem.mesa.garcom
           const recebeu = recalcular(

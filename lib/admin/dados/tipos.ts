@@ -531,4 +531,9 @@ export type BaseLoja = CatalogoLoja & {
   reservas: Reserva[]
   espera: EntradaEspera[]
   chamados: Chamado[]
+  /**
+   * O pedido mais novo que já saiu de Pedidos (a comanda juntada a outra). O id e o número dele
+   * não voltam a ser usados: os itens e o estoque continuam apontando para ele.
+   */
+  ultimoPedido?: { id: number; numero: number; criadoEm: string }
 }
