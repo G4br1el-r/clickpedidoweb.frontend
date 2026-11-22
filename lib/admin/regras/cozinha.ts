@@ -84,15 +84,46 @@ function chaveDaRodada(pedido: Pedido): string | null {
   return primeiro ? `${pedido.id}:${rodadaDo(primeiro)}` : null
 }
 
-export const rodadasNaCozinha = (pedidos: Pedido[]): Set<string> =>
-  new Set(pedidos.map(chaveDaRodada).filter((chave) => chave !== null))
+/** "item:pedido:item" de cada item da rodada que a cozinha tem: ele sobrevive à junção. */
+const chavesDosItens = (pedido: Pedido) =>
+  itensDaCozinha(pedido).atuais.map((item) => `item:${pedido.id}:${item.id}`)
 
-/** Rodadas que chegaram desde a última leitura: pedido novo ou mais itens numa comanda. */
+/** O que a cozinha tem agora: a chave de cada rodada e a de cada item dela. */
+export const rodadasNaCozinha = (pedidos: Pedido[]): Set<string> =>
+  new Set(
+    pedidos.flatMap((pedido) => {
+      const chave = chaveDaRodada(pedido)
+      return chave ? [chave, ...chavesDosItens(pedido)] : []
+    }),
+  )
+
+/**
+ * Rodadas que chegaram desde a última leitura: pedido novo ou mais itens numa comanda. Juntar
+ * mesas renumera as rodadas (e a da secundária muda de comanda): a rodada com um item que a
+ * cozinha já tinha, na mesma comanda ou numa que saiu da tela, não é nova.
+ */
 export function rodadasNovas(conhecidas: ReadonlySet<string>, pedidos: Pedido[]): string[] {
+  const naTela = new Set(pedidos.map((pedido) => pedido.id))
+  const itensConhecidos = [...conhecidas]
+    .filter((chave) => chave.startsWith("item:"))
+    .map((chave) => {
+      const [, pedido, ...item] = chave.split(":")
+      return { pedido: Number(pedido), item: item.join(":") }
+    })
+  const jaTinha = (pedido: Pedido) =>
+    itensDaCozinha(pedido).atuais.some((item) =>
+      itensConhecidos.some(
+        (conhecido) =>
+          conhecido.item === item.id &&
+          (conhecido.pedido === pedido.id || !naTela.has(conhecido.pedido)),
+      ),
+    )
   return pedidos
     .filter((pedido) => pedido.status === "recebido")
-    .map(chaveDaRodada)
-    .filter((chave) => chave !== null && !conhecidas.has(chave)) as string[]
+    .flatMap((pedido) => {
+      const chave = chaveDaRodada(pedido)
+      return chave && !conhecidas.has(chave) && !jaTinha(pedido) ? [chave] : []
+    })
 }
 
 /** Quando a rodada atual chegou à cozinha: o lançamento do garçom ou a criação do pedido. */

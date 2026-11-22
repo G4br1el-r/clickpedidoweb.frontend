@@ -238,6 +238,29 @@ describe("rodadasNovas", () => {
     const depois = [QUADRO[0], QUADRO[1], QUADRO[2], QUADRO[3], QUADRO[10]]
     expect(rodadasNovas(antes, depois)).toEqual(["11:1", "12:2"])
   })
+
+  test("juntar mesas renumera as rodadas, mas a que já estava na cozinha não toca de novo", () => {
+    const comItem = (id: string, rodada: number) => ({ ...item("Pizza", rodada, true), id })
+    // A secundária (31) tem a rodada na cozinha: ela entra na principal (30) como rodada 2.
+    const antes = rodadasNaCozinha([
+      pedido(30, "pronto", 30, "mesa", [comItem("30-1-1", 1)]),
+      pedido(31, "recebido", 5, "mesa", [comItem("31-1-1", 1)]),
+    ])
+    const junta = pedido(30, "recebido", 30, "mesa", [comItem("30-1-1", 1), comItem("31-1-1", 2)])
+    expect(rodadasNovas(antes, [junta])).toEqual([])
+
+    // A principal tem a rodada na cozinha: as dela passam para depois das da secundária.
+    const antes2 = rodadasNaCozinha([
+      pedido(30, "recebido", 30, "mesa", [comItem("30-1-1", 1)]),
+      pedido(31, "pronto", 5, "mesa", [comItem("31-1-1", 1)]),
+    ])
+    const junta2 = pedido(30, "recebido", 30, "mesa", [comItem("31-1-1", 1), comItem("30-1-1", 2)])
+    expect(rodadasNovas(antes2, [junta2])).toEqual([])
+
+    // A rodada lançada depois, na comanda junta, toca.
+    const nova = { ...junta2, itens: [...junta2.itens, comItem("30-3-1", 3)] }
+    expect(rodadasNovas(rodadasNaCozinha([junta2]), [nova])).toEqual(["30:3"])
+  })
 })
 
 describe("urgenciaNaCozinha", () => {
