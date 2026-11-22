@@ -146,6 +146,21 @@ describe("DetalhesPedido", () => {
     expect(guardado?.motivoCancelamento).toBe("fora-da-area")
   })
 
+  test("a comanda cancelada pela mesa mostra o motivo escrito", async () => {
+    const api = servidorDo(useSegmentoAtual.getState().segmento)
+    const mesa = await api.mesas.criar({ numero: 90 })
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    await api.mesas.cancelarComanda(comanda.id, { motivo: "Cliente foi embora" })
+    renderizar(comanda.id)
+    const detalhes = await painel(comanda)
+
+    expect(detalhes.getByText("Motivo: Outro · Cliente foi embora")).toBeInTheDocument()
+  })
+
   test("cancelado sem motivo mostra Não informado", async () => {
     const pedido = await umPedido((p) => p.status === "cancelado" && !p.motivoCancelamento)
     renderizar(pedido.id)

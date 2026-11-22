@@ -177,3 +177,62 @@ describe("ComandaMesa: adicionar itens", () => {
     ).toBeInTheDocument()
   })
 })
+
+/** Mesa 11 aberta com um Suco só lançado e uma Pizza que a cozinha já está preparando. */
+async function mesa11ComPizzaEmPreparo() {
+  const mesa = (await api().mesas.listar()).find((item) => item.numero === 11)
+  const mesaId = mesa?.id ?? ""
+  await api().mesas.abrir(mesaId, { pessoas: 2, garcom: "Bia" })
+  await api().mesas.lancar({
+    mesaId,
+    enviarParaCozinha: false,
+    itens: [{ avulso: { nome: "Suco", preco: 9.5 }, quantidade: 1 }],
+  })
+  const comanda = await api().mesas.lancar({
+    mesaId,
+    enviarParaCozinha: true,
+    itens: [{ avulso: { nome: "Pizza", preco: 40 }, quantidade: 1 }],
+  })
+  await api().pedidos.avancar(comanda.id, "recebido")
+  return comanda
+}
+
+describe("ComandaMesa: editar, tirar e cancelar", () => {
+  test("Editar no item que a cozinha não preparou troca a observação", async () => {
+    await mesa11ComPizzaEmPreparo()
+    const { usuario, gaveta } = await abrirMesa(11)
+    const suco = within(await gaveta.findByRole("listitem", { name: "Suco" }))
+    await usuario.click(suco.getByRole("button", { name: "Editar" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Editar Suco" }))
+    await usuario.type(janela.getByRole("textbox", { name: "Observação" }), "Sem gelo")
+    await usuario.click(janela.getByRole("button", { name: "Salvar" }))
+
+    expect(await suco.findByText("“Sem gelo”")).toBeInTheDocument()
+  })
+
+  test("o item que a cozinha já preparou não tem Editar e não aumenta", async () => {
+    await mesa11ComPizzaEmPreparo()
+    const { gaveta } = await abrirMesa(11)
+    const pizza = within(await gaveta.findByRole("listitem", { name: "Pizza" }))
+    expect(pizza.queryByRole("button", { name: "Editar" })).not.toBeInTheDocument()
+    expect(pizza.getByRole("button", { name: "Mais um" })).toBeDisabled()
+  })
+
+  test("Cancelar comanda, na aba Conta, pede o motivo e deixa a mesa livre", async () => {
+    await mesa11ComPizzaEmPreparo()
+    const { usuario, gaveta } = await abrirMesa(11)
+    await usuario.click(await gaveta.findByRole("tab", { name: "Conta" }))
+    await usuario.click(gaveta.getByRole("button", { name: "Cancelar comanda" }))
+    const pergunta = within(
+      await screen.findByRole("alertdialog", { name: "Cancelar a comanda da mesa 11?" }),
+    )
+    const confirmar = pergunta.getByRole("button", { name: "Cancelar comanda" })
+    expect(confirmar).toBeDisabled()
+    await usuario.type(pergunta.getByRole("textbox", { name: "Motivo" }), "Cliente foi embora")
+    await usuario.click(confirmar)
+
+    expect(await screen.findByText("Comanda da mesa 11 cancelada.")).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(await cartao(11)).toHaveTextContent("Livre")
+  })
+})

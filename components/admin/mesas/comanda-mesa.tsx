@@ -7,12 +7,14 @@ import {
   CreditCardIcon,
   LockOpenIcon,
   MinusIcon,
+  PencilIcon,
   PlusIcon,
   PrinterIcon,
   QrCodeIcon,
   ReceiptIcon,
   SprayCanIcon,
   Trash2Icon,
+  XIcon,
 } from "lucide-react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { useRef, useState } from "react"
@@ -58,11 +60,13 @@ import type { ItemPedido, Mesa, Pedido } from "@/lib/admin/dados/tipos"
 import { cozinhaJaPreparou } from "@/lib/admin/regras/cozinha"
 import { type EstadoMesa, estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
-import { emReais, formatoMoeda } from "@/lib/formato"
+import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
 import { AbrirMesa } from "./abrir-mesa"
 import { AdicionarItens } from "./adicionar-itens"
+import { CancelarComanda } from "./cancelar-comanda"
+import { EditarItem } from "./editar-item"
 import { ConfirmarExclusaoMesa } from "./excluir-mesa"
 import { TirarItem } from "./tirar-item"
 
@@ -258,6 +262,40 @@ function FecharConta({
   )
 }
 
+/** Aba Conta: o resumo da comanda e as ações sobre ela. Pagamentos e divisão chegam na Fase 4. */
+function ContaComanda({ pedido, aoCancelar }: { pedido: Pedido; aoCancelar: () => void }) {
+  const quantidade = pedido.itens.reduce((soma, item) => soma + item.quantidade, 0)
+  return (
+    <>
+      <dl className="flex flex-col gap-2 text-sm">
+        <div className="flex justify-between">
+          <dt className="text-muted-foreground">Itens</dt>
+          <dd className="tabular-nums">
+            {plural(quantidade, "item", "itens")} · {emReais(pedido.subtotal)}
+          </dd>
+        </div>
+        {pedido.mesa?.pessoas !== undefined && (
+          <div className="flex justify-between">
+            <dt className="text-muted-foreground">Pessoas</dt>
+            <dd className="tabular-nums">{pedido.mesa.pessoas}</dd>
+          </div>
+        )}
+      </dl>
+      {pedido.itens.length > 0 && (
+        <Button
+          type="button"
+          variant="outline"
+          className="self-start text-destructive"
+          onClick={aoCancelar}
+        >
+          <XIcon data-icon="inline-start" />
+          Cancelar comanda
+        </Button>
+      )}
+    </>
+  )
+}
+
 function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFechar: () => void }) {
   const { data: loja } = useLoja()
   const alterar = useAlterarQuantidade()
@@ -265,6 +303,8 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   const liberar = useLiberarMesa()
   const [fechando, setFechando] = useState(false)
   const [adicionando, setAdicionando] = useState(false)
+  const [editando, setEditando] = useState<ItemPedido | null>(null)
+  const [cancelando, setCancelando] = useState(false)
   const conta = useRef<HTMLDivElement>(null)
   const imprimir = useReactToPrint({
     contentRef: conta,
@@ -363,6 +403,19 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                       </span>
                     </div>
                     <div className="flex items-center gap-1">
+                      {/* Depois que a cozinha preparou, só tirando (com motivo) e lançando de novo. */}
+                      {!cozinhaJaPreparou(pedido, item) && (
+                        <Button
+                          type="button"
+                          size="icon-sm"
+                          className="max-md:size-10"
+                          variant="ghost"
+                          aria-label="Editar"
+                          onClick={() => setEditando(item)}
+                        >
+                          <PencilIcon />
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         size="icon-sm"
@@ -383,7 +436,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                         className="max-md:size-10"
                         variant="outline"
                         aria-label="Mais um"
-                        disabled={item.quantidade >= 999}
+                        disabled={item.quantidade >= 999 || cozinhaJaPreparou(pedido, item)}
                         onClick={() =>
                           alterar.mutate(
                             {
@@ -424,7 +477,9 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
           </Button>
           <ItemAvulso mesaId={mesa.id} />
         </TabsContent>
-        <TabsContent value="conta" className="flex flex-col gap-5 overflow-y-auto p-4" />
+        <TabsContent value="conta" className="flex flex-col gap-5 overflow-y-auto p-4">
+          <ContaComanda pedido={pedido} aoCancelar={() => setCancelando(true)} />
+        </TabsContent>
         <TabsContent value="historico" className="flex flex-col gap-5 overflow-y-auto p-4" />
       </Tabs>
 
@@ -492,6 +547,14 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
           confirmando?.tirar(motivo)
           setConfirmando(null)
         }}
+      />
+      <EditarItem pedidoId={pedido.id} item={editando} aoFechar={() => setEditando(null)} />
+      <CancelarComanda
+        mesa={mesa}
+        comanda={pedido}
+        aberta={cancelando}
+        aoMudar={setCancelando}
+        aoCancelar={aoFechar}
       />
       <AdicionarItens mesa={mesa} comanda={pedido} aberta={adicionando} aoMudar={setAdicionando} />
       <FecharConta

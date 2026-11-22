@@ -190,7 +190,10 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
         <CaminhoPedido pedido={pedido} />
         {pedido.status === "cancelado" && (
           <p className="text-sm text-muted-foreground">
-            Motivo: {rotuloMotivo(pedido.motivoCancelamento)}
+            Motivo:{" "}
+            {[rotuloMotivo(pedido.motivoCancelamento), pedido.detalheCancelamento]
+              .filter(Boolean)
+              .join(" · ")}
           </p>
         )}
         <div className="flex items-center gap-2 pt-1">
