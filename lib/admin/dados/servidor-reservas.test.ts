@@ -169,3 +169,59 @@ describe("reservas: editar, cancelar e não compareceu", () => {
     )
   })
 })
+
+describe("sentar a reserva", () => {
+  test("abre a mesa da reserva com o nome e as pessoas, sem pedir confirmação", async () => {
+    const api = servidor()
+    const mesaId = await mesaNova(api, 30)
+    const { id } = await api.reservas.criar({ ...marina, mesaId })
+
+    const { reserva, comanda } = await api.reservas.sentar(id, { por: "Rafa" })
+
+    expect(reserva).toMatchObject({ id, status: "sentou", mesaId })
+    expect(comanda.cliente.nome).toBe("Marina Costa")
+    expect(comanda.mesa).toMatchObject({ id: mesaId, numero: 30, pessoas: 2 })
+    expect(comanda.eventos?.at(-1)).toMatchObject({
+      texto: "Mesa aberta para 2 pessoas",
+      por: "Rafa",
+    })
+    const [mesa] = (await servidor().mesas.listar()).filter((item) => item.id === mesaId)
+    expect(mesa).toMatchObject({ status: "ocupada", clienteNome: "Marina Costa" })
+    expect((await servidor().reservas.listar())[0].status).toBe("sentou")
+  })
+})
+
+describe("sentar a reserva: a mesa e o horário", () => {
+  test("sem mesa na reserva, senta na mesa dada e guarda nela; sem nenhuma, pede", async () => {
+    const api = servidor()
+    const mesaId = await mesaNova(api, 30)
+    const { id } = await api.reservas.criar(marina)
+    await expect(api.reservas.sentar(id, {})).rejects.toThrow("Escolha a mesa.")
+    const { reserva } = await api.reservas.sentar(id, { mesaId })
+    expect(reserva.mesaId).toBe(mesaId)
+  })
+
+  test("a atrasada ainda senta; a cancelada, não", async () => {
+    const api = servidor()
+    const mesaId = await mesaNova(api, 30)
+    const atrasada = await api.reservas.criar({ ...marina, mesaId })
+    const cancelada = await api.reservas.criar({ ...marina, nome: "Outra" })
+    await api.reservas.cancelar(cancelada.id)
+    vi.setSystemTime(new Date(2026, 10, 13, 21, 10))
+    await expect(api.reservas.sentar(atrasada.id, {})).resolves.toBeDefined()
+    await expect(api.reservas.sentar(cancelada.id, { mesaId })).rejects.toThrow(
+      "Essa reserva não está mais marcada.",
+    )
+  })
+
+  test("outra reserva da vez na mesa escolhida pede confirmação", async () => {
+    const api = servidor()
+    const mesaId = await mesaNova(api, 30)
+    await api.reservas.criar({ ...marina, mesaId })
+    const { id } = await api.reservas.criar({ ...marina, nome: "Roberto" })
+    await expect(api.reservas.sentar(id, { mesaId })).rejects.toThrow(
+      "A mesa 30 está reservada às 20:50. Confirme para abrir.",
+    )
+    await expect(api.reservas.sentar(id, { mesaId, confirmarReserva: true })).resolves.toBeDefined()
+  })
+})

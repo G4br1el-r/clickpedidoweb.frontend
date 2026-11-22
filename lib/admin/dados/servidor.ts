@@ -203,6 +203,9 @@ export type AberturaMesa = {
   por?: string
 }
 
+/** Sentar quem reservou ou esperava: a mesa (a da reserva, se não vier), o garçom e quem fez. */
+export type Sentada = Omit<AberturaMesa, "pessoas" | "clienteNome"> & { mesaId?: string }
+
 export type OpcoesServidor = {
   segmento: SegmentoPainelId
   carregarCatalogo: () => Promise<CatalogoLoja>
@@ -919,6 +922,59 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       reservas: base.reservas.map((item) => (item.id === id ? nova : item)),
     })
     return responder(nova)
+  }
+
+  /**
+   * Abre a mesa com a comanda vazia, com as regras de "Abrir mesa": pessoas, garçom da lista e,
+   * se reservada agora, só com a confirmação. `reservaId`: a reserva que está sentando, que não
+   * pede confirmação para ela mesma. Devolve a base nova, sem gravar.
+   */
+  function abrirComanda(
+    base: BaseLoja,
+    mesaId: string,
+    { pessoas, garcom: garcomPedido, clienteNome, confirmarReserva, por }: AberturaMesa,
+    reservaId?: string,
+  ): { base: BaseLoja; comanda: Pedido } {
+    const mesa = base.mesas.find((item) => item.id === mesaId)
+    if (!mesa) throw new Error("Mesa não encontrada")
+    if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
+    if (comandaDa(base, mesa.id)) throw new Error(`A mesa ${mesa.numero} já está aberta.`)
+    if (!Number.isInteger(pessoas) || pessoas < 1 || pessoas > 99) {
+      throw new Error("Informe de 1 a 99 pessoas.")
+    }
+    const reserva = reservaDaMesa(
+      { id: mesa.id },
+      base.reservas.filter((item) => item.id !== reservaId),
+      new Date(),
+      base.salao.reservas,
+    )
+    if (reserva && !confirmarReserva) {
+      throw new Error(
+        `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}. Confirme para abrir.`,
+      )
+    }
+    const garcom = garcomDaLista(base, garcomPedido, true)
+    const agora = new Date().toISOString()
+    const id = proximoId(base)
+    const comanda = comEvento(
+      comEtapa(
+        // O couvert já entra na conta da mesa vazia.
+        recalcular(
+          comandaNova(base, mesa, {
+            id,
+            agora,
+            cliente: clienteNome?.trim().slice(0, 80),
+            garcom,
+            pessoas,
+            itens: [],
+            enviarParaCozinha: false,
+          }),
+        ),
+        agora,
+      ),
+      eventoAberta(agora, pessoas, garcom ?? por),
+    )
+    return { base: abrirMesas({ ...base, pedidos: [...base.pedidos, comanda] }), comanda }
   }
 
   async function mudarProduto(id: string, mudar: (produto: Produto) => Produto): Promise<Produto> {
@@ -1893,6 +1949,34 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return mudarReserva(id, (reserva) => ({ ...reserva, status: "cancelada" }))
       },
 
+      /**
+       * A reserva chegou: abre a mesa (a dela, ou a escolhida agora) com o nome e as pessoas, e
+       * guarda a mesa em que sentou. A própria reserva não pede confirmação.
+       */
+      async sentar(
+        id: string,
+        { mesaId, ...abertura }: Sentada,
+      ): Promise<{ reserva: Reserva; comanda: Pedido }> {
+        const base = await carregar()
+        const reserva = base.reservas.find((item) => item.id === id)
+        if (!reserva) throw new Error("Reserva não encontrada")
+        if (reserva.status !== "marcada") throw new Error("Essa reserva não está mais marcada.")
+        const destino = mesaId ?? reserva.mesaId
+        if (!destino) throw new Error("Escolha a mesa.")
+        const { base: aberta, comanda } = abrirComanda(
+          base,
+          destino,
+          { ...abertura, pessoas: reserva.pessoas, clienteNome: reserva.nome },
+          reserva.id,
+        )
+        const sentada: Reserva = { ...reserva, mesaId: destino, status: "sentou" }
+        await substituir({
+          ...aberta,
+          reservas: aberta.reservas.map((item) => (item.id === id ? sentada : item)),
+        })
+        return responder({ reserva: sentada, comanda })
+      },
+
       /** A pessoa não veio: a mesa fica livre na hora, sem esperar a tolerância. */
       naoCompareceu(id: string): Promise<Reserva> {
         return mudarReserva(id, (reserva) => ({ ...reserva, status: "nao-compareceu" }))
@@ -2098,46 +2182,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
        * Abre a mesa com a comanda vazia: pessoas, garçom da lista e, se quiser, o cliente.
        * Mais pessoas que lugares não recusa (a tela avisa).
        */
-      async abrir(
-        mesaId: string,
-        { pessoas, garcom: garcomPedido, clienteNome, confirmarReserva, por }: AberturaMesa,
-      ): Promise<Pedido> {
-        const base = await carregar()
-        const mesa = base.mesas.find((item) => item.id === mesaId)
-        if (!mesa) throw new Error("Mesa não encontrada")
-        if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
-        if (comandaDa(base, mesa.id)) throw new Error(`A mesa ${mesa.numero} já está aberta.`)
-        if (!Number.isInteger(pessoas) || pessoas < 1 || pessoas > 99) {
-          throw new Error("Informe de 1 a 99 pessoas.")
-        }
-        const reserva = reservaDaVez(base, mesa.id, new Date())
-        if (reserva && !confirmarReserva) {
-          throw new Error(
-            `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}. Confirme para abrir.`,
-          )
-        }
-        const garcom = garcomDaLista(base, garcomPedido, true)
-        const agora = new Date().toISOString()
-        const id = proximoId(base)
-        const comanda = comEvento(
-          comEtapa(
-            // O couvert já entra na conta da mesa vazia.
-            recalcular(
-              comandaNova(base, mesa, {
-                id,
-                agora,
-                cliente: clienteNome?.trim().slice(0, 80),
-                garcom,
-                pessoas,
-                itens: [],
-                enviarParaCozinha: false,
-              }),
-            ),
-            agora,
-          ),
-          eventoAberta(agora, pessoas, garcom ?? por),
-        )
-        await substituir(abrirMesas({ ...base, pedidos: [...base.pedidos, comanda] }))
+      async abrir(mesaId: string, abertura: AberturaMesa): Promise<Pedido> {
+        const { base, comanda } = abrirComanda(await carregar(), mesaId, abertura)
+        await substituir(base)
         return responder(comanda)
       },
 
