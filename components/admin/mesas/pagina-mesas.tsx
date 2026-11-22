@@ -180,9 +180,12 @@ export function PaginaMesas() {
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
+      {/* Com Chamados, as ações ficam largas: em tela média, descem para baixo do título em vez
+          de espremer o resumo numa palavra por linha. */}
       <CabecalhoPagina
         titulo="Mesas"
         vivo
+        className="md:flex-wrap md:gap-x-6 md:[&>div:first-child]:min-w-64 md:[&>div:first-child]:flex-1"
         resumo={
           mesas
             ? [
