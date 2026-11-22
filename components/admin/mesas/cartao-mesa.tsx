@@ -234,20 +234,22 @@ function MenuMesa({
         aoMudar={setExcluindo}
         focoAoFechar={gatilho}
       />
-      {comanda && movendo === "transferir" && (
+      {comanda && (
         <TransferirMesa
           mesa={mesa}
           comanda={comanda}
-          aberta
+          aberta={movendo === "transferir"}
           aoMudar={(aberta) => !aberta && setMovendo(null)}
+          focoAoFechar={gatilho}
         />
       )}
-      {comanda && movendo === "juntar" && (
+      {comanda && (
         <JuntarMesas
           mesa={mesa}
           comanda={comanda}
-          aberta
+          aberta={movendo === "juntar"}
           aoMudar={(aberta) => !aberta && setMovendo(null)}
+          focoAoFechar={gatilho}
         />
       )}
     </>

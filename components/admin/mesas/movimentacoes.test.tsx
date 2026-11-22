@@ -152,6 +152,23 @@ describe("Mesas: transferir, juntar e separar pelo menu ⋯", () => {
     ).toBeInTheDocument()
   })
 
+  for (const [acao, titulo] of [
+    ["Transferir", "Transferir a mesa 1"],
+    ["Juntar mesas", "Juntar à mesa 1"],
+  ] as const) {
+    test(`fechar o ${acao} aberto pelo ⋯ devolve o foco ao botão Ações da mesa 1`, async () => {
+      const usuario = await abrir()
+      await usuario.click((await menu(usuario, 1)).getByRole("menuitem", { name: acao }))
+      await screen.findByRole("dialog", { name: titulo })
+      await usuario.keyboard("{Escape}")
+
+      await waitFor(() =>
+        expect(screen.queryByRole("dialog", { name: titulo })).not.toBeInTheDocument(),
+      )
+      expect(screen.getByRole("button", { name: "Ações da mesa 1" })).toHaveFocus()
+    })
+  }
+
   test("marcar limpa a mesa 9 avisa com Desfazer; desfazer volta a Limpeza", async () => {
     const usuario = await abrir()
     await usuario.click((await menu(usuario, 9)).getByRole("menuitem", { name: "Marcar limpa" }))

@@ -20,6 +20,7 @@ import { useGarcom } from "@/lib/admin/garcom"
 import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { numerosEmTexto } from "@/lib/admin/regras/movimentacoes"
 import { useAvisoComDesfazer } from "./aviso-desfazer"
+import { devolverFocoA } from "./devolver-foco"
 
 function Campos({
   mesa,
@@ -118,15 +119,18 @@ export function JuntarMesas({
   comanda,
   aberta,
   aoMudar,
+  focoAoFechar,
 }: {
   mesa: Mesa
   comanda: Pedido
   aberta: boolean
   aoMudar: (aberta: boolean) => void
+  /** Para onde o foco volta quando a janela fecha (o botão ⋯ da mesa). */
+  focoAoFechar?: HTMLElement | null
 }) {
   return (
     <Dialog open={aberta} onOpenChange={aoMudar}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent onCloseAutoFocus={devolverFocoA(focoAoFechar)} className="sm:max-w-md">
         <Campos mesa={mesa} comanda={comanda} aoFechar={() => aoMudar(false)} />
       </DialogContent>
     </Dialog>

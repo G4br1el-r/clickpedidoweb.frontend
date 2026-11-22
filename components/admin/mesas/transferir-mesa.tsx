@@ -24,6 +24,7 @@ import type { Mesa, Pedido } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
 import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { useAvisoComDesfazer } from "./aviso-desfazer"
+import { devolverFocoA } from "./devolver-foco"
 
 /** Mesa que pode receber a comanda inteira: livre, sem bloqueio e sem estar junto de outra. */
 export const recebeComanda = (mesa: Mesa) =>
@@ -114,15 +115,18 @@ export function TransferirMesa({
   comanda,
   aberta,
   aoMudar,
+  focoAoFechar,
 }: {
   mesa: Mesa
   comanda: Pedido
   aberta: boolean
   aoMudar: (aberta: boolean) => void
+  /** Para onde o foco volta quando a janela fecha (o botão ⋯ da mesa). */
+  focoAoFechar?: HTMLElement | null
 }) {
   return (
     <Dialog open={aberta} onOpenChange={aoMudar}>
-      <DialogContent className="sm:max-w-sm">
+      <DialogContent onCloseAutoFocus={devolverFocoA(focoAoFechar)} className="sm:max-w-sm">
         <Campos mesa={mesa} comanda={comanda} aoFechar={() => aoMudar(false)} />
       </DialogContent>
     </Dialog>
