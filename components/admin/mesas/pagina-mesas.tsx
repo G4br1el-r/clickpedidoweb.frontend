@@ -223,7 +223,12 @@ export function PaginaMesas() {
       />
 
       {mesas && agora && (
-        <NumerosSalao mesas={mesas} abertas={[...comandas.values()]} agora={agora} />
+        <NumerosSalao
+          mesas={mesas}
+          abertas={[...comandas.values()]}
+          agora={agora}
+          {...(qrLigado && chamados ? { chamados } : {})}
+        />
       )}
 
       {/* O painel de reservas fica à direita a partir de 1280 px; abaixo disso, acima da grade.

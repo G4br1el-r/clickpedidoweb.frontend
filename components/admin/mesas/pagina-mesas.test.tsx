@@ -358,6 +358,23 @@ describe("PaginaMesas", () => {
     expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("90 min")
     expect(faixa.getByText("Giro das mesas").nextElementSibling).toHaveTextContent("0,1")
     expect(faixa.getByText("Ticket por mesa").nextElementSibling).toHaveTextContent(emReais(126))
+    // O chamado da demonstração ainda está aberto: não há tempo de atendimento.
+    expect(faixa.getByText("Atendimento de chamado").nextElementSibling).toHaveTextContent("—")
+  })
+
+  test("Ver mais mostra o tempo médio de atendimento dos chamados de hoje", async () => {
+    // O chamado da demonstração (mesa 1) chegou às 20:27; atendido às 20:31, 4 min.
+    const [chamado] = await api().chamados.listar()
+    vi.setSystemTime(new Date(2026, 10, 13, 20, 31))
+    await api().chamados.atender(chamado.id)
+    const usuario = await abrir()
+
+    const faixa = within(await screen.findByRole("region", { name: "Números do salão" }))
+    await usuario.click(faixa.getByRole("button", { name: "Ver mais" }))
+
+    expect((await faixa.findByText("Atendimento de chamado")).nextElementSibling).toHaveTextContent(
+      "4 min",
+    )
   })
 
   test("a conta fechada hoje entra no faturamento, nos tickets, na permanência e no giro", async () => {
