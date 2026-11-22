@@ -25,7 +25,18 @@ export type FiltrosLista = {
   /** Telefones do cliente, só os dígitos com DDD. */
   clientes?: string[]
   motivos?: MotivoDoFiltro[]
+  /** Nomes de bairro da entrega; a comparação ignora acento e maiúsculas. */
+  bairros?: string[]
+  /** Ids de motoboy, ou `SEM_MOTOBOY` para as entregas sem ninguém anotado. */
+  motoboys?: string[]
 }
+
+/** No filtro de motoboy: a entrega que não tem motoboy anotado. */
+export const SEM_MOTOBOY = "sem-motoboy"
+
+/** O motoboy do pedido no filtro: o id, `SEM_MOTOBOY` na entrega sem ninguém, nada fora da entrega. */
+export const motoboyDoPedido = (pedido: Pedido) =>
+  pedido.tipo === "entrega" ? (pedido.motoboyId ?? SEM_MOTOBOY) : undefined
 
 /** Minúsculas e sem acento: "João" acha "joao". */
 export const normalizar = (texto: string) =>
@@ -51,12 +62,23 @@ const aceita = <T>(lista: T[] | undefined, valor: T) => !lista?.length || lista.
 
 /**
  * Busca (número, cliente, telefone ou item) combinada com os filtros de status, canal,
- * pagamento, origem, cliente e motivo do cancelamento.
+ * pagamento, origem, cliente, motivo do cancelamento, bairro e motoboy.
  */
 export function filtrarPedidos(
   pedidos: Pedido[],
-  { busca = "", status, tipos, pagamentos, origens, clientes, motivos }: FiltrosLista,
+  {
+    busca = "",
+    status,
+    tipos,
+    pagamentos,
+    origens,
+    clientes,
+    motivos,
+    bairros,
+    motoboys,
+  }: FiltrosLista,
 ) {
+  const bairrosNormais = bairros?.map((bairro) => normalizar(bairro).trim())
   return pedidos.filter(
     (pedido) =>
       aceita(status, pedido.status) &&
@@ -65,6 +87,9 @@ export function filtrarPedidos(
       aceita(origens, pedido.origem) &&
       (!clientes?.length || clientes.includes(telefoneDoCliente(pedido.cliente.telefone) ?? "")) &&
       (!motivos?.length || motivos.includes(motivoDoPedido(pedido) as MotivoDoFiltro)) &&
+      (!bairrosNormais?.length ||
+        bairrosNormais.includes(normalizar(pedido.endereco?.bairro ?? "").trim())) &&
+      (!motoboys?.length || motoboys.includes(motoboyDoPedido(pedido) ?? "")) &&
       combinaBusca(pedido, busca),
   )
 }
