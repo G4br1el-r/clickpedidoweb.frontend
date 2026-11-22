@@ -129,6 +129,16 @@ function PorItem({
   const livres = pedido.itens.filter((item) => !item.cortesia && !pagos.has(item.id))
   const escolhidos = marcados.filter((id) => livres.some((item) => item.id === id))
   const valor = valorDosItens(pedido, escolhidos)
+  // O desconto é da conta, e o valor do item não leva a parte dele: por item fica de fora.
+  if (pedido.descontoConta) {
+    return (
+      <Secao titulo="Por item">
+        <p className="text-sm text-muted-foreground">
+          Com desconto na conta, divida igualmente ou receba um valor.
+        </p>
+      </Secao>
+    )
+  }
   return (
     <Secao titulo="Por item">
       <ul className="flex flex-col gap-2">

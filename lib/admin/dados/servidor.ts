@@ -1038,6 +1038,10 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     }
     // Por item, o valor sai dos itens marcados (com a taxa deles).
     const itens = pagamento.itens?.length ? [...new Set(pagamento.itens)] : undefined
+    // O desconto é da conta: por item, cada item teria de levar a parte dele (fica para depois).
+    if (itens && comanda.descontoConta) {
+      throw new Error("Com desconto na conta, divida igualmente ou receba um valor.")
+    }
     if (itens) {
       const pagos = itensPagos(comanda)
       for (const itemId of itens) {

@@ -243,6 +243,20 @@ describe("ComandaMesa: a aba Conta", () => {
   })
 })
 
+describe("ComandaMesa: por item com desconto", () => {
+  test("com desconto na conta, Por item avisa e não deixa marcar", async () => {
+    const { comanda } = await mesaComConta()
+    await api().mesas.descontar(comanda.id, { modo: "reais", valor: 4, motivo: "Demora" })
+    const { gaveta } = await abrirConta()
+    const porItem = within(gaveta.getByRole("region", { name: "Por item" }))
+    expect(
+      porItem.getByText("Com desconto na conta, divida igualmente ou receba um valor."),
+    ).toBeInTheDocument()
+    expect(porItem.queryByRole("checkbox")).not.toBeInTheDocument()
+    expect(porItem.queryByRole("button", { name: /^Receber/ })).not.toBeInTheDocument()
+  })
+})
+
 describe("ComandaMesa: desconto, cortesia, taxa, couvert e estorno", () => {
   const pergunta = (nome: string) => within(screen.getByRole("alertdialog", { name: nome }))
 

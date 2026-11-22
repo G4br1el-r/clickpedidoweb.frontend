@@ -723,3 +723,22 @@ describe("desconto maior que os itens que sobram", () => {
     await expect(api.mesas.removerItem(comanda.id, comanda.itens[0].id)).rejects.toThrow(erro)
   })
 })
+
+describe("por item com desconto", () => {
+  test("recusa: o valor do item não leva a parte dele no desconto", async () => {
+    const api = servidor()
+    const { mesa } = await abrirMesa(api)
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [
+        { avulso: { nome: "Pizza", preco: 50 }, quantidade: 1 },
+        { avulso: { nome: "Massa", preco: 50 }, quantidade: 1 },
+      ],
+    })
+    await api.mesas.descontar(comanda.id, { modo: "reais", valor: 50, motivo: "Demora" })
+    await expect(
+      api.mesas.pagar(comanda.id, { forma: "pix", itens: [comanda.itens[0].id] }),
+    ).rejects.toThrow("Com desconto na conta, divida igualmente ou receba um valor.")
+  })
+})
