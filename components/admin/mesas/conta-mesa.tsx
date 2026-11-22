@@ -48,8 +48,11 @@ function Linha({
   return (
     <div className={cn("flex items-center gap-3", forte && "font-semibold")}>
       <dt className={cn("flex-1", !forte && "text-muted-foreground")}>{rotulo}</dt>
-      <dd className="tabular-nums">{valor}</dd>
-      {children}
+      {/* Na lista de definição, a ação fica dentro do dd (o axe não aceita botão solto). */}
+      <dd className="flex items-center gap-2">
+        {children}
+        <span className="tabular-nums">{valor}</span>
+      </dd>
     </div>
   )
 }

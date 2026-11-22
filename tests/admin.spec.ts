@@ -352,7 +352,8 @@ test("salão: o garçom lança, a cozinha prepara e a mesa fecha a conta", async
   await expect(comanda.getByRole("list", { name: "Itens da comanda" })).toBeVisible()
   await verificarAcessibilidade(page)
   await comanda.getByRole("button", { name: "Fechar conta" }).click()
-  const fechar = page.getByRole("dialog", { name: "Fechar a conta da mesa 90" })
+  // Fase 4: fechar a conta é receber o saldo, na janela "Receber".
+  const fechar = page.getByRole("dialog", { name: "Receber da mesa 90" })
   await fechar.getByText("Pix").click()
   await fechar.getByRole("button", { name: /^Receber/ }).click()
   await expect(page.getByText("Conta da mesa 90 fechada.")).toBeVisible()
@@ -1013,4 +1014,67 @@ test("mesas: abrir a mesa, adicionar itens, a cozinha prepara, marcar servido e 
   await page.keyboard.press("Escape")
   await expect(page).not.toHaveURL(/mesa=11/)
   await expect(mesa).toContainText("Pediu a conta")
+})
+
+test("mesas: dividir a conta por 3, uma parte no Pix e o resto em dinheiro com troco, e ver Misto em Pedidos", async ({
+  page,
+}) => {
+  test.setTimeout(90_000)
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+
+  // A mesa 11 abre para 2 pessoas: a pizzaria cobra 10% de taxa e R$ 8,00 de couvert.
+  await page.goto("/admin/mesas?mesa=11")
+  const gaveta = page.getByRole("dialog", { name: "Mesa 11" })
+  await gaveta.getByRole("spinbutton", { name: "Pessoas" }).fill("2", { timeout: 15_000 })
+  await gaveta.getByRole("combobox", { name: "Garçom" }).click()
+  await page.getByRole("option", { name: "Bia" }).click()
+  await gaveta.getByRole("textbox", { name: "Cliente (opcional)" }).fill("Teodoro")
+  await gaveta.getByRole("button", { name: "Abrir mesa" }).click()
+  await expect(page.getByText("Mesa 11 aberta.")).toBeVisible()
+
+  // Um rodízio avulso de R$ 100,00: a conta fica em 100 + 10 + 16 = R$ 126,00.
+  await gaveta.getByRole("textbox", { name: "Item avulso" }).fill("Rodízio")
+  await gaveta.getByRole("textbox", { name: "Valor" }).fill("100")
+  await gaveta.getByRole("button", { name: "Incluir item avulso" }).click()
+  await expect(gaveta.getByRole("listitem", { name: "Rodízio" })).toBeVisible()
+
+  // Conta: dividir por 3 e receber uma parte no Pix.
+  await gaveta.getByRole("tab", { name: "Conta" }).click()
+  const resumo = gaveta.getByRole("region", { name: "Resumo da conta" })
+  await expect(resumo).toContainText("R$ 126,00")
+  const dividir = gaveta.getByRole("region", { name: "Dividir igualmente" })
+  await dividir.getByRole("spinbutton", { name: "Partes" }).fill("3")
+  await expect(dividir.getByRole("button", { name: "Receber R$ 42,00" })).toHaveCount(3)
+  await dividir.getByRole("button", { name: "Receber R$ 42,00" }).first().click()
+  const receber = page.getByRole("dialog", { name: "Receber da mesa 11" })
+  await receber.getByText("Pix").click()
+  await receber.getByRole("button", { name: "Receber R$ 42,00" }).click()
+  await expect(page.getByText("R$ 42,00 recebido da mesa 11.")).toBeVisible()
+  await expect(gaveta.getByRole("list", { name: "Pagamentos" })).toContainText("Pix")
+  await verificarAcessibilidade(page)
+
+  // O resto em dinheiro: o cliente entrega R$ 100,00 e leva R$ 16,00 de troco.
+  await gaveta.getByRole("button", { name: "Fechar conta" }).click()
+  await receber.getByText("Dinheiro").click()
+  await receber
+    .getByRole("group", { name: "Notas" })
+    .getByRole("button", { name: "R$ 100,00" })
+    .click()
+  await expect(receber.getByText("Troco: R$ 16,00")).toBeVisible()
+  await verificarAcessibilidade(page)
+  await receber.getByRole("button", { name: "Receber R$ 84,00" }).click()
+  await expect(page.getByText("Conta da mesa 11 fechada.")).toBeVisible()
+  await expect(page.getByRole("button", { name: "Mesa 11", exact: true })).toContainText("Limpeza")
+
+  // Pedidos: a conta aparece como Misto, com cada pagamento no detalhe.
+  await page.goto("/admin/pedidos")
+  await page.getByRole("searchbox").first().fill("Teodoro")
+  const linha = page.getByRole("row").filter({ hasText: "Teodoro" })
+  await expect(linha).toContainText("Misto", { timeout: 15_000 })
+  await linha.click()
+  const detalhe = page.getByRole("dialog", { name: /^Pedido #/ })
+  const pagamentos = detalhe.getByRole("list", { name: "Pagamentos" })
+  await expect(pagamentos).toContainText("Pix · R$ 42,00")
+  await expect(pagamentos).toContainText("Dinheiro · R$ 84,00 · troco R$ 16,00")
+  await verificarAcessibilidade(page)
 })
