@@ -38,8 +38,10 @@ import {
   sugerirMesa,
   sugestoesDaEspera,
 } from "@/lib/admin/regras/reservas"
-import { plural } from "@/lib/formato"
+import { FUNCOES_PRO_SALAO } from "@/lib/admin/regras/salao"
+import { emReais, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
+import { SeloPro } from "../campos"
 import { EntrarNaEspera } from "./entrar-na-espera"
 import { FormularioReserva } from "./formulario-reserva"
 import { type QuemSenta, Sentar } from "./sentar"
@@ -243,8 +245,51 @@ function LinhaEspera({
   )
 }
 
+const CAIXA = "flex min-w-0 flex-col gap-3 rounded-xl bg-foreground/[0.03] p-4"
+
+/** Com a função Pro desligada (Q32): o cadeado, o preço e o caminho para ligar. */
+function ReservasPro({ aoConfigurar }: { aoConfigurar: () => void }) {
+  const { nome, preco } = FUNCOES_PRO_SALAO.reservas
+  return (
+    <section aria-labelledby="titulo-reservas-espera" className={CAIXA}>
+      <div className="flex items-center gap-2">
+        <h2 id="titulo-reservas-espera" className="text-[15px] font-semibold tracking-[-0.01em]">
+          Reservas e espera
+        </h2>
+        <SeloPro liberada={false} />
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {nome}: reservas do dia, fila com a mesa sugerida e o chamado pelo WhatsApp.{" "}
+        {emReais(preco)} por mês no plano Pro. Ligue em Configurar salão, em Funções Pro.
+      </p>
+      <Button
+        type="button"
+        size="sm"
+        variant="outline"
+        className="self-start"
+        onClick={aoConfigurar}
+      >
+        Abrir Configurar salão
+      </Button>
+    </section>
+  )
+}
+
 /** Reservas do dia e lista de espera (Q11, Q24, Q25), ao lado da grade. */
-export function PainelReservas({ mesas, salao }: { mesas: Mesa[]; salao: ConfigSalao }) {
+export function PainelReservas({
+  mesas,
+  salao,
+  aoConfigurar,
+}: {
+  mesas: Mesa[]
+  salao: ConfigSalao
+  aoConfigurar: () => void
+}) {
+  if (!salao.funcoes.reservas) return <ReservasPro aoConfigurar={aoConfigurar} />
+  return <Painel mesas={mesas} salao={salao} />
+}
+
+function Painel({ mesas, salao }: { mesas: Mesa[]; salao: ConfigSalao }) {
   const { data: reservas } = useReservas(4_000)
   const { data: espera } = useEspera(4_000)
   const { data: loja } = useLoja()
@@ -273,10 +318,7 @@ export function PainelReservas({ mesas, salao }: { mesas: Mesa[]; salao: ConfigS
           : undefined),
     })
   return (
-    <section
-      aria-labelledby="titulo-reservas-espera"
-      className="flex min-w-0 flex-col gap-3 rounded-xl bg-foreground/[0.03] p-4"
-    >
+    <section aria-labelledby="titulo-reservas-espera" className={CAIXA}>
       <h2 id="titulo-reservas-espera" className="text-[15px] font-semibold tracking-[-0.01em]">
         Reservas e espera
       </h2>

@@ -304,3 +304,18 @@ describe("Mesas: lista de espera", () => {
     await waitFor(async () => expect(await cartao(13)).toHaveTextContent("Marina Costa"))
   })
 })
+
+describe("Mesas: reservas é Pro", () => {
+  test("com a função desligada, o painel mostra o cadeado, o preço e leva a Configurar salão", async () => {
+    const salao = await api().salao.config()
+    await api().salao.salvar({ ...salao, funcoes: { ...salao.funcoes, reservas: false } })
+    const usuario = await abrir()
+    const aqui = await painel()
+
+    expect(aqui.getByText("Pro")).toBeInTheDocument()
+    expect(aqui.getByText(/R\$ 24,90 por mês/)).toBeInTheDocument()
+    expect(aqui.queryByRole("tab")).not.toBeInTheDocument()
+    await usuario.click(aqui.getByRole("button", { name: "Abrir Configurar salão" }))
+    expect(await screen.findByRole("dialog", { name: "Configurar salão" })).toBeInTheDocument()
+  })
+})

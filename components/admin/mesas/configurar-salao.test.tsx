@@ -191,11 +191,12 @@ describe("Configurar salão", () => {
     expect(painel.queryByLabelText("Couvert por pessoa (R$)")).not.toBeInTheDocument()
   })
 
-  test("reservas e QR não aparecem e voltam iguais no que é salvo", async () => {
+  // Fase 7: as reservas entraram no painel; o QR continua fora até a Fase 8.
+  test("o QR não aparece, e reservas, QR e funções voltam iguais no que é salvo", async () => {
     const antes = await api().salao.config()
     const { usuario, painel } = await abrirPainel()
 
-    expect(painel.queryByText(/reserva|QR/i)).not.toBeInTheDocument()
+    expect(painel.queryByText(/QR/)).not.toBeInTheDocument()
     await usuario.click(painel.getByRole("switch", { name: "Limpeza depois de fechar a conta" }))
     await usuario.click(painel.getByRole("button", { name: "Salvar" }))
     await screen.findByText("Salão salvo.")
@@ -218,5 +219,49 @@ describe("Configurar salão", () => {
     await screen.findByText("Salão salvo.")
 
     expect((await api().salao.config()).funcoes).toEqual({ ...antes.funcoes, mapa: false })
+  })
+
+  test("reservas e lista de espera, função Pro, liga e desliga aqui", async () => {
+    const antes = await api().salao.config()
+    const { usuario, painel } = await abrirPainel()
+    const reservas = painel.getByRole("switch", { name: /^Reservas e lista de espera/ })
+    expect(reservas).toBeChecked()
+    expect(painel.getByText(/R\$ 24,90 por mês/)).toBeInTheDocument()
+
+    await usuario.click(reservas)
+    await usuario.click(painel.getByRole("button", { name: "Salvar" }))
+    await screen.findByText("Salão salvo.")
+
+    expect((await api().salao.config()).funcoes).toEqual({ ...antes.funcoes, reservas: false })
+  })
+
+  test("a antecedência e a tolerância das reservas gravam os minutos", async () => {
+    const { usuario, painel } = await abrirPainel()
+    const antecedencia = painel.getByRole("spinbutton", { name: "Antecedência (min)" })
+    const tolerancia = painel.getByRole("spinbutton", { name: "Tolerância (min)" })
+    expect(antecedencia).toHaveValue(30)
+    expect(tolerancia).toHaveValue(15)
+
+    await usuario.clear(antecedencia)
+    await usuario.type(antecedencia, "45")
+    await usuario.clear(tolerancia)
+    await usuario.type(tolerancia, "10")
+    await usuario.click(painel.getByRole("button", { name: "Salvar" }))
+    await screen.findByText("Salão salvo.")
+
+    expect((await api().salao.config()).reservas).toEqual({
+      antecedenciaMin: 45,
+      toleranciaMin: 10,
+    })
+  })
+
+  test("minutos fora de 0 a 600 mostram o erro do servidor", async () => {
+    const { usuario, painel } = await abrirPainel()
+    const antecedencia = painel.getByRole("spinbutton", { name: "Antecedência (min)" })
+    await usuario.clear(antecedencia)
+    await usuario.type(antecedencia, "700")
+    await usuario.click(painel.getByRole("button", { name: "Salvar" }))
+
+    expect(await screen.findByText("Informe os minutos.")).toBeInTheDocument()
   })
 })

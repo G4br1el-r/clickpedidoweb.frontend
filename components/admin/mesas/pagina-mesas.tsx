@@ -201,7 +201,7 @@ export function PaginaMesas() {
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
         {mesas && salao && (
           <aside className="min-w-0 xl:sticky xl:top-4 xl:col-start-2 xl:row-start-1">
-            <PainelReservas mesas={mesas} salao={salao} />
+            <PainelReservas mesas={mesas} salao={salao} aoConfigurar={() => setSalaoAberto(true)} />
           </aside>
         )}
         <div className="flex min-w-0 flex-col gap-5 xl:col-start-1 xl:row-start-1">

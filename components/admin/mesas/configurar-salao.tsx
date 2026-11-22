@@ -51,6 +51,9 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
   const [couvert, setCouvert] = useState(String(salao.couvert.porPessoa))
   const [limpeza, setLimpeza] = useState(salao.limpeza)
   const [mapa, setMapa] = useState(salao.funcoes.mapa)
+  const [reservas, setReservas] = useState(salao.funcoes.reservas)
+  const [antecedencia, setAntecedencia] = useState(String(salao.reservas.antecedenciaMin))
+  const [tolerancia, setTolerancia] = useState(String(salao.reservas.toleranciaMin))
   const [alertas, setAlertas] = useState(() =>
     Object.fromEntries(ALERTAS.map(([chave]) => [chave, String(salao.alertas[chave])])),
   )
@@ -61,7 +64,7 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
     setGarcons(garcons.map((garcom, i) => (i === indice ? { ...garcom, ...mudanca } : garcom)))
 
   const enviar = () => {
-    // Reservas, QR e as outras funções Pro ficam como o servidor devolveu.
+    // O QR fica como o servidor devolveu.
     const config: ConfigSalao = {
       ...salao,
       areas: areas.map((area, indice) => ({ ...area, ordem: indice })),
@@ -74,7 +77,8 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
         ? { ativo: true, porPessoa: numero(couvert) }
         : { ...salao.couvert, ativo: false },
       limpeza,
-      funcoes: { ...salao.funcoes, mapa },
+      funcoes: { ...salao.funcoes, mapa, reservas },
+      reservas: { antecedenciaMin: numero(antecedencia), toleranciaMin: numero(tolerancia) },
       alertas: {
         semPedidoMin: numero(alertas.semPedidoMin),
         contaPedidaMin: numero(alertas.contaPedidaMin),
@@ -101,7 +105,9 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
     >
       <SheetHeader>
         <SheetTitle>Configurar salão</SheetTitle>
-        <SheetDescription>Áreas, garçons, cobranças e alertas das mesas.</SheetDescription>
+        <SheetDescription>
+          Áreas, garçons, cobranças, funções Pro, reservas e alertas das mesas.
+        </SheetDescription>
       </SheetHeader>
       <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-4 pb-4">
         <BlocoSecao titulo="Áreas" descricao="A ordem da lista é a ordem no salão.">
@@ -262,6 +268,47 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
             </FieldContent>
             <Switch id="salao-mapa" checked={mapa} onCheckedChange={setMapa} />
           </Field>
+          <Field orientation="horizontal">
+            <FieldContent>
+              <FieldLabel htmlFor="salao-reservas" className="flex flex-wrap items-center gap-2">
+                {FUNCOES_PRO_SALAO.reservas.nome}
+                <SeloPro liberada={reservas} />
+              </FieldLabel>
+              <FieldDescription>
+                Reservas do dia e a fila de espera, com a mesa sugerida e o chamado pelo WhatsApp.{" "}
+                {emReais(FUNCOES_PRO_SALAO.reservas.preco)} por mês.
+              </FieldDescription>
+            </FieldContent>
+            <Switch id="salao-reservas" checked={reservas} onCheckedChange={setReservas} />
+          </Field>
+        </BlocoSecao>
+
+        <BlocoSecao
+          titulo="Reservas"
+          descricao="A mesa fica reservada a partir da antecedência; passada a tolerância, a reserva conta como não compareceu."
+        >
+          <div className="grid grid-cols-2 gap-3">
+            <Field>
+              <FieldLabel htmlFor="salao-antecedencia">Antecedência (min)</FieldLabel>
+              <Input
+                id="salao-antecedencia"
+                type="number"
+                inputMode="numeric"
+                value={antecedencia}
+                onChange={(evento) => setAntecedencia(evento.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="salao-tolerancia">Tolerância (min)</FieldLabel>
+              <Input
+                id="salao-tolerancia"
+                type="number"
+                inputMode="numeric"
+                value={tolerancia}
+                onChange={(evento) => setTolerancia(evento.target.value)}
+              />
+            </Field>
+          </div>
         </BlocoSecao>
 
         <BlocoSecao titulo="Alertas" descricao="Minutos até a mesa pedir atenção.">
