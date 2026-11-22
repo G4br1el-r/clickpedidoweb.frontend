@@ -14,6 +14,7 @@ import { esquemaSalao } from "../regras/esquema-salao"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
 import { normalizar } from "../regras/filtro-pedidos"
 import { comEtapa } from "../regras/historico"
+import { nomePadraoDaMesa } from "../regras/mesas"
 import { proximoNumero } from "../regras/numero"
 import {
   type Desconto,
@@ -26,7 +27,7 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
-import { primeiraPosicaoLivre } from "../regras/salao"
+import { mesasSeCruzam, primeiraPosicaoLivre } from "../regras/salao"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearCustos } from "./custos-demo"
@@ -110,6 +111,16 @@ const PAGAMENTOS_NA_LOJA = ["dinheiro", "pix", "cartao-na-entrega"] as const
 /** Como a mesa paga a conta: dinheiro, Pix ou cartão na maquininha. */
 export type PagamentoMesa = (typeof PAGAMENTOS_NA_LOJA)[number]
 
+/** Lugares e forma da mesa vêm da tela: confere na hora de usar. */
+function conferirLugaresEForma(lugares: number, forma: FormaMesa) {
+  if (!Number.isInteger(lugares) || lugares < 1 || lugares > 20) {
+    throw new Error("Informe de 1 a 20 lugares.")
+  }
+  if (!FORMAS_MESA.includes(forma)) {
+    throw new Error("Escolha a forma da mesa.")
+  }
+}
+
 /** A forma de pagamento vem da tela: confere na hora de usar, não só pelo tipo. */
 function conferirPagamento(pagamento: string) {
   if (!(PAGAMENTOS_NA_LOJA as readonly string[]).includes(pagamento)) {
@@ -153,7 +164,7 @@ function abrirMesas(base: BaseLoja): BaseLoja {
   )
   return {
     ...base,
-    mesas: base.mesas.map(({ pedidoAtivoId, clienteNome, ocupadaEm, ...mesa }) => {
+    mesas: base.mesas.map(({ pedidoAtivoId: _pedidoAtivoId, clienteNome, ocupadaEm, ...mesa }) => {
       const comanda = abertas.get(mesa.id)
       // Mesa ocupada deixa de estar em limpeza.
       const { limpezaDesde: _limpezaDesde, ...semLimpeza } = mesa
@@ -436,7 +447,18 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const comEstoque = aplicarEstoque(base, antes, novo, estoque)
     const pedidos = comEstoque.pedidos.with(indice, novo)
     const atualizada = abrirMesas({ ...comEstoque, pedidos })
-    await substituir(atualizada)
+    // A conta da mesa foi paga agora (e não por um dia que virou): a mesa espera a limpeza.
+    const contaFechada = novo.tipo === "mesa" && !antes.pagoEm && novo.pagoEm
+    await substituir(
+      contaFechada && atualizada.salao.limpeza
+        ? {
+            ...atualizada,
+            mesas: atualizada.mesas.map((mesa) =>
+              mesa.id === novo.mesa?.id ? { ...mesa, limpezaDesde: novo.pagoEm } : mesa,
+            ),
+          }
+        : atualizada,
+    )
     return responder(novo)
   }
 
@@ -460,6 +482,16 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       // O garçom não lança mais do que há.
       { conferir: true },
     )
+  }
+
+  /** Troca uma mesa pelo que `mudar` devolve; recusa id que não existe. */
+  async function mudarMesa(id: string, mudar: (mesa: Mesa, base: BaseLoja) => Mesa): Promise<Mesa> {
+    const base = await carregar()
+    const mesa = base.mesas.find((item) => item.id === id)
+    if (!mesa) throw new Error("Mesa não encontrada")
+    const nova = mudar(mesa, base)
+    await substituir({ ...base, mesas: base.mesas.map((item) => (item.id === id ? nova : item)) })
+    return responder(nova)
   }
 
   async function mudarProduto(id: string, mudar: (produto: Produto) => Produto): Promise<Produto> {
@@ -1185,7 +1217,12 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (retirada) {
           throw new Error(`Mova as mesas da área ${retirada.nome} antes de excluí-la.`)
         }
-        await substituir({ ...base, salao: lida.data })
+        // Sem a limpeza, nenhuma mesa pode ficar esperando ser limpa.
+        const mesas =
+          base.salao.limpeza && !lida.data.limpeza
+            ? base.mesas.map(({ limpezaDesde: _, ...mesa }) => mesa)
+            : base.mesas
+        await substituir({ ...base, salao: lida.data, mesas })
         return responder(lida.data)
       },
     },
@@ -1215,12 +1252,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (base.mesas.some((mesa) => mesa.numero === numero)) {
           throw new Error(`Já existe a mesa ${numero}.`)
         }
-        if (!Number.isInteger(lugares) || lugares < 1 || lugares > 20) {
-          throw new Error("Informe de 1 a 20 lugares.")
-        }
-        if (!FORMAS_MESA.includes(forma)) {
-          throw new Error("Escolha a forma da mesa.")
-        }
+        conferirLugaresEForma(lugares, forma)
         const area =
           areaId !== undefined
             ? base.salao.areas.find((item) => item.id === areaId)
@@ -1231,7 +1263,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const mesa: Mesa = {
           id: novoId("mesa")(),
           numero,
-          nome: nome?.trim().slice(0, 40) || `Mesa ${String(numero).padStart(2, "0")}`,
+          nome: nome?.trim().slice(0, 40) || nomePadraoDaMesa(numero),
           status: "livre",
           areaId: area.id,
           lugares,
@@ -1240,6 +1272,80 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         }
         await substituir({ ...base, mesas: [...base.mesas, mesa] })
         return responder(mesa)
+      },
+
+      /**
+       * Troca número, nome, área, lugares e forma. A mesa ocupada não muda de número. Se mudar
+       * de área, ou se o tamanho novo cruzar outra mesa, vai para a primeira posição livre.
+       */
+      async editar(
+        id: string,
+        {
+          numero,
+          nome,
+          areaId,
+          lugares,
+          forma,
+        }: { numero: number; nome?: string; areaId: string; lugares: number; forma: FormaMesa },
+      ): Promise<Mesa> {
+        const base = await carregar()
+        const mesa = base.mesas.find((item) => item.id === id)
+        if (!mesa) throw new Error("Mesa não encontrada")
+        if (!Number.isInteger(numero) || numero < 1 || numero > 999) {
+          throw new Error("Informe o número da mesa.")
+        }
+        if (base.mesas.some((outra) => outra.id !== id && outra.numero === numero)) {
+          throw new Error(`Já existe a mesa ${numero}.`)
+        }
+        if (numero !== mesa.numero && comandaDa(base, id)) {
+          throw new Error("Feche a conta antes de mudar o número da mesa.")
+        }
+        conferirLugaresEForma(lugares, forma)
+        const area = base.salao.areas.find((item) => item.id === areaId)
+        if (!area) throw new Error("Escolha uma área do salão.")
+        const outras = base.mesas.filter((outra) => outra.id !== id)
+        const novaForma = { forma, lugares }
+        const cruza = outras.some(
+          (outra) =>
+            outra.areaId === area.id &&
+            mesasSeCruzam({ ...novaForma, posicao: mesa.posicao }, outra),
+        )
+        const posicao =
+          area.id === mesa.areaId && !cruza
+            ? mesa.posicao
+            : primeiraPosicaoLivre(outras, area.id, novaForma)
+        if (!posicao) throw new Error("Não cabe mais mesa nessa área do mapa.")
+        const editada: Mesa = {
+          ...mesa,
+          numero,
+          nome: nome?.trim().slice(0, 40) || nomePadraoDaMesa(numero),
+          areaId: area.id,
+          lugares,
+          forma,
+          posicao,
+        }
+        await substituir({
+          ...base,
+          mesas: base.mesas.map((item) => (item.id === id ? editada : item)),
+        })
+        return responder(editada)
+      },
+
+      /** Tira a mesa de uso. O motivo é aparado e cortado em 80 caracteres. */
+      bloquear(id: string, motivo?: string) {
+        return mudarMesa(id, (mesa, base) => {
+          if (comandaDa(base, id)) throw new Error("Feche a conta antes de bloquear a mesa.")
+          const texto = motivo?.trim().slice(0, 80)
+          return { ...mesa, bloqueio: texto ? { motivo: texto } : {} }
+        })
+      },
+
+      desbloquear(id: string) {
+        return mudarMesa(id, ({ bloqueio: _bloqueio, ...mesa }) => mesa)
+      },
+
+      marcarLimpa(id: string) {
+        return mudarMesa(id, ({ limpezaDesde: _limpezaDesde, ...mesa }) => mesa)
       },
 
       async excluir(id: string): Promise<void> {

@@ -1,3 +1,4 @@
+import { nomePadraoDaMesa } from "../regras/mesas"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { CONFIG_SALAO_PADRAO } from "./migracao"
 import type { ConfigSalao, FormaMesa, Garcom, Mesa } from "./tipos"
@@ -55,7 +56,7 @@ export function salaoDemo(segmento: SegmentoPainelId): { mesas: Mesa[]; salao: C
     return {
       id: `mesa-${numero}`,
       numero,
-      nome: `Mesa ${String(numero).padStart(2, "0")}`,
+      nome: nomePadraoDaMesa(numero),
       status: "livre",
       areaId,
       lugares,

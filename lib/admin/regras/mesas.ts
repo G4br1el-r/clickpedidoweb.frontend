@@ -64,3 +64,8 @@ export function estadoDaMesa(
   }
   return { estado: "livre", rotulo: "Livre", tom: "fim" }
 }
+
+/** O nome que a mesa leva quando ninguém dá um: "Mesa 07", "Mesa 120". */
+export function nomePadraoDaMesa(numero: number): string {
+  return `Mesa ${String(numero).padStart(2, "0")}`
+}

@@ -157,6 +157,34 @@ for (const tema of ["light", "dark"] as const) {
     await expect(page).toHaveScreenshot(`painel-comanda-${tema}.png`)
   })
 
+  test(`painel: janela Nova mesa (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas")
+    await expect(page.getByRole("list", { name: "Salão" })).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState("networkidle")
+    await page.getByRole("button", { name: "Nova mesa" }).click()
+    const janela = page.getByRole("dialog", { name: "Nova mesa" })
+    await janela.getByRole("spinbutton", { name: "Número" }).fill("21")
+    // Área, lugares e forma vêm preenchidos: Salão, 4 e Quadrada.
+    await expect(janela.getByRole("combobox", { name: "Área" })).toHaveText("Salão")
+    await expect(janela.getByRole("spinbutton", { name: "Lugares" })).toHaveValue("4")
+    await expect(janela.getByRole("combobox", { name: "Forma" })).toHaveText("Quadrada")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-nova-mesa-${tema}.png`)
+  })
+
+  test(`painel: Configurar salão (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas")
+    await expect(page.getByRole("list", { name: "Salão" })).toBeVisible({ timeout: 15_000 })
+    await page.waitForLoadState("networkidle")
+    await page.getByRole("button", { name: "Configurar salão" }).click()
+    const painel = page.getByRole("dialog", { name: "Configurar salão" })
+    await expect(painel.getByRole("textbox", { name: "Nome da área" }).first()).toBeVisible()
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-configurar-salao-${tema}.png`)
+  })
+
   test(`painel: garçom (${tema})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
     await page.goto("/admin/garcom")

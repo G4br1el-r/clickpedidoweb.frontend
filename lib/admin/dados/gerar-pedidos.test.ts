@@ -542,12 +542,12 @@ describe("comandas de mesa ao vivo", () => {
     }
   })
 
-  test("a comanda mais antiga pediu a conta há 5 min; só ela", async () => {
+  test("a comanda mais antiga pediu a conta há 12 min; só ela", async () => {
     const abertas = await comandasAbertas()
     const comConta = abertas.filter((pedido) => pedido.contaPedidaEm)
     expect(comConta).toHaveLength(1)
     expect(comConta[0].criadoEm).toBe(new Date(2026, 10, 13, 18, 55).toISOString())
-    expect(comConta[0].contaPedidaEm).toBe(new Date(2026, 10, 13, 20, 25).toISOString())
+    expect(comConta[0].contaPedidaEm).toBe(new Date(2026, 10, 13, 20, 18).toISOString())
   })
 
   test("exatamente uma comanda está para servir, desde 4 min atrás", async () => {

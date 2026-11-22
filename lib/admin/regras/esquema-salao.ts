@@ -22,6 +22,9 @@ const minutosDaReserva = z
   .min(0, { error: "Informe os minutos." })
   .max(600, { error: "Informe os minutos." })
 
+/** Número com no máximo 2 casas decimais (tolera o erro de ponto flutuante de 8,55). */
+const temAteDuasCasas = (valor: number) => Math.abs(valor * 100 - Math.round(valor * 100)) < 1e-6
+
 /** Configuração do salão como a tela de ajustes salva: nomes limpos e regras entre os campos. */
 export const esquemaSalao = z
   .object({
@@ -46,14 +49,16 @@ export const esquemaSalao = z
       percentual: z
         .number({ error: "A taxa de serviço vai de 0% a 20%." })
         .min(0, { error: "A taxa de serviço vai de 0% a 20%." })
-        .max(20, { error: "A taxa de serviço vai de 0% a 20%." }),
+        .max(20, { error: "A taxa de serviço vai de 0% a 20%." })
+        .refine(temAteDuasCasas, { error: "Informe a taxa com até 2 casas decimais." }),
     }),
     couvert: z.object({
       ativo: z.boolean(),
       porPessoa: z
         .number({ error: "O couvert vai até R$ 100,00 por pessoa." })
         .min(0, { error: "O couvert vai até R$ 100,00 por pessoa." })
-        .max(100, { error: "O couvert vai até R$ 100,00 por pessoa." }),
+        .max(100, { error: "O couvert vai até R$ 100,00 por pessoa." })
+        .refine(temAteDuasCasas, { error: "Informe o couvert em reais e centavos." }),
     }),
     limpeza: z.boolean(),
     alertas: z.object({

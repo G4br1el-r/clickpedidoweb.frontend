@@ -10,7 +10,7 @@
 
 **Origem:** as decisões Q1 a Q52 da sessão de perguntas de 18 e 19/11/2026, registradas abaixo. Base anterior: Fase 8 de [plano-painel-admin.md](plano-painel-admin.md).
 
-**Situação:** Fase 1 pronta em 19/11/2026, aguardando o PR. Só a Fase 1 tem passo a passo. Cada fase seguinte ganha o seu quando a anterior for mesclada, já sobre o código real.
+**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. As Fases 1 e 2 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
 
 ## Restrições gerais
 
@@ -796,30 +796,355 @@ Situação: pronta em 19/11/2026, aguardando o PR.
 - atalhos com a folha `?` (o `M` entra na Fase 6, junto com o mapa);
 - atualização a cada 4 s.
 
-Antes de mudar o visual, conferir que `painel-mesas-*` está atualizado com a Fase 1.
+Antes de mudar o visual, conferir que `painel-mesas-*` está atualizado com a Fase 1 (conferido em 20/11/2026: 438 screenshots iguais).
 
-**Fronteiras de teste**
+**Branch:** `claude/admin-mesas-fase-2`, criada sobre a Fase 1 enquanto o PR dela não é mesclado. O PR da Fase 2 vai para `main` depois da Fase 1.
 
-1. **`lib/admin/regras/alertas-mesa.ts`:** `alertasDaMesa(mesa, comanda, config, agora)` com os quatro limites, testando 1 min antes e no minuto exato.
-2. **`lib/admin/regras/indicadores-salao.ts`:**
-   - ocupação ("12/20 · 60%", sem contar as bloqueadas);
-   - pessoas no salão;
-   - faturamento hoje (decorrência 5);
-   - ticket por pessoa e por mesa;
-   - permanência média e giro.
-3. **`lib/admin/regras/filtro-mesas.ts`:** busca sem acento e sem maiúscula, filtros combinados e as duas ordens.
-4. **Servidor:**
-   - editar (número único);
-   - bloquear e desbloquear (recusa mesa ocupada);
-   - marcar limpa;
-   - fechar a conta com limpeza ligada deixa `limpezaDesde`.
-5. **Componentes:**
-   - grade por área;
-   - cartão por estado (nome falado pelo título, estado na descrição, como hoje);
-   - filtros lidos e escritos no endereço;
-   - menu ⋯ por estado;
-   - editar, Configurar salão e atalhos (Enter com número abre a mesa, e os atalhos não disparam dentro de um campo).
-6. **E2E:** filtrar por "Precisam de atenção", bloquear e desbloquear, e screenshots claro e escuro no celular e no desktop.
+**Decisões de detalhe desta fase** (decorrem de Q12, Q13, Q39, Q40, Q41 e Q42)
+
+- **Ocupação:** conta as mesas ocupadas e as juntadas sobre as não bloqueadas, com o percentual arredondado ("12/20 · 60%").
+- **Pessoas:** a comanda sem `mesa.pessoas` (lançada pelo Garçom antes da Fase 3) conta 1.
+- **Faturamento do salão hoje:** até a Fase 4, é o `total` das comandas de mesa pagas hoje (`pagoEm` no dia de hoje). Na Fase 4 passa a ser a soma dos pagamentos, sem a taxa (decorrência 5).
+- **Ticket por pessoa:** faturamento ÷ pessoas das comandas pagas hoje. **Ticket por mesa:** faturamento ÷ comandas pagas hoje.
+- **Permanência média:** média de `pagoEm − criadoEm` das pagas hoje, em minutos. **Giro:** comandas pagas hoje ÷ mesas não bloqueadas, com 1 casa ("1,5").
+- **Tempo médio de chamado:** entra na Fase 8, com os chamados.
+- **Alertas:** valem só para a mesa ocupada (nem bloqueada, nem juntada) e disparam **no minuto exato** do limite.
+  - "Sem pedido" é a comanda aberta sem nenhum item. Só acontece a partir da Fase 3, com "Abrir mesa".
+  - A ordem é da mais urgente: conta pedida, servir, sem pedido, aberta.
+  - A demonstração passa a ter a conta pedida há 12 min, para existir um alerta.
+- **Busca:** com dígitos, acha a mesa cujo número começa pelo termo ("12" acha 12 e 120). Com texto, procura no nome da mesa e no cliente. Nos dois casos ignora acento e maiúscula (`normalizar` de `filtro-pedidos.ts`).
+- **Filtro de estado:** "Ocupada" junta todas as mesas ocupadas (na cozinha, servir e conta pedida também). Os outros estados casam exatamente.
+- **Filtro de garçom:** usa os garçons ativos de `salao.garcons` e compara pelo nome normalizado do garçom da comanda.
+- **Ordem "mais tempo aberta":** do `ocupadaEm` mais antigo para o mais novo, com as não ocupadas no fim, pelo número.
+- **Endereço:** os parâmetros são `busca`, `area`, `estado`, `garcom`, `atencao=sim` e `ordem=tempo`. O padrão não aparece na URL.
+- **Editar mesa:**
+  - número único;
+  - mesa ocupada não troca de número: "Feche a conta antes de mudar o número da mesa.";
+  - se mudar de área, ou se o tamanho novo sobrepuser outra mesa, vai para a primeira posição livre da área;
+  - nome vazio volta ao padrão "Mesa 07".
+- **Bloquear:** recusa mesa ocupada com "Feche a conta antes de bloquear a mesa.". O motivo é aparado e cortado em 80 caracteres.
+- **Limpeza:** fechar a conta com `salao.limpeza` ligada deixa `limpezaDesde = pagoEm` na mesa. "Liberar" (comanda vazia) não passa pela limpeza. A limpeza de outro dia continua até alguém "Marcar limpa", como já é hoje.
+- **Esquema do salão:** o couvert passa a aceitar só centavos inteiros ("Informe o couvert em reais e centavos."). A taxa aceita até 2 casas.
+- **Menu ⋯:** o botão fica sempre visível, ao lado do cartão (não dentro dele), e por isso serve também no celular. Não há toque longo. Os itens por estado são:
+
+  | Estado                             | Itens                                       |
+  | ---------------------------------- | ------------------------------------------- |
+  | livre, reservada                   | Abrir comanda, Editar, Bloquear, Excluir    |
+  | limpeza                            | Marcar limpa, Editar, Bloquear, Excluir     |
+  | ocupada, na cozinha, servir, conta | Abrir comanda, Editar                       |
+  | bloqueada                          | Desbloquear, Editar, Excluir                |
+  | juntada                            | Abrir comanda (abre a principal, na Fase 5) |
+
+- **Atalhos:** a lógica é pura (`lerTecla`). Os dígitos acumulam até 3 e aparecem num aviso discreto ("Mesa 12 ↵"), que some depois de 2 s sem tecla.
+  - Enter abre a mesa. Número que não existe avisa "Não existe a mesa 12.".
+  - `/` vai para a busca, `N` abre Nova mesa e `?` abre a folha de atalhos.
+  - Nada dispara com o foco num campo, com Ctrl/Alt/Meta apertado ou com uma janela aberta.
+- **Atualização:** a grade de mesas busca a cada 4 s. A fila continua a cada 5 s, como no resto do painel.
+
+**Interfaces que a Fase 2 entrega**
+
+```ts
+// lib/admin/regras/alertas-mesa.ts
+export type TipoAlertaMesa = "conta-pedida" | "servir" | "sem-pedido" | "aberta"
+export type AlertaMesa = { tipo: TipoAlertaMesa; texto: string } // "Pediu a conta há 12 min"
+/** "25 min" ou "2 h 05" (sai do cartão da página). */
+export function tempoDesde(inicio: string, agora: Date): string
+export function alertasDaMesa(
+  mesa: Pick<Mesa, "status" | "ocupadaEm" | "bloqueio" | "juntadaCom">,
+  comanda: Pick<Pedido, "itens" | "contaPedidaEm" | "servirDesde"> | undefined,
+  limites: ConfigSalao["alertas"],
+  agora: Date,
+): AlertaMesa[]
+
+// lib/admin/regras/indicadores-salao.ts
+export type IndicadoresSalao = {
+  ocupacao: { ocupadas: number; total: number; percentual: number; texto: string }
+  pessoas: number
+  faturamento: number
+  ticketPorPessoa: number | null
+  ticketPorMesa: number | null
+  permanenciaMin: number | null
+  giro: number | null
+}
+export function indicadoresSalao(entrada: {
+  mesas: Mesa[]
+  abertas: Pedido[] // comandas de mesa em aberto (a fila)
+  concluidos: Pedido[] // pedidos concluídos; a função pega os de mesa pagos no dia de `agora`
+  agora: Date
+}): IndicadoresSalao
+
+// lib/admin/regras/filtro-mesas.ts
+export type FiltroEstadoMesa = EstadoMesa // "ocupada" junta as ocupadas
+export type FiltrosMesas = {
+  busca: string
+  area: string | null
+  estado: FiltroEstadoMesa | null
+  garcom: string | null
+  atencao: boolean
+}
+export type OrdemMesas = "numero" | "tempo"
+export type MesaNaGrade = {
+  mesa: Mesa
+  comanda?: Pedido
+  estado: ReturnType<typeof estadoDaMesa>
+  alertas: AlertaMesa[]
+}
+export function filtrarMesas(
+  linhas: MesaNaGrade[],
+  filtros: FiltrosMesas,
+  ordem: OrdemMesas,
+): MesaNaGrade[]
+
+// lib/admin/regras/atalhos-mesas.ts
+export type AcaoAtalho =
+  | { tipo: "nenhuma" }
+  | { tipo: "buscar" }
+  | { tipo: "nova-mesa" }
+  | { tipo: "ajuda" }
+  | { tipo: "abrir-mesa"; numero: number }
+export function lerTecla(
+  digitado: string,
+  tecla: { key: string; emCampo: boolean; comModificador: boolean; janelaAberta: boolean },
+): { digitado: string; acao: AcaoAtalho }
+
+// servidor: api.mesas.editar(id, { numero, nome?, areaId, lugares, forma }): Promise<Mesa>
+//           api.mesas.bloquear(id, motivo?): Promise<Mesa>
+//           api.mesas.desbloquear(id): Promise<Mesa>
+//           api.mesas.marcarLimpa(id): Promise<Mesa>
+// consultas-mesas: useEditarMesa, useBloquearMesa, useDesbloquearMesa, useMarcarLimpa;
+//                  useCriarMesa passa a aceitar areaId, lugares e forma
+// components/admin/mesas/estado-grade.ts: useFiltrosMesas() (nuqs, como pedidos/estado-lista.ts)
+```
+
+**Arquivos**
+
+- Criar:
+  - `lib/admin/regras/{alertas-mesa,indicadores-salao,filtro-mesas,atalhos-mesas}.ts`, cada um com o seu `.test.ts`;
+  - `components/admin/mesas/cartao-mesa.tsx` e `cartao-mesa.test.tsx`;
+  - `components/admin/mesas/numeros-salao.tsx`;
+  - `components/admin/mesas/filtros-mesas.tsx` e `estado-grade.ts`;
+  - `components/admin/mesas/formulario-mesa.tsx` (nova e editar) e `bloquear-mesa.tsx`;
+  - `components/admin/mesas/configurar-salao.tsx` e `configurar-salao.test.tsx`;
+  - `components/admin/mesas/atalhos-mesas.tsx`.
+- Mudar:
+  - `lib/admin/dados/servidor.ts` e `servidor.test.ts`;
+  - `lib/admin/dados/consultas-mesas.ts` e `consultas-mesas.test.tsx`;
+  - `lib/admin/regras/esquema-salao.ts` e `esquema-salao.test.ts`;
+  - `lib/admin/dados/gerar-pedidos.ts` (conta pedida há 12 min) e `gerar-pedidos.test.ts`;
+  - `components/admin/mesas/pagina-mesas.tsx`, `nova-mesa.tsx` e `pagina-mesas.test.tsx`;
+  - `tests/admin.spec.ts` e `tests/visual-admin.spec.ts`.
+
+### Task 9 (Tarefa 9): pendências da Fase 1 nos testes
+
+Só teste: nenhum código de produção muda.
+
+- [ ] Em `components/admin/garcom/pagina-garcom.test.tsx`, a regex da mesa bloqueada usa `\b` dentro de template literal, que vira o caractere de backspace. Com isso o `queryByRole` nunca acha nada e o teste não pode falhar. Trocar por `\\b`. Para ver que ele pode falhar, mostrar temporariamente a mesa bloqueada no Garçom, ver o vermelho, e desfazer.
+- [ ] Em `lib/admin/dados/servidor.test.ts`, no teste "base da versão 3 guardada há 3 dias", acrescentar `expect(ocupadas.length).toBeGreaterThan(0)` antes do laço sobre `ocupadas`.
+- [ ] `pnpm test` dos dois arquivos verde. Commit `test: pendências da Fase 1 das mesas`.
+
+### Task 10 (Tarefa 10): alertas da mesa
+
+**Entrega:** `tempoDesde` e `alertasDaMesa` em `lib/admin/regras/alertas-mesa.ts`.
+
+- [ ] Testes que falham, com `agora` fixo e limites `{ semPedidoMin: 15, contaPedidaMin: 10, servirMin: 10, abertaMin: 150 }`:
+  - `tempoDesde`: "0 min" (inclusive para início no futuro), "59 min", "1 h 00" e "2 h 05";
+  - para cada um dos quatro alertas, nada a 1 min do limite e o alerta no minuto exato, com o texto: "Pediu a conta há 10 min", "Pronta há 10 min", "Sem pedido há 15 min" e "Aberta há 2 h 30";
+  - a mesa livre, a bloqueada e a juntada não têm alerta, mesmo com uma comanda antiga;
+  - a comanda que bate três limites devolve os três, na ordem conta pedida, servir, aberta.
+- [ ] Implementar. Em `pagina-mesas.tsx`, o cartão passa a importar `tempoDesde` daqui (sem mudar o que aparece).
+- [ ] Commit `feat(mesas): alertas da mesa pelos limites do salão`.
+
+### Task 11 (Tarefa 11): números do salão
+
+**Entrega:** `indicadoresSalao` em `lib/admin/regras/indicadores-salao.ts`.
+
+- [ ] Testes que falham, montados com `pedidoDeTeste` (`lib/admin/regras/pedidos-de-teste.ts`) e mesas literais:
+  - 20 mesas, 1 bloqueada, 11 ocupadas e 1 juntada: ocupação `{ ocupadas: 12, total: 19, percentual: 63, texto: "12/19 · 63%" }`;
+  - pessoas: comandas abertas com 4, 2 e sem `pessoas` somam 7;
+  - faturamento: só pedidos de mesa, pagos e com `pagoEm` hoje. Um de ontem às 23:40 e um de entrega pago hoje ficam de fora. Com R$ 120,00, R$ 80,50 e R$ 99,50, dá R$ 300,00;
+  - ticket por pessoa (4 + 2 + 4 pessoas) = R$ 30,00, e ticket por mesa = R$ 100,00;
+  - permanência: 60, 90 e 45 min dão 65. Giro: 3 pagas em 19 mesas dá 0,2;
+  - sem nenhuma paga hoje, os quatro valores por conta paga são `null` e o faturamento é 0;
+  - nenhuma mesa: ocupação `0/0 · 0%`, sem dividir por zero.
+- [ ] Implementar. O dinheiro é arredondado em centavos, meio para cima. O percentual e a permanência são arredondados para inteiro, e o giro tem 1 casa.
+- [ ] Commit `feat(mesas): números do salão (ocupação, pessoas, faturamento, tickets, giro)`.
+
+### Task 12 (Tarefa 12): busca, filtros e ordem das mesas
+
+**Entrega:** `filtrarMesas` em `lib/admin/regras/filtro-mesas.ts`.
+
+- [ ] Testes que falham, com 6 linhas literais (`MesaNaGrade`):
+  - "12" acha as mesas 12 e 120, mas não a 1 nem a 21;
+  - "julia" acha a cliente "Júlia", e "VARANDA" acha a mesa de nome "Varanda 3";
+  - área, estado e garçom combinam (E);
+  - o estado "ocupada" pega ocupada, na cozinha, servir e conta pedida;
+  - `atencao` deixa só as mesas com alerta;
+  - a ordem "numero" vai 1, 2, 12. A ordem "tempo" vai da aberta há mais tempo para a mais nova, e as livres ficam no fim, pelo número;
+  - os filtros vazios devolvem tudo na ordem do número.
+- [ ] Implementar e fazer o commit `feat(mesas): busca, filtros e ordem da grade`.
+
+### Task 13 (Tarefa 13): atalhos da tela de mesas
+
+**Entrega:** `lerTecla` em `lib/admin/regras/atalhos-mesas.ts`.
+
+- [ ] Testes que falham:
+  - "1" e depois "2" acumulam "12", e "Enter" devolve `abrir-mesa` 12 e zera o que foi digitado;
+  - o quarto dígito é ignorado (fica em 3);
+  - "Enter" sem dígitos não faz nada;
+  - "Escape" zera os dígitos;
+  - "/" dá `buscar`, "n" e "N" dão `nova-mesa` e "?" dá `ajuda`, e cada um zera os dígitos;
+  - com `emCampo`, `comModificador` ou `janelaAberta`, nenhuma tecla faz nada e os dígitos ficam como estavam;
+  - outras teclas não fazem nada.
+- [ ] Implementar e fazer o commit `feat(mesas): leitura pura dos atalhos`.
+
+### Task 14 (Tarefa 14): servidor, esquema e demonstração
+
+**Entrega:** `editar`, `bloquear`, `desbloquear` e `marcarLimpa` no servidor, a limpeza no fechamento, o esquema em centavos, os hooks e a demonstração com alerta.
+
+- [ ] Testes que falham em `servidor.test.ts`, um comportamento por vez:
+  - editar: troca nome, área, lugares e forma;
+    - número repetido: "Já existe a mesa 3.";
+    - mesa ocupada trocando de número: "Feche a conta antes de mudar o número da mesa.";
+    - mesa ocupada pode mudar o nome e os lugares;
+    - trocando de área, a mesa vai para a primeira posição livre da área nova;
+    - virando retangular de 8 lugares sobre uma vizinha, a mesa vai para uma posição livre e não sobrepõe ninguém (`mesasSeCruzam`);
+    - nome vazio volta para "Mesa 07";
+    - lugares, forma e área inválidos usam as mesmas mensagens de `criar`;
+  - bloquear: guarda o motivo aparado e cortado em 80. Sem motivo, `bloqueio` fica `{}`. Mesa ocupada recusa com "Feche a conta antes de bloquear a mesa.";
+  - desbloquear: tira o `bloqueio`, e a mesa volta a aceitar `lancar`;
+  - marcar limpa: tira o `limpezaDesde`;
+  - fechar a conta com `salao.limpeza` ligada deixa `limpezaDesde` igual ao `pagoEm`. Desligada, não deixa. `liberar` nunca deixa;
+  - id inexistente nas quatro operações: "Mesa não encontrada".
+- [ ] Teste que falha em `esquema-salao.test.ts`: couvert 8,555 recusado com "Informe o couvert em reais e centavos."; 8,5 e 8,55 passam; taxa 12,345 recusada e 12,5 passa.
+- [ ] Teste que falha em `gerar-pedidos.test.ts`: a comanda mais antiga do roteiro pediu a conta há 12 min. Depois, trocar `contaPedidaHa: 5` por 12.
+- [ ] Em `consultas-mesas.test.tsx`: `useEditarMesa`, `useBloquearMesa`, `useDesbloquearMesa` e `useMarcarLimpa` chegam ao servidor e invalidam as mesas. `useCriarMesa` repassa área, lugares e forma.
+- [ ] Implementar cada um depois do seu vermelho. Commits por bloco (`feat(mesas): editar, bloquear e limpar a mesa no servidor`, `feat(mesas): couvert em centavos`, `feat(mesas): a demonstração tem uma conta pedida há 12 min`).
+
+### Task 15 (Tarefa 15): cartão por estado, grade por área e menu ⋯
+
+**Consome:** Tarefas 10 e 14. **Entrega:** `CartaoMesa` em `cartao-mesa.tsx` e a grade agrupada.
+
+- [ ] Testes de componente que falham (`cartao-mesa.test.tsx` para o cartão, `pagina-mesas.test.tsx` para a grade):
+  - o nome falado continua "Mesa N" pelo título, e a descrição traz o estado, o cliente, o total e os alertas;
+  - livre mostra "4 lugares". Limpeza mostra "Limpeza há 5 min". Bloqueada mostra o motivo, ou "Sem motivo". Ocupada mostra o cliente, o tempo, o garçom, "3 pessoas", os itens e o total;
+  - com alerta, o cartão mostra o texto do alerta mais urgente e fica marcado (`data-alerta`);
+  - a grade tem uma seção por área, na ordem das áreas, com título (`heading`) e lista nomeada pela área. Área sem mesa não aparece;
+  - o menu ⋯ ("Ações da mesa N") mostra só os itens do estado, pela tabela das decisões;
+  - "Marcar limpa" e "Desbloquear" funcionam pelo menu. "Excluir" pede confirmação;
+  - o rótulo "Pediu a conta" não quebra linha. É uma classe de layout, e quem confere é o screenshot do celular.
+- [ ] Antes de mudar o visual: o screenshot `painel-mesas-*` já existe e está em dia. Implementar seguindo o DESIGN.md e os tons de `Traco`. O destaque do alerta usa o tom `novo`, nunca vermelho de erro. A busca do teste de comanda continua achando "Mesa 60".
+- [ ] Ajustar os testes antigos de `pagina-mesas.test.tsx` que procuravam a lista única "Mesas" para a lista da área, porque o comportamento mudou de propósito.
+- [ ] Commit `feat(mesas): cartão por estado, grade por área e menu de ações`.
+
+### Task 16 (Tarefa 16): números no topo
+
+**Consome:** Tarefa 11.
+
+- [ ] Teste que falha em `pagina-mesas.test.tsx`: com a demonstração da pizzaria e o relógio fixo, a faixa "Números do salão" mostra a ocupação, as pessoas, o faturamento de hoje e o ticket por pessoa. "Ver mais" mostra a permanência, o giro e o ticket por mesa, com os valores lidos da própria demonstração por `indicadoresSalao`. Isso é permitido porque a função tem teste próprio com literais; aqui o teste confere a ligação.
+- [ ] Implementar `numeros-salao.tsx`. O faturamento vem de `usePedidos({ status: ["concluido"], concluidosEm: hoje })`. O "ver mais" usa `Collapsible`. Valor nulo aparece como "—".
+- [ ] Commit `feat(mesas): números do salão no topo`.
+
+### Task 17 (Tarefa 17): busca e filtros no endereço
+
+**Consome:** Tarefas 12 e 15.
+
+- [ ] Testes que falham, com `NuqsTestingAdapter` (como em `pagina-agendamentos.test.tsx`):
+  - digitar na busca escreve `?busca=` e a grade mostra só as mesas que batem;
+  - o endereço `?estado=bloqueada` abre já filtrado;
+  - "Precisam de atenção" mostra a contagem ("Precisam de atenção (1)") e grava `atencao=sim`;
+  - a ordem "Mais tempo aberta" grava `ordem=tempo`;
+  - sem resultado, aparece "Nenhuma mesa com esses filtros" com "Limpar filtros", que volta ao endereço limpo.
+- [ ] Implementar `estado-grade.ts` (os parâmetros nuqs) e `filtros-mesas.tsx` (busca, área, estado, garçom, atenção e ordem), seguindo os filtros da lista de pedidos.
+- [ ] Commit `feat(mesas): busca, filtros e ordem no endereço`.
+
+### Task 18 (Tarefa 18): nova mesa, editar e bloquear
+
+**Consome:** Tarefas 14 e 15.
+
+- [ ] Testes que falham:
+  - Nova mesa pergunta número, nome, área (as áreas do salão, com a primeira escolhida), lugares (4) e forma (quadrada), e a mesa nasce na área escolhida;
+  - "Editar" no menu abre o mesmo formulário preenchido ("Editar mesa 3"), salva, e o erro do servidor aparece no aviso;
+  - "Bloquear" abre a janela com o motivo opcional. Ao confirmar, o cartão fica "Bloqueada" com o motivo;
+  - o bloqueio da mesa ocupada não aparece no menu (pela tabela), e o servidor também recusa.
+- [ ] Implementar `formulario-mesa.tsx` (usado por `nova-mesa.tsx` e pelo editar) e `bloquear-mesa.tsx`.
+- [ ] Commit `feat(mesas): editar e bloquear a mesa; nova mesa com área, lugares e forma`.
+
+### Task 19 (Tarefa 19): Configurar salão
+
+**Consome:** Tarefa 14.
+
+- [ ] Testes que falham em `configurar-salao.test.tsx`:
+  - o botão "Configurar salão" no cabeçalho abre o painel lateral com as áreas, os garçons, a taxa de serviço, o couvert, a limpeza e os alertas carregados do servidor;
+  - adicionar a área "Terraço" e salvar grava a área no servidor e avisa "Salão salvo.";
+  - excluir a área com mesas mostra o erro do servidor ("Mova as mesas da área Varanda antes de excluí-la.") e não fecha o painel;
+  - desligar um garçom tira ele do filtro de garçom da grade;
+  - taxa 25% mostra o erro do esquema ("A taxa de serviço vai de 0% a 20%.") sem salvar;
+  - o couvert desligado esconde o campo de valor;
+  - reservas, QR e funções Pro não aparecem e voltam iguais no que é salvo.
+- [ ] Implementar `configurar-salao.tsx` com `Sheet`. Áreas novas ganham `area-${crypto.randomUUID()}` e garçons novos ganham `garcom-…`. A ordem das áreas é a posição na lista.
+- [ ] Commit `feat(mesas): painel Configurar salão`.
+
+### Task 20 (Tarefa 20): atalhos e atualização a cada 4 s
+
+**Consome:** Tarefas 13, 15 e 18.
+
+- [ ] Testes que falham em `pagina-mesas.test.tsx`:
+  - digitar "6", "0" e Enter fora de campo abre a comanda da mesa 60;
+  - "9", "9", "9" e Enter avisa "Não existe a mesa 999.";
+  - "/" põe o foco na busca;
+  - "n" abre Nova mesa;
+  - "?" abre a folha "Atalhos do teclado";
+  - digitar "n" dentro da busca só escreve na busca;
+  - uma mesa criada no servidor depois da tela aberta aparece em até 4 s, sem recarregar. Avançar o relógio do intervalo com `vi.advanceTimersByTime`, ou ler o `refetchInterval` pela consulta, se o relógio falso travar o React Query.
+- [ ] Implementar `atalhos-mesas.tsx` (o ouvinte de teclado, o aviso "Mesa 12 ↵" e a folha) e trocar `useMesas()` por `useMesas(4_000)` na página.
+- [ ] Commit `feat(mesas): atalhos do teclado e atualização a cada 4 s`.
+
+### Task 21 (Tarefa 21): E2E, screenshots e fechamento
+
+- [ ] Em `tests/admin.spec.ts`:
+  - filtrar "Precisam de atenção" mostra só a mesa que pediu a conta há 12 min, e o endereço guarda o filtro;
+  - bloquear a mesa 5 pelo menu, com motivo, e desbloquear.
+- [ ] `pnpm check`, mostrando a saída.
+- [ ] `pnpm test:coverage`. Se a cobertura subiu, subir os mínimos.
+- [ ] `pnpm test:e2e:rapido`. `painel-mesas-*` e `painel-comanda-*` vão mudar: revisar a diferença (claro e escuro, celular e desktop) e só então atualizar esses testes.
+- [ ] Registrar a "Situação" no fim desta seção e abrir o PR da Fase 2 quando a Fase 1 estiver no `main`.
+
+Situação: pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. O PR sai depois que a Fase 1 estiver no `main`.
+
+- **O que as revisões pegaram:**
+  - a busca achava o número em qualquer posição ("12" achava 112), olhava nome e cliente mesmo com dígitos, e comparava o garçom com acento e maiúscula;
+  - a limpeza ficou primeiro numa rotina que roda a cada gravação. Com isso, reabrir a demonstração num dia novo punha em "Limpeza" as mesas das comandas de ontem, encerradas sozinhas. Agora a limpeza só entra quando a conta é fechada no painel;
+  - o ⋯ perdia o `absolute` para a área de toque e caía embaixo do cartão;
+  - o nome padrão "Mesa 07" estava escrito em quatro lugares e virou `nomePadraoDaMesa`;
+  - o resumo do cabeçalho dizia "12 livres" contando bloqueada e limpeza, e agora diz "10 livres";
+  - a gaveta dizia "Mesa livre." para a mesa bloqueada ou em limpeza, e agora mostra o estado, com "Desbloquear" ou "Marcar limpa";
+  - desligar a limpeza deixava mesas presas em "Limpeza";
+  - "Nova mesa" aberta antes de as áreas carregarem dava "Escolha uma área do salão.";
+  - Configurar salão abria em branco enquanto carregava, e um valor inválido escondido pelo interruptor bloqueava o salvar;
+  - os atalhos disparavam com o menu ⋯ ou um filtro aberto, e o foco se perdia ao fechar as janelas abertas pelo ⋯;
+  - no celular de 320 px, os filtros saíam cortados e "3 itens" quebrava linha.
+- **Mudou fora do plano:**
+  - o E2E de bloquear usa a mesa 11, porque a 5 está ocupada na demonstração;
+  - a taxa com mais de 2 casas tem a mensagem própria "Informe a taxa com até 2 casas decimais.";
+  - "Reservada" e "Juntada" saíram do filtro de estado até as Fases 5 e 7;
+  - "07" acha a mesa 7;
+  - a descrição falada do cartão traz o que ele mostra: nome, motivo, limpeza, lugares, garçom e pessoas;
+  - a confirmação de excluir virou um componente só (`ConfirmarExclusaoMesa`), usado pelo menu e pela gaveta.
+- **Fica para depois:**
+  - **"ao vivo" entre abas:** a grade consulta a cada 4 s, mas o servidor de demonstração guarda a base em memória. Mudança feita em outra aba só aparece depois de recarregar, e uma aba desatualizada pode apagar ao gravar o que a outra gravou. Isso já era assim antes desta fase e fica para a Fase 8, com o `BroadcastChannel` esvaziando também a cópia em memória do servidor;
+  - **pendências pequenas registradas na revisão:**
+    - os atalhos de uma letra não podem ser desligados;
+    - a limpeza depende de qual operação marca o pagamento;
+    - o número ativo ao editar a mesa ocupada;
+    - garçons com o mesmo nome;
+    - a demonstração sem conta fechada hoje às 20:30, com o faturamento em R$ 0,00 (junto com a Fase 4).
+- **Screenshots:**
+  - `painel-mesas-*` e `painel-comanda-*` mudaram nas 11 telas, com a grade nova;
+  - entraram `painel-nova-mesa-*` e `painel-configurar-salao-*`;
+  - todas as diferenças foram revisadas antes de atualizar.
+- **Testes e cobertura:**
+  - 1345 testes no Vitest e 436 no E2E rápido (28 pulados);
+  - os mínimos de cobertura subiram para 82/74/81/83 no geral, e `lib/**` continua em 98/94/98/98.
 
 ## Fase 3: comanda
 
@@ -954,7 +1279,7 @@ Antes de mudar o visual, conferir que `painel-mesas-*` está atualizado com a Fa
 - vitrine em modo mesa: a rota e o parâmetro seguem o roteamento atual da vitrine (ler `node_modules/next/dist/docs/` antes);
 - pedido do cliente "aguardando aceite" ou direto;
 - chamados com selo, som, contador e Atender;
-- `BroadcastChannel("clickpedido-admin")` invalida as consultas das outras abas;
+- `BroadcastChannel("clickpedido-admin")` invalida as consultas das outras abas. Ele também esvazia a cópia em memória do servidor de demonstração (`carregar()`), e cada gravação parte da leitura mais recente do IndexedDB, para uma aba desatualizada não apagar o que a outra gravou (achado da revisão da Fase 2);
 - simular cliente e folha de QR em A4;
 - entradas `salao.mapa`, `salao.reservas` e `salao.qr` no `CATALOGO_PRO` (preços da decorrência 6);
 - cenário de demonstração com 1 chamado aberto.

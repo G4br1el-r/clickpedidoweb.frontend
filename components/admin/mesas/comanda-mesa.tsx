@@ -5,11 +5,13 @@ import { format } from "date-fns"
 import {
   BanknoteIcon,
   CreditCardIcon,
+  LockOpenIcon,
   MinusIcon,
   PlusIcon,
   PrinterIcon,
   QrCodeIcon,
   ReceiptIcon,
+  SprayCanIcon,
   Trash2Icon,
 } from "lucide-react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
@@ -27,7 +29,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
@@ -55,20 +56,22 @@ import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useLoja, usePedido } from "@/lib/admin/dados/consultas"
 import {
   useAlterarQuantidade,
-  useExcluirMesa,
+  useDesbloquearMesa,
   useFecharConta,
   useLancarNaMesa,
   useLiberarMesa,
+  useMarcarLimpa,
   useRemoverItem,
 } from "@/lib/admin/dados/consultas-mesas"
 import type { PagamentoMesa } from "@/lib/admin/dados/servidor"
 import type { ItemPedido, Mesa, Pedido } from "@/lib/admin/dados/tipos"
 import { cozinhaJaPreparou } from "@/lib/admin/regras/cozinha"
-import { estadoDaMesa } from "@/lib/admin/regras/mesas"
+import { type EstadoMesa, estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import { emReais, formatoMoeda } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
+import { ConfirmarExclusaoMesa } from "./excluir-mesa"
 
 const PAGAMENTOS: { valor: PagamentoMesa; rotulo: string; icone: typeof BanknoteIcon }[] = [
   { valor: "dinheiro", rotulo: "Dinheiro", icone: BanknoteIcon },
@@ -492,57 +495,96 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   )
 }
 
-function MesaLivre({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void }) {
-  const excluir = useExcluirMesa()
+/** O meio da gaveta sem comanda: o que destrava a mesa, ou o convite ao Garçom. */
+function AcaoSemComanda({ mesa, estado }: { mesa: Mesa; estado: EstadoMesa }) {
+  const desbloquear = useDesbloquearMesa()
+  const marcarLimpa = useMarcarLimpa()
+  const aoErrar = (erro: Error) => toast.error(erro.message)
+  if (estado === "bloqueada") {
+    return (
+      <>
+        <p>{mesa.bloqueio?.motivo || "Sem motivo"}</p>
+        <Button
+          type="button"
+          variant="outline"
+          className="self-start"
+          disabled={desbloquear.isPending}
+          onClick={() =>
+            desbloquear.mutate(mesa.id, {
+              onSuccess: () => toast.success(`Mesa ${mesa.numero} desbloqueada.`),
+              onError: aoErrar,
+            })
+          }
+        >
+          <LockOpenIcon data-icon="inline-start" />
+          Desbloquear
+        </Button>
+      </>
+    )
+  }
+  if (estado === "limpeza") {
+    return (
+      <>
+        <p>A mesa volta a ficar livre quando alguém a limpar.</p>
+        <Button
+          type="button"
+          variant="outline"
+          className="self-start"
+          disabled={marcarLimpa.isPending}
+          onClick={() =>
+            marcarLimpa.mutate(mesa.id, {
+              onSuccess: () => toast.success(`Mesa ${mesa.numero} limpa.`),
+              onError: aoErrar,
+            })
+          }
+        >
+          <SprayCanIcon data-icon="inline-start" />
+          Marcar limpa
+        </Button>
+      </>
+    )
+  }
+  return (
+    <>
+      <p>A comanda abre quando o garçom lança o primeiro item.</p>
+      <Button asChild variant="outline" className="self-start">
+        <Link href="/admin/garcom">Abrir o Garçom</Link>
+      </Button>
+    </>
+  )
+}
+
+function MesaSemComanda({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void }) {
+  const [excluindo, setExcluindo] = useState(false)
+  const estado = estadoDaMesa(mesa, undefined)
   return (
     <>
       <SheetHeader className="gap-1.5 border-b border-border/70">
         <SheetTitle className="text-lg">Mesa {mesa.numero}</SheetTitle>
         <SheetDescription className="flex items-center gap-1.5">
-          <Traco tom="fim" />
-          Mesa livre.
+          <Traco tom={estado.tom} />
+          {estado.estado === "livre" ? "Mesa livre." : `${estado.rotulo}.`}
         </SheetDescription>
       </SheetHeader>
       <div className="flex flex-1 flex-col gap-3 p-4 text-sm text-muted-foreground">
-        <p>A comanda abre quando o garçom lança o primeiro item.</p>
-        <Button asChild variant="outline" className="self-start">
-          <Link href="/admin/garcom">Abrir o Garçom</Link>
-        </Button>
+        <AcaoSemComanda mesa={mesa} estado={estado.estado} />
       </div>
       <SheetFooter className="border-t border-border/70">
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button type="button" variant="outline" className="text-destructive">
-              <Trash2Icon data-icon="inline-start" />
-              Excluir mesa
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Excluir a mesa {mesa.numero}?</AlertDialogTitle>
-              <AlertDialogDescription>
-                Ela sai da grade e do Garçom. As contas já fechadas continuam nos pedidos.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                variant="destructive"
-                onClick={() =>
-                  excluir.mutate(mesa.id, {
-                    onSuccess: () => {
-                      toast.success(`Mesa ${mesa.numero} excluída.`)
-                      aoFechar()
-                    },
-                    onError: (erro) => toast.error(erro.message),
-                  })
-                }
-              >
-                Excluir
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        <Button
+          type="button"
+          variant="outline"
+          className="text-destructive"
+          onClick={() => setExcluindo(true)}
+        >
+          <Trash2Icon data-icon="inline-start" />
+          Excluir mesa
+        </Button>
+        <ConfirmarExclusaoMesa
+          mesa={mesa}
+          aberta={excluindo}
+          aoMudar={setExcluindo}
+          aoExcluir={aoFechar}
+        />
       </SheetFooter>
     </>
   )
@@ -550,7 +592,7 @@ function MesaLivre({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void }) {
 
 function ConteudoComanda({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void }) {
   const { data: pedido } = usePedido(mesa.pedidoAtivoId ?? null)
-  if (!mesa.pedidoAtivoId) return <MesaLivre mesa={mesa} aoFechar={aoFechar} />
+  if (!mesa.pedidoAtivoId) return <MesaSemComanda mesa={mesa} aoFechar={aoFechar} />
   if (!pedido) {
     return (
       <SheetHeader>
@@ -563,7 +605,7 @@ function ConteudoComanda({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void 
   return <Comanda mesa={mesa} pedido={pedido} aoFechar={aoFechar} />
 }
 
-/** Painel da mesa: a comanda aberta, ou as ações de uma mesa livre. */
+/** Painel da mesa: a comanda aberta, ou as ações da mesa sem comanda. */
 export function ComandaMesa({ mesa, aoFechar }: { mesa: Mesa | null; aoFechar: () => void }) {
   const telaGrande = useTelaGrande()
   return (
