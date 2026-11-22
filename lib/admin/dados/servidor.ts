@@ -46,6 +46,7 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
+import { type ContaQr, contaQr } from "../regras/qr"
 import {
   conferirEspera,
   conferirReserva,
@@ -223,8 +224,8 @@ export type MesaQr = {
   categorias: Categoria[]
   /** Só o que dá para pedir: ativo e disponível. */
   produtos: Produto[]
-  /** A comanda aberta da mesa (a da principal, na juntada). */
-  comanda: Pedido | null
+  /** A conta da comanda aberta da mesa (a da principal, na juntada), como o cliente vê. */
+  conta: ContaQr | null
   /** Pedidos desta mesa esperando o garçom aceitar. */
   aguardando: number
 }
@@ -2373,6 +2374,7 @@ export function criarServidor({
       async mesa(mesaId: string): Promise<MesaQr> {
         const base = await carregar()
         const mesa = mesaDoQr(base, mesaId)
+        const comanda = comandaDa(base, mesa.id)
         const produtos = base.produtos
           .filter((produto) => produto.ativo && produto.disponivel)
           .toSorted((a, b) => a.ordem - b.ordem)
@@ -2386,7 +2388,7 @@ export function criarServidor({
             )
             .toSorted((a, b) => a.ordem - b.ordem),
           produtos,
-          comanda: comandaDa(base, mesa.id) ?? null,
+          conta: comanda ? contaQr(comanda) : null,
           aguardando: (base.pedidosQr ?? []).filter(
             (pedido) => pedido.mesaId === mesa.id && pedido.status === "aguardando",
           ).length,

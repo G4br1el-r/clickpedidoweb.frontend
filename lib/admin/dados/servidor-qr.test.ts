@@ -165,7 +165,7 @@ describe("QR: chamados", () => {
 })
 
 describe("QR: a mesa vista pelo cliente", () => {
-  test("o nome da loja, o número, o cardápio sem o inativo e o esgotado, e a comanda", async () => {
+  test("o nome da loja, o número, o cardápio sem o inativo e o esgotado, e a conta", async () => {
     const api = servidor()
     await ligarQr(api)
     const mesaId = await mesaNova(api)
@@ -179,12 +179,25 @@ describe("QR: a mesa vista pelo cliente", () => {
     await api.produtos.salvar({ ...produto, id: "prod-inativo", nome: "Inativo", ativo: false })
 
     const livre = await api.qr.mesa(mesaId)
-    expect(livre).toMatchObject({ loja: "Teste", mesa: { id: mesaId, numero: 30 }, comanda: null })
+    expect(livre).toMatchObject({ loja: "Teste", mesa: { id: mesaId, numero: 30 }, conta: null })
     expect(livre.produtos.map((item) => item.nome)).toEqual(["X-Burger"])
     expect(livre.categorias.map((item) => item.nome)).toEqual(["Lanches"])
 
-    const comanda = await comComanda(api, mesaId)
-    expect((await api.qr.mesa(mesaId)).comanda?.id).toBe(comanda.id)
+    await comComanda(api, mesaId)
+    // Só o que o cliente precisa ver: nada de custo, histórico, token ou garçom.
+    const aberta = await api.qr.mesa(mesaId)
+    expect(aberta).not.toHaveProperty("comanda")
+    expect(aberta.conta).toEqual({
+      itens: [{ nome: "X-Burger", quantidade: 1, opcoes: ["Adicional: Bacon"], total: 23 }],
+      subtotal: 23,
+      cortesias: 0,
+      descontos: 0,
+      taxa: 0,
+      couvert: 0,
+      total: 23,
+      pago: 0,
+      saldo: 23,
+    })
   })
 })
 

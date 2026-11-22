@@ -105,7 +105,7 @@ describe("VitrineMesa", () => {
     expect(await screen.findByText("A mesa ainda não tem conta.")).toBeInTheDocument()
   })
 
-  test("na mesa aberta, ver a conta mostra os itens e o total; pedir a conta avisa", async () => {
+  test("na mesa aberta, ver a conta mostra itens, taxa, couvert e total; pedir a conta avisa", async () => {
     const usuario = userEvent.setup()
     const api = servidorDo("pizzaria")
     const comanda = await api.mesas.lancar({
@@ -118,9 +118,15 @@ describe("VitrineMesa", () => {
 
     await usuario.click(await screen.findByRole("button", { name: "Ver a conta" }))
     const conta = await screen.findByRole("dialog", { name: "A conta da mesa" })
-    expect(within(conta).getByText("2× Água sem gás")).toBeInTheDocument()
-    expect(within(conta).getByText("Total")).toBeInTheDocument()
-    expect(within(conta).getAllByText(/R\$/).length).toBeGreaterThan(0)
+    const valor = (rotulo: string) => within(conta).getByText(rotulo).nextElementSibling
+    // Pizzaria: taxa de 10% e couvert de R$ 8,00 por pessoa (a mesa abriu para 1).
+    expect(within(conta).getByText("2× Água sem gás").nextElementSibling).toHaveTextContent(
+      "R$ 10,00",
+    )
+    expect(valor("Itens")).toHaveTextContent("R$ 10,00")
+    expect(valor("Taxa de serviço")).toHaveTextContent("R$ 1,00")
+    expect(valor("Couvert")).toHaveTextContent("R$ 8,00")
+    expect(valor("Total")).toHaveTextContent("R$ 19,00")
     await usuario.keyboard("{Escape}")
 
     await usuario.click(screen.getByRole("button", { name: "Pedir a conta" }))

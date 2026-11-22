@@ -1,7 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { Chamado, PedidoQr } from "../dados/tipos"
 import { chamadosAbertos, seloDaMesa, tempoMedioDeAtendimento, textoDoChamado } from "./chamados"
-import { urlDaMesa } from "./qr"
 
 const em = (hora: number, minuto: number, dia = 13) =>
   new Date(2026, 10, dia, hora, minuto).toISOString()
@@ -15,12 +14,6 @@ const chamado = (id: string, criadoEm: string, atendidoEm?: string): Chamado => 
 })
 
 const AGORA = new Date(2026, 10, 13, 20, 30)
-
-test("urlDaMesa leva a loja e o id da mesa para a vitrine em modo mesa", () => {
-  expect(urlDaMesa("https://loja.app", "pizzaria", "mesa-7")).toBe(
-    "https://loja.app/mesa?loja=pizzaria&mesa=mesa-7",
-  )
-})
 
 describe("chamados", () => {
   test("abertos, do mais antigo para o mais novo; o atendido fica de fora", () => {

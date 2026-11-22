@@ -16,7 +16,6 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { useAoVivo } from "@/lib/admin/dados/consultas"
 import { useChamarNaMesa, useMesaQr, usePedirNaMesa } from "@/lib/admin/dados/consultas-qr"
 import type { MesaQr } from "@/lib/admin/dados/servidor"
-import { resumoDaConta } from "@/lib/admin/regras/conta"
 import { precoDeBalcao } from "@/lib/admin/regras/pdv"
 import { ehSegmentoPainel, type SegmentoPainelId } from "@/lib/admin/segmentos-painel"
 import { emReais, plural } from "@/lib/formato"
@@ -41,11 +40,11 @@ function ContaDaMesa({
   aberta: boolean
   aoMudar: (aberta: boolean) => void
 }) {
-  const { comanda } = dados
-  const resumo = comanda ? resumoDaConta(comanda) : null
+  const { conta: resumo } = dados
   const linhas: [string, number][] = resumo
     ? [
-        ["Itens", resumo.itens],
+        ["Itens", resumo.subtotal],
+        ...(resumo.cortesias > 0 ? [["Cortesia", -resumo.cortesias] as [string, number]] : []),
         ...(resumo.taxa > 0 ? [["Taxa de serviço", resumo.taxa] as [string, number]] : []),
         ...(resumo.couvert > 0 ? [["Couvert", resumo.couvert] as [string, number]] : []),
         ...(resumo.descontos > 0 ? [["Desconto", -resumo.descontos] as [string, number]] : []),
@@ -59,13 +58,14 @@ function ContaDaMesa({
           <DialogTitle>A conta da mesa</DialogTitle>
           <DialogDescription>Mesa {dados.mesa.numero}. Quem recebe é o garçom.</DialogDescription>
         </DialogHeader>
-        {!comanda || !resumo ? (
+        {!resumo ? (
           <p className="text-sm text-muted-foreground">A mesa ainda não tem pedidos.</p>
         ) : (
           <div className="flex flex-col gap-3 text-sm">
             <ul className="flex flex-col divide-y divide-border/70">
-              {comanda.itens.map((item) => (
-                <li key={item.id} className="flex items-baseline justify-between gap-3 py-2">
+              {resumo.itens.map((item, indice) => (
+                // biome-ignore lint/suspicious/noArrayIndexKey: a conta vem pronta do servidor, na ordem da comanda
+                <li key={indice} className="flex items-baseline justify-between gap-3 py-2">
                   <span>
                     {item.quantidade}× {item.nome}
                     {item.opcoes.length > 0 && (
