@@ -52,7 +52,6 @@ import {
   useAlterarQuantidade,
   useDesbloquearMesa,
   useFecharConta,
-  useLancarNaMesa,
   useLiberarMesa,
   useMarcarLimpa,
   useMarcarServido,
@@ -63,13 +62,14 @@ import type { PagamentoMesa } from "@/lib/admin/dados/servidor"
 import type { ItemPedido, Mesa, Pedido } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
 import { cozinhaJaPreparou } from "@/lib/admin/regras/cozinha"
+import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { type EstadoMesa, estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
 import { AbrirMesa } from "./abrir-mesa"
-import { AdicionarItens } from "./adicionar-itens"
+import { AdicionarItens, useLancarNaComanda } from "./adicionar-itens"
 import { CancelarComanda } from "./cancelar-comanda"
 import { EditarItem } from "./editar-item"
 import { ConfirmarExclusaoMesa } from "./excluir-mesa"
@@ -129,28 +129,24 @@ function ContaImpressa({
   )
 }
 
-function ItemAvulso({ mesaId }: { mesaId: string }) {
+function ItemAvulso({ mesa, comanda }: { mesa: Mesa; comanda: Pedido }) {
   const [nome, setNome] = useState("")
   const [valor, setValor] = useState<number | undefined>()
-  const lancar = useLancarNaMesa()
+  const naComanda = useLancarNaComanda(mesa, comanda)
   return (
     <form
       className="grid grid-cols-[1fr_7rem_auto] items-end gap-2"
       onSubmit={(evento) => {
         evento.preventDefault()
         if (!nome.trim() || !valor) return toast.error("Informe o nome e o valor do item.")
-        lancar.mutate(
+        naComanda.lancar(
           {
-            mesaId,
             enviarParaCozinha: false,
             itens: [{ avulso: { nome, preco: valor }, quantidade: 1 }],
           },
-          {
-            onSuccess: () => {
-              setNome("")
-              setValor(undefined)
-            },
-            onError: (erro) => toast.error(erro.message),
+          () => {
+            setNome("")
+            setValor(undefined)
           },
         )
       }}
@@ -183,7 +179,7 @@ function ItemAvulso({ mesaId }: { mesaId: string }) {
         type="submit"
         variant="outline"
         aria-label="Incluir item avulso"
-        disabled={lancar.isPending}
+        disabled={naComanda.enviando}
       >
         <PlusIcon />
       </Button>
@@ -302,24 +298,27 @@ function ContaComanda({
           Pediu a conta às {format(new Date(pedido.contaPedidaEm), "HH:mm")}.
         </p>
       ) : (
-        <Button
-          type="button"
-          variant="outline"
-          className="self-start"
-          disabled={pedirConta.isPending}
-          onClick={() =>
-            pedirConta.mutate(
-              { pedidoId: pedido.id, ...(por.trim() ? { por } : {}) },
-              {
-                onSuccess: () => toast.success(`Mesa ${mesa.numero} pediu a conta.`),
-                onError: (erro) => toast.error(erro.message),
-              },
-            )
-          }
-        >
-          <HandCoinsIcon data-icon="inline-start" />
-          Pediu a conta
-        </Button>
+        // A comanda vazia ainda não tem conta para pedir.
+        pedido.itens.length > 0 && (
+          <Button
+            type="button"
+            variant="outline"
+            className="self-start"
+            disabled={pedirConta.isPending}
+            onClick={() =>
+              pedirConta.mutate(
+                { pedidoId: pedido.id, ...autorDaAcao(por, pedido.mesa?.garcom) },
+                {
+                  onSuccess: () => toast.success(`Mesa ${mesa.numero} pediu a conta.`),
+                  onError: (erro) => toast.error(erro.message),
+                },
+              )
+            }
+          >
+            <HandCoinsIcon data-icon="inline-start" />
+            Pediu a conta
+          </Button>
+        )
       )}
       {pedido.itens.length > 0 && (
         <Button
@@ -356,26 +355,37 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   })
   const vazia = pedido.itens.length === 0
   const aoErrar = (erro: Error) => toast.error(erro.message)
-  // Item que a cozinha já preparou: tirar ou diminuir pergunta antes.
+  // Quem assina no histórico: o nome do aparelho ou, sem ele, o garçom da comanda.
+  const quem = autorDaAcao(por, pedido.mesa?.garcom)
+  // Item que a cozinha já preparou: tirar ou diminuir pergunta o motivo antes.
   const [confirmando, setConfirmando] = useState<{
     item: ItemPedido
-    tirar: (motivo: string) => void
+    /** "Menos um" tira 1; "Remover", o item todo. */
+    quantidade?: number
+    tirar: (motivo?: string) => Promise<unknown>
   } | null>(null)
-  const comConfirmacao = (item: ItemPedido, tirar: (motivo?: string) => void) =>
-    cozinhaJaPreparou(pedido, item) ? setConfirmando({ item, tirar }) : tirar()
+  const comConfirmacao = (
+    item: ItemPedido,
+    tirar: (motivo?: string) => Promise<unknown>,
+    quantidade?: number,
+  ) =>
+    cozinhaJaPreparou(pedido, item)
+      ? setConfirmando({ item, tirar, ...(quantidade ? { quantidade } : {}) })
+      : tirar().catch(() => {})
   const diminuir = (item: ItemPedido, motivo?: string) =>
-    alterar.mutate(
+    alterar.mutateAsync(
       {
         pedidoId: pedido.id,
         itemId: item.id,
         quantidade: item.quantidade - 1,
         ...(motivo ? { motivo } : {}),
+        ...quem,
       },
       { onError: aoErrar },
     )
   const tirar = (item: ItemPedido, motivo?: string) =>
-    remover.mutate(
-      { pedidoId: pedido.id, itemId: item.id, ...(motivo ? { motivo } : {}) },
+    remover.mutateAsync(
+      { pedidoId: pedido.id, itemId: item.id, ...(motivo ? { motivo } : {}), ...quem },
       { onError: aoErrar },
     )
   const semMovimento = useReducedMotion()
@@ -399,7 +409,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
               disabled={servir.isPending}
               onClick={() =>
                 servir.mutate(
-                  { pedidoId: pedido.id, ...(por.trim() ? { por } : {}) },
+                  { pedidoId: pedido.id, ...quem },
                   {
                     onSuccess: () => toast.success(`Mesa ${mesa.numero} servida.`),
                     onError: aoErrar,
@@ -486,7 +496,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                         variant="outline"
                         aria-label="Menos um"
                         disabled={item.quantidade <= 1}
-                        onClick={() => comConfirmacao(item, (motivo) => diminuir(item, motivo))}
+                        onClick={() => comConfirmacao(item, (motivo) => diminuir(item, motivo), 1)}
                       >
                         <MinusIcon />
                       </Button>
@@ -506,6 +516,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                               pedidoId: pedido.id,
                               itemId: item.id,
                               quantidade: item.quantidade + 1,
+                              ...quem,
                             },
                             { onError: aoErrar },
                           )
@@ -538,7 +549,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
             <PlusIcon data-icon="inline-start" />
             Adicionar itens
           </Button>
-          <ItemAvulso mesaId={mesa.id} />
+          <ItemAvulso mesa={mesa} comanda={pedido} />
         </TabsContent>
         <TabsContent value="conta" className="flex flex-col gap-5 overflow-y-auto p-4">
           <ContaComanda mesa={mesa} pedido={pedido} aoCancelar={() => setCancelando(true)} />
@@ -607,9 +618,10 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
       <ContaImpressa pedido={pedido} mesa={mesa} loja={loja?.nome} ref={conta} />
       <TirarItem
         item={confirmando?.item ?? null}
+        {...(confirmando?.quantidade ? { quantidade: confirmando.quantidade } : {})}
         aoMudar={(aberto) => !aberto && setConfirmando(null)}
-        aoTirar={(motivo) => {
-          confirmando?.tirar(motivo)
+        aoTirar={async (motivo) => {
+          await confirmando?.tirar(motivo)
           setConfirmando(null)
         }}
       />

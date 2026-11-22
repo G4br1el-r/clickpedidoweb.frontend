@@ -9,10 +9,45 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useLancarNaMesa } from "@/lib/admin/dados/consultas-mesas"
+import type { LancamentoMesa } from "@/lib/admin/dados/servidor"
 import type { Mesa, Pedido } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
+import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { Bandeja, useRodada } from "../garcom/montar-rodada"
 import { CatalogoBalcao } from "../pdv/catalogo-balcao"
+
+/**
+ * Lança na comanda aberta, pela bandeja ou pelo item avulso: vai com o garçom da comanda,
+ * assinado por quem está no aparelho (ou pelo garçom), e avisa quando a rodada desfaz o
+ * "Pediu a conta" (Q23).
+ */
+export function useLancarNaComanda(mesa: Mesa, comanda: Pedido) {
+  const lancar = useLancarNaMesa()
+  const doAparelho = useGarcom((estado) => estado.nome)
+  const garcom = comanda.mesa?.garcom
+  return {
+    enviando: lancar.isPending,
+    lancar(lancamento: Pick<LancamentoMesa, "itens" | "enviarParaCozinha">, aoLancar: () => void) {
+      lancar.mutate(
+        {
+          mesaId: mesa.id,
+          ...lancamento,
+          ...(garcom ? { garcom } : {}),
+          ...autorDaAcao(doAparelho, garcom),
+        },
+        {
+          onSuccess: () => {
+            aoLancar()
+            if (comanda.contaPedidaEm) {
+              toast.info(`A mesa ${mesa.numero} tinha pedido a conta e voltou para Ocupada.`)
+            }
+          },
+          onError: (erro) => toast.error(erro.message),
+        },
+      )
+    },
+  }
+}
 
 /** "Adicionar itens" da comanda: o catálogo e a bandeja do Garçom, para a mesa aberta (Q15). */
 export function AdicionarItens({
@@ -27,33 +62,16 @@ export function AdicionarItens({
   aoMudar: (aberta: boolean) => void
 }) {
   const rodada = useRodada()
-  const lancar = useLancarNaMesa()
-  const por = useGarcom((estado) => estado.nome)
+  const naComanda = useLancarNaComanda(mesa, comanda)
 
   const aoLancar = (enviarParaCozinha: boolean) =>
-    lancar.mutate(
-      {
-        mesaId: mesa.id,
-        enviarParaCozinha,
-        ...(comanda.mesa?.garcom ? { garcom: comanda.mesa.garcom } : {}),
-        ...(por.trim() ? { por } : {}),
-        itens: rodada.lancados(),
-      },
-      {
-        onSuccess: () => {
-          toast.success(
-            `Mesa ${mesa.numero}: ${enviarParaCozinha ? "enviado para a cozinha" : "lançado na comanda"}.`,
-          )
-          // Rodada nova depois do pedido de conta: a mesa deixa de esperar a conta (Q23).
-          if (comanda.contaPedidaEm) {
-            toast.info(`A mesa ${mesa.numero} tinha pedido a conta e voltou para Ocupada.`)
-          }
-          rodada.limpar()
-          aoMudar(false)
-        },
-        onError: (erro) => toast.error(erro.message),
-      },
-    )
+    naComanda.lancar({ enviarParaCozinha, itens: rodada.lancados() }, () => {
+      toast.success(
+        `Mesa ${mesa.numero}: ${enviarParaCozinha ? "enviado para a cozinha" : "lançado na comanda"}.`,
+      )
+      rodada.limpar()
+      aoMudar(false)
+    })
 
   return (
     <Dialog open={aberta} onOpenChange={aoMudar}>
@@ -70,7 +88,7 @@ export function AdicionarItens({
             <Bandeja
               itens={rodada.itens}
               mesa={mesa}
-              enviando={lancar.isPending}
+              enviando={naComanda.enviando}
               aviso={rodada.aviso}
               mudarQuantidade={rodada.mudarQuantidade}
               remover={rodada.remover}

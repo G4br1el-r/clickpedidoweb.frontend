@@ -215,8 +215,8 @@ describe("ComandaMesa: adicionar itens", () => {
   })
 })
 
-/** Mesa 11 aberta com um Suco só lançado e uma Pizza que a cozinha já está preparando. */
-async function mesa11ComPizzaEmPreparo() {
+/** Mesa 11 aberta com um Suco só lançado e `pizzas` Pizza que a cozinha já está preparando. */
+async function mesa11ComPizzaEmPreparo(pizzas = 1) {
   const mesa = (await api().mesas.listar()).find((item) => item.numero === 11)
   const mesaId = mesa?.id ?? ""
   await api().mesas.abrir(mesaId, { pessoas: 2, garcom: "Bia" })
@@ -228,11 +228,111 @@ async function mesa11ComPizzaEmPreparo() {
   const comanda = await api().mesas.lancar({
     mesaId,
     enviarParaCozinha: true,
-    itens: [{ avulso: { nome: "Pizza", preco: 40 }, quantidade: 1 }],
+    itens: [{ avulso: { nome: "Pizza", preco: 40 }, quantidade: pizzas }],
   })
   await api().pedidos.avancar(comanda.id, "recebido")
   return comanda
 }
+
+/** A linha mais nova da aba Histórico. */
+async function ultimoEvento(
+  usuario: ReturnType<typeof userEvent.setup>,
+  gaveta: ReturnType<typeof within>,
+) {
+  await usuario.click(gaveta.getByRole("tab", { name: "Histórico" }))
+  const [linha] = within(gaveta.getByRole("list", { name: "Histórico da comanda" })).getAllByRole(
+    "listitem",
+  )
+  return linha
+}
+
+describe("ComandaMesa: quem fez e a conta pedida", () => {
+  test("o item avulso assina com o garçom da comanda e, com a conta pedida, avisa que a mesa voltou para Ocupada", async () => {
+    const comanda = await mesa11ComPizzaEmPreparo()
+    await api().mesas.pedirConta(comanda.id)
+    const { usuario, gaveta } = await abrirMesa(11)
+    await usuario.type(await gaveta.findByRole("textbox", { name: "Item avulso" }), "Rolha")
+    await usuario.type(gaveta.getByRole("textbox", { name: "Valor" }), "15")
+    await usuario.click(gaveta.getByRole("button", { name: "Incluir item avulso" }))
+
+    expect(
+      await screen.findByText("A mesa 11 tinha pedido a conta e voltou para Ocupada."),
+    ).toBeInTheDocument()
+    expect(await gaveta.findByRole("listitem", { name: "Rolha" })).toBeInTheDocument()
+    expect(await ultimoEvento(usuario, gaveta)).toHaveTextContent(
+      "Rodada 3 lançada na mesa: 1× Rolha · Bia",
+    )
+  })
+
+  test("Remover o item que a cozinha não preparou assina com o garçom da comanda", async () => {
+    await mesa11ComPizzaEmPreparo()
+    const { usuario, gaveta } = await abrirMesa(11)
+    const suco = within(await gaveta.findByRole("listitem", { name: "Suco" }))
+    await usuario.click(suco.getByRole("button", { name: "Remover" }))
+    await waitFor(() =>
+      expect(gaveta.queryByRole("listitem", { name: "Suco" })).not.toBeInTheDocument(),
+    )
+    expect(await ultimoEvento(usuario, gaveta)).toHaveTextContent("Tirou 1× Suco · Bia")
+  })
+
+  test("com um nome guardado no aparelho, ele assina no lugar do garçom da comanda", async () => {
+    useGarcom.setState({ nome: "Caixa" })
+    await mesa11ComPizzaEmPreparo()
+    const { usuario, gaveta } = await abrirMesa(11)
+    const suco = within(await gaveta.findByRole("listitem", { name: "Suco" }))
+    await usuario.click(suco.getByRole("button", { name: "Remover" }))
+    await waitFor(() =>
+      expect(gaveta.queryByRole("listitem", { name: "Suco" })).not.toBeInTheDocument(),
+    )
+    expect(await ultimoEvento(usuario, gaveta)).toHaveTextContent("Tirou 1× Suco · Caixa")
+  })
+
+  test("a comanda vazia não tem Pediu a conta", async () => {
+    const mesa = (await api().mesas.listar()).find((item) => item.numero === 11)
+    await api().mesas.abrir(mesa?.id ?? "", { pessoas: 2, garcom: "Bia" })
+    const { usuario, gaveta } = await abrirMesa(11)
+    await usuario.click(await gaveta.findByRole("tab", { name: "Conta" }))
+    expect(gaveta.queryByRole("button", { name: "Pediu a conta" })).not.toBeInTheDocument()
+  })
+})
+
+describe("ComandaMesa: tirar com motivo", () => {
+  test("Menos um na Pizza preparada pergunta Tirar 1 Pizza?, com o foco no Motivo", async () => {
+    await mesa11ComPizzaEmPreparo(2)
+    const { usuario, gaveta } = await abrirMesa(11)
+    const pizza = within(await gaveta.findByRole("listitem", { name: "Pizza" }))
+    await usuario.click(pizza.getByRole("button", { name: "Menos um" }))
+    const pergunta = within(await screen.findByRole("alertdialog", { name: "Tirar 1 Pizza?" }))
+    expect(pergunta.getByRole("textbox", { name: "Motivo" })).toHaveFocus()
+    await usuario.keyboard("Queimou")
+    await usuario.click(pergunta.getByRole("button", { name: "Tirar da comanda" }))
+
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument())
+    expect(await ultimoEvento(usuario, gaveta)).toHaveTextContent("Tirou 1× Pizza · Bia")
+    expect(await ultimoEvento(usuario, gaveta)).toHaveTextContent("Motivo: Queimou")
+  })
+
+  test("se o servidor recusar, a pergunta continua aberta com o motivo digitado", async () => {
+    await mesa11ComPizzaEmPreparo()
+    vi.spyOn(api().mesas, "removerItem").mockRejectedValueOnce(new Error("Sem conexão."))
+    const { usuario, gaveta } = await abrirMesa(11)
+    const pizza = within(await gaveta.findByRole("listitem", { name: "Pizza" }))
+    await usuario.click(pizza.getByRole("button", { name: "Remover" }))
+    const pergunta = within(
+      await screen.findByRole("alertdialog", { name: "Tirar Pizza da comanda?" }),
+    )
+    await usuario.type(pergunta.getByRole("textbox", { name: "Motivo" }), "Caiu no chão")
+    await usuario.click(pergunta.getByRole("button", { name: "Tirar da comanda" }))
+
+    expect(await screen.findByText("Sem conexão.")).toBeInTheDocument()
+    expect(pergunta.getByRole("textbox", { name: "Motivo" })).toHaveValue("Caiu no chão")
+    await usuario.click(pergunta.getByRole("button", { name: "Tirar da comanda" }))
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument())
+    await waitFor(() =>
+      expect(gaveta.queryByRole("listitem", { name: "Pizza" })).not.toBeInTheDocument(),
+    )
+  })
+})
 
 describe("ComandaMesa: editar, tirar e cancelar", () => {
   test("Editar no item que a cozinha não preparou troca a observação", async () => {
@@ -265,6 +365,7 @@ describe("ComandaMesa: editar, tirar e cancelar", () => {
     )
     const confirmar = pergunta.getByRole("button", { name: "Cancelar comanda" })
     expect(confirmar).toBeDisabled()
+    expect(pergunta.getByRole("textbox", { name: "Motivo" })).toHaveFocus()
     await usuario.type(pergunta.getByRole("textbox", { name: "Motivo" }), "Cliente foi embora")
     await usuario.click(confirmar)
 

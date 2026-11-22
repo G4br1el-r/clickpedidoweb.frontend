@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { comEtapa, comEvento, itensEmTexto } from "./historico"
+import { autorDaAcao, comEtapa, comEvento, itensEmTexto } from "./historico"
 import { pedidoDeTeste } from "./pedidos-de-teste"
 
 const CRIADO = new Date(2026, 10, 13, 19, 0)
@@ -66,5 +66,13 @@ describe("itensEmTexto", () => {
 
   test("lista vazia dá texto vazio", () => {
     expect(itensEmTexto([])).toBe("")
+  })
+})
+
+describe("autorDaAcao", () => {
+  test("assina quem está no aparelho; sem nome nele, o garçom da comanda; sem nenhum, ninguém", () => {
+    expect(autorDaAcao(" Caixa ", "Bia")).toEqual({ por: "Caixa" })
+    expect(autorDaAcao("  ", "Bia")).toEqual({ por: "Bia" })
+    expect(autorDaAcao("", undefined)).toEqual({})
   })
 })

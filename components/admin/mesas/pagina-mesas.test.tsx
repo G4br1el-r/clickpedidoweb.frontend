@@ -273,7 +273,7 @@ describe("PaginaMesas", () => {
     expect(total()).toHaveTextContent("R$ 93,50")
 
     await usuario.click(pizza().getByRole("button", { name: "Menos um" }))
-    const motivo = within(screen.getByRole("alertdialog", { name: "Tirar Pizza da comanda?" }))
+    const motivo = within(screen.getByRole("alertdialog", { name: "Tirar 1 Pizza?" }))
     await usuario.type(motivo.getByRole("textbox", { name: "Motivo" }), "Caiu no chão")
     await usuario.click(motivo.getByRole("button", { name: "Tirar da comanda" }))
     await waitFor(() => expect(total()).toHaveTextContent("R$ 53,50"))

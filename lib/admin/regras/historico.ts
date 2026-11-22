@@ -14,3 +14,12 @@ export function comEvento(pedido: Pedido, evento: EventoComanda): Pedido {
 /** "2× Calabresa, 1× Coca": os itens de uma rodada ou de uma remoção, em texto. */
 export const itensEmTexto = (itens: Pick<ItemPedido, "quantidade" | "nome">[]) =>
   itens.map((item) => `${item.quantidade}× ${item.nome}`).join(", ")
+
+/**
+ * Quem assina uma ação da tela no histórico: o nome guardado neste aparelho e, sem ele, o
+ * garçom da comanda. Volta pronto para espalhar no pedido ao servidor.
+ */
+export function autorDaAcao(doAparelho: string, daComanda: string | undefined): { por?: string } {
+  const por = doAparelho.trim() || daComanda?.trim()
+  return por ? { por } : {}
+}
