@@ -205,6 +205,18 @@ describe("abas do painel", () => {
     )
   })
 
+  test("Financeiro mostra a taxa de serviço à parte, quando houve", () => {
+    render(<AbaFinanceiro resumo={{ ...RESUMO, taxaServico: 8.75 }} />, { wrapper: Provedores })
+    const taxa = screen.getByRole("region", { name: "Taxa de serviço" })
+    expect(taxa).toHaveTextContent("R$ 8,75")
+    expect(taxa).toHaveTextContent("dos garçons")
+  })
+
+  test("sem taxa de serviço no período, o bloco não aparece", () => {
+    render(<AbaFinanceiro resumo={RESUMO} />, { wrapper: Provedores })
+    expect(screen.queryByRole("region", { name: "Taxa de serviço" })).not.toBeInTheDocument()
+  })
+
   test("no salão, os pedidos são atendimentos", () => {
     renderizarResumo({ segmento: "salao" })
     expect(regiao("Hoje").getByText("Atendimentos hoje")).toBeInTheDocument()

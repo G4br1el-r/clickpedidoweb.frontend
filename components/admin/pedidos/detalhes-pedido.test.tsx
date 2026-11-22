@@ -173,11 +173,60 @@ describe("DetalhesPedido", () => {
     const detalhes = await painel(comanda)
 
     expect(detalhes.queryByRole("button", { name: "Cancelar pedido" })).not.toBeInTheDocument()
-    expect(detalhes.getByText(/Cancele pela tela de Mesas\./)).toBeInTheDocument()
+    // Fase 4: receber também é pela tela de Mesas, e o aviso diz as duas coisas.
+    expect(detalhes.getByText(/Receba ou cancele a conta pela tela de Mesas\./)).toBeInTheDocument()
     expect(detalhes.getByRole("link", { name: "Abrir a mesa 90" })).toHaveAttribute(
       "href",
       "/admin/mesas?mesa=90",
     )
+  })
+
+  test("a comanda de mesa aberta não se recebe aqui: o painel leva para a mesa", async () => {
+    const api = servidorDo(useSegmentoAtual.getState().segmento)
+    const mesa = await api.mesas.criar({ numero: 90 })
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    renderizar(comanda.id)
+    const detalhes = await painel(comanda)
+
+    expect(detalhes.queryByRole("button", { name: "Marcar como pago" })).not.toBeInTheDocument()
+    expect(detalhes.getByText(/Receba ou cancele a conta pela tela de Mesas\./)).toBeInTheDocument()
+  })
+
+  test("a conta paga em Pix e dinheiro mostra Misto, cada pagamento, a taxa e o couvert", async () => {
+    const api = servidorDo(useSegmentoAtual.getState().segmento)
+    const salao = await api.salao.config()
+    await api.salao.salvar({
+      ...salao,
+      garcons: [],
+      taxaServico: { ativa: true, percentual: 10 },
+      couvert: { ativo: true, porPessoa: 5 },
+    })
+    const mesa = await api.mesas.criar({ numero: 91 })
+    const aberta = await api.mesas.abrir(mesa.id, { pessoas: 2 })
+    // R$ 80,00 + 8,00 de taxa + 10,00 de couvert = R$ 98,00.
+    await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Rodízio", preco: 80 }, quantidade: 1 }],
+    })
+    await api.mesas.pagar(aberta.id, { forma: "pix", valor: 40 })
+    const conta = await api.mesas.pagar(aberta.id, { forma: "dinheiro", valor: 58, recebido: 60 })
+    renderizar(conta.id)
+    const detalhes = await painel(conta)
+
+    const pagamento = within(detalhes.getByRole("region", { name: "Pagamento" }))
+    expect(pagamento.getByText("Misto")).toBeInTheDocument()
+    const lista = within(pagamento.getByRole("list", { name: "Pagamentos" }))
+    expect(
+      lista.getAllByRole("listitem").map((item) => item.textContent?.replace(/ /g, " ")),
+    ).toEqual(["Pix · R$ 40,00", "Dinheiro · R$ 58,00 · troco R$ 2,00"])
+    expect(detalhes.getByText("Taxa de serviço").nextElementSibling).toHaveTextContent("R$ 8,00")
+    expect(detalhes.getByText("Couvert").nextElementSibling).toHaveTextContent("R$ 10,00")
+    expect(detalhes.getByText("Total").nextElementSibling).toHaveTextContent("R$ 98,00")
   })
 
   test("cancelado sem motivo mostra Não informado", async () => {

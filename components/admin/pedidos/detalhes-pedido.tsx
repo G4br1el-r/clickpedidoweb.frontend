@@ -4,7 +4,7 @@ import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { BikeIcon, MapPinIcon, MessageCircleIcon, PhoneIcon, PrinterIcon } from "lucide-react"
 import Link from "next/link"
-import { type ReactNode, useState } from "react"
+import { type ReactNode, useId, useState } from "react"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -49,6 +49,7 @@ import {
   usePedido,
 } from "@/lib/admin/dados/consultas"
 import type { MotivoCancelamento, Pedido } from "@/lib/admin/dados/tipos"
+import { resumoDaConta } from "@/lib/admin/regras/conta"
 import {
   enderecoEmTexto,
   formatarTelefone,
@@ -61,8 +62,9 @@ import { faltaPesar } from "@/lib/admin/regras/pesagem"
 import {
   MOTIVOS_CANCELAMENTO,
   rotuloCanal,
+  rotuloDoPagamento,
   rotuloMotivo,
-  rotuloPagamento,
+  rotuloPagamentoDoPedido,
 } from "@/lib/admin/regras/rotulos"
 import { etapasDoCaminho, rotuloAcao, rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
@@ -79,9 +81,12 @@ import { rotuloSituacao, SeloStatus } from "./selos"
 const dataEHora = (iso: string) => format(new Date(iso), "EEEE, dd/MM 'às' HH:mm", { locale: ptBR })
 
 function Bloco({ titulo, children }: { titulo: string; children: ReactNode }) {
+  const id = useId()
   return (
-    <section className="flex flex-col gap-2.5 py-5 first:pt-4">
-      <h3 className="text-[13px] font-medium text-muted-foreground">{titulo}</h3>
+    <section aria-labelledby={id} className="flex flex-col gap-2.5 py-5 first:pt-4">
+      <h3 id={id} className="text-[13px] font-medium text-muted-foreground">
+        {titulo}
+      </h3>
       {children}
     </section>
   )
@@ -177,6 +182,9 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
   const origem = typeof window === "undefined" ? "" : window.location.origin
   const motoboy = motoboys.find((item) => item.id === pedido.motoboyId)
   const comMotoboy = pedido.tipo === "entrega" && temModulo(segmento, "motoboys")
+  // A comanda aberta recebe e cancela pela tela de Mesas: saldo, troco, motivo e histórico.
+  const comandaAberta = !encerrado && pedido.tipo === "mesa" && Boolean(pedido.mesa)
+  const conta = resumoDaConta(pedido)
 
   return (
     <>
@@ -241,9 +249,14 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
           <Separator />
           <div className="flex flex-col gap-1 text-sm">
             <Linha rotulo="Subtotal" valor={emReais(pedido.subtotal)} />
+            {conta.cortesias > 0 && (
+              <Linha rotulo="Cortesias" valor={`− ${emReais(conta.cortesias)}`} />
+            )}
             {pedido.desconto > 0 && (
               <Linha rotulo="Desconto" valor={`− ${emReais(pedido.desconto)}`} />
             )}
+            {conta.taxa > 0 && <Linha rotulo="Taxa de serviço" valor={emReais(conta.taxa)} />}
+            {conta.couvert > 0 && <Linha rotulo="Couvert" valor={emReais(conta.couvert)} />}
             {pedido.taxaEntrega > 0 && (
               <Linha rotulo="Entrega" valor={emReais(pedido.taxaEntrega)} />
             )}
@@ -322,10 +335,25 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
         <Bloco titulo="Pagamento">
           <div className="flex flex-col gap-0.5 text-sm">
             <div className="flex justify-between">
-              <span>{rotuloPagamento(pedido.pagamento)}</span>
+              <span>{rotuloPagamentoDoPedido(pedido)}</span>
               <span className="font-medium">{rotuloSituacao(pedido.situacaoPagamento)}</span>
             </div>
-            {pedido.pagamento === "dinheiro" && (
+            {pedido.pagamentos?.length ? (
+              <ul aria-label="Pagamentos" className="flex flex-col text-muted-foreground">
+                {pedido.pagamentos.map((parte) => (
+                  <li key={parte.id}>
+                    {[
+                      rotuloDoPagamento(parte),
+                      emReais(parte.valor),
+                      parte.troco ? `troco ${emReais(parte.troco)}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {pedido.pagamento === "dinheiro" && !pedido.pagamentos?.length && (
               <span className="text-muted-foreground">
                 {descricaoDoTroco(pedido.trocoPara, pedido.total)}
               </span>
@@ -403,6 +431,7 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
         )}
         {pedido.situacaoPagamento !== "pago" &&
           pedido.status !== "cancelado" &&
+          !comandaAberta &&
           (faltaPesar(pedido) ? (
             // Linha própria, abaixo dos botões: o aviso não aperta entre eles.
             <p className="order-last w-full text-center text-xs text-muted-foreground sm:basis-full">
@@ -423,9 +452,9 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
             </Button>
           ))}
         {/* A comanda aberta se cancela em Mesas: motivo escrito, perda no estoque e histórico (Q36). */}
-        {!encerrado && pedido.tipo === "mesa" && pedido.mesa && (
+        {comandaAberta && pedido.mesa && (
           <p className="order-last w-full text-center text-xs text-muted-foreground sm:basis-full">
-            Cancele pela tela de Mesas.{" "}
+            Receba ou cancele a conta pela tela de Mesas.{" "}
             <Link
               href={`/admin/mesas?mesa=${pedido.mesa.numero}`}
               className="font-medium text-foreground underline underline-offset-4"
@@ -434,7 +463,7 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
             </Link>
           </p>
         )}
-        {!encerrado && !(pedido.tipo === "mesa" && pedido.mesa) && (
+        {!encerrado && !comandaAberta && (
           <ConfirmarCancelamento
             numero={pedido.numero}
             aoConfirmar={(motivo) =>

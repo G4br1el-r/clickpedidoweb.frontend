@@ -315,6 +315,14 @@ export function AbaFinanceiro({ resumo }: { resumo: Resumo }) {
           }))}
         />
       </BlocoSecao>
+      {/* A taxa de serviço é dos garçons, não da casa: aparece à parte (Q34). */}
+      {resumo.taxaServico > 0 && (
+        <BlocoSecao titulo="Taxa de serviço" descricao="No período, dos garçons">
+          <p className="text-2xl font-semibold tracking-tight tabular-nums">
+            {emReais(resumo.taxaServico)}
+          </p>
+        </BlocoSecao>
+      )}
     </div>
   )
 }
