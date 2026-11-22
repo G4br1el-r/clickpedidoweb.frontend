@@ -207,10 +207,13 @@ export function useRemoverItem() {
   )
 }
 
+/** Fecha a conta: recebe o saldo na forma dada ou, sem saldo, fecha sem pagamento. */
 export function useFecharConta() {
   return useMudancaNasMesas(
-    (servidor, { pedidoId, pagamento }: { pedidoId: number; pagamento: PagamentoMesa }) =>
-      servidor.mesas.fecharConta(pedidoId, pagamento),
+    (
+      servidor,
+      { pedidoId, pagamento, por }: { pedidoId: number; pagamento?: PagamentoMesa; por?: string },
+    ) => servidor.mesas.fecharConta(pedidoId, pagamento, por ? { por } : {}),
     { aoSucesso: guardarComanda },
   )
 }

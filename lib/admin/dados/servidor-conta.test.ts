@@ -547,3 +547,80 @@ describe("reabrir a conta", () => {
     expect(await api.mesas.ultimaConta(mesa.id)).toBeNull()
   })
 })
+
+describe("conta com saldo zero", () => {
+  test("tudo em cortesia, sem couvert: Fechar conta fecha sem pagamento", async () => {
+    const api = semTaxa()
+    const { mesa, comanda } = await contaDeCem(api)
+    await api.mesas.darCortesia(comanda.id, comanda.itens[0].id, { motivo: "Aniversário" })
+    const fechada = await api.mesas.fecharConta(comanda.id, undefined, { por: "Rafa" })
+    expect(fechada).toMatchObject({
+      status: "concluido",
+      situacaoPagamento: "pago",
+      pagoEm: AGORA.toISOString(),
+      total: 0,
+    })
+    expect(fechada.pagamentos ?? []).toEqual([])
+    expect(fechada.eventos?.at(-1)).toMatchObject({
+      tipo: "fechada",
+      por: "Rafa",
+      texto: "Conta fechada",
+    })
+    expect((await api.mesas.listar()).find((item) => item.id === mesa.id)?.status).toBe("livre")
+  })
+
+  test("o desconto que zera o saldo de uma conta já paga em parte fecha a conta sozinho", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    await api.mesas.pagar(comanda.id, { forma: "pix", valor: 90 })
+    const fechada = await api.mesas.descontar(comanda.id, {
+      modo: "reais",
+      valor: 10,
+      motivo: "Demorou",
+      por: "Rafa",
+    })
+    expect(fechada).toMatchObject({
+      status: "concluido",
+      situacaoPagamento: "pago",
+      pagoEm: AGORA.toISOString(),
+      pagamento: "pix",
+      total: 90,
+    })
+    expect(fechada.eventos?.slice(-2)).toMatchObject([
+      { tipo: "desconto", texto: "Desconto de R$\u00a010,00" },
+      { tipo: "fechada", por: "Rafa", texto: "Conta fechada" },
+    ])
+  })
+
+  test("reaberta sem mudar nada, fecha de novo pelo Fechar conta", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    await api.mesas.fecharConta(comanda.id, "pix")
+    vi.setSystemTime(new Date(2026, 10, 13, 21, 0))
+    await api.mesas.reabrir(comanda.id, { motivo: "Engano" })
+    const fechada = await api.mesas.fecharConta(comanda.id)
+    expect(fechada).toMatchObject({ status: "concluido", pagoEm: "2026-11-14T00:00:00.000Z" })
+    expect(fechada.pagamentos).toMatchObject([{ forma: "pix", valor: 100 }])
+  })
+
+  test("sem saldo, não recebe nada, nem em dinheiro", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    await api.mesas.fecharConta(comanda.id, "pix")
+    vi.setSystemTime(new Date(2026, 10, 13, 21, 0))
+    await api.mesas.reabrir(comanda.id, { motivo: "Engano" })
+    for (const forma of ["dinheiro", "pix"] as const) {
+      await expect(api.mesas.pagar(comanda.id, { forma, valor: 0.01 })).rejects.toThrow(
+        "Não há saldo a receber. Feche a conta.",
+      )
+    }
+  })
+
+  test("com saldo, Fechar conta sem forma recusa", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    await expect(api.mesas.fecharConta(comanda.id)).rejects.toThrow(
+      "Escolha uma forma de pagamento válida.",
+    )
+  })
+})

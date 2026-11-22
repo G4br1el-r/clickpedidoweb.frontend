@@ -134,6 +134,20 @@ describe("ComandaMesa: a aba Conta", () => {
     expect(await cartao(70)).toHaveTextContent("Limpeza")
   })
 
+  test("sem saldo (tudo em cortesia, sem couvert), Fechar conta fecha direto", async () => {
+    const { comanda } = await mesaComConta()
+    for (const item of (await api().pedidos.buscar(comanda.id))?.itens ?? []) {
+      await api().mesas.darCortesia(comanda.id, item.id, { motivo: "Aniversário" })
+    }
+    await api().mesas.tirarCouvert(comanda.id, { motivo: "Sem música" })
+    const { usuario, gaveta } = await abrirConta()
+    expect(valorDe(gaveta, "Saldo")).toHaveTextContent("R$ 0,00")
+    await usuario.click(gaveta.getByRole("button", { name: "Fechar conta" }))
+    expect(screen.queryByRole("dialog", { name: "Receber da mesa 70" })).not.toBeInTheDocument()
+    expect(await screen.findByText("Conta da mesa 70 fechada.")).toBeInTheDocument()
+    expect(await cartao(70)).toHaveTextContent("Limpeza")
+  })
+
   test("dinheiro: o valor recebido sugere as notas e mostra o troco", async () => {
     await mesaComConta()
     const { usuario, gaveta } = await abrirConta()
@@ -231,6 +245,21 @@ describe("ComandaMesa: desconto, cortesia, taxa, couvert e estorno", () => {
     // 44 − 4 = 40, mais 4,00 de taxa e 16 de couvert.
     await waitFor(() => expect(valorDe(gaveta, "Total")).toHaveTextContent("R$ 60,00"))
     expect(valorDe(gaveta, "Desconto")).toHaveTextContent("− R$ 4,00")
+  })
+
+  test("o desconto que zera o saldo de uma conta paga em parte fecha a conta", async () => {
+    const { comanda } = await mesaComConta()
+    await api().mesas.pagar(comanda.id, { forma: "pix", valor: 60 })
+    const { usuario, gaveta } = await abrirConta()
+    await usuario.click(gaveta.getByRole("button", { name: "Desconto" }))
+    const janela = pergunta("Desconto na conta da mesa 70")
+    await usuario.type(janela.getByRole("textbox", { name: "Valor do desconto" }), "4")
+    await usuario.type(janela.getByRole("textbox", { name: "Motivo" }), "Demora")
+    await usuario.click(janela.getByRole("button", { name: "Aplicar desconto" }))
+    expect(await screen.findByText("Conta da mesa 70 fechada.")).toBeInTheDocument()
+    await usuario.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(await cartao(70)).toHaveTextContent("Limpeza")
   })
 
   test("Cortesia no item, com motivo: o item mostra Cortesia e a conta desconta", async () => {

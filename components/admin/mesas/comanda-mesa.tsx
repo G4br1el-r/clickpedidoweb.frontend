@@ -39,6 +39,7 @@ import {
   useAlterarQuantidade,
   useDarCortesia,
   useDesbloquearMesa,
+  useFecharConta,
   useImprimirPreConta,
   useLiberarMesa,
   useMarcarLimpa,
@@ -146,6 +147,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
     pageStyle: PAPEL_80MM,
   })
   const preConta = useImprimirPreConta()
+  const fecharConta = useFecharConta()
   const vazia = pedido.itens.length === 0
   const aoErrar = (erro: Error) => toast.error(erro.message)
   // Quem assina no histórico: o nome do aparelho ou, sem ele, o garçom da comanda.
@@ -433,8 +435,22 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
             type="button"
             size="lg"
             className="h-11 flex-1"
-            disabled={vazia}
-            onClick={() => setRecebendo({})}
+            disabled={vazia || fecharConta.isPending}
+            onClick={() =>
+              // Sem saldo (tudo em cortesia, ou reaberta sem mudança), não há o que receber.
+              resumo.saldo > 0
+                ? setRecebendo({})
+                : fecharConta.mutate(
+                    { pedidoId: pedido.id, ...quem },
+                    {
+                      onSuccess: () => {
+                        toast.success(`Conta da mesa ${mesa.numero} fechada.`)
+                        aoFechar()
+                      },
+                      onError: aoErrar,
+                    },
+                  )
+            }
           >
             <ReceiptIcon data-icon="inline-start" />
             Fechar conta

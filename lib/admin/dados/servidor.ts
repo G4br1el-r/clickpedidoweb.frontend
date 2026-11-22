@@ -670,11 +670,18 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           ),
         )
         // O que já foi pago não volta sozinho: a conta não pode ficar menor que ele.
-        const { pago, total } = resumoDaConta(novo)
+        const { pago, total, saldo } = resumoDaConta(novo)
         if (novo.status !== "cancelado" && pago > total) {
           throw new Error("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
         }
-        return novo
+        // Desconto, cortesia ou item tirado zerou o saldo de uma conta já paga em parte: fecha.
+        const quitada =
+          EM_ANDAMENTO.includes(novo.status) &&
+          novo.itens.length > 0 &&
+          (novo.pagamentos?.length ?? 0) > 0 &&
+          resumoDaConta(pedido).saldo > 0 &&
+          saldo === 0
+        return quitada ? fechada(novo, new Date().toISOString(), novo.eventos?.at(-1)?.por) : novo
       },
       // O garçom não lança mais do que há.
       { conferir: true },
@@ -990,6 +997,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
   function receber(comanda: Pedido, pagamento: Pagamento): Pedido {
     conferirPagamento(pagamento.forma)
     if (comanda.itens.length === 0) throw new Error("A comanda está vazia.")
+    if (resumoDaConta(comanda).saldo === 0) {
+      throw new Error("Não há saldo a receber. Feche a conta.")
+    }
     const cartao = pagamento.forma === "cartao-na-entrega" ? pagamento.cartao : undefined
     if (pagamento.forma === "cartao-na-entrega" && cartao !== "credito" && cartao !== "debito") {
       throw new Error("Escolha crédito ou débito.")
@@ -2054,11 +2064,26 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return alterarComanda(pedidoId, (comanda) => receber(comanda, pagamento))
       },
 
-      /** Recebe o saldo inteiro de uma vez, numa forma só. */
-      fecharConta(pedidoId: number, forma: PagamentoMesa, cartao?: CartaoPagamento) {
-        return alterarComanda(pedidoId, (comanda) =>
-          receber(comanda, { forma, ...(cartao ? { cartao } : {}) }),
-        )
+      /**
+       * Recebe o saldo inteiro de uma vez, numa forma só. Sem saldo (tudo em cortesia, ou a conta
+       * reaberta sem mudança), fecha sem pagamento, e a forma não importa.
+       */
+      fecharConta(
+        pedidoId: number,
+        forma?: PagamentoMesa,
+        { cartao, por }: { cartao?: CartaoPagamento; por?: string } = {},
+      ) {
+        return alterarComanda(pedidoId, (comanda) => {
+          if (comanda.itens.length === 0) throw new Error("A comanda está vazia.")
+          if (resumoDaConta(comanda).saldo === 0) {
+            return fechada(comanda, new Date().toISOString(), por)
+          }
+          return receber(comanda, {
+            forma: forma as PagamentoMesa,
+            ...(cartao ? { cartao } : {}),
+            ...(por ? { por } : {}),
+          })
+        })
       },
 
       /** Desconto da conta, em reais ou em %, com motivo. Valor zero tira o desconto. */

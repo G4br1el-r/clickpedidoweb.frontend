@@ -208,8 +208,10 @@ export function ContaMesa({
   const quem = autorDaAcao(por, pedido.mesa?.garcom)
   // Fecha a janela quando o servidor aceita; se recusar, avisa e a janela continua aberta.
   const comAviso = (sucesso: string, aoTerminar: () => void) => ({
-    onSuccess: () => {
+    onSuccess: (mudado: Pedido) => {
       toast.success(sucesso)
+      // O desconto (ou a cortesia) zerou o saldo da conta paga em parte: ela fechou.
+      if (mudado.status === "concluido") toast.success(`Conta da mesa ${mesa.numero} fechada.`)
       aoTerminar()
     },
     onError: (erro: Error) => toast.error(erro.message),
