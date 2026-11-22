@@ -302,3 +302,48 @@ describe("QR: o pedido do cliente", () => {
     await expect(api.qr.pedir(mesaId, pedido)).rejects.toThrow("X-Burger está esgotado.")
   })
 })
+
+describe("QR: demonstração e virada do dia", () => {
+  /** O catálogo de teste com o QR ligado, como a demonstração. */
+  function comQr() {
+    return criarServidor({
+      segmento: "lanchonete",
+      carregarCatalogo: async () => {
+        const catalogo = catalogoDeTeste()
+        catalogo.salao.funcoes = { ...catalogo.salao.funcoes, qr: true }
+        return catalogo
+      },
+      espera: 0,
+    })
+  }
+
+  test("sem a função ligada, a base nasce sem chamados", async () => {
+    expect(await servidor().chamados.listar()).toEqual([])
+  })
+
+  test("com a função ligada, a base nasce com 1 chamado de garçom aberto", async () => {
+    expect(await comQr().chamados.listar()).toEqual([
+      {
+        id: "chamado-20261113-1",
+        mesaId: "mesa-1",
+        tipo: "garcom",
+        criadoEm: new Date(2026, 10, 13, 20, 27).toISOString(),
+      },
+    ])
+  })
+
+  test("na virada, o dia novo ganha o chamado dele e a lista só mostra os de hoje", async () => {
+    await comQr().chamados.listar()
+    vi.setSystemTime(new Date(2026, 10, 14, 20, 30))
+
+    const api = comQr()
+
+    expect((await api.base()).chamados.map((chamado) => chamado.id)).toEqual([
+      "chamado-20261113-1",
+      "chamado-20261114-1",
+    ])
+    expect((await api.chamados.listar()).map((chamado) => chamado.id)).toEqual([
+      "chamado-20261114-1",
+    ])
+  })
+})

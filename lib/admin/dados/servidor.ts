@@ -59,6 +59,7 @@ import { rotuloDoPagamento } from "../regras/rotulos"
 import { colide, posicaoValida, primeiraPosicaoLivre } from "../regras/salao"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
+import { chamadosDemo } from "./chamados-demo"
 import { semearCustos } from "./custos-demo"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
@@ -633,11 +634,23 @@ function mesaLivreParaReceber(
   return mesa
 }
 
-/** Com as reservas ligadas, a demonstração ganha as reservas e a espera do dia. */
-function comReservasDoDia(base: BaseLoja, agora: Date): BaseLoja {
-  if (!base.salao.funcoes.reservas) return base
-  const { reservas, espera } = reservasDemo(base.mesas, agora)
-  return { ...base, reservas: [...base.reservas, ...reservas], espera: [...base.espera, ...espera] }
+/**
+ * A demonstração do dia: com as reservas ligadas, as reservas e a espera; com o QR ligado, o
+ * chamado aberto.
+ */
+function comDemonstracaoDoDia(base: BaseLoja, agora: Date): BaseLoja {
+  const comReservas = base.salao.funcoes.reservas
+    ? (() => {
+        const { reservas, espera } = reservasDemo(base.mesas, agora)
+        return {
+          ...base,
+          reservas: [...base.reservas, ...reservas],
+          espera: [...base.espera, ...espera],
+        }
+      })()
+    : base
+  if (!base.salao.funcoes.qr) return comReservas
+  return { ...comReservas, chamados: [...base.chamados, ...chamadosDemo(base.mesas, agora)] }
 }
 
 /**
@@ -758,7 +771,7 @@ export function criarServidor({
           : mesa,
       ),
     }
-    const base = comReservasDoDia(limpando, agora)
+    const base = comDemonstracaoDoDia(limpando, agora)
     await salvar(base)
     return base
   }
@@ -789,7 +802,7 @@ export function criarServidor({
         ),
     })
     // A reserva que ficou marcada num dia que passou não veio; quem esperava foi embora.
-    const completa = comReservasDoDia(
+    const completa = comDemonstracaoDoDia(
       abrirMesas({
         ...base,
         pedidos: [...anteriores, ...novos.map(marcarEmAndamento)],
