@@ -29,7 +29,7 @@ import {
   useMarcarServido,
   useSepararMesas,
 } from "@/lib/admin/dados/consultas-mesas"
-import type { Mesa, Pedido } from "@/lib/admin/dados/tipos"
+import type { Mesa, Pedido, Reserva } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
 import { tempoDesde } from "@/lib/admin/regras/alertas-mesa"
 import type { MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
@@ -46,9 +46,20 @@ import { TransferirMesa } from "./transferir-mesa"
 
 const nomePadrao = (mesa: Mesa) => mesa.nome === nomePadraoDaMesa(mesa.numero)
 
-/** A linha de baixo da mesa sem comanda: o motivo do bloqueio, a limpeza ou os lugares. */
-function resumoSemComanda(mesa: Mesa, estado: EstadoMesa, agora: Date | null) {
+/**
+ * A linha de baixo da mesa sem comanda: o motivo do bloqueio, a limpeza, quem reservou ou os
+ * lugares.
+ */
+function resumoSemComanda(
+  mesa: Mesa,
+  estado: EstadoMesa,
+  agora: Date | null,
+  reserva: Reserva | undefined,
+) {
   if (estado === "bloqueada") return mesa.bloqueio?.motivo || "Sem motivo"
+  if (estado === "reservada" && reserva) {
+    return `${reserva.nome} · ${plural(reserva.pessoas, "pessoa", "pessoas")}`
+  }
   if (estado === "limpeza" && mesa.limpezaDesde) {
     return agora ? `Limpeza há ${tempoDesde(mesa.limpezaDesde, agora)}` : "Limpeza"
   }
@@ -60,11 +71,11 @@ function resumoSemComanda(mesa: Mesa, estado: EstadoMesa, agora: Date | null) {
  * cliente, o garçom, as pessoas, o total e os alertas.
  */
 export function descricaoDaMesa(
-  { mesa, comanda, estado, alertas }: MesaNaGrade,
+  { mesa, comanda, estado, alertas, reserva }: MesaNaGrade,
   agora: Date | null,
 ): string {
   const ocupada = mesa.status === "ocupada"
-  const resumo = ocupada ? null : resumoSemComanda(mesa, estado.estado, agora)
+  const resumo = ocupada ? null : resumoSemComanda(mesa, estado.estado, agora, reserva)
   const garcom = comanda?.mesa?.garcom ? `Garçom ${comanda.mesa.garcom}` : null
   const pessoas = comanda?.mesa?.pessoas ? plural(comanda.mesa.pessoas, "pessoa", "pessoas") : null
   return [
@@ -298,6 +309,7 @@ export function CartaoMesa({
   comanda,
   estado,
   alertas,
+  reserva,
   agora,
   aoAbrir,
   aoEditar,
@@ -309,7 +321,7 @@ export function CartaoMesa({
   const ocupada = mesa.status === "ocupada"
   const itens = comanda?.itens.reduce((soma, item) => soma + item.quantidade, 0) ?? 0
   const alerta = alertas[0]
-  const resumo = ocupada ? null : resumoSemComanda(mesa, estado.estado, agora)
+  const resumo = ocupada ? null : resumoSemComanda(mesa, estado.estado, agora, reserva)
   const garcom = comanda?.mesa?.garcom ? `Garçom ${comanda.mesa.garcom}` : null
   const pessoas = comanda?.mesa?.pessoas ? plural(comanda.mesa.pessoas, "pessoa", "pessoas") : null
   return (
@@ -347,7 +359,7 @@ export function CartaoMesa({
           {estado.rotulo}
         </span>
         <span id={`mesa-${mesa.id}-detalhes`} className="sr-only">
-          {descricaoDaMesa({ mesa, comanda, estado, alertas }, agora)}
+          {descricaoDaMesa({ mesa, comanda, estado, alertas, reserva }, agora)}
         </span>
         {!nomePadrao(mesa) && (
           <span className="truncate text-xs text-muted-foreground">{mesa.nome}</span>

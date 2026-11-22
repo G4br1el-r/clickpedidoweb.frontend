@@ -1,4 +1,4 @@
-import type { Mesa, Pedido } from "../dados/tipos"
+import type { Mesa, Pedido, Reserva } from "../dados/tipos"
 import type { AlertaMesa } from "./alertas-mesa"
 import { normalizar } from "./filtro-pedidos"
 import type { EstadoMesa, estadoDaMesa } from "./mesas"
@@ -17,6 +17,8 @@ export type MesaNaGrade = {
   comanda?: Pedido
   estado: ReturnType<typeof estadoDaMesa>
   alertas: AlertaMesa[]
+  /** A reserva que segura a mesa agora (da antecedência até a tolerância). */
+  reserva?: Reserva
 }
 
 function combinaBusca({ mesa }: MesaNaGrade, busca: string) {

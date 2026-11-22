@@ -166,6 +166,16 @@ describe("vista Mapa", () => {
     )
   })
 
+  test("a mesa reservada diz a hora, quem reservou e as pessoas, como no cartão (Fase 7)", async () => {
+    await abrir("?vista=mapa&area=area-varanda")
+    const varanda = await mapa("Varanda")
+    const treze = within(varanda).getByRole("button", { name: "Mesa 13" })
+    await waitFor(() =>
+      expect(treze).toHaveAccessibleDescription("Reservada 20:50, Marina Costa · 2 pessoas"),
+    )
+    expect(within(varanda).getByText("Reservada 20:50")).toBeInTheDocument()
+  })
+
   test("a mesa bloqueada diz o motivo, como no cartão", async () => {
     await abrir("?vista=mapa&area=area-balcao")
     expect(

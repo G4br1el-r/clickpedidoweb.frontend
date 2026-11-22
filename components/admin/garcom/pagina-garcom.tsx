@@ -22,14 +22,21 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
+import { useAgora } from "@/hooks/use-agora"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { usePedido } from "@/lib/admin/dados/consultas"
-import { useConfigSalao, useLancarNaMesa, useMesas } from "@/lib/admin/dados/consultas-mesas"
+import {
+  useConfigSalao,
+  useLancarNaMesa,
+  useMesas,
+  useReservas,
+} from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
 import { useGarcom, useGarcomCarregado } from "@/lib/admin/garcom"
 import { garcomDoAparelho } from "@/lib/admin/regras/abrir-mesa"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { totaisDaVenda } from "@/lib/admin/regras/pdv"
+import { reservaDaMesa } from "@/lib/admin/regras/reservas"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { ComandaMesa } from "../mesas/comanda-mesa"
@@ -75,6 +82,13 @@ export function PaginaGarcom() {
   const definirNome = useGarcom((estado) => estado.definirNome)
   const { data: mesas = [] } = useMesas()
   const { data: salao } = useConfigSalao()
+  const { data: reservas = [] } = useReservas()
+  const agora = useAgora(30_000)
+  // A mesa livre na janela de uma reserva: o servidor recusa o lançamento e manda abrir por Mesas.
+  const reservaDa = (item: Mesa) =>
+    salao && agora && item.status === "livre" && !item.juntadaCom
+      ? reservaDaMesa(item, reservas, agora, salao.reservas)
+      : undefined
   const garcons = salao?.garcons.filter((garcom) => garcom.ativo) ?? []
   // O nome digitado marca o garçom da lista sem diferenciar acento e maiúscula.
   const marcado = garcomDoAparelho(
@@ -187,17 +201,27 @@ export function PaginaGarcom() {
                     <SelectGroup>
                       {mesas
                         .filter((item) => !item.bloqueio)
-                        .map((item) => (
-                          <SelectItem key={item.id} value={item.id}>
-                            <Traco tom={estadoDaMesa(item, undefined).tom} />
-                            Mesa {item.numero} ·{" "}
-                            {item.juntadaCom
-                              ? `com a mesa ${mesas.find((outra) => outra.id === item.juntadaCom)?.numero}`
-                              : item.status === "livre"
-                                ? "livre"
-                                : item.clienteNome}
-                          </SelectItem>
-                        ))}
+                        .map((item) => {
+                          const reserva = reservaDa(item)
+                          const estado = estadoDaMesa(
+                            item,
+                            undefined,
+                            reserva && agora ? { reserva, agora } : undefined,
+                          )
+                          return (
+                            <SelectItem key={item.id} value={item.id}>
+                              <Traco tom={estado.tom} />
+                              Mesa {item.numero} ·{" "}
+                              {item.juntadaCom
+                                ? `com a mesa ${mesas.find((outra) => outra.id === item.juntadaCom)?.numero}`
+                                : reserva
+                                  ? estado.rotulo.toLowerCase()
+                                  : item.status === "livre"
+                                    ? "livre"
+                                    : item.clienteNome}
+                            </SelectItem>
+                          )
+                        })}
                     </SelectGroup>
                   </SelectContent>
                 </Select>

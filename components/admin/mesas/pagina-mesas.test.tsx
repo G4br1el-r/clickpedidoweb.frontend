@@ -159,12 +159,22 @@ describe("PaginaMesas", () => {
     expect(await screen.findByText(/4 com rodada na cozinha/)).toBeInTheDocument()
   })
 
-  test("o resumo conta como livre só a mesa livre: a bloqueada e a em limpeza ficam de fora", async () => {
-    // Na demonstração: 8 ocupadas, 9 livres, a 9 em limpeza, a 16 junto com a 15 e a 20 bloqueada.
+  test("o resumo conta como livre só a mesa livre: a bloqueada, a em limpeza e a reservada ficam de fora", async () => {
+    // Na demonstração: 8 ocupadas, 8 livres, a 9 em limpeza, a 13 reservada às 20:50 (Fase 7),
+    // a 16 junto com a 15 e a 20 bloqueada.
     await abrir()
     expect(
-      await screen.findByText("8 ocupadas · 9 livres · 3 com rodada na cozinha"),
+      await screen.findByText("8 ocupadas · 8 livres · 3 com rodada na cozinha"),
     ).toBeInTheDocument()
+  })
+
+  test("a mesa 13 está reservada para as 20:50, com o nome e as pessoas da reserva", async () => {
+    await abrir()
+    const mesa = await cartao(13)
+    await waitFor(() =>
+      expect(mesa).toHaveAccessibleDescription("Reservada 20:50, Marina Costa · 2 pessoas"),
+    )
+    expect(mesa).toHaveTextContent("Marina Costa · 2 pessoas")
   })
 
   test("a demonstração mostra a mesa 20 bloqueada, a comanda mais antiga pedindo a conta e outra para servir", async () => {
@@ -583,8 +593,8 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
     )
   })
 
-  // Fase 5: Juntada volta ao filtro; Reservada só com as reservas (Fase 7).
-  test("o filtro de estado não oferece Reservada, que só chega na Fase 7", async () => {
+  // Fase 5: Juntada volta ao filtro; Fase 7: Reservada também, com as reservas.
+  test("o filtro de estado oferece Reservada, depois de Livre", async () => {
     const usuario = await abrir()
     await usuario.click(screen.getByRole("combobox", { name: "Estado" }))
     const opcoes = within(await screen.findByRole("listbox")).getAllByRole("option")
@@ -592,6 +602,7 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
     expect(opcoes.map((opcao) => opcao.textContent)).toEqual([
       "Todos os estados",
       "Livre",
+      "Reservada",
       "Ocupada",
       "Na cozinha",
       "Servir",
@@ -602,11 +613,12 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
     ])
   })
 
-  test("o endereço ?estado=reservada não filtra: a grade abre inteira", async () => {
+  test("o endereço ?estado=reservada mostra só a mesa 13, reservada às 20:50", async () => {
     await abrir("?estado=reservada")
 
-    expect(await screen.findByRole("list", { name: "Salão" })).toBeInTheDocument()
-    expect(screen.getByRole("combobox", { name: "Estado" })).toHaveTextContent("Todos os estados")
+    expect(await screen.findByRole("button", { name: /^Mesa 13\b/ })).toBeInTheDocument()
+    expect(screen.queryByRole("list", { name: "Salão" })).not.toBeInTheDocument()
+    expect(screen.getByRole("combobox", { name: "Estado" })).toHaveTextContent("Reservada")
   })
 
   test("o endereço ?estado=bloqueada abre a grade já filtrada", async () => {

@@ -17,13 +17,14 @@ import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAgora } from "@/hooks/use-agora"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useFila } from "@/lib/admin/dados/consultas"
-import { useConfigSalao, useMesas } from "@/lib/admin/dados/consultas-mesas"
+import { useConfigSalao, useMesas, useReservas } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
 import { useGarcomCarregado } from "@/lib/admin/garcom"
 import { usePreferenciasMesasCarregadas } from "@/lib/admin/preferencias-mesas"
 import { alertasDaMesa } from "@/lib/admin/regras/alertas-mesa"
 import { filtrarMesas, type MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
+import { reservaDaMesa } from "@/lib/admin/regras/reservas"
 import { plural } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { SeloPro } from "../campos"
@@ -48,6 +49,7 @@ export function PaginaMesas() {
   const { data: mesas } = useMesas(4_000)
   const { data: salao } = useConfigSalao()
   const { data: fila } = useFila()
+  const { data: reservas } = useReservas(4_000)
   const agora = useAgora(30_000)
   const [filtros, setFiltros] = useEstadoGrade()
   const [numeroAberto, setNumeroAberto] = useMesaAberta()
@@ -117,10 +119,21 @@ export function PaginaMesas() {
   const linhas: MesaNaGrade[] = (mesas ?? []).map((mesa) => {
     const principal = principalDe(mesa)
     const comanda = comandaDa(principal ?? mesa)
+    // A reserva só conta na mesa sem comanda: aberta, ela já está ocupada.
+    const reserva =
+      salao && agora && !comanda && !principal
+        ? reservaDaMesa(mesa, reservas ?? [], agora, salao.reservas)
+        : undefined
     return {
       mesa,
       comanda,
-      estado: estadoDaMesa(mesa, comanda, principal ? { principal } : undefined),
+      reserva,
+      estado: estadoDaMesa(mesa, comanda, {
+        ...(principal ? { principal } : {}),
+        ...(reserva && agora
+          ? { reserva, agora, antecedenciaMin: salao?.reservas.antecedenciaMin }
+          : {}),
+      }),
       alertas: salao && agora ? alertasDaMesa(mesa, comanda, salao.alertas, agora) : [],
     }
   })
