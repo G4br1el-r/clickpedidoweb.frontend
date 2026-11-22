@@ -28,6 +28,11 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     restoreMocks: true,
     unstubGlobals: true,
+    // Os testes de página inteira levam ~1 s sozinhos, mas 5 a 11 s na cobertura (instrumentação
+    // e arquivos em paralelo). Os 5 s do padrão ficavam abaixo das esperas de 8 s dos findBy, e
+    // o beforeEach que limpa o IndexedDB já passou dos 10 s do padrão com a máquina carregada.
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],

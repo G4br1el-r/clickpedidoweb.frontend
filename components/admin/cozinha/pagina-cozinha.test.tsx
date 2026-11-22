@@ -864,7 +864,8 @@ describe("PaginaCozinha: vias da cozinha", () => {
     expect(impressas).toEqual([])
 
     const comanda = await lancarNaMesa(84, ["cat-calzones", "cat-massas", "cat-bebidas"])
-    await waitFor(() => expect(impressas).toHaveLength(2))
+    // As vias saem na leitura seguinte do quadro (a cada 200 ms): com a máquina lenta, passa de 1 s.
+    await waitFor(() => expect(impressas).toHaveLength(2), { timeout: 4000 })
     expect(impressas[0]).toMatch(/^Mesa 84 · FORNO/)
     expect(impressas[0]).not.toMatch(/R$/)
     expect(impressas[1]).toMatch(/^Mesa 84 · MONTAGEM/)
