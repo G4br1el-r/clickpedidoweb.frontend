@@ -326,7 +326,8 @@ describe("PaginaMesas", () => {
     expect(imprimir).toHaveBeenCalled()
 
     await usuario.click(comanda().getByRole("button", { name: "Fechar conta" }))
-    const fechar = within(screen.getByRole("dialog", { name: "Fechar a conta da mesa 60" }))
+    // Fase 4: fechar a conta é receber o saldo, na janela "Receber".
+    const fechar = within(screen.getByRole("dialog", { name: "Receber da mesa 60" }))
     await usuario.click(fechar.getByRole("radio", { name: "Pix" }))
     // Dinheiro do Intl vem com espaço não separável, que o nome acessível mantém.
     await usuario.click(fechar.getByRole("button", { name: "Receber R$ 13,50" }))
