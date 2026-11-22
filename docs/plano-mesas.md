@@ -1412,6 +1412,7 @@ Situação: implementada em 21/11/2026, na branch `claude/admin-mesas-fase-3`, e
   - a confirmação de reserva na tela, com as reservas (Fase 7);
   - "Imprimir conta" ainda não marca "Pediu a conta": entra com a pré-conta (Fase 4);
   - aumentar a quantidade de um item não preparado não entra no histórico.
+- **Testes e cobertura:** 1412 testes no Vitest; os mínimos de cobertura subiram para 83/75/81/84 no geral, e `lib/**` continua em 98/94/98/98. O E2E novo passou em `desktop-1920` e `celular-390`.
 - **Telas que mudam no visual:** `painel-mesas-*` (botão "Atalhos do teclado" no cabeçalho), `painel-comanda-*` (abas, "Adicionar itens", "Editar" nos itens), a gaveta da mesa livre (formulário "Abrir mesa" no lugar do convite ao Garçom) e o Garçom (botões dos garçons abaixo de "Seu nome").
 
 ## Fase 4: conta
