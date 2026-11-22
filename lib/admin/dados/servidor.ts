@@ -696,7 +696,13 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           ),
         )
         // O que já foi pago não volta sozinho: a conta não pode ficar menor que ele.
-        const { pago, total, saldo } = resumoDaConta(novo)
+        const { pago, total, saldo, itens, cortesias, descontos } = resumoDaConta(novo)
+        // O desconto em reais fica parado: tirar item ou dar cortesia pode deixá-lo acima dos itens.
+        if (novo.status !== "cancelado" && descontos > reais(itens - cortesias)) {
+          throw new Error(
+            "O desconto passaria do valor dos itens. Tire ou diminua o desconto antes.",
+          )
+        }
         if (novo.status !== "cancelado" && pago > total) {
           throw new Error("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
         }

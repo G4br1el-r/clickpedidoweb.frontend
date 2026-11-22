@@ -702,3 +702,24 @@ describe("cancelar a comanda", () => {
     expect(cancelada.status).toBe("cancelado")
   })
 })
+
+describe("desconto maior que os itens que sobram", () => {
+  test("cortesia ou item tirado que deixaria o desconto acima dos itens pede para mexer no desconto", async () => {
+    const api = semTaxa()
+    const { mesa } = await abrirMesa(api)
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [
+        { avulso: { nome: "Pizza", preco: 40 }, quantidade: 1 },
+        { avulso: { nome: "Suco", preco: 20 }, quantidade: 1 },
+      ],
+    })
+    await api.mesas.descontar(comanda.id, { modo: "reais", valor: 50, motivo: "Demora" })
+    const erro = "O desconto passaria do valor dos itens. Tire ou diminua o desconto antes."
+    await expect(
+      api.mesas.darCortesia(comanda.id, comanda.itens[0].id, { motivo: "Brinde" }),
+    ).rejects.toThrow(erro)
+    await expect(api.mesas.removerItem(comanda.id, comanda.itens[0].id)).rejects.toThrow(erro)
+  })
+})
