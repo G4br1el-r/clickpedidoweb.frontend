@@ -272,14 +272,19 @@ const proximoId = (base: BaseLoja) => (ultimoPedido(base)?.id ?? 0) + 1
 /** Valor em reais e centavos, sem fração de centavo. */
 const emCentavosExatos = (valor: number) => Number.isInteger(Number((valor * 100).toFixed(6)))
 
-/** Comanda aberta da mesa, se houver. A mesa juntada aponta para a comanda da principal. */
-const comandaDa = (base: BaseLoja, mesaId: string) =>
-  base.pedidos.find(
-    (pedido) =>
-      pedido.tipo === "mesa" &&
-      EM_ANDAMENTO.includes(pedido.status) &&
-      (pedido.mesa?.id === mesaId || pedido.mesa?.juntadas?.some((junta) => junta.id === mesaId)),
+/**
+ * Comanda aberta da mesa, se houver. A mesa juntada aponta para a comanda da principal; a
+ * comanda da própria mesa vem antes.
+ */
+function comandaDa(base: BaseLoja, mesaId: string) {
+  const abertas = base.pedidos.filter(
+    (pedido) => pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status),
   )
+  return (
+    abertas.find((pedido) => pedido.mesa?.id === mesaId) ??
+    abertas.find((pedido) => pedido.mesa?.juntadas?.some((junta) => junta.id === mesaId))
+  )
+}
 
 /**
  * A reserva marcada da mesa que já está dentro da antecedência e ainda na tolerância. Confere
@@ -1103,7 +1108,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
   /**
    * Por que a conta não pode ser reaberta agora, ou `null`: só a última conta fechada da mesa,
-   * no mesmo dia do pagamento, com a mesa livre ou em limpeza (Q37).
+   * no mesmo dia do pagamento, com a mesa livre ou em limpeza (Q37). A conta que tinha mesas
+   * juntadas reabre junta: cada uma delas também tem que estar livre.
    */
   function porQueNaoReabre(base: BaseLoja, conta: Pedido, agora: Date): string | null {
     const mesa = base.mesas.find((item) => item.id === conta.mesa?.id)
@@ -1116,6 +1122,19 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     }
     if (mesa.bloqueio) return `A mesa ${mesa.numero} está bloqueada.`
     if (comandaDa(base, mesa.id)) return `A mesa ${mesa.numero} já está aberta.`
+    for (const junta of conta.mesa?.juntadas ?? []) {
+      const secundaria = base.mesas.find((item) => item.id === junta.id)
+      const porQue = !secundaria
+        ? `A mesa ${junta.numero} foi excluída.`
+        : secundaria.bloqueio
+          ? `A mesa ${secundaria.numero} está bloqueada.`
+          : secundaria.juntadaCom
+            ? `A mesa ${secundaria.numero} já está junto com a mesa ${base.mesas.find((item) => item.id === secundaria.juntadaCom)?.numero}.`
+            : comandaDa(base, secundaria.id)
+              ? `A mesa ${secundaria.numero} já está aberta.`
+              : null
+      if (porQue) return `${porQue} Reabrir não junta de novo.`
+    }
     return null
   }
 

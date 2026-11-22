@@ -780,3 +780,94 @@ describe("ids depois de juntar (achado da revisão)", () => {
     expect(aberta33.id).toBe(c31.id + 2)
   })
 })
+
+describe("reabrir a conta da principal (achado da revisão)", () => {
+  /** A 30 com a 31 junta, a conta fechada. */
+  async function fechadaComJunta(api: Api) {
+    const { mesaId, comanda } = await aberta(api)
+    const livre = await mesaNova(api, 31)
+    await api.mesas.juntar(comanda.id, [livre])
+    await api.mesas.fecharConta(comanda.id, "pix")
+    return { mesaId, comanda, livre }
+  }
+
+  test("com as secundárias livres, reabre com a junção", async () => {
+    const api = servidor()
+    const { comanda, livre } = await fechadaComJunta(api)
+
+    const reaberta = await api.mesas.reabrir(comanda.id, { motivo: "Errou a forma" })
+
+    expect(reaberta.mesa?.juntadas).toEqual([{ id: livre, numero: 31 }])
+    expect((await mesaDe(api, livre))?.juntadaCom).toBe(comanda.mesa?.id)
+  })
+
+  test("a secundária que abriu comanda própria: recusa, e a 31 continua com a comanda dela", async () => {
+    const api = servidor()
+    const { comanda, livre } = await fechadaComJunta(api)
+    const daMesa31 = await api.mesas.lancar({
+      mesaId: livre,
+      garcom: "Bia",
+      enviarParaCozinha: false,
+      itens: REFRI(1),
+    })
+
+    expect(await api.mesas.ultimaConta(comanda.mesa?.id as string)).toBeNull()
+    await expect(api.mesas.reabrir(comanda.id, { motivo: "Errou" })).rejects.toThrow(
+      "A mesa 31 já está aberta. Reabrir não junta de novo.",
+    )
+    const lancada = await api.mesas.lancar({
+      mesaId: livre,
+      enviarParaCozinha: false,
+      itens: REFRI(1),
+    })
+    expect(lancada.id).toBe(daMesa31.id)
+  })
+
+  test("a secundária bloqueada ou junta a outra mesa: recusa", async () => {
+    const api = servidor()
+    const { comanda, livre } = await fechadaComJunta(api)
+    await api.mesas.bloquear(livre)
+    await expect(api.mesas.reabrir(comanda.id, { motivo: "Errou" })).rejects.toThrow(
+      "A mesa 31 está bloqueada. Reabrir não junta de novo.",
+    )
+    await api.mesas.desbloquear(livre)
+
+    const { comanda: outra } = await aberta(api, 40)
+    await api.mesas.juntar(outra.id, [livre])
+    await expect(api.mesas.reabrir(comanda.id, { motivo: "Errou" })).rejects.toThrow(
+      "A mesa 31 já está junto com a mesa 40. Reabrir não junta de novo.",
+    )
+
+    await api.mesas.separar(outra.id)
+    await api.mesas.excluir(livre)
+    await expect(api.mesas.reabrir(comanda.id, { motivo: "Errou" })).rejects.toThrow(
+      "A mesa 31 foi excluída. Reabrir não junta de novo.",
+    )
+  })
+
+  test("na base que já tem as duas abertas, a secundária lança na comanda dela", async () => {
+    const api = servidor()
+    const { comanda, livre } = await fechadaComJunta(api)
+    const daMesa31 = await api.mesas.lancar({
+      mesaId: livre,
+      garcom: "Bia",
+      enviarParaCozinha: false,
+      itens: REFRI(1),
+    })
+    // Como a base ficava antes da correção: a principal reaberta com a junção.
+    await naBase((base) => {
+      base.pedidos = base.pedidos.map((pedido) =>
+        pedido.id === comanda.id ? { ...pedido, status: "pronto" } : pedido,
+      )
+    })
+    const outra = servidor()
+
+    const lancada = await outra.mesas.lancar({
+      mesaId: livre,
+      enviarParaCozinha: false,
+      itens: REFRI(1),
+    })
+
+    expect(lancada.id).toBe(daMesa31.id)
+  })
+})
