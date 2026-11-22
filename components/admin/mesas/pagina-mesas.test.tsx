@@ -322,7 +322,8 @@ describe("PaginaMesas", () => {
     await mesaOcupada()
     const usuario = await abrir()
     await usuario.click(await cartao(60))
-    await usuario.click(comanda().getByRole("button", { name: "Imprimir conta" }))
+    // Fase 4: a conta impressa é a pré-conta, que também marca "Pediu a conta".
+    await usuario.click(comanda().getByRole("button", { name: "Imprimir pré-conta" }))
     expect(imprimir).toHaveBeenCalled()
 
     await usuario.click(comanda().getByRole("button", { name: "Fechar conta" }))

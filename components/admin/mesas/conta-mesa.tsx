@@ -2,12 +2,14 @@
 
 import { format } from "date-fns"
 import { HandCoinsIcon, XIcon } from "lucide-react"
-import { type ReactNode, useState } from "react"
+import { type ReactNode, useEffect, useRef, useState } from "react"
+import { useReactToPrint } from "react-to-print"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { useLoja } from "@/lib/admin/dados/consultas"
 import {
   useDescontar,
   useEstornarPagamento,
@@ -27,6 +29,7 @@ import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { rotuloDoPagamento } from "@/lib/admin/regras/rotulos"
 import { emReais, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
+import { Comprovante, PAPEL_80MM } from "./impressao-conta"
 import { DescontoNaConta, MotivoConta } from "./motivo-conta"
 import type { ParteDaConta } from "./receber-conta"
 
@@ -182,6 +185,19 @@ export function ContaMesa({
   const comItens = pedido.itens.length > 0
   const [mudando, setMudando] = useState<"desconto" | "taxa" | "couvert" | null>(null)
   const [estornando, setEstornando] = useState<PagamentoConta | null>(null)
+  const [comprovante, setComprovante] = useState<PagamentoConta | null>(null)
+  const papel = useRef<HTMLDivElement>(null)
+  const { data: loja } = useLoja()
+  const imprimir = useReactToPrint({
+    contentRef: papel,
+    documentTitle: `Comprovante mesa ${mesa.numero}`,
+    pageStyle: PAPEL_80MM,
+    onAfterPrint: () => setComprovante(null),
+  })
+  // O comprovante escolhido entra no papel escondido e só então vai para a impressora.
+  useEffect(() => {
+    if (comprovante) imprimir()
+  }, [comprovante, imprimir])
   const descontar = useDescontar()
   const tirarTaxa = useTirarTaxa()
   const tirarCouvert = useTirarCouvert()
@@ -259,6 +275,14 @@ export function ContaMesa({
                   type="button"
                   size="xs"
                   variant="ghost"
+                  onClick={() => setComprovante(pagamento)}
+                >
+                  Comprovante
+                </Button>
+                <Button
+                  type="button"
+                  size="xs"
+                  variant="ghost"
                   className="text-destructive"
                   onClick={() => setEstornando(pagamento)}
                 >
@@ -317,6 +341,17 @@ export function ContaMesa({
         )}
       </div>
 
+      <div className="hidden">
+        {comprovante && (
+          <Comprovante
+            pedido={pedido}
+            mesa={mesa}
+            loja={loja?.nome}
+            pagamento={comprovante}
+            ref={papel}
+          />
+        )}
+      </div>
       <DescontoNaConta
         aberta={mudando === "desconto"}
         numero={mesa.numero}

@@ -11,6 +11,7 @@ import {
   PlusIcon,
   PrinterIcon,
   ReceiptIcon,
+  RotateCcwIcon,
   SprayCanIcon,
   Trash2Icon,
 } from "lucide-react"
@@ -38,10 +39,13 @@ import {
   useAlterarQuantidade,
   useDarCortesia,
   useDesbloquearMesa,
+  useImprimirPreConta,
   useLiberarMesa,
   useMarcarLimpa,
   useMarcarServido,
+  useReabrirConta,
   useRemoverItem,
+  useUltimaConta,
 } from "@/lib/admin/dados/consultas-mesas"
 import type { ItemPedido, Mesa, Pedido } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
@@ -59,56 +63,10 @@ import { ContaMesa } from "./conta-mesa"
 import { EditarItem } from "./editar-item"
 import { ConfirmarExclusaoMesa } from "./excluir-mesa"
 import { HistoricoComanda } from "./historico-comanda"
+import { PAPEL_80MM, PreConta } from "./impressao-conta"
 import { MotivoConta } from "./motivo-conta"
 import { type ParteDaConta, ReceberConta } from "./receber-conta"
 import { TirarItem } from "./tirar-item"
-
-/** Conta no formato do cupom de 80 mm. Fica fora da tela e só aparece na impressão. */
-function ContaImpressa({
-  pedido,
-  mesa,
-  loja,
-  ref,
-}: {
-  pedido: Pedido
-  mesa: Mesa
-  loja: string | undefined
-  ref: React.Ref<HTMLDivElement>
-}) {
-  return (
-    <div className="hidden">
-      <div ref={ref} className="flex flex-col gap-2 p-2 font-mono text-xs text-black">
-        <p className="text-center font-bold">{loja}</p>
-        <p className="text-center">
-          Mesa {mesa.numero} · {pedido.cliente.nome}
-        </p>
-        <p className="text-center">Conferência · {format(new Date(), "dd/MM/yyyy HH:mm")}</p>
-        <hr className="border-dashed border-black" />
-        {pedido.itens.map((item) => (
-          <div key={item.id}>
-            <div className="flex justify-between gap-2">
-              <span>
-                {item.quantidade}× {item.nome}
-              </span>
-              <span>{emReais(item.total)}</span>
-            </div>
-            {item.opcoes.map((opcao) => (
-              <p key={opcao} className="pl-3">
-                * {opcao}
-              </p>
-            ))}
-          </div>
-        ))}
-        <hr className="border-dashed border-black" />
-        <div className="flex justify-between font-bold">
-          <span>TOTAL</span>
-          <span>{emReais(pedido.total)}</span>
-        </div>
-        <p className="text-center">Não é documento fiscal.</p>
-      </div>
-    </div>
-  )
-}
 
 function ItemAvulso({ mesa, comanda }: { mesa: Mesa; comanda: Pedido }) {
   const [nome, setNome] = useState("")
@@ -184,10 +142,10 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   const conta = useRef<HTMLDivElement>(null)
   const imprimir = useReactToPrint({
     contentRef: conta,
-    documentTitle: `Conta mesa ${mesa.numero}`,
-    pageStyle:
-      "@page { size: 80mm auto; margin: 4mm } body { font-family: monospace; font-size: 12px }",
+    documentTitle: `Pré-conta mesa ${mesa.numero}`,
+    pageStyle: PAPEL_80MM,
   })
+  const preConta = useImprimirPreConta()
   const vazia = pedido.itens.length === 0
   const aoErrar = (erro: Error) => toast.error(erro.message)
   // Quem assina no histórico: o nome do aparelho ou, sem ele, o garçom da comanda.
@@ -461,10 +419,14 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
               variant="outline"
               size="lg"
               className="h-11 flex-1"
-              onClick={() => imprimir()}
+              onClick={() => {
+                imprimir()
+                // A pré-conta impressa é a mesa pedindo a conta (Q30).
+                preConta.mutate({ pedidoId: pedido.id, ...quem }, { onError: aoErrar })
+              }}
             >
               <PrinterIcon data-icon="inline-start" />
-              Imprimir conta
+              Imprimir pré-conta
             </Button>
           )}
           <Button
@@ -480,7 +442,9 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
         </div>
       </SheetFooter>
 
-      <ContaImpressa pedido={pedido} mesa={mesa} loja={loja?.nome} ref={conta} />
+      <div className="hidden">
+        <PreConta pedido={pedido} mesa={mesa} loja={loja?.nome} agora={new Date()} ref={conta} />
+      </div>
       <TirarItem
         item={confirmando?.item ?? null}
         {...(confirmando?.quantidade ? { quantidade: confirmando.quantidade } : {})}
@@ -533,6 +497,50 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   )
 }
 
+/** A última conta da mesa, fechada hoje, pode ser reaberta com motivo (Q37). */
+function ReabrirConta({ mesa }: { mesa: Mesa }) {
+  const { data: conta } = useUltimaConta(mesa.id)
+  const [aberta, setAberta] = useState(false)
+  const reabrir = useReabrirConta()
+  const por = useGarcom((estado) => estado.nome)
+  if (!conta?.pagoEm) return null
+  return (
+    <div className="flex flex-col gap-2 border-b border-border/70 pb-4">
+      <p>
+        Conta de {emReais(conta.total)} fechada às {format(new Date(conta.pagoEm), "HH:mm")}.
+      </p>
+      <Button
+        type="button"
+        variant="outline"
+        className="self-start"
+        onClick={() => setAberta(true)}
+      >
+        <RotateCcwIcon data-icon="inline-start" />
+        Reabrir a conta
+      </Button>
+      <MotivoConta
+        aberta={aberta}
+        titulo={`Reabrir a conta da mesa ${mesa.numero}?`}
+        descricao="A comanda volta aberta, com os pagamentos feitos, e a mesa volta a ficar ocupada."
+        acao="Reabrir"
+        aoMudar={setAberta}
+        aoConfirmar={(motivo) =>
+          reabrir.mutateAsync(
+            { pedidoId: conta.id, motivo, ...autorDaAcao(por, conta.mesa?.garcom) },
+            {
+              onSuccess: () => {
+                toast.success(`Conta da mesa ${mesa.numero} reaberta.`)
+                setAberta(false)
+              },
+              onError: (erro) => toast.error(erro.message),
+            },
+          )
+        }
+      />
+    </div>
+  )
+}
+
 /** O meio da gaveta sem comanda: o que destrava a mesa, ou o convite ao Garçom. */
 function AcaoSemComanda({ mesa, estado }: { mesa: Mesa; estado: EstadoMesa }) {
   const desbloquear = useDesbloquearMesa()
@@ -563,6 +571,7 @@ function AcaoSemComanda({ mesa, estado }: { mesa: Mesa; estado: EstadoMesa }) {
   if (estado === "limpeza") {
     return (
       <>
+        <ReabrirConta mesa={mesa} />
         <p>A mesa volta a ficar livre quando alguém a limpar.</p>
         <Button
           type="button"
@@ -586,7 +595,12 @@ function AcaoSemComanda({ mesa, estado }: { mesa: Mesa; estado: EstadoMesa }) {
       </>
     )
   }
-  return <AbrirMesa mesa={mesa} />
+  return (
+    <>
+      <ReabrirConta mesa={mesa} />
+      <AbrirMesa mesa={mesa} />
+    </>
+  )
 }
 
 function MesaSemComanda({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void }) {

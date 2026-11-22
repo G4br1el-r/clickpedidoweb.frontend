@@ -9,9 +9,12 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
+import type { Mesa } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
 import { usePreferenciasMesas } from "@/lib/admin/preferencias-mesas"
+import { pedidoDeTeste } from "@/lib/admin/regras/pedidos-de-teste"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { Comprovante, PreConta } from "./impressao-conta"
 import { PaginaMesas } from "./pagina-mesas"
 
 // Impressora: a fronteira com o navegador. O teste confere só que algo foi mandado imprimir.
@@ -274,5 +277,146 @@ describe("ComandaMesa: desconto, cortesia, taxa, couvert e estorno", () => {
     await usuario.click(janela.getByRole("button", { name: "Estornar" }))
     await waitFor(() => expect(valorDe(gaveta, "Saldo")).toHaveTextContent("R$ 64,40"))
     expect(gaveta.queryByRole("list", { name: "Pagamentos" })).not.toBeInTheDocument()
+  })
+})
+
+describe("pré-conta e comprovante", () => {
+  const agora = new Date(2026, 10, 13, 20, 30)
+  const item = (id: string, nome: string, total: number, extra = {}) => ({
+    id,
+    produtoId: null,
+    nome,
+    quantidade: 1,
+    precoUnitario: total,
+    opcoes: [],
+    total,
+    ...extra,
+  })
+  /** Pizza R$ 40 e Água R$ 4 (cortesia), desconto R$ 4, 10% e couvert de R$ 8 para 2; R$ 20 em Pix. */
+  const conta = pedidoDeTeste(9, agora, 0, {
+    tipo: "mesa",
+    cliente: { nome: "Júlia", telefone: "" },
+    mesa: { id: "mesa-70", numero: 70, pessoas: 2 },
+    itens: [item("i1", "Pizza", 40), item("i2", "Água", 4, { cortesia: { motivo: "Brinde" } })],
+    descontoConta: { modo: "reais", valor: 4, motivo: "Demora" },
+    taxaServico: { percentual: 10 },
+    couvert: { porPessoa: 8 },
+    pagamentos: [{ id: "p1", forma: "pix", valor: 20, em: agora.toISOString() }],
+  })
+  const mesa = { id: "mesa-70", numero: 70 } as Mesa
+
+  test("a pré-conta tem itens, cortesia, desconto, taxa, couvert, total, pagamentos, saldo e por pessoa", () => {
+    render(<PreConta pedido={conta} mesa={mesa} loja="Pizzaria Teste" agora={agora} />)
+    const texto = document.body.textContent?.replace(/\u00a0/g, " ") ?? ""
+    for (const trecho of [
+      "Pizzaria Teste",
+      "Mesa 70 · Júlia",
+      "Pré-conta · 13/11/2026 20:30",
+      "1× PizzaR$ 40,00",
+      "1× Água (cortesia)R$ 0,00",
+      "ItensR$ 44,00",
+      "Cortesias− R$ 4,00",
+      "Desconto− R$ 4,00",
+      "Taxa de serviço (10%)R$ 3,60",
+      "Couvert (2 × R$ 8,00)R$ 16,00",
+      "TOTALR$ 55,60",
+      "Pix 20:30R$ 20,00",
+      "SaldoR$ 35,60",
+      "Por pessoa (2)R$ 27,80",
+      "Não é documento fiscal.",
+    ]) {
+      expect(texto).toContain(trecho)
+    }
+  })
+
+  test("o comprovante tem a forma, o valor, o recebido, o troco e o saldo que ficou", () => {
+    const comTroco = {
+      ...conta,
+      pagamentos: [
+        ...(conta.pagamentos ?? []),
+        {
+          id: "p2",
+          forma: "dinheiro" as const,
+          valor: 10,
+          recebido: 50,
+          troco: 40,
+          em: agora.toISOString(),
+        },
+      ],
+    }
+    render(
+      <Comprovante
+        pedido={comTroco}
+        mesa={mesa}
+        loja="Pizzaria Teste"
+        pagamento={comTroco.pagamentos[1]}
+      />,
+    )
+    const texto = document.body.textContent?.replace(/\u00a0/g, " ") ?? ""
+    for (const trecho of [
+      "Comprovante de pagamento",
+      "Mesa 70",
+      "13/11/2026 20:30",
+      "DinheiroR$ 10,00",
+      "RecebidoR$ 50,00",
+      "TrocoR$ 40,00",
+      "Saldo da contaR$ 25,60",
+    ]) {
+      expect(texto).toContain(trecho)
+    }
+  })
+})
+
+describe("ComandaMesa: imprimir e reabrir", () => {
+  test("Imprimir pré-conta imprime e a mesa fica em Pediu a conta", async () => {
+    await mesaComConta()
+    const { usuario, gaveta } = await abrirConta()
+    await usuario.click(gaveta.getByRole("button", { name: "Imprimir pré-conta" }))
+    expect(imprimir).toHaveBeenCalled()
+    await usuario.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    await waitFor(async () => expect(await cartao(70)).toHaveTextContent("Pediu a conta"))
+  })
+
+  test("Comprovante de um pagamento manda imprimir", async () => {
+    const { comanda } = await mesaComConta()
+    await api().mesas.pagar(comanda.id, { forma: "pix", valor: 10 })
+    const { usuario, gaveta } = await abrirConta()
+    const pagamento = within(await gaveta.findByRole("listitem", { name: /^Pix/ }))
+    await usuario.click(pagamento.getByRole("button", { name: "Comprovante" }))
+    await waitFor(() => expect(imprimir).toHaveBeenCalled())
+  })
+
+  test("a mesa em Limpeza com a conta fechada hoje oferece Reabrir a conta, com motivo", async () => {
+    const { comanda } = await mesaComConta()
+    await api().mesas.pagar(comanda.id, { forma: "pix", valor: 20 })
+    await api().mesas.fecharConta(comanda.id, "dinheiro")
+    vi.stubGlobal("matchMedia", (consulta: string) => ({
+      matches: consulta.includes("min-width"),
+      media: consulta,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    }))
+    const usuario = userEvent.setup()
+    render(
+      <Provedores endereco="?mesa=70">
+        <PaginaMesas />
+      </Provedores>,
+    )
+    const gaveta = within(
+      await screen.findByRole("dialog", { name: /^Mesa 70\b/ }, { timeout: 8000 }),
+    )
+    await usuario.click(await gaveta.findByRole("button", { name: "Reabrir a conta" }))
+    const janela = within(screen.getByRole("alertdialog", { name: "Reabrir a conta da mesa 70?" }))
+    await usuario.type(janela.getByRole("textbox", { name: "Motivo" }), "Faltou a sobremesa")
+    await usuario.click(janela.getByRole("button", { name: "Reabrir" }))
+
+    expect(await screen.findByText("Conta da mesa 70 reaberta.")).toBeInTheDocument()
+    await usuario.click(await gaveta.findByRole("tab", { name: "Conta" }))
+    const pagamentos = within(await gaveta.findByRole("list", { name: "Pagamentos" }))
+    expect(pagamentos.getAllByRole("listitem")).toHaveLength(2)
+    await usuario.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    expect(await cartao(70)).not.toHaveTextContent("Limpeza")
   })
 })
