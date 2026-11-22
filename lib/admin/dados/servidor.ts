@@ -683,9 +683,14 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       agora,
       ...(ultimo ? { ultimo } : {}),
       agendamentos: anteriores,
+      // A comanda que continuou aberta ocupa a mesa dela e as juntadas a ela.
       mesasOcupadas: anteriores
         .filter((pedido) => pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status))
-        .flatMap((pedido) => (pedido.mesa ? [pedido.mesa.id] : [])),
+        .flatMap((pedido) =>
+          pedido.mesa
+            ? [pedido.mesa.id, ...(pedido.mesa.juntadas ?? []).map((junta) => junta.id)]
+            : [],
+        ),
     })
     const completa = abrirMesas({
       ...base,
