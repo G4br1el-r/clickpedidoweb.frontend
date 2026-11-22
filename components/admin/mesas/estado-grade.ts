@@ -54,6 +54,14 @@ export const LIMPAR_GRADE = {
   ordem: null,
 } satisfies Record<keyof typeof PARAMETROS_GRADE, null>
 
+export const VISTAS = ["grade", "mapa"] as const
+export type Vista = (typeof VISTAS)[number]
+
+/** Grade (o padrão, fora do endereço) ou mapa do salão (`?vista=mapa`). */
+export function useVista() {
+  return useQueryState("vista", parseAsStringLiteral(VISTAS).withDefault("grade"))
+}
+
 /** A mesa com a gaveta aberta, pelo número (`?mesa=3`). Sem a mesa, o parâmetro some. */
 export function useMesaAberta() {
   return useQueryState("mesa", parseAsInteger)

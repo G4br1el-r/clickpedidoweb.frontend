@@ -1,6 +1,6 @@
 "use client"
 
-import { ArmchairIcon, KeyboardIcon, SearchXIcon } from "lucide-react"
+import { ArmchairIcon, KeyboardIcon, LayoutGridIcon, MapIcon, SearchXIcon } from "lucide-react"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -13,6 +13,7 @@ import {
   EmptyTitle,
 } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAgora } from "@/hooks/use-agora"
 import { useFila } from "@/lib/admin/dados/consultas"
 import { useConfigSalao, useMesas } from "@/lib/admin/dados/consultas-mesas"
@@ -29,9 +30,10 @@ import { BloquearMesa } from "./bloquear-mesa"
 import { CartaoMesa } from "./cartao-mesa"
 import { ComandaMesa } from "./comanda-mesa"
 import { ConfigurarSalao } from "./configurar-salao"
-import { LIMPAR_GRADE, useEstadoGrade, useMesaAberta } from "./estado-grade"
+import { LIMPAR_GRADE, useEstadoGrade, useMesaAberta, useVista, type Vista } from "./estado-grade"
 import { FiltrosMesas } from "./filtros-mesas"
 import { FormularioMesa } from "./formulario-mesa"
+import { MapaSalao } from "./mapa-salao"
 import { NovaMesa } from "./nova-mesa"
 import { NumerosSalao } from "./numeros-salao"
 
@@ -47,6 +49,8 @@ export function PaginaMesas() {
   const agora = useAgora(30_000)
   const [filtros, setFiltros] = useEstadoGrade()
   const [numeroAberto, setNumeroAberto] = useMesaAberta()
+  const [vista, setVista] = useVista()
+  const noMapa = vista === "mapa"
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [bloqueandoId, setBloqueandoId] = useState<string | null>(null)
   // O botão ⋯ que abriu Editar ou Bloquear: o foco volta a ele quando a janela fecha.
@@ -83,6 +87,16 @@ export function PaginaMesas() {
   // A mesa juntada mostra a principal e leva a comanda dela (para o garçom e o menu ⋯).
   const principalDe = (mesa: Mesa) =>
     mesa.juntadaCom ? mesas?.find((outra) => outra.id === mesa.juntadaCom) : undefined
+  const abrirLinha = (linha: MesaNaGrade) =>
+    void setNumeroAberto((principalDe(linha.mesa) ?? linha.mesa).numero)
+  const editarLinha = (linha: MesaNaGrade, gatilho: HTMLElement | null) => {
+    setGatilhoMenu(gatilho)
+    setEditandoId(linha.mesa.id)
+  }
+  const bloquearLinha = (linha: MesaNaGrade, gatilho: HTMLElement | null) => {
+    setGatilhoMenu(gatilho)
+    setBloqueandoId(linha.mesa.id)
+  }
   const linhas: MesaNaGrade[] = (mesas ?? []).map((mesa) => {
     const principal = principalDe(mesa)
     const comanda = comandaDa(principal ?? mesa)
@@ -152,6 +166,26 @@ export function PaginaMesas() {
       )}
 
       {mesas && salao && mesas.length > 0 && (
+        <ToggleGroup
+          type="single"
+          variant="segmento"
+          size="sm"
+          aria-label="Vista"
+          value={vista}
+          onValueChange={(nova) => nova && void setVista(nova as Vista)}
+        >
+          <ToggleGroupItem value="grade" className="px-3">
+            <LayoutGridIcon data-icon="inline-start" />
+            Grade
+          </ToggleGroupItem>
+          <ToggleGroupItem value="mapa" className="px-3">
+            <MapIcon data-icon="inline-start" />
+            Mapa
+          </ToggleGroupItem>
+        </ToggleGroup>
+      )}
+
+      {mesas && salao && mesas.length > 0 && !noMapa && (
         <FiltrosMesas
           areas={salao.areas}
           garcons={salao.garcons}
@@ -178,6 +212,17 @@ export function PaginaMesas() {
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
+      ) : noMapa ? (
+        <MapaSalao
+          linhas={linhas}
+          areas={salao.areas}
+          areaId={filtros.area}
+          aoMudarArea={(area) => void setFiltros({ area })}
+          agora={agora}
+          aoAbrir={abrirLinha}
+          aoEditar={editarLinha}
+          aoBloquear={bloquearLinha}
+        />
       ) : grupos.length === 0 ? (
         <Empty className="border">
           <EmptyHeader>
@@ -210,17 +255,9 @@ export function PaginaMesas() {
                     <CartaoMesa
                       {...linha}
                       agora={agora}
-                      aoAbrir={() =>
-                        void setNumeroAberto((principalDe(linha.mesa) ?? linha.mesa).numero)
-                      }
-                      aoEditar={(gatilho) => {
-                        setGatilhoMenu(gatilho)
-                        setEditandoId(linha.mesa.id)
-                      }}
-                      aoBloquear={(gatilho) => {
-                        setGatilhoMenu(gatilho)
-                        setBloqueandoId(linha.mesa.id)
-                      }}
+                      aoAbrir={() => abrirLinha(linha)}
+                      aoEditar={(gatilho) => editarLinha(linha, gatilho)}
+                      aoBloquear={(gatilho) => bloquearLinha(linha, gatilho)}
                     />
                   </li>
                 ))}
