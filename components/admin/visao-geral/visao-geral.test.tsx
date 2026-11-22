@@ -17,10 +17,25 @@ import {
 } from "@/lib/admin/regras/pedidos-de-teste"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { FiltroPeriodo } from "./filtro-periodo"
-import { AbaFinanceiro, AbaResumo } from "./painel-visao-geral"
+import { AbaResumo } from "./painel-visao-geral"
 import { VisaoGeral } from "./visao-geral"
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
+
+/** A impressão abre a janela do navegador: o teste guarda as opções e roda o "antes de imprimir". */
+const impressao = vi.hoisted(() => ({
+  opcoes: undefined as
+    | { documentTitle?: string; onBeforePrint?: () => Promise<void>; onAfterPrint?: () => void }
+    | undefined,
+}))
+vi.mock("react-to-print", () => ({
+  useReactToPrint: (opcoes: typeof impressao.opcoes) => {
+    impressao.opcoes = opcoes
+    return async () => {
+      await impressao.opcoes?.onBeforePrint?.()
+    }
+  },
+}))
 
 function Provedores({
   children,
@@ -198,32 +213,6 @@ describe("abas do painel", () => {
     expect(screen.queryByRole("region", { name: "Canais de venda" })).not.toBeInTheDocument()
   })
 
-  test("Financeiro mostra as formas de pagamento", () => {
-    render(<AbaFinanceiro resumo={RESUMO} />, { wrapper: Provedores })
-    expect(regiao("Formas de pagamento").getAllByRole("listitem")[0]).toHaveTextContent(
-      "Dinheiro2 pedidosR$ 100,0059%",
-    )
-  })
-
-  test("Financeiro mostra a taxa de serviço à parte, quando houve", () => {
-    render(<AbaFinanceiro resumo={{ ...RESUMO, taxaServico: 8.75 }} />, { wrapper: Provedores })
-    const taxa = screen.getByRole("region", { name: "Taxa de serviço" })
-    expect(taxa).toHaveTextContent("R$ 8,75")
-    expect(taxa).toHaveTextContent("dos garçons")
-  })
-
-  test("com taxa de serviço, as formas de pagamento avisam que incluem a taxa", () => {
-    render(<AbaFinanceiro resumo={{ ...RESUMO, taxaServico: 8.75 }} />, { wrapper: Provedores })
-    expect(screen.getByRole("region", { name: "Formas de pagamento" })).toHaveTextContent(
-      "O que entrou no caixa, inclui a taxa de serviço",
-    )
-  })
-
-  test("sem taxa de serviço no período, o bloco não aparece", () => {
-    render(<AbaFinanceiro resumo={RESUMO} />, { wrapper: Provedores })
-    expect(screen.queryByRole("region", { name: "Taxa de serviço" })).not.toBeInTheDocument()
-  })
-
   test("no salão, os pedidos são atendimentos", () => {
     renderizarResumo({ segmento: "salao" })
     expect(regiao("Hoje").getByText("Atendimentos hoje")).toBeInTheDocument()
@@ -332,7 +321,7 @@ describe("VisaoGeral", () => {
       within(abas)
         .getAllByRole("tab")
         .map((aba) => aba.textContent),
-    ).toEqual(["Resumo", "Vendas", "Financeiro"])
+    ).toEqual(["Resumo", "Vendas", "Produtos", "Clientes", "Operação", "Entrega", "Financeiro"])
     expect(within(abas).getByRole("tab", { name: "Financeiro" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -346,5 +335,115 @@ describe("VisaoGeral", () => {
 
     expect(aoMudar.mock.lastCall?.[0].searchParams.get("aba")).toBe("vendas")
     expect(await screen.findByRole("region", { name: "Canais de venda" })).toBeInTheDocument()
+  })
+
+  test("a aba Clientes usa os últimos 90 dias: o filtro de período dá lugar ao aviso", async () => {
+    render(
+      <Provedores endereco="?aba=clientes">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole("region", { name: "Melhores clientes" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByRole("region", { name: "Melhores clientes" })).getAllByRole("listitem")
+        .length,
+    ).toBeGreaterThan(0)
+    expect(screen.queryByRole("group", { name: "Período" })).not.toBeInTheDocument()
+    expect(screen.queryByRole("radiogroup", { name: "Período" })).not.toBeInTheDocument()
+    expect(screen.getAllByText("Últimos 90 dias, até hoje").length).toBeGreaterThan(0)
+  })
+
+  test("a aba Operação mostra os tempos da loja a partir do histórico dos pedidos", async () => {
+    render(
+      <Provedores endereco="?aba=operacao">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole("table", { name: "Tempo por etapa" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole("region", { name: "Cancelamentos por motivo" })).toBeInTheDocument()
+  })
+
+  test("a aba Produtos mostra os produtos da loja: ranking e o cardápio parado", async () => {
+    render(
+      <Provedores endereco="?aba=produtos">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole("region", { name: "Mais vendidos" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(
+      within(screen.getByRole("region", { name: "Por categoria" })).getAllByRole("listitem").length,
+    ).toBeGreaterThan(0)
+    expect(screen.getByRole("region", { name: "Sem venda no período" })).toBeInTheDocument()
+  })
+
+  test("a aba Entrega mostra os motoboys da loja pelo nome e os bairros", async () => {
+    render(
+      <Provedores endereco="?aba=entrega">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole("table", { name: "Por bairro" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    const motoboys = await servidorDo("pizzaria").motoboys.listar()
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole("region", { name: "Por motoboy" })).getAllByRole("link")[0],
+      ).toHaveTextContent(new RegExp(motoboys.map((motoboy) => motoboy.nome).join("|"))),
+    )
+  })
+
+  test.each([
+    ["salao", "agenda", "Agenda do período"],
+    ["farmacia", "farmacia", "Validade dos lotes"],
+    ["acougue", "pesagem", "Balança do período"],
+  ] as const)(
+    "no segmento %s, a aba %s abre com os números dela",
+    async (segmento, aba, titulo) => {
+      useSegmentoAtual.setState({ segmento })
+      render(
+        <Provedores endereco={`?aba=${aba}`}>
+          <VisaoGeral />
+        </Provedores>,
+      )
+      expect(
+        await screen.findByRole("region", { name: titulo }, { timeout: 8000 }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole("tab", {
+          name: { agenda: "Agenda", farmacia: "Farmácia", pesagem: "Pesagem" }[aba],
+        }),
+      ).toHaveAttribute("aria-selected", "true")
+    },
+  )
+})
+
+describe("VisaoGeral: imprimir", () => {
+  test("imprime a aba aberta com a loja, o período e a hora, e com as tabelas abertas", async () => {
+    const usuario = userEvent.setup()
+    render(
+      <Provedores endereco="?aba=vendas">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole("region", { name: "Canais de venda" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("table", { name: "Dia a dia do período" })).not.toBeInTheDocument()
+
+    await usuario.click(screen.getByRole("button", { name: "Imprimir" }))
+
+    expect(impressao.opcoes?.documentTitle).toBe("Casa da Pizza · Vendas · 07/11 a 13/11")
+    expect(await screen.findByRole("table", { name: "Dia a dia do período" })).toBeInTheDocument()
+    const cabecalho = screen.getByTestId("cabecalho-da-impressao")
+    expect(cabecalho).toHaveTextContent("Casa da Pizza · Vendas")
+    expect(cabecalho).toHaveTextContent("Período: 07/11/2026 a 13/11/2026")
+    expect(cabecalho).toHaveTextContent("Impresso em 13/11/2026 às 20:30")
   })
 })
