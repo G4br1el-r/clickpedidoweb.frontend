@@ -2,6 +2,7 @@
 
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { comTotais } from "../regras/conta"
+import type { NovaEntradaEspera, NovaReserva } from "../regras/reservas"
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { chaves, servidorDo } from "./consultas"
@@ -11,6 +12,7 @@ import type {
   Pagamento,
   PagamentoMesa,
   Retirada,
+  Sentada,
   Servidor,
 } from "./servidor"
 import type { ConfigSalao, DescontoConta, Mesa, Pedido } from "./tipos"
@@ -341,8 +343,14 @@ export function useTransferirMesa() {
 
 export function useJuntarMesas() {
   return useMudancaNasMesas(
-    (servidor, { pedidoId, mesaIds, por }: { pedidoId: number; mesaIds: string[]; por?: string }) =>
-      servidor.mesas.juntar(pedidoId, mesaIds, por ? { por } : {}),
+    (
+      servidor,
+      {
+        pedidoId,
+        mesaIds,
+        ...opcoes
+      }: { pedidoId: number; mesaIds: string[]; confirmarReserva?: boolean; por?: string },
+    ) => servidor.mesas.juntar(pedidoId, mesaIds, opcoes),
     { aoSucesso: guardarMovida },
   )
 }
@@ -377,5 +385,74 @@ export function useReabrirConta() {
   return useMudancaNasMesas(
     (servidor, { pedidoId, ...motivo }: ComMotivo) => servidor.mesas.reabrir(pedidoId, motivo),
     { aoSucesso: guardarComanda },
+  )
+}
+
+const chaveReservas = (segmento: SegmentoPainelId) => ["admin", segmento, "reservas"] as const
+const chaveEspera = (segmento: SegmentoPainelId) => ["admin", segmento, "espera"] as const
+
+/** As reservas de hoje, conferidas de tempos em tempos como as mesas. */
+export function useReservas(intervalo = 10_000) {
+  const segmento = useSegmento()
+  return useQuery({
+    queryKey: chaveReservas(segmento),
+    queryFn: () => servidorDo(segmento).reservas.listar(),
+    refetchInterval: intervalo,
+  })
+}
+
+/** Quem está na fila de espera, pela chegada. */
+export function useEspera(intervalo = 10_000) {
+  const segmento = useSegmento()
+  return useQuery({
+    queryKey: chaveEspera(segmento),
+    queryFn: () => servidorDo(segmento).espera.listar(),
+    refetchInterval: intervalo,
+  })
+}
+
+export function useCriarReserva() {
+  return useMudancaNasMesas((servidor, dados: NovaReserva) => servidor.reservas.criar(dados))
+}
+
+export function useEditarReserva() {
+  return useMudancaNasMesas((servidor, { id, ...dados }: NovaReserva & { id: string }) =>
+    servidor.reservas.editar(id, dados),
+  )
+}
+
+export function useCancelarReserva() {
+  return useMudancaNasMesas((servidor, id: string) => servidor.reservas.cancelar(id))
+}
+
+export function useNaoCompareceu() {
+  return useMudancaNasMesas((servidor, id: string) => servidor.reservas.naoCompareceu(id))
+}
+
+/** Sentar abre a mesa: a comanda nova já fica guardada para a gaveta. */
+export function useSentarReserva() {
+  return useMudancaNasMesas(
+    (servidor, { id, ...sentada }: Sentada & { id: string }) =>
+      servidor.reservas.sentar(id, sentada),
+    { aoSucesso: (cliente, segmento, { comanda }) => guardarComanda(cliente, segmento, comanda) },
+  )
+}
+
+export function useEntrarNaEspera() {
+  return useMudancaNasMesas((servidor, dados: NovaEntradaEspera) => servidor.espera.entrar(dados))
+}
+
+export function useChamarDaEspera() {
+  return useMudancaNasMesas((servidor, id: string) => servidor.espera.chamar(id))
+}
+
+export function useDesistirDaEspera() {
+  return useMudancaNasMesas((servidor, id: string) => servidor.espera.desistir(id))
+}
+
+export function useSentarDaEspera() {
+  return useMudancaNasMesas(
+    (servidor, { id, ...sentada }: Sentada & { id: string }) => servidor.espera.sentar(id, sentada),
+    { aoSucesso: (cliente, segmento, { comanda }) => guardarComanda(cliente, segmento, comanda) },
   )
 }

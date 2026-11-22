@@ -11,14 +11,21 @@ import {
   useAlterarQuantidade,
   useBloquearMesa,
   useCancelarComanda,
+  useCancelarReserva,
+  useChamarDaEspera,
   useConfigSalao,
   useCriarMesa,
+  useCriarReserva,
   useDarCortesia,
   useDesbloquearMesa,
   useDescontar,
   useDesfazer,
+  useDesistirDaEspera,
   useEditarItem,
   useEditarMesa,
+  useEditarReserva,
+  useEntrarNaEspera,
+  useEspera,
   useEstornarPagamento,
   useImprimirPreConta,
   useJuntarMesas,
@@ -26,12 +33,16 @@ import {
   useMarcarLimpa,
   useMarcarServido,
   useMesas,
+  useNaoCompareceu,
   usePagar,
   usePedirConta,
   usePosicionarMesas,
   useReabrirConta,
   useRemoverItem,
+  useReservas,
   useSalvarConfigSalao,
+  useSentarDaEspera,
+  useSentarReserva,
   useSepararMesas,
   useTirarCouvert,
   useTirarTaxa,
@@ -524,5 +535,83 @@ describe("consultas das movimentações", () => {
       x: 1,
       y: 10,
     })
+  })
+})
+
+describe("consultas das reservas e da espera", () => {
+  test("as reservas de hoje e a fila da demonstração chegam à tela", async () => {
+    const { result } = renderHook(() => ({ reservas: useReservas(), espera: useEspera() }), {
+      wrapper: envolver(),
+    })
+    await waitFor(() => expect(result.current.reservas.data).toHaveLength(2))
+    expect(result.current.reservas.data?.[0].nome).toBe("Marina Costa")
+    await waitFor(() => expect(result.current.espera.data).toHaveLength(3))
+  })
+
+  test("criar, editar, sentar, não compareceu e cancelar a reserva chegam ao servidor e a lista confere", async () => {
+    const api = servidorDo("pizzaria")
+    const { result } = renderHook(
+      () => ({
+        reservas: useReservas(),
+        criar: useCriarReserva(),
+        editar: useEditarReserva(),
+        sentar: useSentarReserva(),
+        naoVeio: useNaoCompareceu(),
+        cancelar: useCancelarReserva(),
+      }),
+      { wrapper: envolver() },
+    )
+    await waitFor(() => expect(result.current.reservas.data).toHaveLength(2))
+    const inicio = new Date(2026, 10, 13, 21, 0).toISOString()
+    const nova = await act(() =>
+      result.current.criar.mutateAsync({ nome: "Ana", inicio, pessoas: 2 }),
+    )
+    await waitFor(() => expect(result.current.reservas.data).toHaveLength(3))
+    await act(() =>
+      result.current.editar.mutateAsync({ id: nova.id, nome: "Ana Lima", inicio, pessoas: 2 }),
+    )
+    await act(() =>
+      result.current.sentar.mutateAsync({ id: nova.id, mesaId: "mesa-12", garcom: "Rafa" }),
+    )
+    const [marina, , roberto] = await api.reservas.listar()
+    await act(() => result.current.naoVeio.mutateAsync(marina.id))
+    await act(() => result.current.cancelar.mutateAsync(roberto.id))
+    await waitFor(() =>
+      expect(result.current.reservas.data?.map((reserva) => reserva.status)).toEqual([
+        "nao-compareceu",
+        "sentou",
+        "cancelada",
+      ]),
+    )
+    expect((await api.mesas.listar()).find((mesa) => mesa.numero === 12)?.clienteNome).toBe(
+      "Ana Lima",
+    )
+  })
+
+  test("entrar, chamar, sentar e desistir da espera chegam ao servidor e a fila confere", async () => {
+    const { result } = renderHook(
+      () => ({
+        espera: useEspera(),
+        entrar: useEntrarNaEspera(),
+        chamar: useChamarDaEspera(),
+        sentar: useSentarDaEspera(),
+        desistir: useDesistirDaEspera(),
+      }),
+      { wrapper: envolver() },
+    )
+    await waitFor(() => expect(result.current.espera.data).toHaveLength(3))
+    const [carlos, juliana, pedro] = result.current.espera.data ?? []
+    const nova = await act(() => result.current.entrar.mutateAsync({ nome: "Ana", pessoas: 2 }))
+    await act(() => result.current.chamar.mutateAsync(nova.id))
+    await act(() =>
+      result.current.sentar.mutateAsync({ id: carlos.id, mesaId: "mesa-11", garcom: "Rafa" }),
+    )
+    await act(() => result.current.desistir.mutateAsync(juliana.id))
+    await waitFor(() =>
+      expect(result.current.espera.data?.map((entrada) => entrada.id)).toEqual([pedro.id, nova.id]),
+    )
+    expect(result.current.espera.data?.[1].chamadaEm).toBe(
+      new Date(2026, 10, 13, 20, 30).toISOString(),
+    )
   })
 })
