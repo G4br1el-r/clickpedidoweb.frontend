@@ -495,3 +495,193 @@ describe("juntar e separar", () => {
     expect((await mesaDe(api, livre))?.juntadaCom).toBe(comanda.mesa?.id)
   })
 })
+
+describe("transferir itens", () => {
+  const refriDe = (pedido: { itens: { id: string; nome: string }[] }) =>
+    pedido.itens.find((item) => item.nome === "Refri lata")?.id as string
+
+  test("1 de 3 Refris para a mesa livre: a linha se divide e a mesa abre com 1; o estoque não muda", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api, 30, REFRI(3))
+    const destino = await mesaNova(api, 31)
+    const movimentos = (await api.estoque.movimentos()).length
+
+    const resultado = await api.mesas.transferirItens(comanda.id, {
+      mesaDestinoId: destino,
+      itens: [{ itemId: refriDe(comanda), quantidade: 1 }],
+      por: "Bia",
+    })
+
+    expect(resultado.comanda.itens).toMatchObject([
+      { id: refriDe(comanda), quantidade: 2, total: 12 },
+    ])
+    expect(resultado.comanda.total).toBe(12)
+    expect(resultado.comanda.eventos?.at(-1)).toEqual({
+      tipo: "itens-transferidos",
+      em: AGORA.toISOString(),
+      por: "Bia",
+      texto: "Transferiu 1× Refri lata para a mesa 31",
+    })
+    expect(resultado.destino).toMatchObject({
+      mesa: { id: destino, numero: 31, garcom: "Rafa", pessoas: 1 },
+      itens: [
+        {
+          nome: "Refri lata",
+          quantidade: 1,
+          total: 6,
+          transferido: { daMesa: 30, preparado: false },
+        },
+      ],
+      total: 6,
+    })
+    expect(resultado.destino.itens[0].id).not.toBe(refriDe(comanda))
+    expect(resultado.destino.eventos?.map((evento) => evento.texto)).toEqual([
+      "Mesa aberta para 1 pessoa",
+      "Recebeu 1× Refri lata da mesa 30",
+    ])
+    expect(await mesaDe(api, destino)).toMatchObject({
+      status: "ocupada",
+      pedidoAtivoId: resultado.destino.id,
+    })
+    expect(await saldo(api, "refri")).toBe(2)
+    expect(await api.estoque.movimentos()).toHaveLength(movimentos)
+  })
+
+  test("para a mesa aberta, os itens entram na comanda dela e o pediu a conta sai", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api, 30, REFRI(2))
+    const { mesaId: outra, comanda: daOutra } = await aberta(api, 31, REFRI(1))
+    await api.mesas.pedirConta(daOutra.id)
+
+    const { destino } = await api.mesas.transferirItens(comanda.id, {
+      mesaDestinoId: outra,
+      itens: [{ itemId: refriDe(comanda), quantidade: 2 }],
+    })
+
+    expect(destino.id).toBe(daOutra.id)
+    expect(destino.itens.map((item) => item.quantidade)).toEqual([1, 2])
+    expect(destino.contaPedidaEm).toBeUndefined()
+    expect(destino.total).toBe(18)
+  })
+
+  test("para uma mesa juntada, os itens vão para a comanda da principal dela", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api, 30, REFRI(2))
+    const { comanda: principal } = await aberta(api, 31, REFRI(1))
+    const junta = await mesaNova(api, 32)
+    await api.mesas.juntar(principal.id, [junta])
+
+    const { destino } = await api.mesas.transferirItens(comanda.id, {
+      mesaDestinoId: junta,
+      itens: [{ itemId: refriDe(comanda), quantidade: 1 }],
+    })
+
+    expect(destino.id).toBe(principal.id)
+    expect(destino.itens).toHaveLength(2)
+  })
+
+  test("o preparado chega preparado (tirar pede motivo); o sem cozinha sai sem motivo e devolve o estoque", async () => {
+    const api = servidor()
+    const mesaId = await mesaNova(api, 30)
+    const comanda = await api.mesas.lancar({
+      mesaId,
+      garcom: "Rafa",
+      enviarParaCozinha: true,
+      itens: X_BURGER(1),
+    })
+    await api.pedidos.avancar(comanda.id, "recebido")
+    await api.pedidos.avancar(comanda.id, "em-preparo")
+    const comRefri = await api.mesas.lancar({ mesaId, enviarParaCozinha: false, itens: REFRI(1) })
+    const destino = await mesaNova(api, 31)
+
+    const { destino: chegou } = await api.mesas.transferirItens(comanda.id, {
+      mesaDestinoId: destino,
+      itens: comRefri.itens.map((item) => ({ itemId: item.id, quantidade: 1 })),
+    })
+
+    const [xBurger, refri] = chegou.itens
+    expect(xBurger.transferido).toEqual({ daMesa: 30, preparado: true })
+    expect(refri.transferido).toEqual({ daMesa: 30, preparado: false })
+    await expect(api.mesas.removerItem(chegou.id, xBurger.id)).rejects.toThrow(
+      "Diga o motivo para tirar o que a cozinha já preparou.",
+    )
+    await api.mesas.removerItem(chegou.id, refri.id)
+    expect(await saldo(api, "refri")).toBe(5)
+  })
+
+  test("recusa sem itens, quantidade fora da linha, a mesma mesa e a bloqueada", async () => {
+    const api = servidor()
+    const { mesaId, comanda } = await aberta(api, 30, REFRI(3))
+    const destino = await mesaNova(api, 31)
+    const bloqueada = await mesaNova(api, 32)
+    await api.mesas.bloquear(bloqueada)
+    const transferir = (mesaDestinoId: string, quantidade: number) =>
+      api.mesas.transferirItens(comanda.id, {
+        mesaDestinoId,
+        itens: [{ itemId: refriDe(comanda), quantidade }],
+      })
+
+    await expect(
+      api.mesas.transferirItens(comanda.id, { mesaDestinoId: destino, itens: [] }),
+    ).rejects.toThrow("Escolha os itens.")
+    for (const quantidade of [0, 4, 1.5]) {
+      await expect(transferir(destino, quantidade)).rejects.toThrow(
+        "Informe uma quantidade válida.",
+      )
+    }
+    await expect(transferir(mesaId, 1)).rejects.toThrow("Escolha outra mesa.")
+    await expect(transferir(bloqueada, 1)).rejects.toThrow("A mesa 32 está bloqueada.")
+  })
+
+  test("recusa o item que a cozinha ainda tem, o pago por item e a origem que ficaria menor que o pago", async () => {
+    const api = servidor()
+    const mesaId = await mesaNova(api, 30)
+    const naCozinha = await api.mesas.lancar({
+      mesaId,
+      garcom: "Rafa",
+      enviarParaCozinha: true,
+      itens: X_BURGER(1),
+    })
+    const destino = await mesaNova(api, 31)
+    await expect(
+      api.mesas.transferirItens(naCozinha.id, {
+        mesaDestinoId: destino,
+        itens: [{ itemId: naCozinha.itens[0].id, quantidade: 1 }],
+      }),
+    ).rejects.toThrow("A cozinha ainda está com X-Burger. Transfira quando ficar pronta.")
+
+    const { comanda: paga } = await aberta(api, 32, [...REFRI(2), ...X_BURGER(1)])
+    await api.mesas.pagar(paga.id, { forma: "pix", itens: [refriDe(paga)] })
+    await expect(
+      api.mesas.transferirItens(paga.id, {
+        mesaDestinoId: destino,
+        itens: [{ itemId: refriDe(paga), quantidade: 1 }],
+      }),
+    ).rejects.toThrow("Esse item já foi pago.")
+
+    const { comanda: emParte } = await aberta(api, 33, REFRI(2))
+    await api.mesas.pagar(emParte.id, { forma: "pix", valor: 10 })
+    await expect(
+      api.mesas.transferirItens(emParte.id, {
+        mesaDestinoId: destino,
+        itens: [{ itemId: refriDe(emParte), quantidade: 1 }],
+      }),
+    ).rejects.toThrow("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
+  })
+
+  test("desfazer devolve a linha inteira e tira a comanda que abriu na mesa livre", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api, 30, REFRI(3))
+    const destino = await mesaNova(api, 31)
+    const { destino: aberta31, desfazer } = await api.mesas.transferirItens(comanda.id, {
+      mesaDestinoId: destino,
+      itens: [{ itemId: refriDe(comanda), quantidade: 1 }],
+    })
+
+    await api.mesas.desfazer(desfazer)
+
+    expect(await api.pedidos.buscar(comanda.id)).toEqual(comanda)
+    expect(await api.pedidos.buscar(aberta31.id)).toBeUndefined()
+    expect((await mesaDe(api, destino))?.status).toBe("livre")
+  })
+})

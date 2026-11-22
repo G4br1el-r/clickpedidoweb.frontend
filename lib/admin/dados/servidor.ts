@@ -26,7 +26,13 @@ import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoqu
 import { normalizar } from "../regras/filtro-pedidos"
 import { comEtapa, comEvento, itensEmTexto } from "../regras/historico"
 import { nomePadraoDaMesa } from "../regras/mesas"
-import { juntarComandas, numerosEmTexto, porQueNaoJunta } from "../regras/movimentacoes"
+import {
+  juntarComandas,
+  numerosEmTexto,
+  porQueNaoJunta,
+  porQueNaoTransfere,
+  separarQuantidade,
+} from "../regras/movimentacoes"
 import { proximoNumero } from "../regras/numero"
 import {
   type Desconto,
@@ -2529,6 +2535,127 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           comanda: base.pedidos.find((pedido) => pedido.id === pedidoId) as Pedido,
           desfazer,
         })
+      },
+
+      /**
+       * Leva itens (ou parte de uma linha) para outra mesa: a aberta recebe na comanda dela (a
+       * juntada, na da principal); a livre abre com o garçom da origem e 1 pessoa. O item chega
+       * com `transferido`, preparado ou não. O estoque não muda.
+       */
+      async transferirItens(
+        pedidoId: number,
+        {
+          mesaDestinoId,
+          itens,
+          confirmarReserva,
+          por,
+        }: {
+          mesaDestinoId: string
+          itens: { itemId: string; quantidade: number }[]
+          confirmarReserva?: boolean
+          por?: string
+        },
+      ): Promise<{ comanda: Pedido; destino: Pedido; desfazer: string }> {
+        let destinoId = 0
+        const { base, desfazer } = await mover((base) => {
+          const origem = comandaAberta(base, pedidoId)
+          if (itens.length === 0) throw new Error("Escolha os itens.")
+          const aberta = comandaDa(base, mesaDestinoId)
+          const mesa = aberta
+            ? (base.mesas.find((item) => item.id === mesaDestinoId) as Mesa)
+            : mesaLivreParaReceber(base, origem, mesaDestinoId, confirmarReserva)
+          if (aberta?.id === origem.id) throw new Error("Escolha outra mesa.")
+          if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
+          const agora = new Date().toISOString()
+          let ficam = origem.itens
+          const vao: ItemPedido[] = []
+          for (const { itemId, quantidade } of itens) {
+            const item = ficam.find((atual) => atual.id === itemId)
+            if (!item) throw new Error("Item não encontrado na comanda")
+            if (!Number.isInteger(quantidade) || quantidade < 1 || quantidade > item.quantidade) {
+              throw new Error("Informe uma quantidade válida.")
+            }
+            const erro = porQueNaoTransfere(origem, item)
+            if (erro) throw new Error(erro)
+            const { fica, vai } = separarQuantidade(
+              item,
+              quantidade,
+              `${item.id}-t${crypto.randomUUID().slice(0, 4)}`,
+            )
+            ficam = fica
+              ? ficam.map((atual) => (atual.id === item.id ? fica : atual))
+              : ficam.filter((atual) => atual.id !== item.id)
+            vao.push({
+              ...vai,
+              transferido: {
+                daMesa: origem.mesa.numero,
+                preparado: cozinhaJaPreparou(origem, item),
+              },
+            })
+          }
+          const saiu = recalcular(depoisDeTirar(origem, { ...origem, itens: ficam }))
+          const { pago, total, itens: valorDosItens, cortesias, descontos } = resumoDaConta(saiu)
+          if (descontos > reais(valorDosItens - cortesias)) {
+            throw new Error(
+              "O desconto passaria do valor dos itens. Tire ou diminua o desconto antes.",
+            )
+          }
+          if (pago > total) {
+            throw new Error("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
+          }
+          const texto = itensEmTexto(vao)
+          const novaOrigem = comEvento(
+            { ...saiu, atualizadoEm: agora },
+            {
+              tipo: "itens-transferidos",
+              em: agora,
+              ...autor(por),
+              texto: `Transferiu ${texto} para a mesa ${mesa.numero}`,
+            },
+          )
+          const id = aberta?.id ?? (base.pedidos.at(-1)?.id ?? 0) + 1
+          destinoId = id
+          const garcom = origem.mesa.garcom
+          const recebeu = recalcular(
+            aberta
+              ? // Receber itens muda a conta, como lançar: o "Pediu a conta" sai (Q23).
+                { ...semContaPedida(aberta), itens: [...aberta.itens, ...vao], atualizadoEm: agora }
+              : comEtapa(
+                  comEvento(
+                    comandaNova(base, mesa, {
+                      id,
+                      agora,
+                      garcom,
+                      pessoas: 1,
+                      itens: vao,
+                      enviarParaCozinha: false,
+                    }),
+                    eventoAberta(agora, 1, por ?? garcom),
+                  ),
+                  agora,
+                ),
+          )
+          const novoDestino = comEvento(recebeu, {
+            tipo: "itens-transferidos",
+            em: agora,
+            ...autor(por),
+            texto: `Recebeu ${texto} da mesa ${origem.mesa.numero}`,
+          })
+          const pedidos = base.pedidos.map((pedido) =>
+            pedido.id === novaOrigem.id
+              ? novaOrigem
+              : pedido.id === novoDestino.id
+                ? novoDestino
+                : pedido,
+          )
+          return {
+            nova: { ...base, pedidos: aberta ? pedidos : [...pedidos, novoDestino] },
+            mesas: [...new Set([origem.mesa.id, mesa.id, novoDestino.mesa?.id as string])],
+            pedidos: [novaOrigem.id, novoDestino.id],
+          }
+        })
+        const buscar = (id: number) => base.pedidos.find((pedido) => pedido.id === id) as Pedido
+        return responder({ comanda: buscar(pedidoId), destino: buscar(destinoId), desfazer })
       },
 
       /** Solta as mesas juntadas: elas voltam livres, e itens, pessoas e pagamentos ficam. */
