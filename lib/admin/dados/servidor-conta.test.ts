@@ -673,3 +673,18 @@ describe("item em cortesia ou já pago", () => {
     expect(mais.itens[2]).toMatchObject({ quantidade: 2, total: 18 })
   })
 })
+
+describe("cancelar a comanda", () => {
+  test("com pagamento recusa: o dinheiro recebido não some", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    const paga = await api.mesas.pagar(comanda.id, { forma: "pix", valor: 30 })
+    await expect(api.mesas.cancelarComanda(comanda.id, { motivo: "Foi embora" })).rejects.toThrow(
+      "Estorne os pagamentos antes.",
+    )
+    const [pix] = paga.pagamentos ?? []
+    await api.mesas.estornarPagamento(comanda.id, pix.id, { motivo: "Devolvido" })
+    const cancelada = await api.mesas.cancelarComanda(comanda.id, { motivo: "Foi embora" })
+    expect(cancelada.status).toBe("cancelado")
+  })
+})

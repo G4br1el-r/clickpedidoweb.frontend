@@ -2035,6 +2035,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           if (comanda.itens.length === 0) throw new Error("A comanda está vazia. Libere a mesa.")
           const texto = motivo?.trim().slice(0, 140)
           if (!texto) throw new Error("Diga o motivo do cancelamento.")
+          if (comanda.pagamentos?.length) throw new Error("Estorne os pagamentos antes.")
           for (const item of comanda.itens) {
             if (cozinhaJaPreparou(comanda, item)) {
               perder({ item, quantidade: item.quantidade, motivo: texto })
