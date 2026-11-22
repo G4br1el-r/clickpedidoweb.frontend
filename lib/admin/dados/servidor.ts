@@ -9,7 +9,13 @@ import {
   sincronizarOpcoes,
   soltarOpcoesDe,
 } from "../regras/cardapio"
-import { comTotais, itensPagos, resumoDaConta, valorDosItens } from "../regras/conta"
+import {
+  comTotais,
+  erroDoDesconto,
+  itensPagos,
+  resumoDaConta,
+  valorDosItens,
+} from "../regras/conta"
 import { cozinhaJaPreparou, depoisDeTirar, itensDaCozinha } from "../regras/cozinha"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
@@ -46,6 +52,7 @@ import {
   type Categoria,
   type ConfigLoja,
   type ConfigSalao,
+  type DescontoConta,
   type EventoComanda,
   FORMAS_MESA,
   type FormaMesa,
@@ -645,12 +652,18 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           throw new Error("Só a comanda aberta de uma mesa pode mudar.")
         }
         // Tirar a rodada da cozinha ou a que estava pronta acerta o status e o "Servir".
-        return recalcular(
+        const novo = recalcular(
           depoisDeTirar(
             pedido,
             mudar(pedido, (perda) => perdas.push(perda), base),
           ),
         )
+        // O que já foi pago não volta sozinho: a conta não pode ficar menor que ele.
+        const { pago, total } = resumoDaConta(novo)
+        if (novo.status !== "cancelado" && pago > total) {
+          throw new Error("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
+        }
+        return novo
       },
       // O garçom não lança mais do que há.
       { conferir: true },
@@ -2000,6 +2013,130 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return alterarComanda(pedidoId, (comanda) =>
           receber(comanda, { forma, ...(cartao ? { cartao } : {}) }),
         )
+      },
+
+      /** Desconto da conta, em reais ou em %, com motivo. Valor zero tira o desconto. */
+      descontar(pedidoId: number, { por, ...desconto }: DescontoConta & { por?: string }) {
+        return alterarComanda(pedidoId, ({ descontoConta: _anterior, ...comanda }) => {
+          if (desconto.valor === 0) return comanda
+          const motivo = desconto.motivo.trim().slice(0, 140)
+          const novo: DescontoConta = { modo: desconto.modo, valor: desconto.valor, motivo }
+          const { itens, cortesias } = resumoDaConta(comanda)
+          const erro = erroDoDesconto(novo, reais(itens - cortesias))
+          if (erro) throw new Error(erro)
+          const comDesconto = { ...comanda, descontoConta: novo }
+          const valor = emReais(resumoDaConta(comDesconto).descontos)
+          return comEvento(comDesconto, {
+            tipo: "desconto",
+            em: new Date().toISOString(),
+            ...autor(por),
+            texto:
+              novo.modo === "percentual"
+                ? `Desconto de ${novo.valor.toLocaleString("pt-BR")}% (${valor})`
+                : `Desconto de ${valor}`,
+            motivo,
+          })
+        })
+      },
+
+      /** Cortesia: o item fica na comanda, zerado, com o motivo. O estoque não volta (foi consumido). */
+      darCortesia(
+        pedidoId: number,
+        itemId: string,
+        { motivo, por }: { motivo: string; por?: string },
+      ) {
+        return alterarComanda(pedidoId, (comanda) => {
+          conferirItem(comanda, itemId)
+          const texto = motivo?.trim().slice(0, 140)
+          if (!texto) throw new Error("Diga o motivo da cortesia.")
+          const item = comanda.itens.find((atual) => atual.id === itemId) as ItemPedido
+          if (item.cortesia) throw new Error(`${item.nome} já é cortesia.`)
+          if (itensPagos(comanda).has(itemId)) throw new Error("Esse item já foi pago.")
+          return comEvento(
+            {
+              ...comanda,
+              itens: comanda.itens.map((atual) =>
+                atual.id === itemId ? { ...atual, cortesia: { motivo: texto } } : atual,
+              ),
+            },
+            {
+              tipo: "cortesia",
+              em: new Date().toISOString(),
+              ...autor(por),
+              texto: `Cortesia: ${itensEmTexto([item])}`,
+              motivo: texto,
+            },
+          )
+        })
+      },
+
+      /** Tira a taxa de serviço da conta, com motivo (fica guardado na própria taxa). */
+      tirarTaxa(pedidoId: number, { motivo, por }: { motivo: string; por?: string }) {
+        return alterarComanda(pedidoId, (comanda) => {
+          if (!comanda.taxaServico || comanda.taxaServico.removida) {
+            throw new Error("Esta conta não tem taxa de serviço.")
+          }
+          const texto = motivo?.trim().slice(0, 140)
+          if (!texto) throw new Error("Diga o motivo para tirar a taxa de serviço.")
+          return comEvento(
+            { ...comanda, taxaServico: { ...comanda.taxaServico, removida: { motivo: texto } } },
+            {
+              tipo: "taxa-removida",
+              em: new Date().toISOString(),
+              ...autor(por),
+              texto: "Tirou a taxa de serviço",
+              motivo: texto,
+            },
+          )
+        })
+      },
+
+      /** Tira o couvert da conta, com motivo (fica guardado no próprio couvert). */
+      tirarCouvert(pedidoId: number, { motivo, por }: { motivo: string; por?: string }) {
+        return alterarComanda(pedidoId, (comanda) => {
+          if (!comanda.couvert || comanda.couvert.removido) {
+            throw new Error("Esta conta não tem couvert.")
+          }
+          const texto = motivo?.trim().slice(0, 140)
+          if (!texto) throw new Error("Diga o motivo para tirar o couvert.")
+          return comEvento(
+            { ...comanda, couvert: { ...comanda.couvert, removido: { motivo: texto } } },
+            {
+              tipo: "couvert-removido",
+              em: new Date().toISOString(),
+              ...autor(por),
+              texto: "Tirou o couvert",
+              motivo: texto,
+            },
+          )
+        })
+      },
+
+      /** Tira um pagamento da conta aberta, com motivo: o saldo volta. */
+      estornarPagamento(
+        pedidoId: number,
+        pagamentoId: string,
+        { motivo, por }: { motivo: string; por?: string },
+      ) {
+        return alterarComanda(pedidoId, (comanda) => {
+          const pagamento = comanda.pagamentos?.find((item) => item.id === pagamentoId)
+          if (!pagamento) throw new Error("Pagamento não encontrado")
+          const texto = motivo?.trim().slice(0, 140)
+          if (!texto) throw new Error("Diga o motivo do estorno.")
+          return comEvento(
+            {
+              ...comanda,
+              pagamentos: (comanda.pagamentos ?? []).filter((item) => item.id !== pagamentoId),
+            },
+            {
+              tipo: "pagamento-estornado",
+              em: new Date().toISOString(),
+              ...autor(por),
+              texto: `Estornou ${rotuloDoPagamento(pagamento)} ${emReais(pagamento.valor)}`,
+              motivo: texto,
+            },
+          )
+        })
       },
 
       /** Mesa com itens só sai pelo fechamento da conta; comanda vazia é cancelada. */

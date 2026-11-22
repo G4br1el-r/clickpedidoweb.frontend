@@ -272,3 +272,181 @@ describe("pagar contra o saldo", () => {
     )
   })
 })
+
+describe("desconto, cortesia, taxa e couvert", () => {
+  test("desconto em reais ou em %, com motivo; zero tira o desconto", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    const comDesconto = await api.mesas.descontar(comanda.id, {
+      modo: "reais",
+      valor: 10,
+      motivo: " Cliente antigo ",
+      por: "Rafa",
+    })
+    expect(comDesconto).toMatchObject({
+      descontoConta: { modo: "reais", valor: 10, motivo: "Cliente antigo" },
+      desconto: 10,
+      total: 90,
+    })
+    expect(comDesconto.eventos?.at(-1)).toMatchObject({
+      tipo: "desconto",
+      por: "Rafa",
+      texto: "Desconto de R$\u00a010,00",
+      motivo: "Cliente antigo",
+    })
+
+    const porCento = await api.mesas.descontar(comanda.id, {
+      modo: "percentual",
+      valor: 12.5,
+      motivo: "Aniversário",
+    })
+    expect(porCento).toMatchObject({ desconto: 12.5, total: 87.5 })
+    expect(porCento.eventos?.at(-1)?.texto).toBe("Desconto de 12,5% (R$\u00a012,50)")
+
+    const semDesconto = await api.mesas.descontar(comanda.id, {
+      modo: "reais",
+      valor: 0,
+      motivo: "",
+    })
+    expect(semDesconto).not.toHaveProperty("descontoConta")
+    expect(semDesconto.total).toBe(100)
+  })
+
+  test("desconto sem motivo ou acima dos itens recusa", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    await expect(
+      api.mesas.descontar(comanda.id, { modo: "reais", valor: 10, motivo: "" }),
+    ).rejects.toThrow("Diga o motivo do desconto.")
+    await expect(
+      api.mesas.descontar(comanda.id, { modo: "reais", valor: 100.01, motivo: "Erro" }),
+    ).rejects.toThrow("O desconto passa do valor dos itens.")
+  })
+
+  test("cortesia zera o item com motivo e não devolve o estoque", async () => {
+    const api = semTaxa()
+    const [lanche] = (await api.produtos.listar()).filter(
+      (produto) => produto.id === "prod-x-burger",
+    )
+    await api.produtos.salvar({
+      ...lanche,
+      id: "refri",
+      nome: "Refri lata",
+      preco: 6,
+      grupos: [],
+      estoque: { controlar: true, quantidade: 5, minimo: 1, esgotarAoZerar: true },
+    })
+    const { mesa } = await contaDeCem(api)
+    const comRefri = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [{ produtoId: "refri", escolhas: {}, quantidade: 1 }],
+    })
+    const refri = comRefri.itens.at(-1)
+    if (!refri) throw new Error("O Refri devia estar na comanda")
+    expect(comRefri.total).toBe(106)
+
+    const cortesia = await api.mesas.darCortesia(comRefri.id, refri.id, {
+      motivo: "Aniversário",
+      por: "Rafa",
+    })
+    expect(cortesia.itens.at(-1)).toMatchObject({ cortesia: { motivo: "Aniversário" }, total: 6 })
+    expect(cortesia.total).toBe(100)
+    expect(cortesia.eventos?.at(-1)).toMatchObject({
+      tipo: "cortesia",
+      por: "Rafa",
+      texto: "Cortesia: 1× Refri lata",
+      motivo: "Aniversário",
+    })
+    const produto = (await api.produtos.listar()).find((item) => item.id === "refri")
+    expect(produto?.estoque?.quantidade).toBe(4)
+
+    await expect(
+      api.mesas.darCortesia(comRefri.id, refri.id, { motivo: "De novo" }),
+    ).rejects.toThrow("Refri lata já é cortesia.")
+    await expect(api.mesas.darCortesia(comRefri.id, refri.id, { motivo: "" })).rejects.toThrow(
+      "Diga o motivo da cortesia.",
+    )
+  })
+
+  test("tirar a taxa e o couvert pede motivo e tira da conta", async () => {
+    const api = servidor()
+    const { mesa } = await abrirMesa(api)
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [xBurger],
+    })
+    await expect(api.mesas.tirarTaxa(comanda.id, { motivo: " " })).rejects.toThrow(
+      "Diga o motivo para tirar a taxa de serviço.",
+    )
+    const semTaxaDeServico = await api.mesas.tirarTaxa(comanda.id, {
+      motivo: "Demorou",
+      por: "Rafa",
+    })
+    expect(semTaxaDeServico).toMatchObject({
+      taxaServico: { percentual: 10, removida: { motivo: "Demorou" } },
+      total: 39,
+    })
+    expect(semTaxaDeServico.eventos?.at(-1)).toMatchObject({
+      tipo: "taxa-removida",
+      por: "Rafa",
+      texto: "Tirou a taxa de serviço",
+      motivo: "Demorou",
+    })
+    await expect(api.mesas.tirarTaxa(comanda.id, { motivo: "De novo" })).rejects.toThrow(
+      "Esta conta não tem taxa de serviço.",
+    )
+
+    await expect(api.mesas.tirarCouvert(comanda.id, { motivo: "" })).rejects.toThrow(
+      "Diga o motivo para tirar o couvert.",
+    )
+    const semCouvert = await api.mesas.tirarCouvert(comanda.id, { motivo: "Sem música" })
+    expect(semCouvert).toMatchObject({ couvert: { removido: { motivo: "Sem música" } }, total: 23 })
+    expect(semCouvert.eventos?.at(-1)).toMatchObject({
+      tipo: "couvert-removido",
+      texto: "Tirou o couvert",
+    })
+    await expect(api.mesas.tirarCouvert(comanda.id, { motivo: "De novo" })).rejects.toThrow(
+      "Esta conta não tem couvert.",
+    )
+  })
+
+  test("nada deixa a conta menor que o já pago", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    await api.mesas.pagar(comanda.id, { forma: "pix", valor: 95 })
+    const erro = "A conta ficaria menor que o já pago. Estorne um pagamento antes."
+    await expect(
+      api.mesas.descontar(comanda.id, { modo: "reais", valor: 10, motivo: "Erro" }),
+    ).rejects.toThrow(erro)
+    await expect(
+      api.mesas.darCortesia(comanda.id, comanda.itens[0].id, { motivo: "Brinde" }),
+    ).rejects.toThrow(erro)
+    await expect(api.mesas.removerItem(comanda.id, comanda.itens[0].id)).rejects.toThrow(erro)
+  })
+
+  test("estornar um pagamento devolve o saldo, com motivo", async () => {
+    const api = semTaxa()
+    const { comanda } = await contaDeCem(api)
+    const paga = await api.mesas.pagar(comanda.id, { forma: "pix", valor: 33.33 })
+    const [pix] = paga.pagamentos ?? []
+    await expect(api.mesas.estornarPagamento(comanda.id, pix.id, { motivo: "" })).rejects.toThrow(
+      "Diga o motivo do estorno.",
+    )
+    await expect(
+      api.mesas.estornarPagamento(comanda.id, "pag-outro", { motivo: "Errado" }),
+    ).rejects.toThrow("Pagamento não encontrado")
+    const estornada = await api.mesas.estornarPagamento(comanda.id, pix.id, {
+      motivo: "Pix não caiu",
+      por: "Rafa",
+    })
+    expect(estornada.pagamentos).toEqual([])
+    expect(estornada.eventos?.at(-1)).toMatchObject({
+      tipo: "pagamento-estornado",
+      por: "Rafa",
+      texto: "Estornou Pix R$ 33,33",
+      motivo: "Pix não caiu",
+    })
+  })
+})

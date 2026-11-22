@@ -2,9 +2,9 @@ import { describe, expect, test } from "vitest"
 import {
   MOTIVOS_CANCELAMENTO,
   rotuloCanal,
+  rotuloDoPagamento,
   rotuloMotivo,
   rotuloOrigem,
-  rotuloDoPagamento,
   rotuloPagamento,
 } from "./rotulos"
 

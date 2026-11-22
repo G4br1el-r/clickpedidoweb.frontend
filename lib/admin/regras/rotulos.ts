@@ -53,6 +53,6 @@ export function rotuloDoPagamento({
   }
   return PAGAMENTOS[forma]
 }
-export const rotuloOrigem =(origem: OrigemPedido) => ORIGENS[origem]
+export const rotuloOrigem = (origem: OrigemPedido) => ORIGENS[origem]
 export const rotuloMotivo = (motivo: MotivoCancelamento | undefined) =>
   motivo ? MOTIVOS[motivo] : "Não informado"
