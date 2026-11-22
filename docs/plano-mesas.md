@@ -2156,31 +2156,46 @@ posicionar(lote: { id: string; posicao: PosicaoMesa }[]): Promise<Mesa[]>
 - [ ] `pnpm check`, mostrando a saída. `pnpm test:coverage` e subir os mínimos se a cobertura subiu.
 - [ ] Registrar a "Situação" no fim desta seção.
 
-Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-6`, empilhada sobre a Fase 5, aguardando a revisão e os screenshots. O PR sai depois que as Fases 1 a 5 estiverem no `main`.
+Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-6`, empilhada sobre a Fase 5, depois da revisão. O PR sai depois que as Fases 1 a 5 estiverem no `main`.
 
 - **O que os testes pegaram** (cada correção com o teste vermelho antes):
   - editar a quadrada em x 22 para retangular de 8 lugares deixava metade da mesa fora do mapa (Tarefa 60);
   - a primeira versão do teste do hook conferia a lista logo depois da mutação e falhava de vez em quando (o React Query avisa a tela num tempo próprio). Agora a leitura do servidor fica pendurada no teste e só a cópia que o hook grava pode trazer a posição nova;
   - o axe do E2E recusou o contraste das abas inativas (texto mais forte, como na Cozinha e na Agenda) e o texto visível do estado dentro do botão da mesa, que não cabia no nome "Mesa 3".
+- **O que a revisão pegou** (cada correção com o teste vermelho antes):
+  - os dois E2E da edição clicavam em "Editar mapa" sem pular as telas abaixo de 768 px e falhavam nos celulares: agora pulam, e um E2E novo de celular confere que `?vista=mapa` mostra o mapa sem "Editar mapa" e que a página não rola de lado;
+  - desligar o mapa em Configurar salão durante a edição, ou a tela cair abaixo de 768 px, deixava a edição presa (alternador e `M` travados). A edição agora só vale com o mapa liberado e a tela grande (`editandoMapa && noMapa && telaGrande`, e um efeito zera o pedido), e fora dela a planta desenha as posições salvas, sem o rascunho;
+  - na edição, número + Enter e `N` não abrem mais janela (a mesma trava do `M`);
+  - "Cancelar" trava enquanto o salvar não volta;
+  - só a mesa do rascunho fica marcada "sobre outra mesa" (a parada embaixo dela não), e o aviso do salvar fala da última movida (a ordem do rascunho é a do último movimento);
+  - na edição, a descrição falada mantém o estado da mesa e acrescenta a posição ("Bloqueada, Em manutenção, coluna 15, linha 8");
+  - setas com Alt, Ctrl ou Meta ficam para o navegador: não movem a mesa nem fazem `preventDefault`;
+  - fechar a aba com posição não salva pede confirmação (`beforeunload`, como em Configurações da loja); mover e voltar ao lugar salvo não conta;
+  - `posicionar([])` devolve `[]` sem regravar a base (o teste confere o `geradoEm` guardado);
+  - lacunas de teste fechadas (cada uma conferida desligando a regra e vendo o vermelho): a linha quebrada em `posicaoValida`, a resposta de `posicionar` pelo número com a base fora de ordem (mesa 30 criada antes da 3) e mover e voltar sem chamar o servidor.
+- **Achado nos screenshots:** com só a mesa movida marcada, o anel vermelho sumia, porque a mesa movida é a que tem o foco e o anel do foco ganhava dele. Agora o vermelho ganha do alerta e do foco, e o foco vira contorno (`outline`) por fora; conferido no `painel-mapa-edicao-*` antes e depois.
 - **Mudou fora do plano:**
   - a lista de cada área se chama "Mapa: Salão" (e não "Mapa do Salão": o artigo depende do nome da área);
   - no botão da mesa, o nome vem de um texto só para o leitor ("Mesa 3"), o número visível fica escondido dele e o rótulo do estado fica por cima do botão, fora dele. A descrição falada continua a do cartão, que já começa pelo estado;
-  - na edição, a mesa com o foco fica por cima das outras, e a que está por cima de outra ganha o anel de erro (`ring-destructive`);
+  - na edição, a mesa com o foco fica por cima das outras, e a que está por cima de outra ganha o anel de erro (`ring-destructive`), que o foco não apaga;
   - `ConfigurarSalao` passou a aceitar `aberto` e `aoMudar` de fora: "Abrir Configurar salão", na janela do Pro, abre o painel;
   - `FUNCOES_PRO_SALAO` já tem os três preços da decorrência 6 (reservas e QR só são usados nas fases deles);
-  - o E2E ganhou um segundo teste, o do arrasto da mesa 2 (o arrasto não tem teste de componente).
-- **Testes antigos que mudaram (mudança de comportamento planejada):** "reservas, QR e funções Pro não aparecem…" (`configurar-salao.test.tsx`) virou "reservas e QR não aparecem…", porque o mapa entrou no painel.
+  - o E2E ganhou um segundo teste, o do arrasto da mesa 2 (o arrasto não tem teste de componente). Para passar em todas as telas, ele espera 100 ms antes de salvar (o dnd-kit engole o clique dos 50 ms depois de soltar) e arrasta em dois trechos de 4 células logo abaixo do cabeçalho (no celular deitado, chegar perto da borda de baixo rolava a página durante o arrasto);
+  - o screenshot do mapa procurava "Mesa 1" sem `exact` e achava também a 10 e o ⋯: agora com `exact`.
+- **Testes antigos que mudaram (mudança de comportamento planejada):**
+  - "reservas, QR e funções Pro não aparecem…" (`configurar-salao.test.tsx`) virou "reservas e QR não aparecem…", porque o mapa entrou no painel;
+  - revisão: em `mapa-salao.test.tsx` ("as setas movem…", "mesa por cima de outra…", "Cancelar volta…") e nos dois E2E da edição, a descrição na edição passou a ser conferida pelo fim (`/, coluna 3, linha 2$/`), porque agora ela começa pelo estado da mesa.
 - **Testes que passaram de primeira**, porque a regra já saía do desenho de outra fatia: em `servidor-mapa.test.ts`, trocar duas mesas de lugar, a mesa de outra área, a mesa aberta e a bloqueada e o lote vazio; em `mapa-salao.test.tsx`, as fatias da Tarefa 63 depois da primeira, o celular, o `M` travado, cancelar e tocar na edição. Cada grupo foi conferido desligando a regra no código e vendo o vermelho.
 - **Fica para depois:**
   - ligar a função na sacola do painel (`CATALOGO_PRO`), na Fase 8, como já estava no desenho dela;
   - filtros no mapa (o mapa mostra a área inteira) e editar mais de uma área de uma vez;
   - desfazer a edição do mapa depois de salvar;
-  - o E2E do mapa nas outras telas (só rodou em `desktop-1920`) e os screenshots abaixo.
-- **Screenshots** (para a revisão, nada foi gerado nem atualizado):
-  - novos: `painel-mapa-*` e `painel-mapa-edicao-*` (este só onde aparece "Editar mapa", de 768 px para cima);
-  - mudam pela tela: `painel-mesas-*` (o alternador Grade/Mapa acima dos filtros), `painel-configurar-salao-*` (o bloco Funções Pro) e `painel-atalhos-mesas-*` (a linha do `M`);
-  - podem mudar pelo fundo, com a grade descendo por causa do alternador: `painel-comanda-*`, `painel-comanda-conta-*`, `painel-receber-conta-*`, `painel-adicionar-itens-*`, `painel-abrir-mesa-*`, `painel-nova-mesa-*`, `painel-transferir-mesa-*`, `painel-juntar-mesas-*` e `painel-transferir-itens-*`.
-- **Testes e cobertura:** 1697 testes no Vitest (`pnpm check` verde). Os dois E2E novos passaram em `desktop-1920`, contra o `next start` na porta 3010. A cobertura ficou em 84,87/77,92/83,28/85,91 no geral: os mínimos continuam em 84/77/83/85 (nenhum ponto inteiro a mais), e `lib/**` em 98/95/98/98.
+  - onde a planta fica na largura mínima (720 px: celulares, `tablet-768` e `notebook-1024`), o rótulo do estado corta com reticências ("Ocup…", "Pediu…"); o número aparece inteiro e a descrição falada continua completa. Mudar o tamanho da planta ou do rótulo é decisão de desenho.
+- **Screenshots** (revisados nas imagens esperada, atual e diff, claro e escuro, em celular-390 e desktop-1920; depois gerados nas outras 9 telas, com uma amostra de cada tamanho conferida):
+  - novos: `painel-mapa-*` (as mesas sem sobrepor, nos lugares da demonstração) e `painel-mapa-edicao-*` (só de 768 px para cima; a mesa 1 por cima da 5 com o anel vermelho e o contorno do foco);
+  - mudam pela tela: `painel-mesas-*` (o alternador Grade/Mapa acima dos filtros) e `painel-atalhos-mesas-*` (a linha do `M`);
+  - mudam só pelo fundo, com a grade descendo 52 px por causa do alternador: `painel-configurar-salao-*` (o bloco Funções Pro fica abaixo da dobra do painel, fora da foto), `painel-comanda-*`, `painel-comanda-conta-*`, `painel-receber-conta-*`, `painel-adicionar-itens-*`, `painel-abrir-mesa-*`, `painel-nova-mesa-*`, `painel-transferir-mesa-*`, `painel-juntar-mesas-*` e `painel-transferir-itens-*`.
+- **Testes e cobertura:** 1711 testes no Vitest (`pnpm check` verde). E2E rápido (celular-390 e desktop-1920) contra o `next start` na porta 3010: 473 passaram, 31 pulados, nenhum falhou (na primeira rodada, as falhas eram só os screenshots acima). Os E2E do mapa (`-g "mapa"`) nas 11 telas: 39 passaram, 16 pulados (a edição abaixo de 768 px e o de celular de 768 px para cima). A cobertura ficou em 84,91/78,02/83,33/85,95 no geral: o mínimo de ramos sobe para 78 (84/78/83/85); `lib/**` continua em 98/95/98/98.
 
 ## Fase 7: reservas e lista de espera
 
