@@ -124,6 +124,16 @@ describe("Mesas: transferir, juntar e separar pelo menu ⋯", () => {
     expect(await cartao(8)).toHaveAccessibleDescription(/^Livre/)
   })
 
+  test("Juntar não oferece a 15, que já tem a 16 junta, nem a 16", async () => {
+    const usuario = await abrir()
+    await usuario.click((await menu(usuario, 1)).getByRole("menuitem", { name: "Juntar mesas" }))
+    const janela = within(await screen.findByRole("dialog", { name: "Juntar à mesa 1" }))
+
+    expect(janela.getByRole("checkbox", { name: /^Mesa 14\b/ })).toBeInTheDocument()
+    expect(janela.queryByRole("checkbox", { name: /^Mesa 15\b/ })).not.toBeInTheDocument()
+    expect(janela.queryByRole("checkbox", { name: /^Mesa 16\b/ })).not.toBeInTheDocument()
+  })
+
   test("juntar a 8 à mesa 1 deixa a 8 Com a mesa 1; Separar no menu solta", async () => {
     const usuario = await abrir()
     await usuario.click((await menu(usuario, 1)).getByRole("menuitem", { name: "Juntar mesas" }))

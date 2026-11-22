@@ -37,9 +37,12 @@ function Campos({
   const por = useGarcom((estado) => estado.nome)
   const [marcadas, setMarcadas] = useState<string[]>([])
   const [tentou, setTentou] = useState(false)
-  // A que já está junto de alguma não entra; a bloqueada também não.
+  // A que já está junto de alguma não entra, nem a que já tem outras juntas a ela (o servidor
+  // pede para separar antes); a bloqueada também não.
+  const principais = new Set((mesas ?? []).map((outra) => outra.juntadaCom))
   const candidatas = (mesas ?? []).filter(
-    (outra) => outra.id !== mesa.id && !outra.bloqueio && !outra.juntadaCom,
+    (outra) =>
+      outra.id !== mesa.id && !outra.bloqueio && !outra.juntadaCom && !principais.has(outra.id),
   )
   const erro = tentou && marcadas.length === 0 ? "Escolha as mesas para juntar." : null
   return (
