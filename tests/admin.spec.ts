@@ -1286,3 +1286,54 @@ test("mesas: reservar a mesa 8, chegar a hora, sentar a reserva e fechar a conta
   await expect(page.getByText("Conta da mesa 8 fechada.")).toBeVisible()
   await expect(mesa8).toContainText("Limpeza")
 })
+
+test("mesas: o cliente pede pelo QR da mesa 11, o painel aceita; o cliente chama e o painel atende", async ({
+  page,
+  context,
+}) => {
+  test.setTimeout(90_000)
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/mesas?mesa=11")
+
+  // A gaveta da mesa livre abre a vitrine da mesa numa aba nova, como o QR.
+  const gaveta = page.getByRole("dialog", { name: "Mesa 11" })
+  const [cliente] = await Promise.all([
+    context.waitForEvent("page"),
+    gaveta.getByRole("button", { name: "Simular cliente na mesa" }).click({ timeout: 15_000 }),
+  ])
+  await expect(cliente).toHaveURL(/\/mesa\?loja=pizzaria&mesa=mesa-11$/)
+  await expect(cliente.getByRole("heading", { level: 1, name: "Mesa 11" })).toBeVisible({
+    timeout: 15_000,
+  })
+  await expect(cliente.getByText("Peça daqui e pague na mesa, com o garçom.")).toBeVisible()
+  await verificarAcessibilidade(cliente)
+
+  // O cliente pede uma água para a mesa.
+  await cliente.getByRole("button", { name: "Adicionar Água sem gás" }).click()
+  await cliente.getByRole("button", { name: "Pedir para a mesa" }).click()
+  await expect(cliente.getByText("Pedido enviado. O garçom vai confirmar.")).toBeVisible()
+
+  // O painel recebe na hora (o chamado da mesa 1 é da demonstração) e aceita.
+  await page.keyboard.press("Escape")
+  const mesa11 = page.getByRole("button", { name: "Mesa 11", exact: true })
+  await expect(mesa11).toContainText("Pedido pelo QR")
+  await page.getByRole("button", { name: "Chamados, 2 esperando" }).click()
+  const lista = page.getByRole("dialog", { name: "Chamados" })
+  await expect(lista.getByRole("listitem", { name: "Mesa 11" })).toContainText("1× Água sem gás")
+  await verificarAcessibilidade(page)
+  await lista.getByRole("button", { name: "Aceitar o pedido da mesa 11" }).click()
+  await expect(page.getByText("Pedido da mesa 11 aceito.")).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(mesa11).toContainText("Na cozinha")
+
+  // O cliente chama o garçom, e o painel atende.
+  await cliente.getByRole("button", { name: "Chamar o garçom" }).click()
+  await expect(cliente.getByText("O garçom já vem.")).toBeVisible()
+  await expect(mesa11).toContainText("Chamou o garçom")
+  await page.getByRole("button", { name: "Chamados, 2 esperando" }).click()
+  await lista.getByRole("button", { name: "Atender a mesa 11" }).click()
+  await expect(lista.getByRole("listitem", { name: "Mesa 11" })).toBeHidden()
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("button", { name: "Chamados, 1 esperando" })).toBeVisible()
+  await expect(mesa11).not.toContainText("Chamou o garçom")
+})

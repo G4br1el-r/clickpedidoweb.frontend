@@ -377,6 +377,18 @@ for (const tema of ["light", "dark"] as const) {
     await expect(reservas).toHaveScreenshot(`painel-reservas-pro-${tema}.png`)
   })
 
+  test(`painel: folha de QR (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    await page.goto("/admin/mesas")
+    await page.getByRole("button", { name: "Chamados, 1 esperando" }).click({ timeout: 15_000 })
+    await page.getByRole("button", { name: "Folha de QR" }).click()
+    const folha = page.getByRole("dialog", { name: "Folha de QR" })
+    await expect(folha.getByRole("figure")).toHaveCount(19)
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(folha).toHaveScreenshot(`painel-folha-qr-${tema}.png`)
+  })
+
   test(`painel: garçom (${tema})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
     await page.goto("/admin/garcom")

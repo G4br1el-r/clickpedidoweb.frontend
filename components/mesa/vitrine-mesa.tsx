@@ -189,33 +189,38 @@ function Mesa({
             </h2>
             <ul className="grid grid-cols-1 md:grid-cols-2 md:gap-x-8">
               {produtos.map((produto) => (
-                <li key={produto.id} className="border-b border-border/70">
-                  <button
+                <li
+                  key={produto.id}
+                  className="flex items-center gap-3 border-b border-border/70 py-3"
+                >
+                  {produto.imagem && (
+                    <Image
+                      src={produto.imagem}
+                      alt=""
+                      width={56}
+                      height={56}
+                      className="size-14 shrink-0 rounded-lg object-cover"
+                    />
+                  )}
+                  <span className="flex min-w-0 flex-1 flex-col">
+                    <span className="font-medium">{produto.nome}</span>
+                    <span className="line-clamp-2 text-xs text-muted-foreground">
+                      {produto.descricao}
+                    </span>
+                    <span className="text-sm tabular-nums">
+                      {emReais(precoDeBalcao(produto, segmento))}
+                    </span>
+                  </span>
+                  <Button
                     type="button"
+                    size="icon"
+                    variant="outline"
+                    className="shrink-0 rounded-full"
                     aria-label={`Adicionar ${produto.nome}`}
                     onClick={() => rodada.tocarProduto(produto)}
-                    className="flex w-full items-center gap-3 py-3 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                   >
-                    {produto.imagem && (
-                      <Image
-                        src={produto.imagem}
-                        alt=""
-                        width={56}
-                        height={56}
-                        className="size-14 shrink-0 rounded-lg object-cover"
-                      />
-                    )}
-                    <span className="flex min-w-0 flex-1 flex-col">
-                      <span className="font-medium">{produto.nome}</span>
-                      <span className="line-clamp-2 text-xs text-muted-foreground">
-                        {produto.descricao}
-                      </span>
-                      <span className="text-sm tabular-nums">
-                        {emReais(precoDeBalcao(produto, segmento))}
-                      </span>
-                    </span>
-                    <PlusIcon aria-hidden="true" className="size-5 shrink-0 text-primary" />
-                  </button>
+                    <PlusIcon />
+                  </Button>
                 </li>
               ))}
             </ul>
