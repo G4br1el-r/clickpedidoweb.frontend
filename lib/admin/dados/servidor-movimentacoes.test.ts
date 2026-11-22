@@ -735,6 +735,46 @@ describe("transferir itens", () => {
     ).rejects.toThrow("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
   })
 
+  test("recusa a origem que ficaria com o desconto acima dos itens", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api, 30, REFRI(2))
+    await api.mesas.descontar(comanda.id, { modo: "reais", valor: 10, motivo: "Cliente fiel" })
+    const destino = await mesaNova(api, 31)
+
+    await expect(
+      api.mesas.transferirItens(comanda.id, {
+        mesaDestinoId: destino,
+        itens: [{ itemId: refriDe(comanda), quantidade: 1 }],
+      }),
+    ).rejects.toThrow("O desconto passaria do valor dos itens. Tire ou diminua o desconto antes.")
+  })
+
+  test("o que fica na origem já paga zera o saldo: a conta fecha, e a mesa vai para a limpeza", async () => {
+    const api = servidor((catalogo) => {
+      catalogo.salao.limpeza = true
+    })
+    const { mesaId, comanda } = await aberta(api, 30, REFRI(2))
+    await api.mesas.pagar(comanda.id, { forma: "pix", valor: 6 })
+    const destino = await mesaNova(api, 31)
+
+    const { comanda: origem, desfazer } = await api.mesas.transferirItens(comanda.id, {
+      mesaDestinoId: destino,
+      itens: [{ itemId: refriDe(comanda), quantidade: 1 }],
+    })
+
+    expect(origem).toMatchObject({ status: "concluido", total: 6, pagoEm: AGORA.toISOString() })
+    expect(origem.eventos?.at(-1)).toMatchObject({ tipo: "fechada", texto: "Conta fechada" })
+    expect(await mesaDe(api, mesaId)).toMatchObject({
+      status: "livre",
+      limpezaDesde: AGORA.toISOString(),
+    })
+
+    // Desfazer abre a conta de novo, com os 2 Refris, e tira a limpeza.
+    await api.mesas.desfazer(desfazer)
+    expect((await api.pedidos.buscar(comanda.id))?.status).toBe("pronto")
+    expect((await mesaDe(api, mesaId))?.limpezaDesde).toBeUndefined()
+  })
+
   test("desfazer devolve a linha inteira e tira a comanda que abriu na mesa livre", async () => {
     const api = servidor()
     const { comanda } = await aberta(api, 30, REFRI(3))

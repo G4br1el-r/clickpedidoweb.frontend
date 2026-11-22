@@ -385,6 +385,17 @@ function retirar(
  * O saldo zerou: a comanda fica concluída e paga. A forma do pedido é a do maior pagamento (o
  * primeiro, no empate), e o troco do pedido só vale quando houve um pagamento único em dinheiro.
  */
+/**
+ * Desconto, cortesia, item tirado ou transferido zerou o saldo de uma conta já paga em parte:
+ * ela fecha.
+ */
+const quitou = (antes: Pedido, depois: Pedido, saldo = resumoDaConta(depois).saldo) =>
+  EM_ANDAMENTO.includes(depois.status) &&
+  depois.itens.length > 0 &&
+  (depois.pagamentos?.length ?? 0) > 0 &&
+  resumoDaConta(antes).saldo > 0 &&
+  saldo === 0
+
 function fechada(comanda: Pedido, agora: string, por: string | undefined): Pedido {
   const pagamentos = comanda.pagamentos ?? []
   const maior = pagamentos.reduce<PagamentoConta | undefined>(
@@ -815,14 +826,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (novo.status !== "cancelado" && pago > total) {
           throw new Error("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
         }
-        // Desconto, cortesia ou item tirado zerou o saldo de uma conta já paga em parte: fecha.
-        const quitada =
-          EM_ANDAMENTO.includes(novo.status) &&
-          novo.itens.length > 0 &&
-          (novo.pagamentos?.length ?? 0) > 0 &&
-          resumoDaConta(pedido).saldo > 0 &&
-          saldo === 0
-        return quitada ? fechada(novo, new Date().toISOString(), novo.eventos?.at(-1)?.por) : novo
+        return quitou(pedido, novo, saldo)
+          ? fechada(novo, new Date().toISOString(), novo.eventos?.at(-1)?.por)
+          : novo
       },
       // O garçom não lança mais do que há.
       { conferir: true },
@@ -2673,7 +2679,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             throw new Error("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
           }
           const texto = itensEmTexto(vao)
-          const novaOrigem = comEvento(
+          const transferiu = comEvento(
             { ...saiu, atualizadoEm: agora },
             {
               tipo: "itens-transferidos",
@@ -2682,6 +2688,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
               texto: `Transferiu ${texto} para a mesa ${mesa.numero}`,
             },
           )
+          // O que ficou já estava pago: a conta da origem fecha, como ao tirar um item.
+          const fechou = quitou(origem, transferiu)
+          const novaOrigem = fechou ? fechada(transferiu, agora, por) : transferiu
           const id = aberta?.id ?? proximoId(base)
           destinoId = id
           const garcom = origem.mesa.garcom
@@ -2720,7 +2729,22 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
                 : pedido,
           )
           return {
-            nova: { ...base, pedidos: aberta ? pedidos : [...pedidos, novoDestino] },
+            nova: {
+              ...base,
+              pedidos: aberta ? pedidos : [...pedidos, novoDestino],
+              // Com a limpeza ligada, a mesa da conta que fechou (e as juntas a ela) espera a limpeza.
+              mesas:
+                fechou && base.salao.limpeza
+                  ? base.mesas.map((item) =>
+                      [
+                        origem.mesa.id,
+                        ...(origem.mesa.juntadas ?? []).map((junta) => junta.id),
+                      ].includes(item.id)
+                        ? { ...item, limpezaDesde: agora }
+                        : item,
+                    )
+                  : base.mesas,
+            },
             mesas: [...new Set([origem.mesa.id, mesa.id, novoDestino.mesa?.id as string])],
             pedidos: [novaOrigem.id, novoDestino.id],
           }
