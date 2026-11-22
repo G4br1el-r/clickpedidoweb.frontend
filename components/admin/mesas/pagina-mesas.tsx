@@ -287,6 +287,7 @@ export function PaginaMesas() {
         aoAbrirMesa={abrirPeloNumero}
         aoNovaMesa={() => setNovaAberta(true)}
         aoAjuda={() => setAjudaAberta(true)}
+        aoAlternarVista={() => void setVista(noMapa ? "grade" : "mapa")}
       />
       <FolhaAtalhos aberta={ajudaAberta} aoMudar={setAjudaAberta} />
     </div>

@@ -174,3 +174,30 @@ describe("vista Mapa", () => {
     )
   })
 })
+
+describe("atalho M", () => {
+  test("m fora de campo leva ao mapa, e M volta à grade", async () => {
+    const usuario = await abrir()
+    await usuario.keyboard("m")
+    expect(await mapa("Salão")).toBeInTheDocument()
+    expect(endereco).toContain("vista=mapa")
+
+    await usuario.keyboard("M")
+    expect(await screen.findByRole("list", { name: "Salão" })).toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Grade" })).toBeChecked()
+  })
+
+  test("m na busca só escreve", async () => {
+    const usuario = await abrir()
+    await usuario.type(screen.getByRole("searchbox", { name: "Buscar mesa" }), "m")
+    expect(screen.getByRole("searchbox", { name: "Buscar mesa" })).toHaveValue("m")
+    expect(screen.getByRole("radio", { name: "Grade" })).toBeChecked()
+  })
+
+  test("a folha de atalhos lista o M", async () => {
+    const usuario = await abrir()
+    await usuario.click(screen.getByRole("button", { name: "Atalhos do teclado" }))
+    const folha = within(await screen.findByRole("dialog", { name: "Atalhos do teclado" }))
+    expect(folha.getByText("Alternar entre grade e mapa")).toBeInTheDocument()
+  })
+})

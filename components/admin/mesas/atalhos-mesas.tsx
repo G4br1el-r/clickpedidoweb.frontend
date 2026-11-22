@@ -36,23 +36,26 @@ export function AtalhosMesas({
   aoAbrirMesa,
   aoNovaMesa,
   aoAjuda,
+  aoAlternarVista,
 }: {
   /** Recebe o número digitado; a página avisa se a mesa não existe. */
   aoAbrirMesa: (numero: number) => void
   aoNovaMesa: () => void
   aoAjuda: () => void
+  aoAlternarVista: () => void
 }) {
   const [digitado, setDigitado] = useState("")
   const acumulado = useRef("")
   const relogio = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-  const acoes = useRef({ aoAbrirMesa, aoNovaMesa, aoAjuda })
-  acoes.current = { aoAbrirMesa, aoNovaMesa, aoAjuda }
+  const acoes = useRef({ aoAbrirMesa, aoNovaMesa, aoAjuda, aoAlternarVista })
+  acoes.current = { aoAbrirMesa, aoNovaMesa, aoAjuda, aoAlternarVista }
 
   useEffect(() => {
     function executar(acao: AcaoAtalho) {
       if (acao.tipo === "abrir-mesa") acoes.current.aoAbrirMesa(acao.numero)
       else if (acao.tipo === "nova-mesa") acoes.current.aoNovaMesa()
       else if (acao.tipo === "ajuda") acoes.current.aoAjuda()
+      else if (acao.tipo === "alternar-vista") acoes.current.aoAlternarVista()
       else if (acao.tipo === "buscar") {
         document.querySelector<HTMLInputElement>('input[aria-label="Buscar mesa"]')?.focus()
       }
@@ -105,6 +108,7 @@ const ATALHOS: { teclas: string; acao: string }[] = [
   { teclas: "0–9, depois Enter", acao: "Abrir a mesa pelo número" },
   { teclas: "/", acao: "Buscar mesa" },
   { teclas: "N", acao: "Nova mesa" },
+  { teclas: "M", acao: "Alternar entre grade e mapa" },
   { teclas: "?", acao: "Mostrar estes atalhos" },
   { teclas: "Esc", acao: "Apagar o número digitado" },
 ]
