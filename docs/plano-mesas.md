@@ -2004,6 +2004,158 @@ Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilha
    - cadeado.
 4. **E2E:** mover uma mesa pelo teclado, salvar e recarregar, e screenshot do mapa.
 
+**Branch:** `claude/admin-mesas-fase-6`, empilhada sobre as Fases 1 a 5. O PR vai para `main` depois delas.
+
+**Decisões de detalhe desta fase** (decorrem de Q3, Q16, Q17, Q32, Q40, Q47 e das decorrências 6 e 7)
+
+- **Posição e tamanho:** a posição é a célula do canto de cima à esquerda da mesa, na grade 24 × 16 da área; o tamanho sai de `tamanhoDaMesa` (já existe). Duas mesas colidem quando são da mesma área e os retângulos se cruzam (encostar não conta, como em `mesasSeCruzam`). Uma posição é válida com coordenadas inteiras, a mesa inteira dentro do mapa e sem colidir.
+- **Mover pelo teclado:** setas movem 1 célula, Shift+setas 4, e a mesa para na borda (não sai nem recusa). O movimento **não** pula nem recusa a colisão: no rascunho a mesa pode passar por cima de outra (é o único jeito de atravessá-la pelo teclado). A mesa por cima fica marcada ("sobre outra mesa") e o salvar recusa.
+- **Arrastar:** `@dnd-kit/core` (`useDraggable`, `PointerSensor` com 4 px de distância). O deslocamento em pixels vira células arredondadas para a mais próxima (encaixe), também enquanto arrasta, e a mesa para na borda (`arrastar`). Soltar por cima de outra mesa vale a mesma regra do teclado: marca e o salvar recusa. O arrasto não tem teste de componente (o jsdom não mede a planta nem simula o ponteiro do dnd-kit): a conta é pura e testada, e o arrasto entra no E2E.
+- **Servidor, `mesas.posicionar(lote)`:** grava as posições de uma vez, conferidas contra o resultado final (trocar duas mesas de lugar no mesmo lote vale). Recusa o lote inteiro, sem gravar nada:
+  - mesa que não existe: "Mesa não encontrada";
+  - mesas de áreas diferentes no mesmo lote: "Salve as posições de uma área por vez." (o editor mexe numa área só);
+  - fora do mapa ou coordenada quebrada: "A mesa 3 sai do mapa.";
+  - por cima de outra: "A mesa 3 ficaria sobre a mesa 4.".
+
+  Mesa de outra área no mesmo lugar não colide. A posição não depende do estado: mesa aberta, bloqueada ou juntada também se move. Lote vazio devolve `[]` sem gravar. Devolve as mesas do lote, pelo número.
+- **Editar mesa (ponto de atenção 6):** a regra de ficar ou ir para a primeira posição livre passa a usar `posicaoValida`. Até aqui ela só olhava o cruzamento, e a quadrada em x 22 virando retangular de 8 lugares (4 × 2) ficava com metade fora do mapa. A mesa nova já nasce sem sobrepor (`primeiraPosicaoLivre`, Tarefa 4).
+- **Vista no endereço:** `?vista=mapa` (nuqs; a grade é o padrão e não aparece). O alternador "Grade | Mapa" fica acima da grade (`ToggleGroup` no estilo segmento, nomeado "Vista"). `M` (e `m`) alterna, com as mesmas travas dos outros atalhos (campo, modificador, janela aberta, atalhos de uma tecla desligados). Durante a edição do mapa o alternador e o `M` ficam travados.
+- **Mapa por área:** abas com as áreas (só as que têm mesa), na ordem das áreas. A aba escolhida fica em `?area=`, o mesmo parâmetro do filtro de área da grade (sem área, a primeira). No mapa, a barra de filtros some: o mapa mostra a área inteira. Os números do salão continuam no topo. Cada área é uma lista ("Mapa do Salão") desenhada numa grade CSS de 24 × 16 com proporção 3:2, e as mesas vêm na ordem de leitura (linha, depois coluna), para o Tab seguir o desenho. No celular a planta tem 720 px de largura mínima e rola de lado dentro da própria faixa (a página não rola de lado).
+- **Mesa no mapa:** é um botão com o mesmo nome ("Mesa 3") e a **mesma descrição falada** do cartão (`descricaoDaMesa`, extraída do cartão). Desenho: redonda em círculo, quadrada e retangular com cantos arredondados; o número grande, o traço e o rótulo do estado; os lugares como cadeiras em volta (decorativas, escondidas do leitor de tela). Ocupada com o fundo do cartão; com alerta, o anel no tom novo e `data-alerta`, como na grade. Tocar abre a gaveta (a juntada abre a da principal). O ⋯ fica ao lado da mesa, com o mesmo menu da grade (`MenuMesa`, exportado do cartão).
+- **Modo edição (Q47):** botão "Editar mapa" só em tela de tablet para cima (`useTelaGrande`, ≥ 768 px) e com a função ligada. Em edição:
+  - as abas, o alternador e o `M` travam, o ⋯ some e tocar na mesa não abre a gaveta;
+  - Tab passa de mesa em mesa (a focada é a que as setas movem), e a lista ganha a instrução "Use Tab para escolher a mesa e as setas para mover. Com Shift, anda 4 células.";
+  - a descrição de cada mesa passa a dizer a posição ("coluna 2, linha 2", contando de 1) e, se for o caso, "sobre outra mesa";
+  - uma região viva anuncia cada movimento: "Mesa 3: coluna 5, linha 2" (e ", sobre outra mesa");
+  - "Salvar posições" manda só as mesas que mudaram. Com uma mesa por cima de outra, a tela recusa sem chamar o servidor ("A mesa 3 está sobre outra mesa. Mova antes de salvar."). Sem mudança, só sai da edição. Deu certo: "Mapa salvo.";
+  - "Cancelar" volta as posições de antes.
+- **Cadeado Pro (Q32, decorrência 6):** com `salao.funcoes.mapa` desligada, o "Mapa" do alternador mostra o selo Pro com cadeado (`SeloPro`, o mesmo da vitrine). Tocar nele (ou `M`) não troca a vista: abre a janela "Mapa do salão é Pro", que explica o recurso, diz o preço (R$ 19,90 por mês) e tem "Abrir Configurar salão". `?vista=mapa` com a função desligada mostra a grade. Configurar salão ganha o bloco "Funções Pro" com o interruptor "Mapa do salão" e o selo (cadeado desligado, brilho ligado). Ligar não passa pela sacola nesta fase: a entrada no `CATALOGO_PRO` continua na Fase 8, como já está no desenho dela (as chaves do catálogo são da vitrine, e `opcaoEmUso` quebraria com `salao.*`). Reservas e QR continuam fora do painel até as fases deles. A demonstração já vem com o mapa ligado.
+
+**Interfaces que a Fase 6 entrega**
+
+```ts
+// lib/admin/regras/salao.ts
+export type MesaNoMapa = Pick<Mesa, "id" | "areaId" | "forma" | "lugares" | "posicao">
+export type Direcao = "esquerda" | "direita" | "cima" | "baixo"
+export function colide(mesa: MesaNoMapa, mesas: MesaNoMapa[]): boolean
+export function posicaoValida(mesa: MesaNoMapa, mesas: MesaNoMapa[]): boolean
+export function noMapa(mesa: Pick<Mesa, "forma" | "lugares">, posicao: PosicaoMesa): PosicaoMesa
+export function moverPorTeclado(
+  mesa: Pick<Mesa, "forma" | "lugares" | "posicao">,
+  direcao: Direcao,
+  passo: 1 | 4,
+): PosicaoMesa
+export function arrastar(
+  mesa: Pick<Mesa, "forma" | "lugares" | "posicao">,
+  deslocamento: { x: number; y: number }, // em pixels
+  celula: { largura: number; altura: number }, // em pixels
+): PosicaoMesa
+export function descreverPosicao(posicao: PosicaoMesa): string // "coluna 3, linha 2"
+export const FUNCOES_PRO_SALAO: Record<keyof ConfigSalao["funcoes"], { nome: string; preco: number }>
+
+// servidor (api.mesas)
+posicionar(lote: { id: string; posicao: PosicaoMesa }[]): Promise<Mesa[]>
+
+// consultas-mesas: usePosicionarMesas() (guarda as posições novas na lista de mesas e invalida)
+// lib/admin/regras/atalhos-mesas.ts: AcaoAtalho ganha { tipo: "alternar-vista" } ("m" e "M")
+// components/admin/mesas/estado-grade.ts: useVista() (?vista=mapa)
+// components/admin/mesas/cartao-mesa.tsx: export function descricaoDaMesa(linha, agora): string; export MenuMesa
+// components/admin/mesas/mapa-salao.tsx: <MapaSalao />, <MapaPro /> (a janela do cadeado)
+```
+
+**Arquivos**
+
+- Criar:
+  - `lib/admin/dados/servidor-mapa.test.ts` (os testes de servidor desta fase);
+  - `components/admin/mesas/mapa-salao.tsx` e `mapa-salao.test.tsx`.
+- Mudar:
+  - `lib/admin/regras/salao.ts` e `salao.test.ts`;
+  - `lib/admin/dados/servidor.ts` e `servidor.test.ts` (editar dentro do mapa);
+  - `lib/admin/dados/consultas-mesas.ts` e `consultas-mesas.test.tsx`;
+  - `lib/admin/regras/atalhos-mesas.ts` e `atalhos-mesas.test.ts`;
+  - `components/admin/mesas/{pagina-mesas,cartao-mesa,atalhos-mesas,estado-grade,configurar-salao}.tsx` e `configurar-salao.test.tsx`;
+  - `tests/admin.spec.ts` e `tests/visual-admin.spec.ts`.
+
+### Task 58 (Tarefa 58): regras do mapa
+
+- [ ] Testes que falham em `salao.test.ts`, um comportamento por vez:
+  - `colide`: a quadrada em (1, 1) colide com a de (2, 2) da mesma área; encostar ((3, 1)) não colide; a mesma mesa (mesmo id) não conta; a de outra área no mesmo lugar não colide; a retangular de 8 em (0, 0) colide com a quadrada em (3, 0);
+  - `posicaoValida`: (22, 14) vale para a quadrada; (23, 0) não (passa da coluna 24); (0, 15) não (passa da linha 16); (-1, 0) e (1.5, 0) não; a retangular de 8 em (20, 0) vale e em (21, 0) não; colidindo, não;
+  - `moverPorTeclado`: da quadrada em (5, 5), direita 1 → (6, 5), esquerda 4 → (1, 5), cima 1 → (5, 4), baixo 4 → (5, 9); em (1, 5), esquerda 4 → (0, 5); em (21, 13), direita 4 → (22, 13) e baixo 4 → (21, 14); a retangular de 8 em (19, 0), direita 4 → (20, 0);
+  - `arrastar` com células de 40 × 30 px: da (5, 5), (+41, −29) → (6, 4); (+19, +14) não sai do lugar; (+21, +16) → (6, 6); (−400, +1000) → (0, 14);
+  - `descreverPosicao({ x: 2, y: 1 })` → "coluna 3, linha 2".
+- [ ] Implementar e fazer o commit `feat(mesas): regras do mapa: colisão, posição válida, teclado e arrasto`.
+
+### Task 59 (Tarefa 59): posicionar as mesas no servidor
+
+- [ ] Testes que falham em `servidor-mapa.test.ts` (lanchonete de teste: mesas 1 e 2 do Salão em (0, 0) e (4, 0)):
+  - posicionar a mesa 1 em (10, 3) e a 2 em (0, 8) grava as duas (a leitura seguinte vê) e devolve as duas, pelo número;
+  - trocar a 1 e a 2 de lugar no mesmo lote vale;
+  - recusas que não gravam nada, uma por teste: a mesa 1 em (2, 0) por cima de uma mesa nova em (2, 0) ("A mesa 1 ficaria sobre a mesa 3."), a mesa 1 em (23, 0) ("A mesa 1 sai do mapa."), em (1.5, 0), a mesa inexistente no meio de um lote válido ("Mesa não encontrada", e a outra do lote não mudou), duas mesas de áreas diferentes ("Salve as posições de uma área por vez.");
+  - a mesa da Varanda no mesmo lugar de uma mesa do Salão não colide;
+  - mesa ocupada e bloqueada se movem sem mudar a comanda nem o bloqueio;
+  - lote vazio devolve `[]`.
+- [ ] Implementar `posicionar` e fazer o commit `feat(mesas): o servidor grava as posições do mapa em lote`.
+
+### Task 60 (Tarefa 60): editar a mesa sem sair do mapa
+
+- [ ] Teste que falha em `servidor.test.ts`, no `describe("editar")`: a quadrada em (22, 8) virando retangular de 8 lugares vai para uma posição válida (a primeira livre, (6, 0)), em vez de ficar com metade fora do mapa.
+- [ ] Trocar a conferência de `editar` por `posicaoValida`. Commit `fix(mesas): editar a mesa não deixa metade dela fora do mapa`.
+
+### Task 61 (Tarefa 61): hook de posicionar
+
+- [ ] Teste que falha em `consultas-mesas.test.tsx`: `usePosicionarMesas` chega ao servidor e a lista de `useMesas` já traz a posição nova logo depois do sucesso.
+- [ ] Implementar e fazer o commit `feat(mesas): hook para salvar as posições do mapa`.
+
+### Task 62 (Tarefa 62): o atalho M
+
+- [ ] Testes que falham em `atalhos-mesas.test.ts`: "m" e "M" dão `alternar-vista` e zeram os dígitos; com campo, modificador, janela aberta ou atalhos desligados, nada.
+- [ ] Implementar e fazer o commit `feat(mesas): o atalho M na leitura das teclas`.
+
+### Task 63 (Tarefa 63): vista Mapa com abas por área
+
+- [ ] Testes que falham em `mapa-salao.test.tsx` (pizzaria, tela grande):
+  - o alternador "Vista" mostra "Grade" marcada; tocar em "Mapa" grava `?vista=mapa` e mostra as abas Salão, Varanda e Balcão, com o Salão escolhido e a lista "Mapa do Salão" com as mesas 1 a 10;
+  - `?vista=mapa&area=area-varanda` abre na Varanda; trocar de aba grava `?area=`;
+  - no mapa, a barra de filtros some;
+  - a mesa no mapa tem o mesmo nome e a mesma descrição do cartão: "Mesa 16" com "Com a mesa 15, 6 lugares", e a 20 com "Bloqueada, Em manutenção";
+  - as mesas da lista vêm na ordem de leitura (no Salão: 1, 2, 3, 4, 9, 5, 6, 7, 8, 10);
+  - tocar na 16 abre a gaveta da Mesa 15; o ⋯ da mesa 9 oferece "Marcar limpa";
+  - a mesa que pediu a conta há 12 min fica com `data-alerta`.
+- [ ] Extrair `descricaoDaMesa` do cartão (com os testes do cartão verdes), exportar `MenuMesa` e implementar `useVista`, o alternador e `mapa-salao.tsx`. Commit `feat(mesas): vista Mapa, com abas por área e as mesmas ações da grade`.
+
+### Task 64 (Tarefa 64): M na tela
+
+- [ ] Testes que falham em `mapa-salao.test.tsx`: "m" fora de campo leva ao mapa (`?vista=mapa`) e "M" volta à grade; "m" na busca só escreve; a folha de atalhos lista "M" ("Alternar entre grade e mapa").
+- [ ] Implementar e fazer o commit `feat(mesas): M alterna grade e mapa`.
+
+### Task 65 (Tarefa 65): editar o mapa pelo teclado
+
+- [ ] Testes que falham em `mapa-salao.test.tsx`:
+  - no celular (sem `telaGrande`), o mapa não tem "Editar mapa";
+  - "Editar mapa" mostra "Salvar posições" e "Cancelar", trava as abas e o alternador e esconde o ⋯; a lista ganha a instrução;
+  - com o foco na mesa 1 (1, 1), seta para a direita leva a (2, 1) ("coluna 3, linha 2" na descrição) e a região viva diz "Mesa 1: coluna 3, linha 2"; Shift+seta para baixo duas vezes leva a (2, 9) ("coluna 3, linha 10");
+  - tocar na mesa em edição não abre a gaveta;
+  - "Salvar posições" grava só a mesa 1 no servidor, avisa "Mapa salvo." e sai da edição;
+  - por cima de outra mesa (a 1 em (2, 5), sobre a mesa 5, com seta para a direita e Shift+seta para baixo uma vez), a descrição diz "sobre outra mesa", e salvar avisa "A mesa 1 está sobre outra mesa. Mova antes de salvar." sem gravar;
+  - "Cancelar" volta a mesa para (1, 1) sem gravar;
+  - o erro do servidor aparece no aviso e a edição continua.
+- [ ] Implementar o modo edição em `mapa-salao.tsx`, com o arrasto do `@dnd-kit` (sem teste de componente, ver as decisões). Commit `feat(mesas): editar o mapa pelo teclado e arrastando, e salvar em lote`.
+
+### Task 66 (Tarefa 66): cadeado Pro
+
+- [ ] Testes que falham:
+  - em `mapa-salao.test.tsx`, com `funcoes.mapa` desligada: "Mapa" tem o selo Pro; tocar nele não muda a vista e abre "Mapa do salão é Pro" com o preço "R$ 19,90"; "Abrir Configurar salão" abre o painel; `?vista=mapa` mostra a grade; "m" abre a mesma janela;
+  - em `configurar-salao.test.tsx`: o interruptor "Mapa do salão" mostra o estado do servidor e desligar grava `funcoes.mapa: false`, com reservas e QR iguais. O teste antigo "reservas, QR e funções Pro não aparecem…" passa a não esperar "mapa" (mudança planejada: o mapa entrou no painel).
+- [ ] Implementar e fazer o commit `feat(mesas): mapa do salão com cadeado Pro e a função em Configurar salão`.
+
+### Task 67 (Tarefa 67): E2E e fechamento
+
+- [ ] Em `tests/admin.spec.ts`: na pizzaria, `?vista=mapa`, "Editar mapa", mover a mesa 1 pelo teclado (seta para a direita e duas vezes Shift+seta para baixo, até "coluna 3, linha 10"), salvar, recarregar e ver a posição nova na descrição da mesa em edição; arrastar uma mesa e salvar. Rodar só ele, em `desktop-1920`.
+- [ ] Em `tests/visual-admin.spec.ts`: os screenshots `painel-mapa-*` (mapa do Salão) e `painel-mapa-edicao-*` (modo edição). Eles e os que mudam (`painel-mesas-*` pelo alternador, `painel-configurar-salao-*` pelo bloco Funções Pro) ficam para a revisão.
+- [ ] `pnpm check`, mostrando a saída. `pnpm test:coverage` e subir os mínimos se a cobertura subiu.
+- [ ] Registrar a "Situação" no fim desta seção.
+
 ## Fase 7: reservas e lista de espera
 
 **Desenho:**
