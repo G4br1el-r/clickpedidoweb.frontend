@@ -63,6 +63,7 @@ import { semearCustos } from "./custos-demo"
 import { semearEstoque } from "./estoque-demo"
 import { gerarPedidoAgora, gerarPedidos } from "./gerar-pedidos"
 import { type BaseLojaV3, migrarDaVersao3 } from "./migracao"
+import { reservasDemo } from "./reservas-demo"
 import {
   type Bairro,
   type BaseLoja,
@@ -606,6 +607,13 @@ function mesaLivreParaReceber(
   return mesa
 }
 
+/** Com as reservas ligadas, a demonstração ganha as reservas e a espera do dia. */
+function comReservasDoDia(base: BaseLoja, agora: Date): BaseLoja {
+  if (!base.salao.funcoes.reservas) return base
+  const { reservas, espera } = reservasDemo(base.mesas, agora)
+  return { ...base, reservas: [...base.reservas, ...reservas], espera: [...base.espera, ...espera] }
+}
+
 /**
  * Pedido de um dia que já passou não fica aberto: entrega e comanda viram concluídas. A conta de
  * mesa só fecha recebendo: a comanda que alguém mexeu (tem histórico) continua aberta na virada
@@ -687,7 +695,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       chamados: [],
     })
     // A demonstração abre com uma mesa livre sendo limpa há 3 min.
-    const base = {
+    const limpando = {
       ...aberta,
       mesas: aberta.mesas.map((mesa) =>
         catalogo.salao.limpeza && mesa.id === "mesa-9" && mesa.status === "livre"
@@ -695,6 +703,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           : mesa,
       ),
     }
+    const base = comReservasDoDia(limpando, agora)
     await salvar(base)
     return base
   }
@@ -724,13 +733,25 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             : [],
         ),
     })
-    const completa = abrirMesas({
-      ...base,
-      pedidos: [...anteriores, ...novos.map(marcarEmAndamento)],
-      reservas: base.reservas ?? [],
-      espera: base.espera ?? [],
-      chamados: base.chamados ?? [],
-    })
+    // A reserva que ficou marcada num dia que passou não veio; quem esperava foi embora.
+    const completa = comReservasDoDia(
+      abrirMesas({
+        ...base,
+        pedidos: [...anteriores, ...novos.map(marcarEmAndamento)],
+        reservas: (base.reservas ?? []).map((reserva) =>
+          reserva.status === "marcada" && new Date(reserva.inicio) < hoje
+            ? { ...reserva, status: "nao-compareceu" as const }
+            : reserva,
+        ),
+        espera: (base.espera ?? []).map((entrada) =>
+          entrada.status === "esperando" && new Date(entrada.chegouEm) < hoje
+            ? { ...entrada, status: "desistiu" as const }
+            : entrada,
+        ),
+        chamados: base.chamados ?? [],
+      }),
+      agora,
+    )
     await salvar(completa)
     return completa
   }

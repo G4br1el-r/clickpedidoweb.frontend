@@ -318,3 +318,63 @@ describe("a mesa com reserva não some", () => {
     await expect(api.mesas.excluir(trintaEUm)).resolves.toBeUndefined()
   })
 })
+
+describe("demonstração e virada do dia", () => {
+  /** O catálogo de teste com as reservas ligadas, como a demonstração. */
+  function comReservas() {
+    return criarServidor({
+      segmento: "lanchonete",
+      carregarCatalogo: async () => {
+        const catalogo = catalogoDeTeste()
+        catalogo.salao.funcoes = { ...catalogo.salao.funcoes, reservas: true }
+        return catalogo
+      },
+      espera: 0,
+    })
+  }
+
+  test("sem a função ligada, a base nasce sem reservas e sem espera", async () => {
+    const api = servidor()
+    expect(await api.reservas.listar()).toEqual([])
+    expect(await api.espera.listar()).toEqual([])
+  })
+
+  test("com a função ligada, a base nasce com as 2 reservas e as 3 pessoas na espera", async () => {
+    const api = comReservas()
+    expect((await api.reservas.listar()).map((reserva) => reserva.nome)).toEqual([
+      "Marina Costa",
+      "Roberto Andrade",
+    ])
+    expect((await api.espera.listar()).map((entrada) => entrada.nome)).toEqual([
+      "Carlos Mendes",
+      "Juliana Rocha",
+      "Pedro Alves",
+    ])
+  })
+
+  test("na virada, a marcada de ontem não compareceu, a espera desistiu e o dia novo tem as suas", async () => {
+    const ontem = comReservas()
+    const roberto = (await ontem.reservas.listar())[1]
+    await ontem.reservas.cancelar(roberto.id)
+    vi.setSystemTime(new Date(2026, 10, 14, 20, 30))
+
+    const base = await comReservas().base()
+
+    expect(
+      Object.fromEntries(base.reservas.map((reserva) => [reserva.id, reserva.status])),
+    ).toEqual({
+      "reserva-20261113-1": "nao-compareceu",
+      "reserva-20261113-2": "cancelada",
+      "reserva-20261114-1": "marcada",
+      "reserva-20261114-2": "marcada",
+    })
+    expect(
+      base.espera.filter((entrada) => entrada.id.includes("20261113")).map((e) => e.status),
+    ).toEqual(["desistiu", "desistiu", "desistiu"])
+    expect((await comReservas().espera.listar()).map((entrada) => entrada.id)).toEqual([
+      "espera-20261114-1",
+      "espera-20261114-2",
+      "espera-20261114-3",
+    ])
+  })
+})
