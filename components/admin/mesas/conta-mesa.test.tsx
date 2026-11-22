@@ -264,6 +264,19 @@ describe("ComandaMesa: desconto, cortesia, taxa, couvert e estorno", () => {
     expect(valorDe(gaveta, "Desconto")).toHaveTextContent("− R$ 4,00")
   })
 
+  test("Tirar desconto pede motivo e devolve o total", async () => {
+    const { comanda } = await mesaComConta()
+    await api().mesas.descontar(comanda.id, { modo: "reais", valor: 4, motivo: "Demora" })
+    const { usuario, gaveta } = await abrirConta()
+    expect(valorDe(gaveta, "Total")).toHaveTextContent("R$ 60,00")
+    await usuario.click(gaveta.getByRole("button", { name: "Tirar desconto" }))
+    const janela = pergunta("Tirar o desconto?")
+    await usuario.type(janela.getByRole("textbox", { name: "Motivo" }), "Lançado errado")
+    await usuario.click(janela.getByRole("button", { name: "Tirar desconto" }))
+    await waitFor(() => expect(valorDe(gaveta, "Total")).toHaveTextContent("R$ 64,40"))
+    expect(gaveta.queryByText("Desconto", { selector: "dt" })).not.toBeInTheDocument()
+  })
+
   test("o desconto que zera o saldo de uma conta paga em parte fecha a conta", async () => {
     const { comanda } = await mesaComConta()
     await api().mesas.pagar(comanda.id, { forma: "pix", valor: 60 })

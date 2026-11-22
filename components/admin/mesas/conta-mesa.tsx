@@ -186,7 +186,9 @@ export function ContaMesa({
   const pagamentos = pedido.pagamentos ?? []
   const pessoas = pedido.mesa?.pessoas ?? 1
   const comItens = pedido.itens.length > 0
-  const [mudando, setMudando] = useState<"desconto" | "taxa" | "couvert" | null>(null)
+  const [mudando, setMudando] = useState<"desconto" | "tirar-desconto" | "taxa" | "couvert" | null>(
+    null,
+  )
   const [estornando, setEstornando] = useState<PagamentoConta | null>(null)
   const [comprovante, setComprovante] = useState<PagamentoConta | null>(null)
   const papel = useRef<HTMLDivElement>(null)
@@ -230,7 +232,16 @@ export function ContaMesa({
             <Linha rotulo="Cortesias" valor={`− ${emReais(resumo.cortesias)}`} />
           )}
           {resumo.descontos > 0 && (
-            <Linha rotulo="Desconto" valor={`− ${emReais(resumo.descontos)}`} />
+            <Linha rotulo="Desconto" valor={`− ${emReais(resumo.descontos)}`}>
+              <Button
+                type="button"
+                size="xs"
+                variant="ghost"
+                onClick={() => setMudando("tirar-desconto")}
+              >
+                Tirar desconto
+              </Button>
+            </Linha>
           )}
           {pedido.taxaServico && !pedido.taxaServico.removida && (
             <Linha
@@ -365,6 +376,19 @@ export function ContaMesa({
           descontar.mutateAsync(
             { pedidoId: pedido.id, ...desconto, ...quem },
             comAviso("Desconto aplicado.", fecharMudanca),
+          )
+        }
+      />
+      <MotivoConta
+        aberta={mudando === "tirar-desconto"}
+        titulo="Tirar o desconto?"
+        descricao="O desconto sai desta conta e fica no histórico, com o motivo. A taxa é refeita."
+        acao="Tirar desconto"
+        aoMudar={(aberta) => !aberta && fecharMudanca()}
+        aoConfirmar={(motivo) =>
+          descontar.mutateAsync(
+            { pedidoId: pedido.id, modo: "reais", valor: 0, motivo, ...quem },
+            comAviso("Desconto tirado.", fecharMudanca),
           )
         }
       />

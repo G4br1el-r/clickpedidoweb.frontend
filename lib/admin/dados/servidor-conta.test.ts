@@ -304,13 +304,27 @@ describe("desconto, cortesia, taxa e couvert", () => {
     expect(porCento).toMatchObject({ desconto: 12.5, total: 87.5 })
     expect(porCento.eventos?.at(-1)?.texto).toBe("Desconto de 12,5% (R$\u00a012,50)")
 
+    // Tirar o desconto pede motivo e fica no histórico (revisão da Fase 4).
+    await expect(
+      api.mesas.descontar(comanda.id, { modo: "reais", valor: 0, motivo: " " }),
+    ).rejects.toThrow("Diga o motivo para tirar o desconto.")
     const semDesconto = await api.mesas.descontar(comanda.id, {
       modo: "reais",
       valor: 0,
-      motivo: "",
+      motivo: "Lançado errado",
+      por: "Rafa",
     })
     expect(semDesconto).not.toHaveProperty("descontoConta")
     expect(semDesconto.total).toBe(100)
+    expect(semDesconto.eventos?.at(-1)).toMatchObject({
+      tipo: "desconto",
+      por: "Rafa",
+      texto: "Tirou o desconto",
+      motivo: "Lançado errado",
+    })
+    await expect(
+      api.mesas.descontar(comanda.id, { modo: "reais", valor: 0, motivo: "De novo" }),
+    ).rejects.toThrow("Esta conta não tem desconto.")
   })
 
   test("desconto sem motivo ou acima dos itens recusa", async () => {

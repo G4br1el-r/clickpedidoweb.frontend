@@ -2117,11 +2117,21 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         })
       },
 
-      /** Desconto da conta, em reais ou em %, com motivo. Valor zero tira o desconto. */
+      /** Desconto da conta, em reais ou em %, com motivo. Valor zero tira o desconto (com motivo). */
       descontar(pedidoId: number, { por, ...desconto }: DescontoConta & { por?: string }) {
-        return alterarComanda(pedidoId, ({ descontoConta: _anterior, ...comanda }) => {
-          if (desconto.valor === 0) return comanda
+        return alterarComanda(pedidoId, ({ descontoConta: anterior, ...comanda }) => {
           const motivo = desconto.motivo.trim().slice(0, 140)
+          if (desconto.valor === 0) {
+            if (!anterior) throw new Error("Esta conta não tem desconto.")
+            if (!motivo) throw new Error("Diga o motivo para tirar o desconto.")
+            return comEvento(comanda, {
+              tipo: "desconto",
+              em: new Date().toISOString(),
+              ...autor(por),
+              texto: "Tirou o desconto",
+              motivo,
+            })
+          }
           const novo: DescontoConta = { modo: desconto.modo, valor: desconto.valor, motivo }
           const { itens, cortesias } = resumoDaConta(comanda)
           const erro = erroDoDesconto(novo, reais(itens - cortesias))
