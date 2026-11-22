@@ -57,8 +57,19 @@ function telaGrande() {
 
 const api = () => servidorDo("pizzaria")
 
+/** A pizzaria da demonstração cobra taxa e couvert: aqui o teste confere só a soma dos itens. */
+async function semTaxaNemCouvert(api: ReturnType<typeof servidorDo>) {
+  const salao = await api.salao.config()
+  await api.salao.salvar({
+    ...salao,
+    taxaServico: { ...salao.taxaServico, ativa: false },
+    couvert: { ...salao.couvert, ativo: false },
+  })
+}
+
 /** Mesa 60 com 2 itens de R$ 4,00 e R$ 9,50, lançados 25 minutos atrás. */
 async function mesaOcupada() {
+  await semTaxaNemCouvert(api())
   const mesa = await api().mesas.criar({ numero: 60 })
   vi.setSystemTime(new Date(2026, 10, 13, 20, 5))
   await api().mesas.lancar({

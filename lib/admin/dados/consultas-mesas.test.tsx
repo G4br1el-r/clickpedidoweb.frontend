@@ -45,6 +45,16 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+/** A pizzaria da demonstração cobra taxa e couvert: aqui o teste confere só a soma dos itens. */
+async function semTaxaNemCouvert(api: ReturnType<typeof servidorDo>) {
+  const salao = await api.salao.config()
+  await api.salao.salvar({
+    ...salao,
+    taxaServico: { ...salao.taxaServico, ativa: false },
+    couvert: { ...salao.couvert, ativo: false },
+  })
+}
+
 describe("consultas das mesas", () => {
   test("salvar a configuração do salão atualiza a configuração e as mesas", async () => {
     const api = servidorDo("pizzaria")
@@ -65,6 +75,7 @@ describe("consultas das mesas", () => {
 
   test("lançar na mesa traz a comanda nova para quem a tem aberta", async () => {
     const api = servidorDo("pizzaria")
+    await semTaxaNemCouvert(api)
     const mesa = await api.mesas.criar({ numero: 81 })
     const comanda = await api.mesas.lancar({
       mesaId: mesa.id,
@@ -89,6 +100,7 @@ describe("consultas das mesas", () => {
 
   test("a quantidade muda na hora e volta se o servidor recusar", async () => {
     const api = servidorDo("pizzaria")
+    await semTaxaNemCouvert(api)
     const mesa = await api.mesas.criar({ numero: 80 })
     const comanda = await api.mesas.lancar({
       mesaId: mesa.id,
@@ -115,6 +127,34 @@ describe("consultas das mesas", () => {
     await waitFor(() => expect(result.current.alterar.isError).toBe(true))
     expect(result.current.comanda.data?.itens[0].quantidade).toBe(3)
     expect(result.current.comanda.data?.total).toBe(12)
+  })
+
+  test("a previsão da quantidade já conta a taxa e o couvert da comanda", async () => {
+    const api = servidorDo("pizzaria")
+    const mesa = await api.mesas.criar({ numero: 82 })
+    // Água de R$ 4,00 na pizzaria: 10% de taxa e R$ 8,00 de couvert para 1 pessoa.
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    const { result } = renderHook(
+      () => ({ comanda: usePedido(comanda.id), alterar: useAlterarQuantidade() }),
+      { wrapper: envolver() },
+    )
+    await waitFor(() => expect(result.current.comanda.data?.total).toBe(12.4))
+
+    // A rede demora: o servidor ainda não respondeu quando a tela muda.
+    vi.spyOn(api.mesas, "alterarQuantidade").mockReturnValue(new Promise(() => {}))
+    act(() =>
+      result.current.alterar.mutate({
+        pedidoId: comanda.id,
+        itemId: comanda.itens[0].id,
+        quantidade: 3,
+      }),
+    )
+    // Antes de o servidor responder, a tela já mostra 12 + 1,20 + 8.
+    await waitFor(() => expect(result.current.comanda.data?.total).toBe(21.2))
   })
 
   test("diminuir o que a cozinha preparou repassa o motivo e quem tirou", async () => {

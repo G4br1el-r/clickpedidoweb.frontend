@@ -1,6 +1,7 @@
 "use client"
 
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { comTotais } from "../regras/conta"
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { chaves, servidorDo } from "./consultas"
@@ -64,9 +65,6 @@ function useMudancaNasMesas<A, R>(
 /** A comanda volta inteira: atualiza na hora quem está com ela aberta. */
 const guardarComanda = (cliente: QueryClient, segmento: SegmentoPainelId, comanda: Pedido) =>
   cliente.setQueryData(chaves.pedido(segmento, comanda.id), comanda)
-
-const totalDe = (itens: Pedido["itens"]) =>
-  Math.round(itens.reduce((soma, item) => soma + item.total, 0) * 100) / 100
 
 export function useCriarMesa() {
   return useMudancaNasMesas((servidor, mesa: Parameters<Servidor["mesas"]["criar"]>[0]) =>
@@ -176,7 +174,7 @@ export function useAlterarQuantidade() {
                 }
               : item,
           )
-          return { ...pedido, itens, subtotal: totalDe(itens), total: totalDe(itens) }
+          return comTotais({ ...pedido, itens })
         },
       },
       aoSucesso: guardarComanda,
@@ -194,8 +192,7 @@ export function useRemoverItem() {
       previsao: {
         pedidoId: ({ pedidoId }) => pedidoId,
         mudar: (pedido, { itemId }) => {
-          const itens = pedido.itens.filter((item) => item.id !== itemId)
-          return { ...pedido, itens, subtotal: totalDe(itens), total: totalDe(itens) }
+          return comTotais({ ...pedido, itens: pedido.itens.filter((item) => item.id !== itemId) })
         },
       },
       aoSucesso: guardarComanda,

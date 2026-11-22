@@ -9,6 +9,7 @@ import {
   sincronizarOpcoes,
   soltarOpcoesDe,
 } from "../regras/cardapio"
+import { comTotais } from "../regras/conta"
 import { cozinhaJaPreparou, depoisDeTirar, itensDaCozinha } from "../regras/cozinha"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
@@ -308,11 +309,8 @@ function retirar(
 
 const semContaPedida = ({ contaPedidaEm: _contaPedidaEm, ...comanda }: Pedido): Pedido => comanda
 
-/** Subtotal e total da comanda refeitos a partir dos itens. */
-function recalcular(pedido: Pedido): Pedido {
-  const subtotal = reais(pedido.itens.reduce((soma, item) => soma + item.total, 0))
-  return { ...pedido, subtotal, total: reais(subtotal - pedido.desconto) }
-}
+/** Subtotal, desconto e total da comanda refeitos pela conta (com taxa e couvert). */
+const recalcular = comTotais
 
 /** A ação partiu da etapa que a tela mostrava; se outra aba mudou o pedido, recusa. */
 function conferirEtapa(pedido: Pedido, de: StatusPedido) {
@@ -758,6 +756,11 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       enviarParaCozinha,
       // Cada lançamento do garçom tira do estoque.
       estoqueBaixado: true,
+      // Taxa e couvert do salão de agora: mudar a configuração não mexe na conta aberta.
+      ...(base.salao.taxaServico.ativa
+        ? { taxaServico: { percentual: base.salao.taxaServico.percentual } }
+        : {}),
+      ...(base.salao.couvert.ativo ? { couvert: { porPessoa: base.salao.couvert.porPessoa } } : {}),
     }
   }
 
@@ -1594,15 +1597,18 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const id = (base.pedidos.at(-1)?.id ?? 0) + 1
         const comanda = comEvento(
           comEtapa(
-            comandaNova(base, mesa, {
-              id,
-              agora,
-              cliente: clienteNome?.trim().slice(0, 80),
-              garcom,
-              pessoas,
-              itens: [],
-              enviarParaCozinha: false,
-            }),
+            // O couvert já entra na conta da mesa vazia.
+            recalcular(
+              comandaNova(base, mesa, {
+                id,
+                agora,
+                cliente: clienteNome?.trim().slice(0, 80),
+                garcom,
+                pessoas,
+                itens: [],
+                enviarParaCozinha: false,
+              }),
+            ),
             agora,
           ),
           eventoAberta(agora, pessoas, garcom ?? por),
