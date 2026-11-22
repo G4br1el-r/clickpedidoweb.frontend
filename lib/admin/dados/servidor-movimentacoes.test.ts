@@ -73,6 +73,20 @@ async function aberta(api: Api, numero = 30, itens = REFRI(2)) {
   return { mesaId, comanda }
 }
 
+/** A mesa aberta por "Abrir mesa" com Rafa, para tantas pessoas, e uma rodada. */
+async function abertaPara(
+  api: Api,
+  numero: number,
+  pessoas: number,
+  itens: ReturnType<typeof REFRI>,
+  enviarParaCozinha = false,
+) {
+  const mesaId = await mesaNova(api, numero)
+  await api.mesas.abrir(mesaId, { pessoas, garcom: "Rafa" })
+  const comanda = await api.mesas.lancar({ mesaId, enviarParaCozinha, itens })
+  return { mesaId, comanda }
+}
+
 /** Muda a base guardada direto, como outra aba (ou uma fase futura) faria. */
 async function naBase(mudar: (base: BaseLoja) => void) {
   const guardado = (await get(CHAVE)) as { base: BaseLoja }
@@ -298,5 +312,186 @@ describe("desfazer", () => {
     await outra.mesas.desfazer(desfazer)
 
     expect((await mesaDe(outra, destino))?.limpezaDesde).toBe(limpezaDesde)
+  })
+})
+
+describe("juntar e separar", () => {
+  test("a mesa livre junta à aberta: ela fica com a principal, sem comanda própria", async () => {
+    const api = servidor()
+    const { mesaId, comanda } = await aberta(api)
+    const livre = await mesaNova(api, 31)
+
+    const { comanda: junta } = await api.mesas.juntar(comanda.id, [livre], { por: "Bia" })
+
+    expect(junta.mesa?.juntadas).toEqual([{ id: livre, numero: 31 }])
+    expect(junta.eventos?.at(-1)).toEqual({
+      tipo: "juntada",
+      em: AGORA.toISOString(),
+      por: "Bia",
+      texto: "Juntou a mesa 31",
+    })
+    const secundaria = await mesaDe(api, livre)
+    expect(secundaria).toMatchObject({ status: "livre", juntadaCom: mesaId })
+    expect(secundaria?.pedidoAtivoId).toBeUndefined()
+  })
+
+  test("a comanda da mesa aberta entra na principal: itens, pessoas e pagamento; o estoque não muda", async () => {
+    const api = servidor()
+    const { comanda } = await abertaPara(api, 30, 3, X_BURGER(1))
+    const { mesaId: outra, comanda: daOutra } = await abertaPara(api, 31, 2, REFRI(2))
+    await api.mesas.pagar(daOutra.id, { forma: "pix", valor: 6 })
+    const movimentos = (await api.estoque.movimentos()).length
+
+    const { comanda: junta } = await api.mesas.juntar(comanda.id, [outra])
+
+    expect(junta.itens.map((item) => `${item.quantidade}× ${item.nome}`)).toEqual([
+      "1× X-Burger",
+      "2× Refri lata",
+    ])
+    expect(junta.mesa).toMatchObject({ pessoas: 5, juntadas: [{ id: outra, numero: 31 }] })
+    expect(junta.pagamentos).toMatchObject([{ forma: "pix", valor: 6 }])
+    expect(junta).toMatchObject({ total: 35, eventos: expect.any(Array) })
+    expect(junta.eventos?.at(-1)?.texto).toBe("Juntou a mesa 31: 2× Refri lata")
+    expect(await api.pedidos.buscar(daOutra.id)).toBeUndefined()
+    expect(await saldo(api, "refri")).toBe(3)
+    expect(await saldo(api, "bacon")).toBe(9)
+    expect(await api.estoque.movimentos()).toHaveLength(movimentos)
+  })
+
+  test("recusa sem mesa, a própria, a bloqueada, a que já está junto e a reservada", async () => {
+    const api = servidor()
+    const { mesaId, comanda } = await aberta(api)
+    const { comanda: outraComanda } = await aberta(api, 31)
+    const bloqueada = await mesaNova(api, 32)
+    await api.mesas.bloquear(bloqueada)
+    const junta = await mesaNova(api, 33)
+    await api.mesas.juntar(outraComanda.id, [junta])
+    const reservada = await mesaNova(api, 34)
+    await naBase((base) => {
+      base.reservas = [
+        {
+          id: "res-1",
+          nome: "Carla",
+          inicio: new Date(2026, 10, 13, 20, 45).toISOString(),
+          pessoas: 4,
+          mesaId: reservada,
+          status: "marcada",
+        },
+      ]
+    })
+    const outra = servidor()
+
+    await expect(outra.mesas.juntar(comanda.id, [])).rejects.toThrow(
+      "Escolha as mesas para juntar.",
+    )
+    await expect(outra.mesas.juntar(comanda.id, [mesaId])).rejects.toThrow("Escolha outra mesa.")
+    await expect(outra.mesas.juntar(comanda.id, [bloqueada])).rejects.toThrow(
+      "A mesa 32 está bloqueada.",
+    )
+    await expect(outra.mesas.juntar(comanda.id, [junta])).rejects.toThrow(
+      "A mesa 33 já está junto com a mesa 31.",
+    )
+    await expect(outra.mesas.juntar(comanda.id, [reservada])).rejects.toThrow(
+      "A mesa 34 está reservada às 20:45.",
+    )
+  })
+
+  test("recusa o que as regras da conta recusam: desconto na secundária e as duas na cozinha", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api, 30, X_BURGER(1))
+    const { mesaId: comDesconto, comanda: daOutra } = await aberta(api, 31)
+    await api.mesas.descontar(daOutra.id, { modo: "reais", valor: 2, motivo: "Cliente fiel" })
+    await expect(api.mesas.juntar(comanda.id, [comDesconto])).rejects.toThrow(
+      "Tire o desconto da mesa 31 antes de juntar.",
+    )
+
+    const { comanda: naCozinha } = await abertaPara(api, 32, 1, X_BURGER(1), true)
+    const { mesaId: tambem } = await abertaPara(api, 33, 1, X_BURGER(1), true)
+    await expect(api.mesas.juntar(naCozinha.id, [tambem])).rejects.toThrow(
+      "A cozinha está com rodadas das mesas 32 e 33. Junte depois que uma ficar pronta.",
+    )
+  })
+
+  test("a secundária aponta para a principal: lançar nela entra na comanda junta; abrir, bloquear e excluir recusam", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api)
+    const livre = await mesaNova(api, 31)
+    await api.mesas.juntar(comanda.id, [livre])
+
+    const lancada = await api.mesas.lancar({
+      mesaId: livre,
+      enviarParaCozinha: false,
+      itens: REFRI(1),
+    })
+
+    expect(lancada.id).toBe(comanda.id)
+    expect(lancada.itens).toHaveLength(2)
+    await expect(api.mesas.abrir(livre, { pessoas: 2, garcom: "Rafa" })).rejects.toThrow(
+      "A mesa 31 já está aberta.",
+    )
+    await expect(api.mesas.bloquear(livre)).rejects.toThrow(
+      "Feche a conta antes de bloquear a mesa.",
+    )
+    await expect(api.mesas.excluir(livre)).rejects.toThrow("Feche a conta antes de excluir a mesa.")
+  })
+
+  test("fechar a conta da principal libera as duas e, com a limpeza ligada, põe as duas em limpeza", async () => {
+    const api = servidor((catalogo) => {
+      catalogo.salao.limpeza = true
+    })
+    const { mesaId, comanda } = await aberta(api)
+    const livre = await mesaNova(api, 31)
+    await api.mesas.juntar(comanda.id, [livre])
+
+    await api.mesas.fecharConta(comanda.id, "pix")
+
+    for (const id of [mesaId, livre]) {
+      const mesa = await mesaDe(api, id)
+      expect(mesa).toMatchObject({ status: "livre", limpezaDesde: AGORA.toISOString() })
+      expect(mesa?.juntadaCom).toBeUndefined()
+    }
+  })
+
+  test("separar solta as secundárias; itens e pessoas ficam na principal", async () => {
+    const api = servidor()
+    const { comanda } = await abertaPara(api, 30, 3, X_BURGER(1))
+    const { mesaId: outra } = await abertaPara(api, 31, 2, REFRI(2))
+    const livre = await mesaNova(api, 32)
+    await api.mesas.juntar(comanda.id, [outra, livre])
+
+    const { comanda: separada } = await api.mesas.separar(comanda.id, { por: "Bia" })
+
+    expect(separada.mesa?.juntadas).toBeUndefined()
+    expect(separada.mesa?.pessoas).toBe(5)
+    expect(separada.itens).toHaveLength(2)
+    expect(separada.eventos?.at(-1)).toMatchObject({
+      tipo: "separada",
+      por: "Bia",
+      texto: "Separou as mesas 31 e 32",
+    })
+    expect((await mesaDe(api, outra))?.juntadaCom).toBeUndefined()
+    await expect(api.mesas.separar(comanda.id)).rejects.toThrow(
+      "A mesa 30 não está junto com outra.",
+    )
+  })
+
+  test("desfazer o juntar devolve a comanda da secundária, com o mesmo id; desfazer o separar junta de novo", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api)
+    const { mesaId: outra, comanda: daOutra } = await aberta(api, 31)
+    const juntou = await api.mesas.juntar(comanda.id, [outra])
+
+    await api.mesas.desfazer(juntou.desfazer)
+
+    expect(await api.pedidos.buscar(daOutra.id)).toEqual(daOutra)
+    expect(await api.pedidos.buscar(comanda.id)).toEqual(comanda)
+    expect(await mesaDe(api, outra)).toMatchObject({ status: "ocupada", pedidoAtivoId: daOutra.id })
+
+    const livre = await mesaNova(api, 32)
+    const { comanda: junta } = await api.mesas.juntar(comanda.id, [livre])
+    const separou = await api.mesas.separar(comanda.id)
+    await api.mesas.desfazer(separou.desfazer)
+    expect(await api.pedidos.buscar(comanda.id)).toEqual(junta)
+    expect((await mesaDe(api, livre))?.juntadaCom).toBe(comanda.mesa?.id)
   })
 })

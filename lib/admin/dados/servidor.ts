@@ -26,6 +26,7 @@ import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoqu
 import { normalizar } from "../regras/filtro-pedidos"
 import { comEtapa, comEvento, itensEmTexto } from "../regras/historico"
 import { nomePadraoDaMesa } from "../regras/mesas"
+import { juntarComandas, numerosEmTexto, porQueNaoJunta } from "../regras/movimentacoes"
 import { proximoNumero } from "../regras/numero"
 import {
   type Desconto,
@@ -211,22 +212,34 @@ function abrirMesas(base: BaseLoja): BaseLoja {
       )
       .map((pedido) => [pedido.mesa?.id, pedido]),
   )
+  // A mesa juntada não tem comanda: fica com a principal enquanto a comanda dela está aberta.
+  const juntas = new Map(
+    [...abertas.values()].flatMap((comanda) =>
+      (comanda.mesa?.juntadas ?? []).map((junta) => [junta.id, comanda.mesa?.id as string]),
+    ),
+  )
   return {
     ...base,
-    mesas: base.mesas.map(({ pedidoAtivoId: _pedidoAtivoId, clienteNome, ocupadaEm, ...mesa }) => {
-      const comanda = abertas.get(mesa.id)
-      // Mesa ocupada deixa de estar em limpeza.
-      const { limpezaDesde: _limpezaDesde, ...semLimpeza } = mesa
-      return comanda
-        ? {
+    mesas: base.mesas.map(
+      ({ pedidoAtivoId: _pedidoAtivoId, clienteNome, ocupadaEm, juntadaCom: _junta, ...mesa }) => {
+        const comanda = abertas.get(mesa.id)
+        const principal = juntas.get(mesa.id)
+        // Mesa ocupada (ou junta a outra) deixa de estar em limpeza.
+        const { limpezaDesde: _limpezaDesde, ...semLimpeza } = mesa
+        if (comanda) {
+          return {
             ...semLimpeza,
             status: "ocupada",
             pedidoAtivoId: comanda.id,
             clienteNome: comanda.cliente.nome,
             ocupadaEm: comanda.criadoEm,
           }
-        : { ...mesa, status: "livre" }
-    }),
+        }
+        return principal
+          ? { ...semLimpeza, status: "livre", juntadaCom: principal }
+          : { ...mesa, status: "livre" }
+      },
+    ),
   }
 }
 
@@ -235,11 +248,13 @@ const reais = (valor: number) => Math.round(valor * 100) / 100
 /** Valor em reais e centavos, sem fração de centavo. */
 const emCentavosExatos = (valor: number) => Number.isInteger(Number((valor * 100).toFixed(6)))
 
-/** Comanda aberta da mesa, se houver. */
+/** Comanda aberta da mesa, se houver. A mesa juntada aponta para a comanda da principal. */
 const comandaDa = (base: BaseLoja, mesaId: string) =>
   base.pedidos.find(
     (pedido) =>
-      pedido.tipo === "mesa" && pedido.mesa?.id === mesaId && EM_ANDAMENTO.includes(pedido.status),
+      pedido.tipo === "mesa" &&
+      EM_ANDAMENTO.includes(pedido.status) &&
+      (pedido.mesa?.id === mesaId || pedido.mesa?.juntadas?.some((junta) => junta.id === mesaId)),
   )
 
 /**
@@ -710,14 +725,16 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const comEstoque = depois ? depois(aplicado, novo) : aplicado
     const pedidos = comEstoque.pedidos.with(indice, novo)
     const atualizada = abrirMesas({ ...comEstoque, pedidos })
-    // A conta da mesa foi paga agora (e não por um dia que virou): a mesa espera a limpeza.
+    // A conta da mesa foi paga agora (e não por um dia que virou): a mesa (e as que estavam
+    // juntas a ela) espera a limpeza.
     const contaFechada = novo.tipo === "mesa" && !antes.pagoEm && novo.pagoEm
+    const usadas = [novo.mesa?.id, ...(novo.mesa?.juntadas ?? []).map((junta) => junta.id)]
     await substituir(
       contaFechada && atualizada.salao.limpeza
         ? {
             ...atualizada,
             mesas: atualizada.mesas.map((mesa) =>
-              mesa.id === novo.mesa?.id ? { ...mesa, limpezaDesde: novo.pagoEm } : mesa,
+              usadas.includes(mesa.id) ? { ...mesa, limpezaDesde: novo.pagoEm } : mesa,
             ),
           }
         : atualizada,
@@ -2430,6 +2447,124 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             },
             mesas: [comanda.mesa.id, destino.id],
             pedidos: [novo.id],
+          }
+        })
+        return responder({
+          comanda: base.pedidos.find((pedido) => pedido.id === pedidoId) as Pedido,
+          desfazer,
+        })
+      },
+
+      /**
+       * Junta mesas à da comanda (a principal). A mesa livre só fica "Com a mesa X"; a aberta traz
+       * a comanda dela, que sai de Pedidos (`juntarComandas`). O estoque não muda.
+       */
+      async juntar(
+        pedidoId: number,
+        mesaIds: string[],
+        { por }: { por?: string } = {},
+      ): Promise<{ comanda: Pedido; desfazer: string }> {
+        const { base, desfazer } = await mover((base) => {
+          let comanda: Pedido = comandaAberta(base, pedidoId)
+          if (mesaIds.length === 0) throw new Error("Escolha as mesas para juntar.")
+          const principalId = comanda.mesa?.id as string
+          const agora = new Date().toISOString()
+          const saem: number[] = []
+          for (const mesaId of new Set(mesaIds)) {
+            const mesa = base.mesas.find((item) => item.id === mesaId)
+            if (!mesa) throw new Error("Mesa não encontrada")
+            if (mesa.id === principalId) throw new Error("Escolha outra mesa.")
+            if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
+            if (mesa.juntadaCom) {
+              const com = base.mesas.find((item) => item.id === mesa.juntadaCom)
+              throw new Error(`A mesa ${mesa.numero} já está junto com a mesa ${com?.numero}.`)
+            }
+            const daMesa = comandaDa(base, mesa.id)
+            let texto = `Juntou a mesa ${mesa.numero}`
+            if (daMesa) {
+              const erro = porQueNaoJunta(comanda, daMesa)
+              if (erro) throw new Error(erro)
+              comanda = juntarComandas(comanda, daMesa)
+              saem.push(daMesa.id)
+              if (daMesa.itens.length > 0) texto += `: ${itensEmTexto(daMesa.itens)}`
+            } else {
+              const reserva = reservaDaVez(base, mesa.id, new Date())
+              if (reserva) {
+                throw new Error(
+                  `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}.`,
+                )
+              }
+              const juntadas = [
+                ...(comanda.mesa?.juntadas ?? []),
+                { id: mesa.id, numero: mesa.numero },
+              ]
+              comanda = {
+                ...comanda,
+                mesa: {
+                  ...(comanda.mesa as NonNullable<Pedido["mesa"]>),
+                  juntadas: juntadas.toSorted((a, b) => a.numero - b.numero),
+                },
+              }
+            }
+            comanda = comEvento(comanda, { tipo: "juntada", em: agora, ...autor(por), texto })
+          }
+          // A taxa da principal vale para tudo: se a secundária pagou com uma taxa maior, recusa.
+          const { pago, total } = resumoDaConta(comanda)
+          if (pago > total) {
+            throw new Error("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
+          }
+          const junta = { ...comanda, atualizadoEm: agora }
+          return {
+            nova: {
+              ...base,
+              pedidos: base.pedidos
+                .filter((pedido) => !saem.includes(pedido.id))
+                .map((pedido) => (pedido.id === junta.id ? junta : pedido)),
+            },
+            mesas: [principalId, ...mesaIds],
+            pedidos: [junta.id, ...saem],
+          }
+        })
+        return responder({
+          comanda: base.pedidos.find((pedido) => pedido.id === pedidoId) as Pedido,
+          desfazer,
+        })
+      },
+
+      /** Solta as mesas juntadas: elas voltam livres, e itens, pessoas e pagamentos ficam. */
+      async separar(
+        pedidoId: number,
+        { por }: { por?: string } = {},
+      ): Promise<{ comanda: Pedido; desfazer: string }> {
+        const { base, desfazer } = await mover((base) => {
+          const comanda = comandaAberta(base, pedidoId)
+          const { juntadas = [], ...mesa } = comanda.mesa
+          if (juntadas.length === 0) {
+            throw new Error(`A mesa ${mesa.numero} não está junto com outra.`)
+          }
+          const numeros = juntadas.map((junta) => junta.numero)
+          const agora = new Date().toISOString()
+          const separada = comEvento(
+            { ...comanda, mesa, atualizadoEm: agora },
+            {
+              tipo: "separada",
+              em: agora,
+              ...autor(por),
+              texto:
+                numeros.length === 1
+                  ? `Separou a mesa ${numeros[0]}`
+                  : `Separou as mesas ${numerosEmTexto(numeros)}`,
+            },
+          )
+          return {
+            nova: {
+              ...base,
+              pedidos: base.pedidos.map((pedido) =>
+                pedido.id === separada.id ? separada : pedido,
+              ),
+            },
+            mesas: [mesa.id, ...juntadas.map((junta) => junta.id)],
+            pedidos: [separada.id],
           }
         })
         return responder({

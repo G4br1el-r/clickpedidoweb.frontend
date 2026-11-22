@@ -48,8 +48,10 @@ export function cozinhaJaPreparou(comanda: Pedido, item: ItemPedido): boolean {
 
 /** "Mesa 3", ou "Mesa 15 + 16" com as mesas juntadas. */
 export function rotuloDaMesa({ mesa }: Pick<Pedido, "mesa">): string {
-  return ["Mesa", [mesa?.numero, ...(mesa?.juntadas ?? []).map((item) => item.numero)].join(" + ")]
-    .join(" ")
+  return [
+    "Mesa",
+    [mesa?.numero, ...(mesa?.juntadas ?? []).map((item) => item.numero)].join(" + "),
+  ].join(" ")
 }
 
 const ultimaRodada = (pedido: Pedido) => Math.max(0, ...itensDaCozinha(pedido).atuais.map(rodadaDo))
