@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest"
 import type { ItemPedido, Pedido, Praca, Produto } from "../dados/tipos"
-import { historicoDoDia, linhaDoTempo } from "./historico"
+import { historicoDoDia, historicoDoPeriodo, linhaDoTempo } from "./historico"
 
 const DIA = new Date(2026, 10, 13)
 const AGORA = new Date(2026, 10, 13, 21, 0)
@@ -312,5 +312,26 @@ describe("o refazer no Histórico", () => {
     expect(
       linhaDoTempo(linhas[0].ticket, { produtos: [], pracas: [] }).map(({ rotulo }) => rotulo),
     ).toEqual(["Chegou", "Iniciou", "Pronto", "Entregue"])
+  })
+})
+
+describe("historicoDoPeriodo", () => {
+  test("as linhas de cada dia do período, dia a dia; no dia, a mais nova primeiro", () => {
+    const antes = pedido({ criadoEm: as("20:00", 10), itens: [item("pizza")] })
+    const cedo = pedido({ criadoEm: as("19:00", 11), itens: [item("pizza")] })
+    const tarde = pedido({ criadoEm: as("21:00", 11), itens: [item("pizza")] })
+    const hoje = pedido({ criadoEm: as("20:00", 13), itens: [item("pizza")] })
+    const depois = pedido({ criadoEm: as("20:00", 14), itens: [item("pizza")] })
+
+    const linhas = historicoDoPeriodo(
+      [hoje, antes, cedo, depois, tarde],
+      { de: new Date(2026, 10, 11), ate: DIA },
+      { agora: AGORA },
+    )
+    expect(linhas.map(({ ticket }) => ticket.id)).toEqual([
+      `${tarde.id}:1`,
+      `${cedo.id}:1`,
+      `${hoje.id}:1`,
+    ])
   })
 })

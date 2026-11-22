@@ -1,4 +1,4 @@
-import { isSameDay } from "date-fns"
+import { endOfDay, isSameDay, startOfDay } from "date-fns"
 import type { ItemPedido, Pedido, Praca, Produto } from "../dados/tipos"
 import {
   type ConfigCozinha,
@@ -181,6 +181,27 @@ export function historicoDoDia(
     .sort((a, b) => Date.parse(b.chegouEm) - Date.parse(a.chegouEm))
     .map((ticket) => linhaDo(ticket, agora, tempos))
     .filter(NA_SITUACAO[situacao])
+}
+
+/**
+ * As linhas de cada dia do período, dia a dia; no dia, a mais nova primeiro (como o
+ * `historicoDoDia` de cada um). Monta os tickets uma vez só para o período inteiro.
+ */
+export function historicoDoPeriodo(
+  pedidos: Pedido[],
+  { de, ate }: { de: Date; ate: Date },
+  { agora, tempos = TEMPOS_PADRAO }: { agora: Date; tempos?: ConfigCozinha },
+): LinhaDoHistorico[] {
+  const inicio = startOfDay(de).getTime()
+  const fim = endOfDay(ate).getTime()
+  const diaDo = (ticket: TicketCozinha) => startOfDay(new Date(ticket.chegouEm)).getTime()
+  return ticketsDoHistorico(pedidos)
+    .filter((ticket) => {
+      const chegou = Date.parse(ticket.chegouEm)
+      return chegou >= inicio && chegou <= fim
+    })
+    .sort((a, b) => diaDo(a) - diaDo(b) || Date.parse(b.chegouEm) - Date.parse(a.chegouEm))
+    .map((ticket) => linhaDo(ticket, agora, tempos))
 }
 
 /** Um passo da linha do tempo, com quanto levou desde o anterior. */

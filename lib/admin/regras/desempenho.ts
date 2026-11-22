@@ -1,7 +1,6 @@
-import { eachDayOfInterval } from "date-fns"
 import type { Pedido, Praca, Produto } from "../dados/tipos"
 import { atrasadosNaCozinha, type ConfigCozinha, TEMPOS_PADRAO } from "./cozinha"
-import { historicoDoDia, type LinhaDoHistorico } from "./historico"
+import { historicoDoDia, historicoDoPeriodo, type LinhaDoHistorico } from "./historico"
 import { pracaDoItem } from "./pracas"
 
 /** A faixa do turno, no topo do Quadro: como a cozinha está indo hoje. */
@@ -53,10 +52,8 @@ export type Periodo = { de: Date; ate: Date }
 type Opcoes = { agora: Date; tempos?: ConfigCozinha }
 
 /** As linhas do Histórico de cada dia do período. */
-const linhasDoPeriodo = (pedidos: Pedido[], { de, ate }: Periodo, { agora, tempos }: Opcoes) =>
-  eachDayOfInterval({ start: de, end: ate }).flatMap((dia) =>
-    historicoDoDia(pedidos, dia, { agora, tempos }),
-  )
+const linhasDoPeriodo = (pedidos: Pedido[], periodo: Periodo, { agora, tempos }: Opcoes) =>
+  historicoDoPeriodo(pedidos, periodo, { agora, tempos })
 
 const porcento = (parte: number, todo: number) => (todo > 0 ? Math.round((parte / todo) * 100) : 0)
 
