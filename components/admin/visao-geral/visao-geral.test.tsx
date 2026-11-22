@@ -22,6 +22,21 @@ import { VisaoGeral } from "./visao-geral"
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
+/** A impressão abre a janela do navegador: o teste guarda as opções e roda o "antes de imprimir". */
+const impressao = vi.hoisted(() => ({
+  opcoes: undefined as
+    | { documentTitle?: string; onBeforePrint?: () => Promise<void>; onAfterPrint?: () => void }
+    | undefined,
+}))
+vi.mock("react-to-print", () => ({
+  useReactToPrint: (opcoes: typeof impressao.opcoes) => {
+    impressao.opcoes = opcoes
+    return async () => {
+      await impressao.opcoes?.onBeforePrint?.()
+    }
+  },
+}))
+
 function Provedores({
   children,
   onUrlUpdate,
@@ -306,7 +321,7 @@ describe("VisaoGeral", () => {
       within(abas)
         .getAllByRole("tab")
         .map((aba) => aba.textContent),
-    ).toEqual(["Resumo", "Vendas", "Produtos", "Clientes", "Operação", "Financeiro"])
+    ).toEqual(["Resumo", "Vendas", "Produtos", "Clientes", "Operação", "Entrega", "Financeiro"])
     expect(within(abas).getByRole("tab", { name: "Financeiro" })).toHaveAttribute(
       "aria-selected",
       "true",
@@ -365,5 +380,70 @@ describe("VisaoGeral", () => {
       within(screen.getByRole("region", { name: "Por categoria" })).getAllByRole("listitem").length,
     ).toBeGreaterThan(0)
     expect(screen.getByRole("region", { name: "Sem venda no período" })).toBeInTheDocument()
+  })
+
+  test("a aba Entrega mostra os motoboys da loja pelo nome e os bairros", async () => {
+    render(
+      <Provedores endereco="?aba=entrega">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole("table", { name: "Por bairro" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    const motoboys = await servidorDo("pizzaria").motoboys.listar()
+    await waitFor(() =>
+      expect(
+        within(screen.getByRole("region", { name: "Por motoboy" })).getAllByRole("link")[0],
+      ).toHaveTextContent(new RegExp(motoboys.map((motoboy) => motoboy.nome).join("|"))),
+    )
+  })
+
+  test.each([
+    ["salao", "agenda", "Agenda do período"],
+    ["farmacia", "farmacia", "Validade dos lotes"],
+    ["acougue", "pesagem", "Balança do período"],
+  ] as const)(
+    "no segmento %s, a aba %s abre com os números dela",
+    async (segmento, aba, titulo) => {
+      useSegmentoAtual.setState({ segmento })
+      render(
+        <Provedores endereco={`?aba=${aba}`}>
+          <VisaoGeral />
+        </Provedores>,
+      )
+      expect(
+        await screen.findByRole("region", { name: titulo }, { timeout: 8000 }),
+      ).toBeInTheDocument()
+      expect(
+        screen.getByRole("tab", {
+          name: { agenda: "Agenda", farmacia: "Farmácia", pesagem: "Pesagem" }[aba],
+        }),
+      ).toHaveAttribute("aria-selected", "true")
+    },
+  )
+})
+
+describe("VisaoGeral: imprimir", () => {
+  test("imprime a aba aberta com a loja, o período e a hora, e com as tabelas abertas", async () => {
+    const usuario = userEvent.setup()
+    render(
+      <Provedores endereco="?aba=vendas">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole("region", { name: "Canais de venda" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("table", { name: "Dia a dia do período" })).not.toBeInTheDocument()
+
+    await usuario.click(screen.getByRole("button", { name: "Imprimir" }))
+
+    expect(impressao.opcoes?.documentTitle).toBe("Casa da Pizza · Vendas · 07/11 a 13/11")
+    expect(await screen.findByRole("table", { name: "Dia a dia do período" })).toBeInTheDocument()
+    const cabecalho = screen.getByTestId("cabecalho-da-impressao")
+    expect(cabecalho).toHaveTextContent("Casa da Pizza · Vendas")
+    expect(cabecalho).toHaveTextContent("Período: 07/11/2026 a 13/11/2026")
+    expect(cabecalho).toHaveTextContent("Impresso em 13/11/2026 às 20:30")
   })
 })
