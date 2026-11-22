@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/sheet"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { usePedido } from "@/lib/admin/dados/consultas"
-import { useLancarNaMesa, useMesas } from "@/lib/admin/dados/consultas-mesas"
+import { useConfigSalao, useLancarNaMesa, useMesas } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
 import { useGarcom, useGarcomCarregado } from "@/lib/admin/garcom"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
@@ -73,6 +73,8 @@ export function PaginaGarcom() {
   const nome = useGarcom((estado) => estado.nome)
   const definirNome = useGarcom((estado) => estado.definirNome)
   const { data: mesas = [] } = useMesas()
+  const { data: salao } = useConfigSalao()
+  const garcons = salao?.garcons.filter((garcom) => garcom.ativo) ?? []
   const lancar = useLancarNaMesa()
   const [mesaId, setMesaId] = useState<string | null>(null)
   const [cliente, setCliente] = useState("")
@@ -140,6 +142,23 @@ export function PaginaGarcom() {
                   value={nome}
                   onChange={(evento) => definirNome(evento.target.value)}
                 />
+                {/* Atalho: os garçons do salão; o nome continua livre neste aparelho. */}
+                {garcons.length > 0 && (
+                  <fieldset aria-label="Garçons do salão" className="flex flex-wrap gap-1.5">
+                    {garcons.map((garcom) => (
+                      <Button
+                        key={garcom.id}
+                        type="button"
+                        size="sm"
+                        variant={garcom.nome === nome ? "secondary" : "ghost"}
+                        aria-pressed={garcom.nome === nome}
+                        onClick={() => definirNome(garcom.nome)}
+                      >
+                        {garcom.nome}
+                      </Button>
+                    ))}
+                  </fieldset>
+                )}
               </Field>
               <Field>
                 <FieldLabel htmlFor="garcom-mesa">Mesa</FieldLabel>

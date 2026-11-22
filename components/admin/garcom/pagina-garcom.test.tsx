@@ -220,6 +220,20 @@ describe("PaginaGarcom", () => {
     expect(comanda.getByRole("listitem", { name: simples.nome })).toBeInTheDocument()
   })
 
+  test("os garçons ativos do salão aparecem para tocar e preencher Seu nome", async () => {
+    const usuario = await abrir()
+    const garcons = within(await screen.findByRole("group", { name: "Garçons do salão" }))
+    expect(garcons.getAllByRole("button").map((botao) => botao.textContent)).toEqual([
+      "Lucas",
+      "Paula",
+      "Rafa",
+      "Bia",
+    ])
+    await usuario.click(garcons.getByRole("button", { name: "Bia" }))
+    expect(screen.getByRole("textbox", { name: "Seu nome" })).toHaveValue("Bia")
+    expect(garcons.getByRole("button", { name: "Bia" })).toHaveAttribute("aria-pressed", "true")
+  })
+
   test("o nome do garçom fica guardado neste aparelho", async () => {
     const usuario = await abrir()
     await usuario.type(screen.getByRole("textbox", { name: "Seu nome" }), "Rafa")
