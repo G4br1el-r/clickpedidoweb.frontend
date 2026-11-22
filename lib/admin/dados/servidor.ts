@@ -47,7 +47,7 @@ import {
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
 import { rotuloDoPagamento } from "../regras/rotulos"
-import { colide, mesasSeCruzam, posicaoValida, primeiraPosicaoLivre } from "../regras/salao"
+import { colide, posicaoValida, primeiraPosicaoLivre } from "../regras/salao"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearCustos } from "./custos-demo"
@@ -1906,13 +1906,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (!area) throw new Error("Escolha uma área do salão.")
         const outras = base.mesas.filter((outra) => outra.id !== id)
         const novaForma = { forma, lugares }
-        const cruza = outras.some(
-          (outra) =>
-            outra.areaId === area.id &&
-            mesasSeCruzam({ ...novaForma, posicao: mesa.posicao }, outra),
-        )
+        const cabe = posicaoValida({ ...mesa, ...novaForma, areaId: area.id }, outras)
         const posicao =
-          area.id === mesa.areaId && !cruza
+          area.id === mesa.areaId && cabe
             ? mesa.posicao
             : primeiraPosicaoLivre(outras, area.id, novaForma)
         if (!posicao) throw new Error("Não cabe mais mesa nessa área do mapa.")
