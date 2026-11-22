@@ -3,6 +3,8 @@ import type { ComponentProps } from "react"
 import { describe, expect, test } from "vitest"
 import type { DadosMedicamento, Lote, Produto, Receita } from "@/lib/admin/dados/tipos"
 import { PERIODO_DE_TESTE, pedidoDeTeste } from "@/lib/admin/regras/pedidos-de-teste"
+import { capturarCsv } from "../csv-de-teste"
+import { ProvedorDaAba } from "../exportar"
 import { AbaFarmacia } from "./aba-farmacia"
 
 const regiao = (nome: string) => within(screen.getByRole("region", { name: nome }))
@@ -150,5 +152,43 @@ describe("AbaFarmacia", () => {
     expect(
       regiao("Receitas por canal").getByText("Nenhuma receita recebida no período."),
     ).toBeInTheDocument()
+  })
+})
+
+describe("AbaFarmacia: CSV", () => {
+  test("as receitas por canal e o saldo dos controlados saem em arquivos com o nome da tabela", async () => {
+    const csv = capturarCsv()
+    render(
+      <ProvedorDaAba loja="Drogaria" aba="Farmácia" periodo={PERIODO_DE_TESTE}>
+        <AbaFarmacia
+          pedidos={[]}
+          periodo={PERIODO_DE_TESTE}
+          agora={AGORA}
+          produtos={PRODUTOS}
+          receitas={[receita("r1", "site")]}
+          decisoes={{ r1: { situacao: "aprovada" } }}
+          lotes={[]}
+          movimentos={[
+            {
+              id: "m1",
+              produtoId: "clonazepam",
+              em: "2026-11-10T10:00:00.000Z",
+              tipo: "entrada",
+              quantidade: 30,
+              documento: "NF 1",
+            },
+          ]}
+        />
+      </ProvedorDaAba>,
+    )
+    screen.getByRole("button", { name: "Baixar CSV: Receitas por canal" }).click()
+    expect(csv.nome()).toBe("drogaria-farmacia-receitas-por-canal-2026-11-12-a-2026-11-13.csv")
+    expect(await csv.texto()).toBe(
+      "﻿Canal;Recebidas;Aprovadas;Recusadas;A conferir\r\nSite;1;1;0;0\r\n",
+    )
+    screen.getByRole("button", { name: "Baixar CSV: Saldo dos controlados" }).click()
+    expect(csv.nome()).toBe("drogaria-farmacia-saldo-dos-controlados-2026-11-12-a-2026-11-13.csv")
+    expect(await csv.texto()).toBe("﻿Produto;Lista;Saldo\r\nClonazepam 2 mg;B1;30\r\n")
+    csv.soltar()
   })
 })

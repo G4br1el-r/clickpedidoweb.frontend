@@ -555,7 +555,7 @@ Situação: pronta em 13/11/2026.
 - **Fora da tela:** o pedido passa a guardar o horário de cada status, o produto ganha custo (com cópia na venda), o cancelamento ganha motivo, as Configurações ganham a taxa de cada forma de pagamento e o gerador de demonstração sobe para a versão 3.
 - **Etapas,** cada uma num PR: 1. Resumo; 2. Vendas; 3. Base de dados; 4. Produtos e Financeiro; 5. Operação e Clientes; 6. Entrega e abas do segmento; 7. CSV e impressão.
 
-Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 3 (Base de dados) prontas em 19/11/2026; etapa 4 (Produtos e Financeiro) pronta em 20/11/2026; etapa 5 (Operação e Clientes) e etapa 6 (Entrega e abas do segmento) prontas em 21/11/2026.
+Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 3 (Base de dados) prontas em 19/11/2026; etapa 4 (Produtos e Financeiro) pronta em 20/11/2026; etapa 5 (Operação e Clientes), etapa 6 (Entrega e abas do segmento) e etapa 7 (CSV e impressão) prontas em 21/11/2026.
 
 - **Etapa 1:**
   - abas Resumo, Vendas e Financeiro no endereço (`?aba=`), dentro do painel de cada aba para leitores de tela;
@@ -615,4 +615,15 @@ Situação: planejada em 19/11/2026; etapa 1 (Resumo), etapa 2 (Vendas) e etapa 
   - a entrega sem motoboy anotado entra junto, como "Sem motoboy", sempre por último;
   - a aba Pesagem aparece onde há pagamento depois da pesagem (`pagarAposPesagem`), hoje só no açougue.
 - **Etapa 6, a conferir:** a foto da página rolada no celular-320 (`painel-visao-geral-abas-rolada-light`) oscila 1 vez em 6 por um pixel de rolagem; não tem relação com esta etapa.
+- **Etapa 7:**
+  - cada tabela das abas tem o botão **CSV**: o dia a dia (Vendas), todos os produtos (Produtos), o tempo por etapa (Operação), por bairro (Entrega), as receitas por canal e o saldo dos controlados (Farmácia). O arquivo sai para o Excel em português: `;`, vírgula decimal sem "R$", data dd/mm/aaaa, CRLF e UTF-8 com BOM, com o nome `<loja>-<aba>-<de>-a-<ate>.csv`;
+  - **Imprimir**, no cabeçalho da visão geral, leva só a aba aberta, com um cabeçalho (loja e aba, período e a hora em que saiu), sem botões nem as trocas de medida, e com as tabelas recolhidas abertas (`react-to-print`);
+  - o CSV é gerado por `lib/admin/regras/dashboard/csv.ts` (`gerarCsv` e `nomeDoCsv`), sem biblioteca nova; o botão e o contexto da aba aberta ficam em `components/admin/visao-geral/exportar.tsx`.
+- **Etapa 7, decidido no caminho:**
+  - na aba com mais de uma tabela (Farmácia), o nome da tabela entra no arquivo depois da aba, para um não sobrescrever o outro;
+  - as datas do nome do arquivo saem como aaaa-mm-dd, para os arquivos ficarem em ordem na pasta;
+  - dinheiro sai com 2 casas e sem separador de milhar, para o Excel ler como número; o produto vendido por quilo leva a unidade numa coluna à parte;
+  - na aba Clientes, o período do arquivo e da impressão são os 90 dias da aba;
+  - só as tabelas têm CSV; as listas com barra (motoboys, canais, melhores clientes) ficam na impressão.
+- **Etapa 7, a conferir:** a janela de impressão do navegador não abre no Playwright; a impressão está coberta pelo teste de componente (o cabeçalho e as tabelas abertas), não por E2E.
 - **Também mudou:** as fotos do Playwright escondem o selo de avisos do Next no modo dev (`tests/sem-avisos-do-next.css`), que aparecia mesmo com `devIndicators: false`.

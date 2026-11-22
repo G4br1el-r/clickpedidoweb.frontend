@@ -1,3 +1,4 @@
+import { readFile } from "node:fs/promises"
 import { expect, type Page, test } from "@playwright/test"
 import { esperarAnimacoes, verificarAcessibilidade } from "./apoio"
 
@@ -206,6 +207,18 @@ test("aba Entrega: o motoboy e o bairro levando às entregas deles", async ({ pa
   const bairros = page.getByRole("table", { name: "Por bairro" })
   await expect(bairros).toBeVisible({ timeout: 15_000 })
   await verificarAcessibilidade(page)
+
+  // A tabela por bairro sai em CSV para o Excel em português.
+  const [download] = await Promise.all([
+    page.waitForEvent("download"),
+    page.getByRole("button", { name: "Baixar CSV: Por bairro" }).click(),
+  ])
+  expect(download.suggestedFilename()).toBe("casa-da-pizza-entrega-2026-11-07-a-2026-11-13.csv")
+  const conteudo = await readFile((await download.path()) as string)
+  expect(conteudo.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]))
+  expect(conteudo.toString("utf8", 3)).toMatch(
+    /^Bairro;Pedidos;Faturamento;Taxas;Ticket;Tempo \(min\)\r\n[^;]+;\d+;\d+,\d{2};/,
+  )
 
   const motoboy = page.getByRole("region", { name: "Por motoboy" }).getByRole("link").first()
   const nome = (await motoboy.textContent()) ?? ""

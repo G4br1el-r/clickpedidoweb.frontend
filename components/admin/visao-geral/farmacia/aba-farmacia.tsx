@@ -20,6 +20,7 @@ import {
 import type { Periodo } from "@/lib/admin/regras/periodo"
 import { plural } from "@/lib/formato"
 import { Indicador, Regua } from "../../regua"
+import { BaixarCsv } from "../exportar"
 import { Numero } from "../numero"
 import { ListaDeFatias, Secao } from "../partes"
 
@@ -98,7 +99,26 @@ export function AbaFarmacia({
       </Secao>
 
       <div className="grid gap-x-10 gap-y-10 lg:grid-cols-2">
-        <Secao titulo="Receitas por canal" descricao="Recebidas no período">
+        <Secao
+          titulo="Receitas por canal"
+          descricao="Recebidas no período"
+          acao={
+            canais.length > 0 && (
+              <BaixarCsv
+                tabela="Receitas por canal"
+                comNomeDaTabela
+                linhas={canais}
+                colunas={[
+                  { titulo: "Canal", valor: (canal) => CANAL[canal.canal] },
+                  { titulo: "Recebidas", tipo: "numero", valor: (canal) => canal.recebidas },
+                  { titulo: "Aprovadas", tipo: "numero", valor: (canal) => canal.aprovadas },
+                  { titulo: "Recusadas", tipo: "numero", valor: (canal) => canal.recusadas },
+                  { titulo: "A conferir", tipo: "numero", valor: (canal) => canal.aguardando },
+                ]}
+              />
+            )
+          }
+        >
           {canais.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma receita recebida no período.</p>
           ) : (
@@ -142,7 +162,28 @@ export function AbaFarmacia({
         </Secao>
       </div>
 
-      <Secao titulo="Saldo dos controlados" descricao="Pela escrituração, hoje">
+      <Secao
+        titulo="Saldo dos controlados"
+        descricao="Pela escrituração, hoje"
+        acao={
+          controlados.length > 0 && (
+            <BaixarCsv
+              tabela="Saldo dos controlados"
+              comNomeDaTabela
+              linhas={controlados}
+              colunas={[
+                { titulo: "Produto", valor: (controlado) => controlado.nome },
+                {
+                  titulo: "Lista",
+                  valor: (controlado) =>
+                    controlado.lista === "antimicrobiano" ? "Antimicrobiano" : controlado.lista,
+                },
+                { titulo: "Saldo", tipo: "numero", valor: (controlado) => controlado.saldo },
+              ]}
+            />
+          )
+        }
+      >
         {controlados.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nenhum controlado no cardápio.</p>
         ) : (

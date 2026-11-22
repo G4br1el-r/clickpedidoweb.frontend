@@ -17,6 +17,7 @@ import { SEM_MOTOBOY } from "@/lib/admin/regras/filtro-pedidos"
 import type { Periodo } from "@/lib/admin/regras/periodo"
 import { emReais, plural } from "@/lib/formato"
 import { Indicador, Regua } from "../../regua"
+import { BaixarCsv } from "../exportar"
 import { Numero } from "../numero"
 import { ListaDeFatias, Secao } from "../partes"
 
@@ -84,7 +85,30 @@ export function AbaEntrega({
         />
       </Secao>
 
-      <Secao titulo="Por bairro" descricao="Tempo do pedido até ser entregue">
+      <Secao
+        titulo="Por bairro"
+        descricao="Tempo do pedido até ser entregue"
+        acao={
+          bairros.length > 0 && (
+            <BaixarCsv
+              tabela="Por bairro"
+              linhas={bairros}
+              colunas={[
+                { titulo: "Bairro", valor: (bairro) => bairro.bairro },
+                { titulo: "Pedidos", tipo: "numero", valor: (bairro) => bairro.pedidos },
+                { titulo: "Faturamento", tipo: "dinheiro", valor: (bairro) => bairro.total },
+                { titulo: "Taxas", tipo: "dinheiro", valor: (bairro) => bairro.taxas },
+                { titulo: "Ticket", tipo: "dinheiro", valor: (bairro) => bairro.ticket },
+                {
+                  titulo: "Tempo (min)",
+                  tipo: "numero",
+                  valor: (bairro) => bairro.minutos || undefined,
+                },
+              ]}
+            />
+          )
+        }
+      >
         {bairros.length === 0 ? (
           <p className="text-sm text-muted-foreground">Nenhuma entrega no período.</p>
         ) : (

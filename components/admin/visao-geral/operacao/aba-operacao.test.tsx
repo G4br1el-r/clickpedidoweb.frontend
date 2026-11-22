@@ -8,6 +8,8 @@ import {
   PERIODO_DE_TESTE,
   pedidoDeTeste,
 } from "@/lib/admin/regras/pedidos-de-teste"
+import { capturarCsv } from "../csv-de-teste"
+import { ProvedorDaAba } from "../exportar"
 import { AbaOperacao } from "./aba-operacao"
 
 const regiao = (nome: string) => within(screen.getByRole("region", { name: nome }))
@@ -221,5 +223,23 @@ describe("AbaOperacao: mesas e salão", () => {
     expect(fato(pontualidade, "Duração real")).toHaveTextContent("marcada: 60 min")
     expect(screen.queryByRole("table", { name: "Tempo por etapa" })).not.toBeInTheDocument()
     expect(screen.queryByRole("region", { name: "Atrasos por hora" })).not.toBeInTheDocument()
+  })
+})
+
+describe("AbaOperacao: CSV", () => {
+  test("o tempo por etapa sai em CSV, em minutos", async () => {
+    const csv = capturarCsv()
+    render(
+      <ProvedorDaAba loja="Casa da Pizza" aba="Operação" periodo={PERIODO_DE_TESTE}>
+        <AbaOperacao pedidos={PEDIDOS} periodo={PERIODO_DE_TESTE} segmento="lanchonete" />
+      </ProvedorDaAba>,
+    )
+    screen.getByRole("button", { name: "Baixar CSV: Tempo por etapa" }).click()
+    expect(csv.nome()).toBe("casa-da-pizza-operacao-2026-11-12-a-2026-11-13.csv")
+    expect(await csv.texto()).toBe(
+      "﻿Etapa;Média (min);9 em 10 em até (min)\r\n" +
+        "Aceite;4;4\r\nPreparo;20;20\r\nEspera do motoboy;5;6\r\nEntrega;11;15\r\nTotal na loja;40;45\r\n",
+    )
+    csv.soltar()
   })
 })

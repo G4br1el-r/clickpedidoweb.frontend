@@ -22,6 +22,21 @@ import { VisaoGeral } from "./visao-geral"
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
 
+/** A impressão abre a janela do navegador: o teste guarda as opções e roda o "antes de imprimir". */
+const impressao = vi.hoisted(() => ({
+  opcoes: undefined as
+    | { documentTitle?: string; onBeforePrint?: () => Promise<void>; onAfterPrint?: () => void }
+    | undefined,
+}))
+vi.mock("react-to-print", () => ({
+  useReactToPrint: (opcoes: typeof impressao.opcoes) => {
+    impressao.opcoes = opcoes
+    return async () => {
+      await impressao.opcoes?.onBeforePrint?.()
+    }
+  },
+}))
+
 function Provedores({
   children,
   onUrlUpdate,
@@ -407,4 +422,28 @@ describe("VisaoGeral", () => {
       ).toHaveAttribute("aria-selected", "true")
     },
   )
+})
+
+describe("VisaoGeral: imprimir", () => {
+  test("imprime a aba aberta com a loja, o período e a hora, e com as tabelas abertas", async () => {
+    const usuario = userEvent.setup()
+    render(
+      <Provedores endereco="?aba=vendas">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    expect(
+      await screen.findByRole("region", { name: "Canais de venda" }, { timeout: 8000 }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole("table", { name: "Dia a dia do período" })).not.toBeInTheDocument()
+
+    await usuario.click(screen.getByRole("button", { name: "Imprimir" }))
+
+    expect(impressao.opcoes?.documentTitle).toBe("Casa da Pizza · Vendas · 07/11 a 13/11")
+    expect(await screen.findByRole("table", { name: "Dia a dia do período" })).toBeInTheDocument()
+    const cabecalho = screen.getByTestId("cabecalho-da-impressao")
+    expect(cabecalho).toHaveTextContent("Casa da Pizza · Vendas")
+    expect(cabecalho).toHaveTextContent("Período: 07/11/2026 a 13/11/2026")
+    expect(cabecalho).toHaveTextContent("Impresso em 13/11/2026 às 20:30")
+  })
 })

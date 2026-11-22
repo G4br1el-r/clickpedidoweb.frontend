@@ -8,6 +8,8 @@ import {
   PERIODO_DE_TESTE,
   pedidoDeTeste,
 } from "@/lib/admin/regras/pedidos-de-teste"
+import { capturarCsv } from "../csv-de-teste"
+import { ProvedorDaAba } from "../exportar"
 import { AbaEntrega } from "./aba-entrega"
 
 const regiao = (nome: string) => within(screen.getByRole("region", { name: nome }))
@@ -120,5 +122,22 @@ describe("AbaEntrega", () => {
       regiao("Por motoboy").getByText("Nenhuma entrega concluída no período."),
     ).toBeInTheDocument()
     expect(regiao("Por bairro").getByText("Nenhuma entrega no período.")).toBeInTheDocument()
+  })
+})
+
+describe("AbaEntrega: CSV", () => {
+  test("a tabela por bairro sai em CSV", async () => {
+    const csv = capturarCsv()
+    render(
+      <ProvedorDaAba loja="Casa da Pizza" aba="Entrega" periodo={PERIODO_DE_TESTE}>
+        <AbaEntrega pedidos={PEDIDOS} periodo={PERIODO_DE_TESTE} motoboys={[]} />
+      </ProvedorDaAba>,
+    )
+    screen.getByRole("button", { name: "Baixar CSV: Por bairro" }).click()
+    expect(await csv.texto()).toBe(
+      "﻿Bairro;Pedidos;Faturamento;Taxas;Ticket;Tempo (min)\r\n" +
+        "Centro;2;150,00;12,00;75,00;45\r\nVila Nova;1;150,00;9,00;150,00;32\r\n",
+    )
+    csv.soltar()
   })
 })
