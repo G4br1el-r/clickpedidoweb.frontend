@@ -10,7 +10,7 @@
 
 **Origem:** as decisões Q1 a Q52 da sessão de perguntas de 18 e 19/11/2026, registradas abaixo. Base anterior: Fase 8 de [plano-painel-admin.md](plano-painel-admin.md).
 
-**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 está em andamento na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. As Fases 1 a 4 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
+**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. As Fases 1 a 4 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
 
 ## Restrições gerais
 
@@ -1481,9 +1481,9 @@ Situação: pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilha
   - no dinheiro, `recebido` (opcional, padrão = valor) é o que o cliente entregou e não pode ser menor que o valor ("O valor recebido é menor que o da parte."). Dinheiro acima do saldo é aceito: o valor vira o saldo e o resto vira troco;
   - `itens` (pagamento por item): ids dos itens que ele cobre. O servidor refaz o valor por `valorDosItens` (o item marcado mais a taxa sobre ele) e recusa item inexistente, em cortesia ou já pago ("Esse item já foi pago.");
   - o evento `pagamento` tem o texto "Pix R$ 33,33", "Dinheiro R$ 66,67 · troco R$ 13,33" ou "Cartão de crédito R$ 10,00 · 2 itens".
-- **Fecha sozinha:** quando o saldo chega a zero, a comanda fica concluída e paga, com `pagoEm`, o evento `fechada` ("Conta fechada") e a mesa livre (em Limpeza, com a limpeza ligada). O `pagamento` do pedido passa a ser a forma do maior pagamento (o primeiro, no empate), e o `trocoPara` fica só quando houve um pagamento único em dinheiro. `fecharConta(pedidoId, forma)` continua existindo: é pagar o saldo inteiro de uma vez.
+- **Fecha sozinha:** quando o saldo chega a zero, a comanda fica concluída e paga, com `pagoEm`, o evento `fechada` ("Conta fechada") e a mesa livre (em Limpeza, com a limpeza ligada). O `pagamento` do pedido passa a ser a forma do maior pagamento (o primeiro, no empate), e o `trocoPara` fica só quando houve um pagamento único em dinheiro. `fecharConta(pedidoId, forma)` continua existindo: é pagar o saldo inteiro de uma vez; sem saldo (tudo em cortesia, ou a conta reaberta sem mudança), fecha sem pagamento. Desconto, cortesia ou item tirado que zera o saldo de uma conta já paga em parte também fecha sozinho. Sem saldo, receber recusa ("Não há saldo a receber. Feche a conta.") (revisão).
 - **Limpeza unificada:** só fechar a conta põe a mesa em limpeza, e isso acontece no mesmo ponto (`alterar`), qualquer que seja o caminho. Por isso "Marcar como pago" em Pedidos deixa de valer para a comanda de mesa aberta: o servidor recusa ("Receba a conta pela tela de Mesas.") e o painel mostra o aviso com o link "Abrir a mesa 5", como no cancelar (decidido: um lugar só para o dinheiro da mesa, com saldo, troco e histórico).
-- **Desconto:** em R$ (até 2 casas) ou em % (de 0,01 a 100), com motivo obrigatório ("Diga o motivo do desconto."), nunca maior que itens − cortesias ("O desconto passa do valor dos itens."). Um desconto novo troca o anterior; valor zero tira o desconto. Evento `desconto`: "Desconto de R$ 10,00" ou "Desconto de 10% (R$ 8,75)", com o motivo.
+- **Desconto:** em R$ (até 2 casas) ou em % (de 0,01 a 100), com motivo obrigatório ("Diga o motivo do desconto."), nunca maior que itens − cortesias ("O desconto passa do valor dos itens."). Um desconto novo troca o anterior; valor zero tira o desconto, com motivo e o evento "Tirou o desconto" (revisão: botão "Tirar desconto" na aba Conta). Evento `desconto`: "Desconto de R$ 10,00" ou "Desconto de 10% (R$ 8,75)", com o motivo.
 - **Cortesia:** zera um item, com motivo. O item continua na comanda (o estoque não volta: foi consumido). Recusa item já em cortesia ou já pago. Evento `cortesia`: "Cortesia: 1× Coca", com o motivo. A cortesia não se desfaz nesta fase.
 - **Tirar taxa e couvert:** com motivo, guardado no próprio campo (`taxaServico.removida`, `couvert.removido`). Recusa se a comanda não tem taxa ("Esta conta não tem taxa de serviço.") ou couvert. Eventos `taxa-removida` ("Tirou a taxa de serviço") e `couvert-removido` ("Tirou o couvert").
 - **Conta menor que o pago:** desconto, cortesia, tirar taxa, tirar couvert e tirar item recusam quando o total ficaria abaixo do que já foi pago: "A conta ficaria menor que o já pago. Estorne um pagamento antes.".
@@ -1493,9 +1493,9 @@ Situação: pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilha
 - **Virada do dia (ponto 3):** o faturamento usa o dia de cada pagamento (`em`), e reabrir usa o dia do `pagoEm`. A comanda aberta às 23:40 e paga às 00:10 entra no faturamento do dia seguinte e pode ser reaberta nesse dia.
 - **Faturamento do salão hoje (decorrência 5):** para cada comanda de mesa (aberta ou concluída), a soma dos pagamentos com `em` hoje, sem a parte da taxa: `pago hoje × (total − taxa) ÷ total`, em centavos, uma vez por comanda. A comanda paga antes desta fase, sem `pagamentos`, conta como um pagamento único do total no `pagoEm` (`pagamentosDoPedido`). Os tickets, a permanência e o giro continuam contando só as contas fechadas hoje, agora sem a taxa.
 - **Pedidos (Q34):**
-  - a forma de pagamento da lista e do detalhe é "Misto" quando os pagamentos têm mais de uma forma (`rotuloPagamentoDoPedido`); o filtro por forma continua pelo `pagamento` do pedido (a forma do maior pagamento);
+  - a forma de pagamento da lista e do detalhe é "Misto" quando os pagamentos têm mais de uma forma (`rotuloPagamentoDoPedido`); o filtro por forma põe a conta Misto em cada forma que ela tem (`formasDoPedido`), e a comanda aberta paga em parte numa forma só mostra essa forma (revisão);
   - o detalhe lista cada pagamento ("Pix · R$ 33,33", "Dinheiro · R$ 66,67 · troco R$ 13,33", "Cartão de crédito · R$ 10,00") e mostra cortesias, taxa de serviço e couvert nos totais.
-- **Início (Q34):** em Financeiro, "Formas de pagamento" soma cada pagamento na sua forma (o pedido misto conta nas duas). A taxa de serviço aparece separada, abaixo, como "Taxa de serviço · dos garçons", com o total do período. O faturamento geral do Início continua sendo o `total` dos pedidos.
+- **Início (Q34):** em Financeiro, "Formas de pagamento" soma cada pagamento na sua forma (o pedido misto conta nas duas). A taxa de serviço aparece separada, abaixo, como "Taxa de serviço · dos garçons", com o total do período. O faturamento, o ticket, a série, o melhor dia, os canais e a meta do Início ficam sem a taxa (`valorSemTaxa`); "Formas de pagamento" continua com o que entrou no caixa e avisa que inclui a taxa; o bloco da taxa soma só as contas pagas, pelo dia do pagamento (revisão).
 - **Tela, aba Conta:**
   - resumo (itens, cortesias, desconto, taxa, couvert, total, pago e saldo);
   - lista de pagamentos, cada um com "Comprovante" e "Estornar" (motivo);
@@ -1700,29 +1700,49 @@ reabrir(pedidoId, { motivo, por? }): Promise<Pedido>
 - [ ] O E2E rápido e os screenshots (`painel-mesas-*`, `painel-comanda-*` e os de Pedidos e Início) ficam para a revisão.
 - [ ] Registrar a "Situação" no fim desta seção.
 
-Situação: implementada em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. Falta a revisão, o E2E rápido completo e os screenshots.
+Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3, depois da revisão. O PR sai depois que as Fases 1 a 3 estiverem no `main`.
 
+- **O que a revisão pegou** (cada correção com o teste vermelho antes):
+  - a conta com saldo zero não fechava: tudo em cortesia, desconto que iguala o já pago e a conta reaberta sem mudança ficavam em "Receber R$ 0,00" desabilitado. Agora `fecharConta` fecha sem pagamento quando não há saldo, a mudança que zera o saldo de uma conta paga em parte fecha sozinha, e receber sem saldo recusa (antes gravava pagamento de R$ 0,00 com troco). O rodapé usa `useFecharConta`, que estava sem uso;
+  - recarregar a página no dia seguinte dava como paga a conta de mesa aberta (o `encerrar` da virada do dia). Agora a comanda que alguém mexeu (tem histórico) continua aberta, e a demonstração do dia novo não senta ninguém na mesa dela (`mesasOcupadas` em `gerarPedidos`). Só a comanda da demonstração, intocada, fecha sozinha, e a paga em parte recebe o resto na forma dela: a demonstração não fica com comanda de ontem pendurada;
+  - o troco da tela e o gravado diferiam com a parte acima do saldo: os dois usam `trocoDoPagamento`;
+  - "Mais um" no item em cortesia ou já pago por item: o servidor recusa ("Lance o item de novo.") e a tela esconde o botão;
+  - o comprovante de um pagamento antigo mostrava o saldo de agora (`saldoDepoisDe`);
+  - cancelar a comanda com pagamento sumia com o dinheiro: recusa com "Estorne os pagamentos antes.";
+  - o Início somava a taxa no faturamento (Q34; ver "Início" nas decisões, já atualizado);
+  - tirar o desconto não tinha tela nem histórico: "Tirar desconto", com motivo, e o evento "Tirou o desconto";
+  - testes que recalculavam o esperado com a própria regra (`indicadoresSalao`, `resumoDaConta`) ou trocavam valores por "não é —": agora com valores literais, conferidos à mão (o teste da conta fechada hoje volta a conferir os tickets);
+  - menores: a mensagem quando o desconto passaria dos itens ("O desconto passaria do valor dos itens. Tire ou diminua o desconto antes.", em vez de "menor que o já pago"); a comanda paga antes da Fase 4 reaberta grava o pagamento que teve (`pagamentosDoPedido`); valor recebido com fração de centavo é recusado; em Pedidos, a comanda aberta paga em parte numa forma diz essa forma, o filtro e a contagem por forma põem a conta Misto em cada forma que ela tem (`formasDoPedido`), e o "Reimprimir cupom" da conta de mesa mostra cortesias, desconto, taxa, couvert, Misto, cada pagamento e, na conta aberta, cobra o saldo; no Receber, o recebido menor que a parte e o valor acima do saldo avisam no campo; "Partes" fora de 2 a 20 avisa; "Por item" não perde a marcação ao fechar a janela; as partes já recebidas aparecem como "Recebida" (`partesRecebidas`).
 - **Mudou fora do plano:**
   - o `rotuloDoPagamento` ("Cartão de crédito") entrou na Tarefa 36, porque o texto do evento de pagamento depende dele;
   - a previsão da tela (`useAlterarQuantidade`, `useRemoverItem`) passou a usar `comTotais`: sem isso, o total da comanda com taxa caía e voltava ao mudar a quantidade (teste novo em `consultas-mesas.test.tsx`, com o servidor sem responder);
   - "Marcar como pago" em Pedidos sai na comanda de mesa aberta, e o aviso junta os dois caminhos: "Receba ou cancele a conta pela tela de Mesas.";
   - a comanda aberta já soma o couvert, mesmo vazia;
   - "Por item" e "Dividir igualmente" só aparecem com saldo; as partes da divisão são do total;
-  - na lista de definição do resumo, "Tirar taxa" e "Tirar couvert" ficam dentro do `dd` (o axe do E2E recusou o botão solto);
-  - a demonstração ganhou a conta fechada no roteiro ao vivo (há 20 min, aberta 90 min antes) e a parcial na comanda de 80 min. O sorteio do dia muda com isso: as pessoas no salão da pizzaria passam de 21 para 16.
+  - na lista de definição do resumo, "Tirar taxa", "Tirar couvert" e "Tirar desconto" ficam dentro do `dd` (o axe do E2E recusou o botão solto);
+  - a demonstração ganhou a conta fechada no roteiro ao vivo (há 20 min, aberta 90 min antes) e a parcial na comanda de 80 min. O sorteio do dia muda com isso: as pessoas no salão da pizzaria passam de 21 para 16, e os pedidos de hoje de todas as lojas mudam (por isso mudam também a fila, a cozinha, os motoboys e a pesagem do açougue);
+  - **por item com desconto** (revisão): em vez de ratear o desconto entre os itens, o pagamento por item fica de fora quando a conta tem desconto ("Com desconto na conta, divida igualmente ou receba um valor.");
+  - **Início e Mesas** (revisão): o faturamento do Início fica sem a taxa e conta as vendas pelo dia do pedido (inclusive a conta aberta); o de Mesas conta o que entrou no dia, pelo pagamento. Os dois batem na conta aberta e fechada no mesmo dia (teste em `resumo.test.ts`); a conta aberta paga em parte, e a que atravessa a meia-noite, contam diferente nas duas telas, de propósito.
 - **Testes antigos que mudaram (mudança de comportamento planejada):**
   - `mesaOcupada` em `pagina-mesas.test.tsx`, dois testes de `consultas-mesas.test.tsx` e um de `pagina-garcom.test.tsx` desligam a taxa e o couvert da pizzaria na montagem: eles conferem a soma dos itens (decorrência 3);
-  - "a faixa Números do salão…" e "a conta fechada hoje entra no faturamento…": a demonstração passou a ter conta fechada hoje (o faturamento vem de `indicadoresSalao` sobre a própria demonstração, como na Tarefa 16; permanência e giro com valores literais);
+  - "a faixa Números do salão…" e "a conta fechada hoje entra no faturamento…": a demonstração passou a ter conta fechada hoje; na revisão, os valores ficaram literais (R$ 159,00, R$ 42,00 e R$ 126,00; com a mesa 60, R$ 172,50, R$ 34,88 e R$ 69,75);
+  - em `gerar-pedidos.test.ts`, a parcial (R$ 62,53 de R$ 125,07), a conta fechada (R$ 36,61 + R$ 36,61) e os totais das comandas de hoje da pizzaria passaram a valores literais;
   - "imprimir a conta e fechar…": "Imprimir pré-conta" e a janela "Receber da mesa 60";
   - "a comanda de mesa aberta não se cancela aqui": o aviso agora é "Receba ou cancele a conta pela tela de Mesas.";
-  - E2E "salão: o garçom lança…": a janela é "Receber da mesa 90".
+  - E2E "salão: o garçom lança…": a janela é "Receber da mesa 90";
+  - revisão: "reabrir a base em outro dia encerra a comanda aberta…" virou "…mantém a comanda aberta, e a mesa ocupada sem limpeza"; "desconto… zero tira o desconto" passa a pedir motivo e conferir o evento; em `resumo.test.ts`, a conta Misto ganhou `pagoEm` (a taxa conta pelo dia do pagamento).
 - **Fica para depois:**
   - desfazer a cortesia;
-  - cancelar a comanda que já tem pagamento (hoje cancela e os pagamentos ficam registrados nela);
-  - o filtro de forma em Pedidos continua pela forma do maior pagamento (não há "Misto" no filtro);
-  - o faturamento geral do Início continua com a taxa dentro; a taxa aparece à parte em Financeiro.
-- **Screenshots que vão mudar** (ninguém atualizou ainda): `painel-comanda-*` (aba Conta nova, rodapé com saldo, "Imprimir pré-conta", botão "Cortesia" nos itens, total com taxa e couvert), `painel-mesas-*` (totais das comandas da demonstração com taxa e couvert, a comanda com a conta parcial, números do salão com faturamento e pessoas), `painel-adicionar-itens-*` e `painel-abrir-mesa-*` se mostrarem total, e os de Pedidos (`Misto`) e Início (Financeiro com a taxa) que usam a demonstração de hoje.
-- **Testes e cobertura:** 1513 testes no Vitest; o E2E novo e o de "salão: o garçom lança…" passaram em `desktop-1920`. A cobertura ficou em 83,88/76,53/82,32/84,92 no geral e 98,19/95,31/98,73/98,86 em `lib/**`: os mínimos subiram para 83/76/82/84 e 98/95/98/98.
+  - ratear o desconto no pagamento por item (com o centavo na última parte);
+  - diminuir um item já pago por item (hoje só o aumento é recusado);
+  - o "Por item" da conta já paga em parte por valor mostra os itens a preço cheio (o servidor recusa quando passa do saldo);
+  - a pré-conta não ganhou teste visual: ela só existe no papel (fica escondida na tela); o conteúdo tem teste de componente.
+- **Screenshots** (revisados nas imagens esperada, atual e diferença, claro e escuro, celular e desktop, antes de atualizar):
+  - mudaram pela Fase 4: `painel-comanda-*` (rodapé com saldo, "Imprimir pré-conta", "Cortesia" no item, a mesa 2 com a parcial), `painel-mesas-*` (totais com taxa e couvert, faturamento de R$ 159,00 e ticket de R$ 42,00), `painel-abrir-mesa-*`, `painel-adicionar-itens-*`, `painel-atalhos-mesas-*`, `painel-nova-mesa-*` e `painel-configurar-salao-*` (os números do salão por trás da janela), `painel-pedidos-*` (Misto, e Pix na comanda aberta paga em parte), `painel-visao-geral-*` (faturamento sem a taxa) e `painel-visao-geral-financeiro-*` (o aviso nas formas e a taxa de R$ 10,20);
+  - mudaram pelo sorteio novo da demonstração (só dados, sem mudança de layout): `painel-fila-*`, `painel-cozinha-*`, `painel-motoboys-*`, `painel-pesagem-*`, `painel-visao-geral-vendas-*` e `painel-visao-geral-abas-rolada-*`;
+  - entraram `painel-comanda-conta-*` (aba Conta com pagamento, partes e "Recebida") e `painel-receber-conta-*` (Receber em dinheiro com troco);
+  - atualizados em `celular-390` e `desktop-1920` e gerados nos outros 9 tamanhos, com uma amostra de cada tamanho conferida.
+- **Testes e cobertura:** 1550 testes no Vitest; 456 no E2E rápido (`celular-390` e `desktop-1920`, 28 pulados, nenhuma falha), contra o `next start` na porta 3011 (o `next dev` para no aviso de segurança do Next; atualizar o Next é decisão do usuário). A cobertura ficou em 84,03/76,94/82,49/85,09 no geral e 98,25/95,33/98,89/98,94 em `lib/**`: os mínimos subiram para 84/76/82/85 no geral; `lib/**` continua em 98/95/98/98.
 
 ## Fase 5: movimentações
 
