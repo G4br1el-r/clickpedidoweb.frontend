@@ -10,7 +10,6 @@ import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { usePreferenciasMesas } from "@/lib/admin/preferencias-mesas"
-import { indicadoresSalao } from "@/lib/admin/regras/indicadores-salao"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { emReais as emReaisDoIntl } from "@/lib/formato"
 import { FormularioMesa } from "./formulario-mesa"
@@ -118,20 +117,6 @@ const cartao = (numero: number) =>
   screen.findByRole("button", { name: new RegExp(`^Mesa ${numero}\\b`) })
 /** O texto do dinheiro como a tela mostra para a Testing Library (sem o espaço não separável). */
 const emReais = (valor: number) => emReaisDoIntl(valor).replace(/ /g, " ")
-
-/** Os números do salão da demonstração de agora, pela regra (que tem os seus testes com valores). */
-async function numerosDaDemonstracao() {
-  const { mesas, pedidos } = await api().base()
-  const deMesa = pedidos.filter((pedido) => pedido.tipo === "mesa")
-  return indicadoresSalao({
-    mesas,
-    abertas: deMesa.filter((pedido) =>
-      ["recebido", "em-preparo", "pronto"].includes(pedido.status),
-    ),
-    concluidos: deMesa.filter((pedido) => pedido.status === "concluido"),
-    agora: new Date(),
-  })
-}
 
 const comanda = () => within(screen.getByRole("dialog", { name: /^Mesa 60/ }))
 const total = () => comanda().getByText("Total").closest("div")
@@ -341,27 +326,28 @@ describe("PaginaMesas", () => {
   })
 
   test("a faixa Números do salão mostra os quatro números da demonstração e esconde o resto em Ver mais", async () => {
-    const numeros = await numerosDaDemonstracao()
     const usuario = await abrir()
 
     const faixa = within(await screen.findByRole("region", { name: "Números do salão" }))
-    // A demonstração tem uma conta de mesa fechada hoje, há 20 min, aberta 90 min antes.
+    // A demonstração tem uma conta de mesa fechada hoje, há 20 min, aberta 90 min antes, para 3:
+    // R$ 102,00 em itens + R$ 10,20 de taxa + R$ 24,00 de couvert = R$ 136,20, ou R$ 126,00 sem a
+    // taxa. E a mesa 2 pagou em Pix R$ 35,90 dos R$ 71,80 (com R$ 5,80 de taxa): R$ 33,00 sem ela.
     expect(faixa.getByText("Ocupação").nextElementSibling).toHaveTextContent("8/19 · 42%")
     expect(faixa.getByText("Pessoas").nextElementSibling).toHaveTextContent("16")
-    expect(numeros.faturamento).toBeGreaterThan(0)
     await waitFor(() =>
       expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent(
-        emReais(numeros.faturamento),
+        emReais(159),
       ),
     )
-    expect(faixa.getByText("Ticket por pessoa").nextElementSibling).not.toHaveTextContent("—")
+    // R$ 126,00 ÷ 3 pessoas.
+    expect(faixa.getByText("Ticket por pessoa").nextElementSibling).toHaveTextContent(emReais(42))
     expect(faixa.queryByText("Permanência média")).not.toBeInTheDocument()
 
     await usuario.click(faixa.getByRole("button", { name: "Ver mais" }))
 
     expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("90 min")
     expect(faixa.getByText("Giro das mesas").nextElementSibling).toHaveTextContent("0,1")
-    expect(faixa.getByText("Ticket por mesa").nextElementSibling).not.toHaveTextContent("—")
+    expect(faixa.getByText("Ticket por mesa").nextElementSibling).toHaveTextContent(emReais(126))
   })
 
   test("a conta fechada hoje entra no faturamento, nos tickets, na permanência e no giro", async () => {
@@ -369,19 +355,24 @@ describe("PaginaMesas", () => {
     const { pedidos } = await api().base()
     const comandaAberta = pedidos.find((pedido) => pedido.mesa?.id === mesa.id)
     if (!comandaAberta) throw new Error("A mesa 60 devia ter a comanda aberta")
-    const antes = await numerosDaDemonstracao()
     await api().mesas.fecharConta(comandaAberta.id, "pix")
     const usuario = await abrir()
 
     const faixa = within(await screen.findByRole("region", { name: "Números do salão" }))
     await usuario.click(faixa.getByRole("button", { name: "Ver mais" }))
 
-    // A conta da mesa 60 (R$ 13,50, 25 min) se soma à da demonstração (90 min).
+    // A conta da mesa 60 (R$ 13,50, 1 pessoa, 25 min) se soma à da demonstração (R$ 126,00 sem
+    // a taxa, 3 pessoas, 90 min) e à parcial da mesa 2 (R$ 33,00).
     await waitFor(() =>
       expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent(
-        emReais(antes.faturamento + 13.5),
+        emReais(172.5),
       ),
     )
+    // R$ 139,50 ÷ 4 pessoas = 34,875, meio para cima; R$ 139,50 ÷ 2 contas.
+    expect(faixa.getByText("Ticket por pessoa").nextElementSibling).toHaveTextContent(
+      emReais(34.88),
+    )
+    expect(faixa.getByText("Ticket por mesa").nextElementSibling).toHaveTextContent(emReais(69.75))
     expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("58 min")
     expect(faixa.getByText("Giro das mesas").nextElementSibling).toHaveTextContent("0,1")
   })
