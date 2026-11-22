@@ -2,7 +2,7 @@ import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { clear } from "idb-keyval"
+import { clear, keys } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
@@ -195,6 +195,12 @@ describe("VitrineMesa", () => {
     expect(screen.queryByText("Mesa indisponível.")).not.toBeInTheDocument()
     await usuario.click(screen.getByRole("button", { name: "Tentar de novo" }))
     expect(await screen.findByRole("heading", { level: 1, name: "Mesa 11" })).toBeInTheDocument()
+  })
+
+  test("a loja sem mesas mostra Mesa indisponível sem criar a base dela", async () => {
+    renderizar("mesa-1", "farmacia")
+    expect(await screen.findByRole("heading", { name: "Mesa indisponível." })).toBeInTheDocument()
+    expect(await keys()).not.toContain("clickpedido-admin-dados:farmacia")
   })
 
   test("a mesa bloqueada e a loja que não existe mostram Mesa indisponível", async () => {

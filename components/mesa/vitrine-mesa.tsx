@@ -17,7 +17,7 @@ import { useAoVivo } from "@/lib/admin/dados/consultas"
 import { useChamarNaMesa, useMesaQr, usePedirNaMesa } from "@/lib/admin/dados/consultas-qr"
 import type { MesaQr } from "@/lib/admin/dados/servidor"
 import { precoDeBalcao } from "@/lib/admin/regras/pdv"
-import { ehSegmentoPainel, type SegmentoPainelId } from "@/lib/admin/segmentos-painel"
+import { ehSegmentoPainel, type SegmentoPainelId, temModulo } from "@/lib/admin/segmentos-painel"
 import { emReais, plural } from "@/lib/formato"
 import { LOJAS } from "@/lib/loja-atual"
 
@@ -336,7 +336,8 @@ function Mesa({
  * pedir e ver a conta. Sem entrega e sem pagamento online: quem recebe é o garçom.
  */
 export function VitrineMesa({ segmento, mesaId }: { segmento: string; mesaId: string }) {
-  if (!ehSegmentoPainel(segmento)) return <Indisponivel />
+  // A loja sem mesas (farmácia, salão de beleza) nem chega a abrir a base dela.
+  if (!ehSegmentoPainel(segmento) || !temModulo(segmento, "mesas")) return <Indisponivel />
   return <VitrineDaLoja segmento={segmento} mesaId={mesaId} />
 }
 

@@ -315,6 +315,43 @@ describe("QR: o pedido do cliente", () => {
     await expect(api.qr.pedir(mesaId, pedido)).rejects.toThrow("Chame o garçom para abrir a mesa.")
   })
 
+  test("a mesa juntada pede na comanda da principal", async () => {
+    const api = servidor()
+    await ligarQr(api, { aceite: "direto" })
+    const principal = await mesaNova(api, 30)
+    const juntada = await mesaNova(api, 31)
+    const comanda = await comComanda(api, principal)
+    await api.mesas.juntar(comanda.id, [juntada])
+
+    const { comanda: depois } = await api.qr.pedir(juntada, pedido)
+
+    expect(depois).toMatchObject({ id: comanda.id, mesa: { id: principal }, total: 69 })
+    const daMesa = (await api.base()).pedidos.filter(
+      (item) => item.tipo === "mesa" && [principal, juntada].includes(item.mesa?.id ?? ""),
+    )
+    expect(daMesa.map((item) => item.id)).toEqual([comanda.id])
+  })
+
+  test("o estoque só baixa quando o garçom aceita", async () => {
+    const api = servidor()
+    await ligarQr(api)
+    await api.estoque.configurar("prod-x-burger", {
+      controlar: true,
+      minimo: 0,
+      esgotarAoZerar: false,
+    })
+    await api.estoque.entrada("prod-x-burger", { quantidade: 10 })
+    const mesaId = await mesaNova(api)
+    const saldo = async () =>
+      (await api.produtos.listar()).find((item) => item.id === "prod-x-burger")?.estoque?.quantidade
+
+    const { pedido: aguardando } = await api.qr.pedir(mesaId, pedido)
+    expect(await saldo()).toBe(10)
+
+    await api.pedidosQr.aceitar(aguardando?.id as string, {})
+    expect(await saldo()).toBe(8)
+  })
+
   test("o pedido vazio e o produto esgotado recusam na hora", async () => {
     const api = servidor()
     await ligarQr(api)
