@@ -190,6 +190,44 @@ describe("abrir mesa", () => {
     })
     expect(comanda.mesa?.id).toBe(mesaId)
   })
+
+  test("a mesa em limpeza com reserva dentro da antecedência também pede a confirmação", async () => {
+    const api = servidor((catalogo) => {
+      catalogo.salao.limpeza = true
+    })
+    const mesaId = await mesaLivre(api)
+    const anterior = await api.mesas.lancar({
+      mesaId,
+      enviarParaCozinha: false,
+      garcom: "Rafa",
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    await api.mesas.fecharConta(anterior.id, "pix")
+    const guardado = await get(CHAVE)
+    guardado.base.reservas = [
+      {
+        id: "reserva-1",
+        nome: "Carla",
+        inicio: new Date(2026, 10, 13, 20, 45).toISOString(),
+        pessoas: 2,
+        mesaId,
+        status: "marcada",
+      },
+    ]
+    await set(CHAVE, guardado)
+    await expect(servidor().mesas.abrir(mesaId, { pessoas: 2, garcom: "Rafa" })).rejects.toThrow(
+      "A mesa 30 está reservada às 20:45. Confirme para abrir.",
+    )
+  })
+
+  test("sem garçom no salão, o `por` assina a abertura", async () => {
+    const api = servidor((catalogo) => {
+      catalogo.salao.garcons = []
+    })
+    const mesaId = await mesaLivre(api)
+    const comanda = await api.mesas.abrir(mesaId, { pessoas: 2, por: " Caixa " })
+    expect(comanda.eventos?.[0]).toMatchObject({ tipo: "aberta", por: "Caixa" })
+  })
 })
 
 describe("lançar na comanda", () => {
@@ -217,6 +255,77 @@ describe("lançar na comanda", () => {
       },
       { tipo: "rodada", em: AGORA.toISOString(), texto: "Rodada 2 lançada na mesa: 1× Água" },
     ])
+  })
+
+  test("sem `por`, o evento da rodada leva o garçom do lançamento", async () => {
+    const api = servidor()
+    const mesaId = await mesaLivre(api)
+    await api.mesas.abrir(mesaId, { pessoas: 2, garcom: "Rafa" })
+    const comanda = await api.mesas.lancar({
+      mesaId,
+      enviarParaCozinha: false,
+      garcom: "Bia",
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    expect(comanda.eventos?.at(-1)).toMatchObject({ tipo: "rodada", por: "Bia" })
+  })
+
+  test("lançar na mesa livre abre como a tela de Mesas: 1 pessoa, o garçom da lista e o evento de abertura", async () => {
+    const api = servidor()
+    const mesaId = await mesaLivre(api)
+    const comanda = await api.mesas.lancar({
+      mesaId,
+      enviarParaCozinha: false,
+      garcom: " rafa ",
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    expect(comanda.mesa).toEqual({ id: mesaId, numero: 30, garcom: "Rafa", pessoas: 1 })
+    expect(comanda.eventos).toEqual([
+      { tipo: "aberta", em: AGORA.toISOString(), por: "Rafa", texto: "Mesa aberta para 1 pessoa" },
+      {
+        tipo: "rodada",
+        em: AGORA.toISOString(),
+        por: "Rafa",
+        texto: "Rodada 1 lançada na mesa: 1× Água",
+      },
+    ])
+  })
+
+  test("na mesa livre, o garçom fora da lista do salão é recusado", async () => {
+    const api = servidor()
+    const mesaId = await mesaLivre(api)
+    await expect(
+      api.mesas.lancar({
+        mesaId,
+        enviarParaCozinha: false,
+        garcom: "Zé",
+        itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+      }),
+    ).rejects.toThrow("Esse garçom não está na lista do salão.")
+  })
+
+  test("lançar na mesa livre com reserva dentro da antecedência recusa", async () => {
+    const mesaId = await mesaLivre(servidor())
+    const guardado = await get(CHAVE)
+    guardado.base.reservas = [
+      {
+        id: "reserva-1",
+        nome: "Carla",
+        inicio: new Date(2026, 10, 13, 20, 45).toISOString(),
+        pessoas: 2,
+        mesaId,
+        status: "marcada",
+      },
+    ]
+    await set(CHAVE, guardado)
+    await expect(
+      servidor().mesas.lancar({
+        mesaId,
+        enviarParaCozinha: false,
+        garcom: "Rafa",
+        itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+      }),
+    ).rejects.toThrow("A mesa 30 está reservada. Abra pela tela de Mesas.")
   })
 
   test("lançar depois de pedir a conta limpa o pedido de conta", async () => {
@@ -571,6 +680,15 @@ describe("servir e pedir a conta", () => {
     const deNovo = await api.mesas.pedirConta(comanda.id)
     expect(deNovo.contaPedidaEm).toBe(AGORA.toISOString())
     expect(deNovo.eventos?.filter((evento) => evento.tipo === "conta-pedida")).toHaveLength(1)
+  })
+
+  test("a comanda vazia não pede a conta", async () => {
+    const api = servidor()
+    const mesaId = await mesaLivre(api)
+    const comanda = await api.mesas.abrir(mesaId, { pessoas: 2, garcom: "Rafa" })
+    await expect(api.mesas.pedirConta(comanda.id)).rejects.toThrow(
+      "Lance algum item antes de pedir a conta.",
+    )
   })
 
   test("servir e pedir a conta recusam a comanda que não está aberta", async () => {
