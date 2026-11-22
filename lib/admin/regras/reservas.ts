@@ -113,6 +113,25 @@ export function sugerirMesa<M extends MesaParaSugerir>(
 }
 
 /**
+ * Por que a mesa não recebe agora quem senta (a reserva ou a espera); nada, se recebe. Recebe a
+ * livre, mesmo em limpeza, sem bloqueio e sem estar junto de outra.
+ */
+export function porQueNaoSenta(
+  mesaId: string,
+  mesas: Pick<Mesa, "id" | "numero" | "status" | "bloqueio" | "juntadaCom">[],
+): string | undefined {
+  const mesa = mesas.find((item) => item.id === mesaId)
+  if (!mesa) return "A mesa da reserva foi excluída."
+  if (mesa.bloqueio) return `A mesa ${mesa.numero} está bloqueada.`
+  if (mesa.juntadaCom) {
+    const principal = mesas.find((item) => item.id === mesa.juntadaCom)
+    return `A mesa ${mesa.numero} está junto com a mesa ${principal?.numero}.`
+  }
+  if (mesa.status !== "livre") return `A mesa ${mesa.numero} está ocupada.`
+  return undefined
+}
+
+/**
  * A mesa livre de cada um da espera: na ordem da chegada, cada um fica com a menor que cabe entre
  * as que sobraram. Quem não cabe em nenhuma fica sem.
  */
@@ -187,7 +206,8 @@ export function conferirReserva(
   agora: Date,
 ): { erros: ErrosReserva; reserva?: Omit<NovaReserva, "mesaId"> } {
   const { erros: daPessoa, ...pessoa } = conferirPessoa(campos)
-  const hora = /^(\d{2}):(\d{2})$/.exec(campos.horario)
+  // HH de 00 a 23 e MM de 00 a 59: "23:99" não vira 00:39 do dia seguinte.
+  const hora = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(campos.horario)
   const inicio = hora
     ? set(agora, { hours: Number(hora[1]), minutes: Number(hora[2]), seconds: 0, milliseconds: 0 })
     : null

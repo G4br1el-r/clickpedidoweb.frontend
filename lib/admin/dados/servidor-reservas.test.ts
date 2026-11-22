@@ -224,6 +224,49 @@ describe("sentar a reserva: a mesa e o horário", () => {
     )
     await expect(api.reservas.sentar(id, { mesaId, confirmarReserva: true })).resolves.toBeDefined()
   })
+
+  test("na mesa junto de outra, a reserva e a espera não sentam, e o servidor diz com qual", async () => {
+    const api = servidor()
+    const principal = await mesaNova(api, 30)
+    const juntada = await mesaNova(api, 31)
+    const comanda = await api.mesas.abrir(principal, { pessoas: 2 })
+    await api.mesas.juntar(comanda.id, [juntada])
+    const { id } = await api.reservas.criar(marina)
+    const ana = await api.espera.entrar({ nome: "Ana", pessoas: 2 })
+
+    await expect(api.reservas.sentar(id, { mesaId: juntada })).rejects.toThrow(
+      "A mesa 31 está junto com a mesa 30.",
+    )
+    await expect(api.espera.sentar(ana.id, { mesaId: juntada })).rejects.toThrow(
+      "A mesa 31 está junto com a mesa 30.",
+    )
+  })
+})
+
+describe("reservas perto da meia-noite", () => {
+  test("a reserva das 23:50 continua na lista à 00:01 enquanto segura a mesa", async () => {
+    vi.setSystemTime(new Date(2026, 10, 13, 23, 40))
+    const api = servidor()
+    const mesaId = await mesaNova(api, 30)
+    await api.reservas.criar({ ...marina, inicio: as("23:50"), mesaId })
+    vi.setSystemTime(new Date(2026, 10, 14, 0, 1))
+
+    expect((await api.reservas.listar()).map((reserva) => reserva.inicio)).toEqual([as("23:50")])
+    await expect(api.mesas.abrir(mesaId, { pessoas: 2 })).rejects.toThrow(
+      "A mesa 30 está reservada às 23:50. Confirme para abrir.",
+    )
+  })
+
+  test("passada a tolerância, a de ontem sai da lista e solta a mesa", async () => {
+    vi.setSystemTime(new Date(2026, 10, 13, 23, 40))
+    const api = servidor()
+    const mesaId = await mesaNova(api, 30)
+    await api.reservas.criar({ ...marina, inicio: as("23:50"), mesaId })
+    vi.setSystemTime(new Date(2026, 10, 14, 0, 6))
+
+    expect(await api.reservas.listar()).toEqual([])
+    await expect(api.mesas.abrir(mesaId, { pessoas: 2 })).resolves.toBeDefined()
+  })
 })
 
 describe("lista de espera", () => {

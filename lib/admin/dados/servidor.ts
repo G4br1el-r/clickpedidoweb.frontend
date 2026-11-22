@@ -324,6 +324,14 @@ function conferirSemReserva(base: BaseLoja, mesa: Mesa) {
   }
 }
 
+/** Sentar na mesa junto de outra diz com qual ela está, como transferir. */
+function conferirNaoJuntada(base: BaseLoja, mesaId: string) {
+  const mesa = base.mesas.find((item) => item.id === mesaId)
+  if (!mesa?.juntadaCom) return
+  const principal = base.mesas.find((item) => item.id === mesa.juntadaCom)
+  throw new Error(`A mesa ${mesa.numero} está junto com a mesa ${principal?.numero}.`)
+}
+
 /**
  * O garçom pela lista do salão, com o nome escrito como lá (sem diferenciar acento e
  * maiúscula). Recusa quem não está na lista; com `obrigatorio`, recusa também o vazio. Sem
@@ -591,10 +599,7 @@ function mesaLivreParaReceber(
   const doGrupo = [origem.mesa?.id, ...(origem.mesa?.juntadas ?? []).map((item) => item.id)]
   if (doGrupo.includes(mesa.id)) throw new Error("Escolha outra mesa.")
   if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
-  if (mesa.juntadaCom) {
-    const principal = base.mesas.find((item) => item.id === mesa.juntadaCom)
-    throw new Error(`A mesa ${mesa.numero} está junto com a mesa ${principal?.numero}.`)
-  }
+  conferirNaoJuntada(base, mesa.id)
   if (comandaDa(base, mesa.id)) {
     throw new Error(`A mesa ${mesa.numero} já está aberta. Junte as mesas ou transfira os itens.`)
   }
@@ -1971,12 +1976,20 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     },
 
     reservas: {
-      /** As reservas de hoje, pelo horário. */
+      /**
+       * As reservas de hoje, pelo horário. Logo depois da meia-noite, a de ontem que ainda está na
+       * tolerância continua: ela segura a mesa, e a tela precisa vê-la para pedir a confirmação.
+       */
       async listar(): Promise<Reserva[]> {
         const agora = new Date()
+        const base = await carregar()
         return responder(
-          (await carregar()).reservas
-            .filter((reserva) => isSameDay(new Date(reserva.inicio), agora))
+          base.reservas
+            .filter(
+              (reserva) =>
+                isSameDay(new Date(reserva.inicio), agora) ||
+                reservaAtiva(reserva, agora, base.salao.reservas),
+            )
             .toSorted((a, b) => Date.parse(a.inicio) - Date.parse(b.inicio)),
         )
       },
@@ -2019,6 +2032,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (reserva.status !== "marcada") throw new Error("Essa reserva não está mais marcada.")
         const destino = mesaId ?? reserva.mesaId
         if (!destino) throw new Error("Escolha a mesa.")
+        conferirNaoJuntada(base, destino)
         const { base: aberta, comanda } = abrirComanda(
           base,
           destino,
@@ -2084,6 +2098,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const base = await carregar()
         const entrada = esperando(base, id)
         if (!mesaId) throw new Error("Escolha a mesa.")
+        conferirNaoJuntada(base, mesaId)
         const { base: aberta, comanda } = abrirComanda(base, mesaId, {
           ...abertura,
           pessoas: entrada.pessoas,

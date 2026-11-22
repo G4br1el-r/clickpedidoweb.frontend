@@ -5,6 +5,7 @@ import {
   conferirEspera,
   conferirReserva,
   type MesaParaSugerir,
+  porQueNaoSenta,
   reservaDaMesa,
   reservaEmConflito,
   statusDaReserva,
@@ -33,6 +34,10 @@ describe("reservaDaMesa", () => {
     expect(reservaDaMesa(mesa, [reserva()], as("21:05"), CONFIG)?.id).toBe("r1")
     expect(reservaDaMesa(mesa, [reserva()], as("20:19"), CONFIG)).toBeUndefined()
     expect(reservaDaMesa(mesa, [reserva()], as("21:06"), CONFIG)).toBeUndefined()
+  })
+
+  test("às 20:20 em ponto, a antecedência de 30 min já vale", () => {
+    expect(reservaDaMesa({ id: "mesa-13" }, [reserva()], as("20:20"), CONFIG)?.id).toBe("r1")
   })
 })
 
@@ -128,6 +133,11 @@ describe("sugerirMesa", () => {
     expect(sugerirMesa(2, mesas, [], { ...quando, inicio: as("22:30") })?.numero).toBe(3)
   })
 
+  test("para mais tarde, a em limpeza agora é a menor e fica com a reserva", () => {
+    const mesas = [mesa(5, 4), mesa(4, 4, { limpezaDesde: as("20:20").toISOString() })]
+    expect(sugerirMesa(2, mesas, [], { ...quando, inicio: as("22:30") })?.numero).toBe(4)
+  })
+
   test("a reserva da hora deixa a mesa de fora; a de outra hora, não", () => {
     const mesas = [mesa(3, 4), mesa(4, 4)]
     const daTres = [reserva({ mesaId: "mesa-3", inicio: as("20:50").toISOString() })]
@@ -141,6 +151,28 @@ describe("sugerirMesa", () => {
 
   test("sem mesa que caiba, nada", () => {
     expect(sugerirMesa(10, [mesa(1, 8)], [], quando)).toBeUndefined()
+  })
+})
+
+describe("porQueNaoSenta", () => {
+  const mesas = [
+    mesa(13, 2),
+    mesa(14, 2, { limpezaDesde: as("20:20").toISOString() }),
+    mesa(20, 4, { bloqueio: {} }),
+    mesa(30, 4, { status: "ocupada" }),
+    mesa(31, 4, { status: "ocupada", juntadaCom: "mesa-30" }),
+  ]
+
+  test("a livre e a em limpeza recebem quem senta", () => {
+    expect(porQueNaoSenta("mesa-13", mesas)).toBeUndefined()
+    expect(porQueNaoSenta("mesa-14", mesas)).toBeUndefined()
+  })
+
+  test("a bloqueada, a juntada, a ocupada e a que não existe mais dizem o porquê", () => {
+    expect(porQueNaoSenta("mesa-20", mesas)).toBe("A mesa 20 está bloqueada.")
+    expect(porQueNaoSenta("mesa-31", mesas)).toBe("A mesa 31 está junto com a mesa 30.")
+    expect(porQueNaoSenta("mesa-30", mesas)).toBe("A mesa 30 está ocupada.")
+    expect(porQueNaoSenta("mesa-99", mesas)).toBe("A mesa da reserva foi excluída.")
   })
 })
 
@@ -165,6 +197,24 @@ describe("sugestoesDaEspera", () => {
       carlos: 11,
       juliana: 8,
       pedro: 10,
+    })
+  })
+
+  test("duas pessoas disputando a mesma mesa: fica com quem chegou antes", () => {
+    const entrada = (id: string, chegouEm: string) => ({
+      id,
+      nome: id,
+      pessoas: 2,
+      chegouEm: as(chegouEm).toISOString(),
+      status: "esperando" as const,
+    })
+    const espera = [entrada("depois", "20:20"), entrada("antes", "20:10")]
+    const sugestoes = sugestoesDaEspera(espera, [mesa(11, 2)], [], {
+      agora: as("20:30"),
+      config: CONFIG,
+    })
+    expect(Object.fromEntries([...sugestoes].map(([id, m]) => [id, m.numero]))).toEqual({
+      antes: 11,
     })
   })
 })
@@ -212,6 +262,19 @@ describe("conferirReserva", () => {
       horario: "Esse horário já passou.",
     })
     expect(conferirReserva({ ...certo, horario: "20:30" }, as("20:30")).erros).toEqual({})
+  })
+
+  test("no meio do minuto, o minuto de agora ainda vale", () => {
+    const meioMinuto = new Date("2026-11-13T20:30:45-03:00")
+    expect(conferirReserva({ ...certo, horario: "20:30" }, meioMinuto).erros).toEqual({})
+  })
+
+  test("hora fora de 00 a 23 ou minuto fora de 00 a 59 não é horário", () => {
+    for (const horario of ["23:99", "24:00", "25:10", "21:60"]) {
+      expect(conferirReserva({ ...certo, horario }, agora).erros).toEqual({
+        horario: "Informe o horário.",
+      })
+    }
   })
 
   test("sem telefone, a reserva vai sem ele", () => {
