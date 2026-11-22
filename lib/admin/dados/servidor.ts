@@ -70,6 +70,7 @@ import {
   type CartaoPagamento,
   type CatalogoLoja,
   type Categoria,
+  type Chamado,
   type ConfigLoja,
   type ConfigSalao,
   type DescontoConta,
@@ -456,6 +457,9 @@ function comContaPedida(comanda: Pedido, por: string | undefined): Pedido {
 }
 
 const semContaPedida = ({ contaPedidaEm: _contaPedidaEm, ...comanda }: Pedido): Pedido => comanda
+
+/** Quem assina o que o cliente faz pela vitrine da mesa. */
+const POR_QR = "Cliente pelo QR"
 
 /** Subtotal, desconto e total da comanda refeitos pela conta (com taxa e couvert). */
 const recalcular = comTotais
@@ -1041,6 +1045,16 @@ export function criarServidor({
       eventoAberta(agora, pessoas, garcom ?? por),
     )
     return { base: abrirMesas({ ...base, pedidos: [...base.pedidos, comanda] }), comanda }
+  }
+
+  /**
+   * A mesa que o QR abriu: existe, sem bloqueio, com a função QR ligada. O cliente não precisa
+   * saber o porquê: qualquer outro caso é "Mesa indisponível." (ponto de atenção 5).
+   */
+  function mesaDoQr(base: BaseLoja, mesaId: string): Mesa {
+    const mesa = base.mesas.find((item) => item.id === mesaId)
+    if (!mesa || mesa.bloqueio || !base.salao.funcoes.qr) throw new Error("Mesa indisponível.")
+    return mesa
   }
 
   /** Quem ainda está na fila; quem sentou ou desistiu já saiu dela. */
@@ -2138,6 +2152,74 @@ export function criarServidor({
           espera: aberta.espera.map((item) => (item.id === id ? sentou : item)),
         })
         return responder({ entrada: sentou, comanda })
+      },
+    },
+
+    /** O que o cliente faz pela vitrine da mesa (o QR). */
+    qr: {
+      /**
+       * "Chamar o garçom" ou "Pedir a conta". O chamado do mesmo tipo ainda aberto hoje não se
+       * repete. O de conta exige a comanda e marca "Pediu a conta", assinado pelo cliente.
+       */
+      async chamar(mesaId: string, tipo: Chamado["tipo"]): Promise<Chamado> {
+        const base = await carregar()
+        const mesa = mesaDoQr(base, mesaId)
+        const agora = new Date()
+        const comanda = comandaDa(base, mesa.id)
+        if (tipo === "conta" && !comanda) throw new Error("A mesa ainda não tem conta.")
+        const pedidos =
+          comanda && tipo === "conta"
+            ? base.pedidos.map((pedido) =>
+                pedido.id === comanda.id
+                  ? { ...comContaPedida(comanda, POR_QR), atualizadoEm: agora.toISOString() }
+                  : pedido,
+              )
+            : base.pedidos
+        const aberto = base.chamados.find(
+          (chamado) =>
+            chamado.mesaId === mesa.id &&
+            chamado.tipo === tipo &&
+            !chamado.atendidoEm &&
+            isSameDay(new Date(chamado.criadoEm), agora),
+        )
+        const chamado: Chamado = aberto ?? {
+          id: novoId("chamado")(),
+          mesaId: mesa.id,
+          tipo,
+          criadoEm: agora.toISOString(),
+        }
+        await substituir({
+          ...base,
+          pedidos,
+          chamados: aberto ? base.chamados : [...base.chamados, chamado],
+        })
+        return responder(chamado)
+      },
+    },
+
+    chamados: {
+      /** Os chamados de hoje, abertos e atendidos, pela hora. */
+      async listar(): Promise<Chamado[]> {
+        const agora = new Date()
+        return responder(
+          (await carregar()).chamados
+            .filter((chamado) => isSameDay(new Date(chamado.criadoEm), agora))
+            .toSorted((a, b) => Date.parse(a.criadoEm) - Date.parse(b.criadoEm)),
+        )
+      },
+
+      /** Grava a hora do atendimento: o tempo de resposta é dela até o chamado. */
+      async atender(id: string): Promise<Chamado> {
+        const base = await carregar()
+        const chamado = base.chamados.find((item) => item.id === id)
+        if (!chamado) throw new Error("Chamado não encontrado")
+        if (chamado.atendidoEm) throw new Error("Esse chamado já foi atendido.")
+        const atendido = { ...chamado, atendidoEm: new Date().toISOString() }
+        await substituir({
+          ...base,
+          chamados: base.chamados.map((item) => (item.id === id ? atendido : item)),
+        })
+        return responder(atendido)
       },
     },
 
