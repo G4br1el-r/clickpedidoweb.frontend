@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import { PEDIDOS_DE_TESTE } from "../regras/pedidos-de-teste"
 import { mesasSeCruzam } from "../regras/salao"
 import { catalogoDeTeste } from "./catalogo-de-teste"
-import { type BaseLojaV3, CONFIG_SALAO_PADRAO, migrarDaVersao3 } from "./migracao"
+import { type BaseLojaV4, CONFIG_SALAO_PADRAO, migrarDaVersao4 } from "./migracao"
 import type { Pedido } from "./tipos"
 
 const mesaDe = (id: number, garcom: string): Pedido => {
@@ -11,7 +11,7 @@ const mesaDe = (id: number, garcom: string): Pedido => {
   return { ...pedido, tipo: "mesa", mesa: { id: `mesa-${id}`, numero: id, garcom } }
 }
 
-function baseV2(): BaseLojaV3 {
+function baseV2(): BaseLojaV4 {
   const { mesas: _mesas, ...catalogo } = catalogoDeTeste()
   return {
     ...catalogo,
@@ -28,7 +28,7 @@ function baseV2(): BaseLojaV3 {
 }
 
 /** Base antiga só com mesas livres, para testar o espaço do mapa. */
-function baseV2ComMesas(quantidade: number): BaseLojaV3 {
+function baseV2ComMesas(quantidade: number): BaseLojaV4 {
   return {
     ...baseV2(),
     mesas: Array.from({ length: quantidade }, (_, indice) => ({
@@ -40,16 +40,16 @@ function baseV2ComMesas(quantidade: number): BaseLojaV3 {
   }
 }
 
-describe("migrarDaVersao3", () => {
+describe("migrarDaVersao4", () => {
   test("toda mesa vai para a área Salão, com 4 lugares e forma quadrada", () => {
-    const { mesas, salao } = migrarDaVersao3(baseV2())
+    const { mesas, salao } = migrarDaVersao4(baseV2())
     expect(salao.areas).toEqual([{ id: "area-salao", nome: "Salão", ordem: 1 }])
     for (const mesa of mesas)
       expect(mesa).toMatchObject({ areaId: "area-salao", lugares: 4, forma: "quadrada" })
   })
 
   test("posições em fileiras de 6, a cada 4 células", () => {
-    expect(migrarDaVersao3(baseV2()).mesas.map((mesa) => mesa.posicao)).toEqual([
+    expect(migrarDaVersao4(baseV2()).mesas.map((mesa) => mesa.posicao)).toEqual([
       { x: 0, y: 0 },
       { x: 4, y: 0 },
       { x: 8, y: 0 },
@@ -61,7 +61,7 @@ describe("migrarDaVersao3", () => {
   })
 
   test("taxa, couvert e limpeza começam desligados", () => {
-    const { salao } = migrarDaVersao3(baseV2())
+    const { salao } = migrarDaVersao4(baseV2())
     expect(salao.taxaServico).toEqual({ ativa: false, percentual: 10 })
     expect(salao.couvert).toEqual({ ativo: false, porPessoa: 0 })
     expect(salao.limpeza).toBe(false)
@@ -69,7 +69,7 @@ describe("migrarDaVersao3", () => {
   })
 
   test("alertas, reservas e QR começam com os valores padrão", () => {
-    const { salao } = migrarDaVersao3(baseV2())
+    const { salao } = migrarDaVersao4(baseV2())
     expect(salao.alertas).toEqual({
       semPedidoMin: 15,
       contaPedidaMin: 10,
@@ -81,7 +81,7 @@ describe("migrarDaVersao3", () => {
   })
 
   test("os garçons saem das comandas, sem repetir, em ordem alfabética", () => {
-    const { garcons } = migrarDaVersao3(baseV2()).salao
+    const { garcons } = migrarDaVersao4(baseV2()).salao
     expect(garcons.map((garcom) => garcom.nome)).toEqual(["Bia", "Paula"])
     expect(garcons).toEqual([
       { id: "garcom-bia", nome: "Bia", ativo: true },
@@ -92,7 +92,7 @@ describe("migrarDaVersao3", () => {
   test("o id do garçom não leva acento nem espaço", () => {
     const base = baseV2()
     base.pedidos = [mesaDe(7, "Maria José")]
-    expect(migrarDaVersao3(base).salao.garcons).toEqual([
+    expect(migrarDaVersao4(base).salao.garcons).toEqual([
       { id: "garcom-maria-jose", nome: "Maria José", ativo: true },
     ])
   })
@@ -100,13 +100,13 @@ describe("migrarDaVersao3", () => {
   test("o mesmo garçom escrito de jeitos diferentes vira um só, com a primeira grafia", () => {
     const base = baseV2()
     base.pedidos = [mesaDe(7, "Bia"), mesaDe(2, "bia "), mesaDe(1, "Bía")]
-    expect(migrarDaVersao3(base).salao.garcons).toEqual([
+    expect(migrarDaVersao4(base).salao.garcons).toEqual([
       { id: "garcom-bia", nome: "Bia", ativo: true },
     ])
   })
 
   test("com mais de 24 mesas, a 25ª cai no primeiro lugar livre do mapa, sem cruzar outra", () => {
-    const { mesas, salao } = migrarDaVersao3(baseV2ComMesas(25))
+    const { mesas, salao } = migrarDaVersao4(baseV2ComMesas(25))
     expect(salao.areas).toEqual([{ id: "area-salao", nome: "Salão", ordem: 1 }])
     expect(mesas[24]).toMatchObject({ areaId: "area-salao", posicao: { x: 2, y: 0 } })
     for (const [i, a] of mesas.entries())
@@ -114,7 +114,7 @@ describe("migrarDaVersao3", () => {
   })
 
   test("quando o Salão enche, a mesa seguinte vai para o Salão 2", () => {
-    const { mesas, salao } = migrarDaVersao3(baseV2ComMesas(97))
+    const { mesas, salao } = migrarDaVersao4(baseV2ComMesas(97))
     expect(salao.areas).toEqual([
       { id: "area-salao", nome: "Salão", ordem: 1 },
       { id: "area-salao-2", nome: "Salão 2", ordem: 2 },
@@ -124,7 +124,7 @@ describe("migrarDaVersao3", () => {
   })
 
   test("a mesa ocupada continua com a mesma comanda", () => {
-    expect(migrarDaVersao3(baseV2()).mesas[1]).toMatchObject({
+    expect(migrarDaVersao4(baseV2()).mesas[1]).toMatchObject({
       status: "ocupada",
       pedidoAtivoId: 7,
       clienteNome: "Cliente 7",
@@ -133,7 +133,7 @@ describe("migrarDaVersao3", () => {
 
   test("pedidos, produtos e estoque não mudam; reservas, espera e chamados começam vazios", () => {
     const base = baseV2()
-    const migrada = migrarDaVersao3(base)
+    const migrada = migrarDaVersao4(base)
     expect(migrada.pedidos).toEqual(base.pedidos)
     expect(migrada.produtos).toEqual(base.produtos)
     expect(migrada.movimentosEstoque).toEqual(base.movimentosEstoque)
