@@ -520,7 +520,8 @@ describe("PaginaMesas: grade por área", () => {
 
     expect(
       screen.getAllByRole("heading", { level: 2 }).map((titulo) => titulo.textContent),
-    ).toEqual(["Balcão", "Varanda", "Salão"])
+      // Fase 7: o painel de reservas vem antes da grade.
+    ).toEqual(["Reservas e espera", "Balcão", "Varanda", "Salão"])
     expect(screen.queryByRole("list", { name: "Terraço" })).not.toBeInTheDocument()
     expect(screen.queryByRole("heading", { name: "Terraço" })).not.toBeInTheDocument()
     // Varanda: mesas 11 a 16. Balcão: 17 a 20.
@@ -626,7 +627,7 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
 
     expect(await screen.findByRole("button", { name: /^Mesa 20\b/ })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /^Mesa 1\b/ })).not.toBeInTheDocument()
-    expect(screen.getAllByRole("listitem")).toHaveLength(1)
+    expect(screen.getAllByRole("button", { name: /^Mesa \d+$/ })).toHaveLength(1)
   })
   test("Precisam de atenção mostra a contagem e grava atencao=sim", async () => {
     const aoMudarUrl = vi.fn()
@@ -637,7 +638,7 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
     expect(aoMudarUrl).toHaveBeenLastCalledWith(
       expect.objectContaining({ queryString: "?atencao=sim" }),
     )
-    expect(screen.getAllByRole("listitem")).toHaveLength(1)
+    expect(screen.getAllByRole("button", { name: /^Mesa \d+$/ })).toHaveLength(1)
     // A contagem é de antes do próprio filtro: continua 1.
     expect(screen.getByRole("button", { name: "Precisam de atenção (1)" })).toHaveAttribute(
       "aria-pressed",
