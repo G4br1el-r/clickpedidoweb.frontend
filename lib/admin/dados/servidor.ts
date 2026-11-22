@@ -158,6 +158,7 @@ export type LancamentoMesa = {
   enviarParaCozinha: boolean
   /** Na mesa livre, tem que estar na lista do salão (quando ela existe). */
   garcom?: string
+  /** Só abre a comanda com ele: a comanda aberta (a da principal, na juntada) não muda de nome. */
   clienteNome?: string
   /** Quem lançou, para o histórico. Sem ele, assina o garçom do lançamento. */
   por?: string
@@ -2065,7 +2066,6 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
                     itens: [...aberta.itens, ...novos],
                     status: vaiParaCozinha ? "recebido" : aberta.status,
                     enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
-                    ...(cliente ? { cliente: { ...aberta.cliente, nome: cliente } } : {}),
                     atualizadoEm: agora,
                     estoqueBaixado: true,
                   }

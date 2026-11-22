@@ -453,6 +453,23 @@ describe("juntar e separar", () => {
     await expect(api.mesas.excluir(livre)).rejects.toThrow("Feche a conta antes de excluir a mesa.")
   })
 
+  test("o garçom lança na secundária com o nome de um cliente: a comanda da principal não muda de nome", async () => {
+    const api = servidor()
+    const { comanda } = await aberta(api)
+    const livre = await mesaNova(api, 31)
+    await api.mesas.juntar(comanda.id, [livre])
+
+    const lancada = await api.mesas.lancar({
+      mesaId: livre,
+      garcom: "Bia",
+      clienteNome: "João",
+      enviarParaCozinha: false,
+      itens: REFRI(1),
+    })
+
+    expect(lancada.cliente.nome).toBe("Mesa 30")
+  })
+
   test("fechar a conta da principal libera as duas e, com a limpeza ligada, põe as duas em limpeza", async () => {
     const api = servidor((catalogo) => {
       catalogo.salao.limpeza = true
