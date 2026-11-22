@@ -3,6 +3,7 @@ import {
   AGORA_DE_TESTE as AGORA,
   PEDIDOS_DE_TESTE as PEDIDOS,
   PERIODO_DE_TESTE as PERIODO,
+  pedidoDeTeste,
 } from "../pedidos-de-teste"
 import { resumir } from "./resumo"
 
@@ -104,5 +105,40 @@ describe("resumir", () => {
     expect(vazio.periodo).toMatchObject({ faturamento: 0, pedidos: 0, ticket: 0, melhorDia: null })
     expect(vazio.pagamentos).toEqual([])
     expect(vazio.serie.every((dia) => dia.faturamento === 0 && !dia.pico)).toBe(true)
+  })
+
+  test("conta paga em duas formas: cada parte soma na sua forma, e a taxa aparece separada", () => {
+    const item = {
+      id: "i1",
+      produtoId: "p",
+      nome: "Pizza",
+      quantidade: 1,
+      precoUnitario: 100,
+      opcoes: [],
+      total: 100,
+    }
+    const misto = pedidoDeTeste(20, new Date(2026, 10, 13, 19), 110, {
+      tipo: "mesa",
+      pagamento: "dinheiro",
+      itens: [item],
+      taxaServico: { percentual: 10 },
+      pagamentos: [
+        { id: "p1", forma: "pix", valor: 40, em: "" },
+        { id: "p2", forma: "dinheiro", valor: 70, em: "" },
+      ],
+    })
+    const resumo = resumir(
+      [misto, pedidoDeTeste(21, new Date(2026, 10, 13, 19), 30)],
+      PERIODO,
+      AGORA,
+    )
+    expect(resumo.pagamentos.map(({ forma, pedidos, total }) => [forma, pedidos, total])).toEqual([
+      // Empate no total: vem antes a forma com mais pedidos.
+      ["pix", 2, 70],
+      ["dinheiro", 1, 70],
+    ])
+    expect(resumo.pagamentos[0].percentual).toBeCloseTo(50, 2)
+    expect(resumo.taxaServico).toBe(10)
+    expect(resumir(PEDIDOS, PERIODO, AGORA).taxaServico).toBe(0)
   })
 })

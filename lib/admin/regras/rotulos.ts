@@ -3,6 +3,7 @@ import type {
   MotivoCancelamento,
   OrigemPedido,
   PagamentoConta,
+  Pedido,
   TipoPedido,
 } from "../dados/tipos"
 
@@ -52,6 +53,11 @@ export function rotuloDoPagamento({
     return cartao === "credito" ? "Cartão de crédito" : "Cartão de débito"
   }
   return PAGAMENTOS[forma]
+}
+/** A forma do pedido: "Misto" quando a conta foi paga em mais de uma forma. */
+export function rotuloPagamentoDoPedido(pedido: Pick<Pedido, "pagamento" | "pagamentos">) {
+  const formas = new Set((pedido.pagamentos ?? []).map((pagamento) => pagamento.forma))
+  return formas.size > 1 ? "Misto" : PAGAMENTOS[pedido.pagamento]
 }
 export const rotuloOrigem = (origem: OrigemPedido) => ORIGENS[origem]
 export const rotuloMotivo = (motivo: MotivoCancelamento | undefined) =>

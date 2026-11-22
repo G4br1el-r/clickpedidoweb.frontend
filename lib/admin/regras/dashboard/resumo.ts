@@ -1,5 +1,6 @@
 import { addDays, format, isSameDay, startOfDay } from "date-fns"
 import type { FormaPagamento, Pedido, StatusPedido, TipoPedido } from "../../dados/tipos"
+import { emCentavos, resumoDaConta } from "../conta"
 import { diasNoPeriodo, type Periodo, periodoAnterior } from "../periodo"
 import { ehValido, fatias, noPeriodo, reais, soma, ticket } from "./comum"
 
@@ -34,7 +35,10 @@ export type Resumo = {
     melhorDia: { data: Date; faturamento: number; pedidos: number } | null
   }
   serie: DiaDaSerie[]
+  /** Cada parte paga na sua forma: o pedido misto conta nas duas. */
   pagamentos: Fatia<{ forma: FormaPagamento }>[]
+  /** A taxa de serviço do período, à parte: é dos garçons, não da casa. */
+  taxaServico: number
   canais: Fatia<{ tipo: TipoPedido }>[]
   maisVendidos: { periodo: ProdutoVendido[]; hoje: ProdutoVendido[] }
   recentes: Pedido[]
@@ -62,6 +66,42 @@ function maisVendidos(pedidos: Pedido[], limite: number): ProdutoVendido[] {
   return [...produtos.values()]
     .sort((a, b) => b.quantidade - a.quantidade || b.total - a.total)
     .slice(0, limite)
+}
+
+/**
+ * As partes do pedido por forma: os pagamentos da conta (e o que falta, na forma do pedido) ou,
+ * sem eles, o total na forma do pedido.
+ */
+function partes(pedido: Pedido): { forma: FormaPagamento; valor: number }[] {
+  if (!pedido.pagamentos?.length) return [{ forma: pedido.pagamento, valor: pedido.total }]
+  const pago = pedido.pagamentos.reduce((soma, parte) => soma + emCentavos(parte.valor), 0)
+  const falta = emCentavos(pedido.total) - pago
+  return [
+    ...pedido.pagamentos,
+    ...(falta > 0 ? [{ forma: pedido.pagamento, valor: falta / 100 }] : []),
+  ]
+}
+
+/** Soma as partes por forma, do maior total para o menor (empate: mais pedidos). */
+function porForma(pedidos: Pedido[]): Fatia<{ forma: FormaPagamento }>[] {
+  const grupos = new Map<FormaPagamento, { centavos: number; pedidos: Set<number> }>()
+  for (const pedido of pedidos) {
+    for (const { forma, valor } of partes(pedido)) {
+      const grupo = grupos.get(forma) ?? { centavos: 0, pedidos: new Set<number>() }
+      grupo.centavos += emCentavos(valor)
+      grupo.pedidos.add(pedido.id)
+      grupos.set(forma, grupo)
+    }
+  }
+  const total = [...grupos.values()].reduce((soma, grupo) => soma + grupo.centavos, 0)
+  return [...grupos.entries()]
+    .map(([forma, grupo]) => ({
+      forma,
+      pedidos: grupo.pedidos.size,
+      total: grupo.centavos / 100,
+      percentual: total ? (grupo.centavos / total) * 100 : 0,
+    }))
+    .sort((a, b) => b.total - a.total || b.pedidos - a.pedidos)
 }
 
 /** Tudo o que a visão geral mostra, a partir dos pedidos do período e do anterior. */
@@ -125,10 +165,9 @@ export function resumir(pedidos: Pedido[], periodo: Periodo, agora: Date): Resum
       melhorDia: melhor,
     },
     serie: dias.map((dia) => ({ ...dia, hoje: isSameDay(dia.data, agora), pico: dia === melhor })),
-    pagamentos: fatias(validos, (pedido) => pedido.pagamento).map(({ valor, ...resto }) => ({
-      forma: valor,
-      ...resto,
-    })),
+    pagamentos: porForma(validos),
+    taxaServico:
+      validos.reduce((soma, pedido) => soma + emCentavos(resumoDaConta(pedido).taxa), 0) / 100,
     canais: fatias(validos, (pedido) => pedido.tipo).map(({ valor, ...resto }) => ({
       tipo: valor,
       ...resto,

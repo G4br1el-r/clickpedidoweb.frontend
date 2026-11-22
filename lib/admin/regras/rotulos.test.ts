@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { pedidoDeTeste } from "./pedidos-de-teste"
 import {
   MOTIVOS_CANCELAMENTO,
   rotuloCanal,
@@ -6,6 +7,7 @@ import {
   rotuloMotivo,
   rotuloOrigem,
   rotuloPagamento,
+  rotuloPagamentoDoPedido,
 } from "./rotulos"
 
 describe("rótulos", () => {
@@ -34,6 +36,30 @@ describe("rótulos", () => {
       "Cartão de débito",
     )
     expect(rotuloDoPagamento({ forma: "cartao-na-entrega" })).toBe("Cartão na maquininha")
+  })
+
+  test("a forma do pedido: Misto quando a conta foi paga em mais de uma forma", () => {
+    const pedido = pedidoDeTeste(1, new Date(2026, 10, 13, 20), 100, { pagamento: "dinheiro" })
+    const pagamento = (forma: "pix" | "dinheiro", valor: number) => ({
+      id: forma + valor,
+      forma,
+      valor,
+      em: "",
+    })
+    expect(
+      rotuloPagamentoDoPedido({
+        ...pedido,
+        pagamentos: [pagamento("pix", 40), pagamento("dinheiro", 60)],
+      }),
+    ).toBe("Misto")
+    expect(
+      rotuloPagamentoDoPedido({
+        ...pedido,
+        pagamento: "pix",
+        pagamentos: [pagamento("pix", 40), pagamento("pix", 60)],
+      }),
+    ).toBe("Pix")
+    expect(rotuloPagamentoDoPedido(pedido)).toBe("Dinheiro")
   })
 
   test("motivos do cancelamento, na ordem da lista; sem motivo, Não informado", () => {
