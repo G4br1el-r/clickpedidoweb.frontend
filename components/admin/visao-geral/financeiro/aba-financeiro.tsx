@@ -9,6 +9,7 @@ import {
   descontosDoPdv,
   formasDePagamento,
   reguaFinanceira,
+  taxaDeServico,
   taxasEstimadas,
 } from "@/lib/admin/regras/dashboard/financeiro"
 import { margemDoPeriodo } from "@/lib/admin/regras/dashboard/produtos"
@@ -45,6 +46,7 @@ export function AbaFinanceiro({
   const margem = useMemo(() => margemDoPeriodo(pedidos, periodo), [pedidos, periodo])
   const receber = useMemo(() => aReceber(pedidos, periodo), [pedidos, periodo])
   const formas = useMemo(() => formasDePagamento(pedidos, periodo), [pedidos, periodo])
+  const taxaServico = useMemo(() => taxaDeServico(pedidos, periodo), [pedidos, periodo])
   const noPeriodo = `de=${dia(periodo.de)}&ate=${dia(periodo.ate)}`
   const abertos = [
     receber.naEntrega.pedidos > 0 &&
@@ -109,7 +111,15 @@ export function AbaFinanceiro({
       </Secao>
 
       <div className="grid gap-x-10 gap-y-10 lg:grid-cols-2">
-        <Secao titulo="Formas de pagamento" descricao="No período">
+        <Secao
+          titulo="Formas de pagamento"
+          descricao={
+            // O líquido fica sem a taxa; aqui é o que entrou no caixa (Q34).
+            taxaServico > 0
+              ? "No período. O que entrou no caixa, inclui a taxa de serviço"
+              : "No período"
+          }
+        >
           <ListaDeFatias
             vazio="Nenhuma venda no período."
             itens={formas.map((fatia) => ({
@@ -153,6 +163,15 @@ export function AbaFinanceiro({
           )}
         </Secao>
       </div>
+
+      {/* A taxa de serviço é dos garçons, não da casa: aparece à parte (Q34). */}
+      {taxaServico > 0 && (
+        <Secao titulo="Taxa de serviço" descricao="No período, dos garçons">
+          <p className="text-2xl font-semibold tracking-tight tabular-nums">
+            {emReais(taxaServico)}
+          </p>
+        </Secao>
+      )}
     </div>
   )
 }

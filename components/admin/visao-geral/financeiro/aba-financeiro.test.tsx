@@ -138,3 +138,46 @@ describe("AbaFinanceiro", () => {
     )
   })
 })
+
+describe("AbaFinanceiro: taxa de serviço (Q34)", () => {
+  /** Conta de mesa de R$ 110,00 (100 + 10% de taxa), paga em Pix no período. */
+  const contaDeMesa = pedidoDeTeste(20, NO_PERIODO, 110, {
+    tipo: "mesa",
+    mesa: { id: "mesa-1", numero: 1, pessoas: 2 },
+    subtotal: 100,
+    pagamento: "pix",
+    taxaServico: { percentual: 10 },
+    itens: [
+      {
+        id: "20",
+        produtoId: "Pizza",
+        nome: "Pizza",
+        quantidade: 1,
+        precoUnitario: 100,
+        total: 100,
+        opcoes: [],
+      },
+    ],
+    pagoEm: new Date(2026, 10, 13, 20).toISOString(),
+    pagamentos: [{ id: "p20", forma: "pix", valor: 110, em: "" }],
+  })
+
+  test("a taxa de serviço aparece à parte, dos garçons", () => {
+    renderizar({ pedidos: [...PEDIDOS, contaDeMesa] })
+    const taxa = screen.getByRole("region", { name: "Taxa de serviço" })
+    expect(taxa).toHaveTextContent("R$ 10,00")
+    expect(taxa).toHaveTextContent("dos garçons")
+  })
+
+  test("com taxa de serviço, as formas de pagamento avisam que incluem a taxa", () => {
+    renderizar({ pedidos: [...PEDIDOS, contaDeMesa] })
+    expect(screen.getByRole("region", { name: "Formas de pagamento" })).toHaveTextContent(
+      "O que entrou no caixa, inclui a taxa de serviço",
+    )
+  })
+
+  test("sem taxa de serviço no período, o bloco não aparece", () => {
+    renderizar()
+    expect(screen.queryByRole("region", { name: "Taxa de serviço" })).not.toBeInTheDocument()
+  })
+})
