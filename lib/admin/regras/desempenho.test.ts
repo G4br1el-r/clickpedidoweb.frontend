@@ -147,6 +147,17 @@ describe("numerosDoPeriodo", () => {
 
 const HOJE = { de: new Date(2026, 10, 13), ate: new Date(2026, 10, 13) }
 
+test("numerosDoPeriodo: sem nada no período, os números ficam zerados", () => {
+  expect(numerosDoPeriodo([], HOJE, { agora: AGORA, tempos: TEMPOS })).toEqual({
+    tickets: 0,
+    tempoMedioMin: null,
+    noPrazoPct: 0,
+    refeitos: 0,
+    retrabalhoPct: 0,
+    canceladosDepoisDeIniciar: 0,
+  })
+})
+
 describe("porHora", () => {
   test("tickets e tempo médio pela hora da chegada, só nas horas com movimento", () => {
     const pedidos = [
@@ -191,16 +202,23 @@ describe("porTipo e porPraca", () => {
       imprime: true,
       tocaSom: true,
     })
-    const pracas = [praca("forno", "Forno", ["pizzas"]), praca("bar", "Bar", ["bebidas"])]
+    const pracas = [
+      praca("forno", "Forno", ["pizzas"]),
+      praca("bar", "Bar", ["bebidas"]),
+      praca("chapa", "Chapa", ["lanches"]),
+    ]
     const produtos = [
       { id: "Pizza", categoriaId: "pizzas" },
       { id: "Coca", categoriaId: "bebidas" },
+      { id: "Lanche", categoriaId: "lanches" },
     ] as Produto[]
     const pedidos = [
       pedido({
         itens: [item("Pizza", { feitoEm: as("20:20") }), item("Coca", { feitoEm: as("20:02") })],
       }),
       pedido({ itens: [item("Pizza", { feitoEm: as("20:10") })] }),
+      // A Chapa ainda não terminou nenhum: fica de fora.
+      pedido({ status: "em-preparo", itens: [item("Lanche", { iniciadoEm: as("20:05") })] }),
     ]
     expect(porPraca(pedidos, HOJE, { agora: AGORA, tempos: TEMPOS, produtos, pracas })).toEqual([
       { id: "forno", nome: "Forno", tickets: 2, tempoMedioMin: 15 },
@@ -230,6 +248,17 @@ describe("produtosDemorados", () => {
       { produtoId: "C", nome: "C", vezes: 1, tempoMedioMin: 4 },
       { produtoId: "B", nome: "B", vezes: 1, tempoMedioMin: 3 },
       { produtoId: "Coca", nome: "Coca", vezes: 1, tempoMedioMin: 2 },
+    ])
+  })
+
+  test("o item avulso, sem produto do cardápio, junta pelo nome", () => {
+    const porcao = (feitoEm: string) => item("Porção", { produtoId: null, feitoEm })
+    const pedidos = [
+      pedido({ itens: [porcao(as("20:10"))] }),
+      pedido({ itens: [porcao(as("20:20"))] }),
+    ]
+    expect(produtosDemorados(pedidos, HOJE, { agora: AGORA, tempos: TEMPOS })).toEqual([
+      { produtoId: null, nome: "Porção", vezes: 2, tempoMedioMin: 15 },
     ])
   })
 })

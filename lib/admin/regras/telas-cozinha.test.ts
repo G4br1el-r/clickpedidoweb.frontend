@@ -67,4 +67,12 @@ describe("numerosDaChamada", () => {
     ]
     expect(numerosDaChamada(pedidos)).toEqual({ preparando: [11, 12], prontos: [10, 9] })
   })
+
+  test("pronta sem a hora do pronto entra pela hora do pedido", () => {
+    const pedidos = [
+      pedido(6, "pronto", { etapas: { pronto: as("20:20") } }),
+      pedido(5, "pronto", { criadoEm: as("20:25") }),
+    ]
+    expect(numerosDaChamada(pedidos).prontos).toEqual([5, 6])
+  })
 })

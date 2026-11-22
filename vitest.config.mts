@@ -38,12 +38,12 @@ export default defineConfig({
       reporter: ["text", "html"],
       include: ["lib/**/*.{ts,tsx}", "hooks/**/*.{ts,tsx}", "components/**/*.{ts,tsx}"],
       exclude: ["components/ui/**", "lib/mock/**", "**/*.d.ts", "**/*.test.{ts,tsx}"],
-      // Mínimos medidos em 2026-11-22, arredondados para baixo. Só sobem, nunca descem.
+      // Mínimos medidos em 2026-11-22 (depois do merge do main), arredondados para baixo. Só sobem, nunca descem.
       thresholds: {
-        statements: 83,
-        branches: 75,
-        functions: 82,
-        lines: 84,
+        statements: 85,
+        branches: 77,
+        functions: 84,
+        lines: 86,
         "lib/**": { statements: 98, branches: 95, functions: 98, lines: 98 },
       },
     },
