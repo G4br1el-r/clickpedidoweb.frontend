@@ -2643,8 +2643,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           const mesa = aberta
             ? (base.mesas.find((item) => item.id === mesaDestinoId) as Mesa)
             : mesaLivreParaReceber(base, origem, mesaDestinoId, confirmarReserva)
+          // A mesa aberta não fica bloqueada (bloquear pede a conta fechada); a livre passa por
+          // mesaLivreParaReceber, que recusa a bloqueada.
           if (aberta?.id === origem.id) throw new Error("Escolha outra mesa.")
-          if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
           const agora = new Date().toISOString()
           let ficam = origem.itens
           const vao: ItemPedido[] = []
