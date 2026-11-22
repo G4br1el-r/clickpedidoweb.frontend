@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vitest"
+import { indicadoresSalao } from "../indicadores-salao"
 import {
   AGORA_DE_TESTE as AGORA,
   PEDIDOS_DE_TESTE as PEDIDOS,
   PERIODO_DE_TESTE as PERIODO,
+  pedidoDeTeste,
 } from "../pedidos-de-teste"
 import { resumir } from "./resumo"
 
@@ -104,5 +106,115 @@ describe("resumir", () => {
     expect(vazio.periodo).toMatchObject({ faturamento: 0, pedidos: 0, ticket: 0, melhorDia: null })
     expect(vazio.pagamentos).toEqual([])
     expect(vazio.serie.every((dia) => dia.faturamento === 0 && !dia.pico)).toBe(true)
+  })
+
+  test("conta paga em duas formas: cada parte soma na sua forma, e a taxa aparece separada", () => {
+    const item = {
+      id: "i1",
+      produtoId: "p",
+      nome: "Pizza",
+      quantidade: 1,
+      precoUnitario: 100,
+      opcoes: [],
+      total: 100,
+    }
+    const misto = pedidoDeTeste(20, new Date(2026, 10, 13, 19), 110, {
+      tipo: "mesa",
+      pagamento: "dinheiro",
+      itens: [item],
+      taxaServico: { percentual: 10 },
+      pagoEm: new Date(2026, 10, 13, 20).toISOString(),
+      pagamentos: [
+        { id: "p1", forma: "pix", valor: 40, em: "" },
+        { id: "p2", forma: "dinheiro", valor: 70, em: "" },
+      ],
+    })
+    const resumo = resumir(
+      [misto, pedidoDeTeste(21, new Date(2026, 10, 13, 19), 30)],
+      PERIODO,
+      AGORA,
+    )
+    expect(resumo.pagamentos.map(({ forma, pedidos, total }) => [forma, pedidos, total])).toEqual([
+      // Empate no total: vem antes a forma com mais pedidos.
+      ["pix", 2, 70],
+      ["dinheiro", 1, 70],
+    ])
+    expect(resumo.pagamentos[0].percentual).toBeCloseTo(50, 2)
+    expect(resumo.taxaServico).toBe(10)
+    expect(resumir(PEDIDOS, PERIODO, AGORA).taxaServico).toBe(0)
+  })
+
+  describe("taxa de serviço (Q34): é do garçom, e não da casa", () => {
+    const pizza = {
+      id: "i1",
+      produtoId: "p",
+      nome: "Pizza",
+      quantidade: 1,
+      precoUnitario: 100,
+      opcoes: [],
+      total: 100,
+    }
+    /** Conta de mesa de R$ 110,00 (100 + 10% de taxa), aberta e paga em `dia`. */
+    const contaDeMesa = (id: number, criada: Date, paga?: Date) =>
+      pedidoDeTeste(id, criada, 110, {
+        tipo: "mesa",
+        mesa: { id: "mesa-1", numero: 1, pessoas: 2 },
+        itens: [pizza],
+        subtotal: 100,
+        taxaServico: { percentual: 10 },
+        ...(paga
+          ? {
+              pagoEm: paga.toISOString(),
+              pagamentos: [
+                { id: `p${id}`, forma: "pix" as const, valor: 110, em: paga.toISOString() },
+              ],
+            }
+          : { status: "pronto" as const, situacaoPagamento: "na-entrega" as const }),
+      })
+
+    test("o faturamento, o ticket, a série e o melhor dia ficam sem a taxa", () => {
+      const hoje = new Date(2026, 10, 13, 19)
+      const resumo = resumir(
+        [contaDeMesa(20, hoje, hoje), pedidoDeTeste(21, hoje, 30)],
+        PERIODO,
+        AGORA,
+      )
+      expect(resumo.hoje).toMatchObject({ pedidos: 2, faturamento: 130, ticket: 65 })
+      expect(resumo.periodo).toMatchObject({ faturamento: 130, ticket: 65 })
+      expect(resumo.periodo.melhorDia).toMatchObject({ faturamento: 130 })
+      expect(resumo.serie.at(-1)).toMatchObject({ faturamento: 130 })
+      expect(resumo.canais.map(({ tipo, total }) => [tipo, total])).toEqual([
+        ["mesa", 100],
+        ["retirada", 30],
+      ])
+      // As formas mostram o que entrou no caixa, com a taxa.
+      expect(resumo.pagamentos.map(({ forma, total }) => [forma, total])).toEqual([["pix", 140]])
+    })
+
+    test("o bloco da taxa soma só as contas pagas, pelo dia do pagamento", () => {
+      const pagas = resumir(
+        [
+          // Aberta às 23:40 do dia 11 e paga às 00:10 do dia 12: entra no período.
+          contaDeMesa(30, new Date(2026, 10, 11, 23, 40), new Date(2026, 10, 12, 0, 10)),
+          contaDeMesa(31, new Date(2026, 10, 13, 19), new Date(2026, 10, 13, 20)),
+        ],
+        PERIODO,
+        AGORA,
+      )
+      expect(pagas.taxaServico).toBe(20)
+      // Ainda aberta: a taxa não foi paga.
+      expect(
+        resumir([contaDeMesa(32, new Date(2026, 10, 13, 19))], PERIODO, AGORA).taxaServico,
+      ).toBe(0)
+    })
+
+    test("o Início e a tela de Mesas dão o mesmo faturamento do salão no dia", () => {
+      const hoje = new Date(2026, 10, 13, 19)
+      const conta = contaDeMesa(40, hoje, new Date(2026, 10, 13, 20))
+      const resumo = resumir([conta], PERIODO, AGORA)
+      const salao = indicadoresSalao({ mesas: [], abertas: [], concluidos: [conta], agora: AGORA })
+      expect(resumo.hoje.faturamento).toBe(100)
+      expect(salao.faturamento).toBe(100)
+    })
   })
 })

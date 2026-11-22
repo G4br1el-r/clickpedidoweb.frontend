@@ -13,16 +13,25 @@ import {
   useCancelarComanda,
   useConfigSalao,
   useCriarMesa,
+  useDarCortesia,
   useDesbloquearMesa,
+  useDescontar,
   useEditarItem,
   useEditarMesa,
+  useEstornarPagamento,
+  useImprimirPreConta,
   useLancarNaMesa,
   useMarcarLimpa,
   useMarcarServido,
   useMesas,
+  usePagar,
   usePedirConta,
+  useReabrirConta,
   useRemoverItem,
   useSalvarConfigSalao,
+  useTirarCouvert,
+  useTirarTaxa,
+  useUltimaConta,
 } from "./consultas-mesas"
 import type { Mesa } from "./tipos"
 
@@ -45,6 +54,16 @@ afterEach(() => {
   vi.useRealTimers()
 })
 
+/** A pizzaria da demonstração cobra taxa e couvert: aqui o teste confere só a soma dos itens. */
+async function semTaxaNemCouvert(api: ReturnType<typeof servidorDo>) {
+  const salao = await api.salao.config()
+  await api.salao.salvar({
+    ...salao,
+    taxaServico: { ...salao.taxaServico, ativa: false },
+    couvert: { ...salao.couvert, ativo: false },
+  })
+}
+
 describe("consultas das mesas", () => {
   test("salvar a configuração do salão atualiza a configuração e as mesas", async () => {
     const api = servidorDo("pizzaria")
@@ -65,6 +84,7 @@ describe("consultas das mesas", () => {
 
   test("lançar na mesa traz a comanda nova para quem a tem aberta", async () => {
     const api = servidorDo("pizzaria")
+    await semTaxaNemCouvert(api)
     const mesa = await api.mesas.criar({ numero: 81 })
     const comanda = await api.mesas.lancar({
       mesaId: mesa.id,
@@ -89,6 +109,7 @@ describe("consultas das mesas", () => {
 
   test("a quantidade muda na hora e volta se o servidor recusar", async () => {
     const api = servidorDo("pizzaria")
+    await semTaxaNemCouvert(api)
     const mesa = await api.mesas.criar({ numero: 80 })
     const comanda = await api.mesas.lancar({
       mesaId: mesa.id,
@@ -115,6 +136,34 @@ describe("consultas das mesas", () => {
     await waitFor(() => expect(result.current.alterar.isError).toBe(true))
     expect(result.current.comanda.data?.itens[0].quantidade).toBe(3)
     expect(result.current.comanda.data?.total).toBe(12)
+  })
+
+  test("a previsão da quantidade já conta a taxa e o couvert da comanda", async () => {
+    const api = servidorDo("pizzaria")
+    const mesa = await api.mesas.criar({ numero: 82 })
+    // Água de R$ 4,00 na pizzaria: 10% de taxa e R$ 8,00 de couvert para 1 pessoa.
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    const { result } = renderHook(
+      () => ({ comanda: usePedido(comanda.id), alterar: useAlterarQuantidade() }),
+      { wrapper: envolver() },
+    )
+    await waitFor(() => expect(result.current.comanda.data?.total).toBe(12.4))
+
+    // A rede demora: o servidor ainda não respondeu quando a tela muda.
+    vi.spyOn(api.mesas, "alterarQuantidade").mockReturnValue(new Promise(() => {}))
+    act(() =>
+      result.current.alterar.mutate({
+        pedidoId: comanda.id,
+        itemId: comanda.itens[0].id,
+        quantidade: 3,
+      }),
+    )
+    // Antes de o servidor responder, a tela já mostra 12 + 1,20 + 8.
+    await waitFor(() => expect(result.current.comanda.data?.total).toBe(21.2))
   })
 
   test("diminuir o que a cozinha preparou repassa o motivo e quem tirou", async () => {
@@ -286,5 +335,84 @@ describe("consultas das mesas", () => {
     await waitFor(() =>
       expect(result.current.mesas.data?.find((item) => item.id === mesa.id)?.status).toBe("livre"),
     )
+  })
+
+  test("a conta: desconto, cortesia, taxa, couvert, pagar, estornar, pré-conta, fechar e reabrir", async () => {
+    const api = servidorDo("pizzaria")
+    const mesa = await api.mesas.criar({ numero: 83 })
+    const aberta = await api.mesas.abrir(mesa.id, { pessoas: 2, garcom: "Bia" })
+    const lancada = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [
+        { avulso: { nome: "Pizza", preco: 40 }, quantidade: 1 },
+        { avulso: { nome: "Água", preco: 4 }, quantidade: 1 },
+      ],
+    })
+    const [, agua] = lancada.itens
+    const { result } = renderHook(
+      () => ({
+        comanda: usePedido(aberta.id),
+        ultima: useUltimaConta(mesa.id),
+        descontar: useDescontar(),
+        cortesia: useDarCortesia(),
+        tirarTaxa: useTirarTaxa(),
+        tirarCouvert: useTirarCouvert(),
+        pagar: usePagar(),
+        estornar: useEstornarPagamento(),
+        preConta: useImprimirPreConta(),
+        reabrir: useReabrirConta(),
+      }),
+      { wrapper: envolver() },
+    )
+    // 44 + 4,40 de taxa + 16 de couvert.
+    await waitFor(() => expect(result.current.comanda.data?.total).toBe(64.4))
+    await waitFor(() => expect(result.current.ultima.isSuccess).toBe(true))
+    expect(result.current.ultima.data).toBeNull()
+
+    await act(() =>
+      result.current.descontar.mutateAsync({
+        pedidoId: aberta.id,
+        modo: "reais",
+        valor: 4,
+        motivo: "Demora",
+      }),
+    )
+    await waitFor(() => expect(result.current.comanda.data?.total).toBe(60))
+    await act(() =>
+      result.current.cortesia.mutateAsync({
+        pedidoId: aberta.id,
+        itemId: agua.id,
+        motivo: "Brinde",
+      }),
+    )
+    await act(() => result.current.tirarTaxa.mutateAsync({ pedidoId: aberta.id, motivo: "Pedido" }))
+    await act(() =>
+      result.current.tirarCouvert.mutateAsync({ pedidoId: aberta.id, motivo: "Pedido" }),
+    )
+    // 44 − 4 de cortesia − 4 de desconto.
+    await waitFor(() => expect(result.current.comanda.data?.total).toBe(36))
+
+    const paga = await act(() =>
+      result.current.pagar.mutateAsync({ pedidoId: aberta.id, forma: "pix", valor: 10 }),
+    )
+    const [pix] = paga.pagamentos ?? []
+    await act(() =>
+      result.current.estornar.mutateAsync({
+        pedidoId: aberta.id,
+        pagamentoId: pix.id,
+        motivo: "Errado",
+      }),
+    )
+    await waitFor(() => expect(result.current.comanda.data?.pagamentos).toEqual([]))
+    await act(() => result.current.preConta.mutateAsync({ pedidoId: aberta.id, por: "Bia" }))
+    await waitFor(() => expect(result.current.comanda.data?.contaPedidaEm).toBeDefined())
+
+    await act(() => result.current.pagar.mutateAsync({ pedidoId: aberta.id, forma: "dinheiro" }))
+    await waitFor(() => expect(result.current.comanda.data?.status).toBe("concluido"))
+    await waitFor(() => expect(result.current.ultima.data?.id).toBe(aberta.id))
+
+    await act(() => result.current.reabrir.mutateAsync({ pedidoId: aberta.id, motivo: "Erro" }))
+    await waitFor(() => expect(result.current.comanda.data?.status).toBe("pronto"))
   })
 })

@@ -147,4 +147,46 @@ describe("indicadoresSalao", () => {
       giro: null,
     })
   })
+
+  it("faturamento: os pagamentos de hoje sem a taxa, inclusive o parcial de uma comanda aberta", () => {
+    const item = {
+      id: "i1",
+      produtoId: "p",
+      nome: "Pizza",
+      quantidade: 1,
+      precoUnitario: 100,
+      opcoes: [],
+      total: 100,
+    }
+    // R$ 100,00 de itens com 10%: total 110. Fechada hoje, paga 55 ontem e 55 hoje.
+    const fechada = paga(1, AGORA, 110, 2, new Date(2026, 10, 12, 22))
+    fechada.itens = [item]
+    fechada.taxaServico = { percentual: 10 }
+    fechada.pagamentos = [
+      { id: "p1", forma: "pix", valor: 55, em: new Date(2026, 10, 12, 23).toISOString() },
+      { id: "p2", forma: "dinheiro", valor: 55, em: AGORA.toISOString() },
+    ]
+    // Aberta, R$ 40,00 sem taxa, com R$ 20,00 pagos hoje.
+    const aberta = pedidoDeTeste(2, AGORA, 40, {
+      tipo: "mesa",
+      status: "pronto",
+      situacaoPagamento: "na-entrega",
+      mesa: { id: "m2", numero: 2, pessoas: 2 },
+      pagamentos: [{ id: "p3", forma: "pix", valor: 20, em: AGORA.toISOString() }],
+    })
+    const numeros = indicadoresSalao(entrada({ abertas: [aberta], concluidos: [fechada] }))
+    expect(numeros.faturamento).toBe(70)
+    // Os tickets contam só a conta fechada hoje, sem a taxa: R$ 100,00 para 2 pessoas.
+    expect(numeros.ticketPorPessoa).toBe(50)
+    expect(numeros.ticketPorMesa).toBe(100)
+  })
+
+  it("aberta às 23:40 e paga às 00:10: entra no faturamento do dia do pagamento", () => {
+    const virada = paga(1, new Date(2026, 10, 14, 0, 10), 80, 1, new Date(2026, 10, 13, 23, 40))
+    expect(indicadoresSalao(entrada({ concluidos: [virada] })).faturamento).toBe(0)
+    expect(
+      indicadoresSalao(entrada({ concluidos: [virada], agora: new Date(2026, 10, 14, 1) }))
+        .faturamento,
+    ).toBe(80)
+  })
 })

@@ -40,6 +40,20 @@ const numeros = () =>
     .map((linha) => within(linha).getAllByRole("cell")[0].textContent)
 
 describe("ListaPedidos", () => {
+  test("a conta paga em mais de uma forma aparece como Misto", () => {
+    const [primeiro, ...resto] = PEDIDOS_DE_TESTE
+    const misto: Pedido = {
+      ...primeiro,
+      pagamentos: [
+        { id: "p1", forma: "pix", valor: 20, em: primeiro.criadoEm },
+        { id: "p2", forma: "dinheiro", valor: 40, em: primeiro.criadoEm },
+      ],
+    }
+    renderizar([misto, ...resto])
+    const linha = screen.getAllByRole("row").find((item) => item.textContent?.includes("#8"))
+    expect(linha).toHaveTextContent("Misto")
+  })
+
   test("mostra os pedidos do mais novo para o mais antigo, com o total da lista", () => {
     renderizar(PEDIDOS_DE_TESTE)
     expect(numeros()).toEqual(["#6", "#5", "#4", "#3", "#2", "#1", "#7", "#8"])

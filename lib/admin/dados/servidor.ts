@@ -1,6 +1,6 @@
 import { addDays, addMinutes, endOfDay, format, isSameDay, startOfDay, subDays } from "date-fns"
 import { del, get, set } from "idb-keyval"
-import { plural } from "../../formato"
+import { emReais, plural } from "../../formato"
 import { expediente, horariosLivres, INTERVALO_MIN } from "../regras/agenda"
 import {
   copiarProduto,
@@ -9,6 +9,15 @@ import {
   sincronizarOpcoes,
   soltarOpcoesDe,
 } from "../regras/cardapio"
+import {
+  comTotais,
+  erroDoDesconto,
+  itensPagos,
+  pagamentosDoPedido,
+  resumoDaConta,
+  trocoDoPagamento,
+  valorDosItens,
+} from "../regras/conta"
 import { cozinhaJaPreparou, depoisDeTirar, itensDaCozinha } from "../regras/cozinha"
 import { esquemaLoja } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
@@ -29,6 +38,7 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
+import { rotuloDoPagamento } from "../regras/rotulos"
 import { mesasSeCruzam, primeiraPosicaoLivre } from "../regras/salao"
 import { proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
@@ -39,10 +49,12 @@ import { type BaseLojaV3, migrarDaVersao3 } from "./migracao"
 import {
   type Bairro,
   type BaseLoja,
+  type CartaoPagamento,
   type CatalogoLoja,
   type Categoria,
   type ConfigLoja,
   type ConfigSalao,
+  type DescontoConta,
   type EventoComanda,
   FORMAS_MESA,
   type FormaMesa,
@@ -51,6 +63,7 @@ import {
   type MotivoCancelamento,
   type Motoboy,
   type MovimentoEstoque,
+  type PagamentoConta,
   type Pedido,
   type Produto,
   type StatusPedido,
@@ -143,6 +156,19 @@ export type LancamentoMesa = {
   por?: string
 }
 
+/**
+ * Um pagamento da conta. `valor` é a parte que abate do saldo (no dinheiro, acima do saldo vira
+ * troco); por item, o valor sai dos itens. `recebido`: o que o cliente entregou em dinheiro.
+ */
+export type Pagamento = {
+  forma: PagamentoMesa
+  valor?: number
+  recebido?: number
+  cartao?: CartaoPagamento
+  itens?: string[]
+  por?: string
+}
+
 /** Parte de um item preparado que saiu da comanda: não volta ao estoque. */
 type Perda = { item: ItemPedido; quantidade: number; motivo: string }
 
@@ -205,6 +231,9 @@ function abrirMesas(base: BaseLoja): BaseLoja {
 }
 
 const reais = (valor: number) => Math.round(valor * 100) / 100
+
+/** Valor em reais e centavos, sem fração de centavo. */
+const emCentavosExatos = (valor: number) => Number.isInteger(Number((valor * 100).toFixed(6)))
 
 /** Comanda aberta da mesa, se houver. */
 const comandaDa = (base: BaseLoja, mesaId: string) =>
@@ -306,13 +335,46 @@ function retirar(
   })
 }
 
+/**
+ * O saldo zerou: a comanda fica concluída e paga. A forma do pedido é a do maior pagamento (o
+ * primeiro, no empate), e o troco do pedido só vale quando houve um pagamento único em dinheiro.
+ */
+function fechada(comanda: Pedido, agora: string, por: string | undefined): Pedido {
+  const pagamentos = comanda.pagamentos ?? []
+  const maior = pagamentos.reduce<PagamentoConta | undefined>(
+    (atual, pagamento) => (!atual || pagamento.valor > atual.valor ? pagamento : atual),
+    undefined,
+  )
+  const { trocoPara: _troco, ...semTroco } = comanda
+  const [unico] = pagamentos
+  return comEvento(
+    {
+      ...semTroco,
+      status: "concluido",
+      situacaoPagamento: "pago",
+      pagoEm: agora,
+      pagamento: maior?.forma ?? comanda.pagamento,
+      ...(pagamentos.length === 1 && unico.recebido ? { trocoPara: unico.recebido } : {}),
+    },
+    { tipo: "fechada", em: agora, ...autor(por), texto: "Conta fechada" },
+  )
+}
+
+/** A mesa pediu a conta: grava a hora e o evento, ou mantém a primeira hora. */
+function comContaPedida(comanda: Pedido, por: string | undefined): Pedido {
+  if (comanda.itens.length === 0) throw new Error("Lance algum item antes de pedir a conta.")
+  if (comanda.contaPedidaEm) return comanda
+  const agora = new Date().toISOString()
+  return comEvento(
+    { ...comanda, contaPedidaEm: agora },
+    { tipo: "conta-pedida", em: agora, ...autor(por), texto: "Pediu a conta" },
+  )
+}
+
 const semContaPedida = ({ contaPedidaEm: _contaPedidaEm, ...comanda }: Pedido): Pedido => comanda
 
-/** Subtotal e total da comanda refeitos a partir dos itens. */
-function recalcular(pedido: Pedido): Pedido {
-  const subtotal = reais(pedido.itens.reduce((soma, item) => soma + item.total, 0))
-  return { ...pedido, subtotal, total: reais(subtotal - pedido.desconto) }
-}
+/** Subtotal, desconto e total da comanda refeitos pela conta (com taxa e couvert). */
+const recalcular = comTotais
 
 /** A ação partiu da etapa que a tela mostrava; se outra aba mudou o pedido, recusa. */
 function conferirEtapa(pedido: Pedido, de: StatusPedido) {
@@ -412,8 +474,30 @@ function aplicarEstoque(
   return atual
 }
 
-/** Pedido de um dia que já passou não fica aberto: entrega e comanda viram concluídas. */
-function encerrar(pedido: Pedido, momento: string): Pedido {
+/**
+ * Pedido de um dia que já passou não fica aberto: entrega e comanda viram concluídas. A conta de
+ * mesa só fecha recebendo: a comanda que alguém mexeu (tem histórico) continua aberta na virada
+ * do dia. Só a da demonstração, intocada, fecha sozinha, com o resto pago na forma dela.
+ */
+function encerrar(antes: Pedido, momento: string): Pedido {
+  const comandaAberta = antes.tipo === "mesa" && EM_ANDAMENTO.includes(antes.status)
+  if (comandaAberta && antes.eventos?.length) return antes
+  const { saldo } = resumoDaConta(antes)
+  const pedido: Pedido =
+    comandaAberta && antes.pagamentos?.length && saldo > 0
+      ? {
+          ...antes,
+          pagamentos: [
+            ...antes.pagamentos,
+            {
+              id: `pag-${antes.id}-resto`,
+              forma: antes.pagamento as PagamentoMesa,
+              valor: saldo,
+              em: momento,
+            },
+          ],
+        }
+      : antes
   if (pedido.status === "aguardando-pagamento") {
     return comEtapa(
       { ...pedido, status: "cancelado", situacaoPagamento: "cancelado", atualizadoEm: momento },
@@ -499,6 +583,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       agora,
       ...(ultimo ? { ultimo } : {}),
       agendamentos: anteriores,
+      mesasOcupadas: anteriores
+        .filter((pedido) => pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status))
+        .flatMap((pedido) => (pedido.mesa ? [pedido.mesa.id] : [])),
     })
     const completa = abrirMesas({
       ...base,
@@ -603,12 +690,31 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           throw new Error("Só a comanda aberta de uma mesa pode mudar.")
         }
         // Tirar a rodada da cozinha ou a que estava pronta acerta o status e o "Servir".
-        return recalcular(
+        const novo = recalcular(
           depoisDeTirar(
             pedido,
             mudar(pedido, (perda) => perdas.push(perda), base),
           ),
         )
+        // O que já foi pago não volta sozinho: a conta não pode ficar menor que ele.
+        const { pago, total, saldo, itens, cortesias, descontos } = resumoDaConta(novo)
+        // O desconto em reais fica parado: tirar item ou dar cortesia pode deixá-lo acima dos itens.
+        if (novo.status !== "cancelado" && descontos > reais(itens - cortesias)) {
+          throw new Error(
+            "O desconto passaria do valor dos itens. Tire ou diminua o desconto antes.",
+          )
+        }
+        if (novo.status !== "cancelado" && pago > total) {
+          throw new Error("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
+        }
+        // Desconto, cortesia ou item tirado zerou o saldo de uma conta já paga em parte: fecha.
+        const quitada =
+          EM_ANDAMENTO.includes(novo.status) &&
+          novo.itens.length > 0 &&
+          (novo.pagamentos?.length ?? 0) > 0 &&
+          resumoDaConta(pedido).saldo > 0 &&
+          saldo === 0
+        return quitada ? fechada(novo, new Date().toISOString(), novo.eventos?.at(-1)?.por) : novo
       },
       // O garçom não lança mais do que há.
       { conferir: true },
@@ -758,6 +864,11 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       enviarParaCozinha,
       // Cada lançamento do garçom tira do estoque.
       estoqueBaixado: true,
+      // Taxa e couvert do salão de agora: mudar a configuração não mexe na conta aberta.
+      ...(base.salao.taxaServico.ativa
+        ? { taxaServico: { percentual: base.salao.taxaServico.percentual } }
+        : {}),
+      ...(base.salao.couvert.ativo ? { couvert: { porPessoa: base.salao.couvert.porPessoa } } : {}),
     }
   }
 
@@ -880,6 +991,113 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     return responder(loja)
   }
 
+  /** A última conta de mesa fechada (paga) da mesa, pela hora do pagamento (no empate, a mais nova). */
+  const ultimaFechada = (base: BaseLoja, mesaId: string) =>
+    base.pedidos
+      .filter(
+        (pedido) =>
+          pedido.tipo === "mesa" &&
+          pedido.mesa?.id === mesaId &&
+          pedido.status === "concluido" &&
+          pedido.pagoEm,
+      )
+      .toSorted(
+        (a, b) => Date.parse(b.pagoEm as string) - Date.parse(a.pagoEm as string) || b.id - a.id,
+      )[0]
+
+  /**
+   * Por que a conta não pode ser reaberta agora, ou `null`: só a última conta fechada da mesa,
+   * no mesmo dia do pagamento, com a mesa livre ou em limpeza (Q37).
+   */
+  function porQueNaoReabre(base: BaseLoja, conta: Pedido, agora: Date): string | null {
+    const mesa = base.mesas.find((item) => item.id === conta.mesa?.id)
+    if (conta.tipo !== "mesa" || !mesa || conta.status !== "concluido" || !conta.pagoEm) {
+      return "Só a conta de mesa fechada pode ser reaberta."
+    }
+    if (!isSameDay(new Date(conta.pagoEm), agora)) return "Só dá para reabrir a conta no mesmo dia."
+    if (ultimaFechada(base, mesa.id)?.id !== conta.id) {
+      return "Só dá para reabrir a última conta da mesa."
+    }
+    if (mesa.bloqueio) return `A mesa ${mesa.numero} está bloqueada.`
+    if (comandaDa(base, mesa.id)) return `A mesa ${mesa.numero} já está aberta.`
+    return null
+  }
+
+  /**
+   * Um pagamento contra o saldo: confere forma, cartão, itens e valor, grava o pagamento e o
+   * evento, e fecha a conta quando o saldo zera. Sem valor nem itens, paga o saldo.
+   */
+  function receber(comanda: Pedido, pagamento: Pagamento): Pedido {
+    conferirPagamento(pagamento.forma)
+    if (comanda.itens.length === 0) throw new Error("A comanda está vazia.")
+    if (resumoDaConta(comanda).saldo === 0) {
+      throw new Error("Não há saldo a receber. Feche a conta.")
+    }
+    const cartao = pagamento.forma === "cartao-na-entrega" ? pagamento.cartao : undefined
+    if (pagamento.forma === "cartao-na-entrega" && cartao !== "credito" && cartao !== "debito") {
+      throw new Error("Escolha crédito ou débito.")
+    }
+    // Por item, o valor sai dos itens marcados (com a taxa deles).
+    const itens = pagamento.itens?.length ? [...new Set(pagamento.itens)] : undefined
+    // O desconto é da conta: por item, cada item teria de levar a parte dele (fica para depois).
+    if (itens && comanda.descontoConta) {
+      throw new Error("Com desconto na conta, divida igualmente ou receba um valor.")
+    }
+    if (itens) {
+      const pagos = itensPagos(comanda)
+      for (const itemId of itens) {
+        conferirItem(comanda, itemId)
+        if (pagos.has(itemId)) throw new Error("Esse item já foi pago.")
+      }
+    }
+    const pedido = itens
+      ? valorDosItens(comanda, itens)
+      : (pagamento.valor ?? resumoDaConta(comanda).saldo)
+    if (!(pedido > 0) || !emCentavosExatos(pedido)) {
+      throw new Error("Informe um valor acima de zero.")
+    }
+    const { saldo } = resumoDaConta(comanda)
+    const dinheiro = pagamento.forma === "dinheiro"
+    if (pedido > saldo && !dinheiro) {
+      throw new Error(`O valor passa do saldo de ${emReais(saldo)}.`)
+    }
+    // No dinheiro, o que passa do saldo é troco.
+    const valor = Math.min(pedido, saldo)
+    const recebido = dinheiro ? (pagamento.recebido ?? pedido) : valor
+    if (!Number.isFinite(recebido) || !emCentavosExatos(recebido)) {
+      throw new Error("Informe um valor recebido válido.")
+    }
+    if (recebido < pedido) throw new Error("O valor recebido é menor que o da parte.")
+    const troco = trocoDoPagamento({ valor, saldo, recebido })
+    const agora = new Date().toISOString()
+    const novo: PagamentoConta = {
+      id: `pag-${crypto.randomUUID().slice(0, 8)}`,
+      forma: pagamento.forma,
+      valor,
+      em: agora,
+      ...autor(pagamento.por),
+      ...(dinheiro && troco > 0 ? { recebido, troco } : {}),
+      ...(cartao ? { cartao } : {}),
+      ...(itens ? { itens } : {}),
+    }
+    const paga = comEvento(
+      { ...comanda, pagamentos: [...(comanda.pagamentos ?? []), novo] },
+      {
+        tipo: "pagamento",
+        em: agora,
+        ...autor(pagamento.por),
+        texto: [
+          `${rotuloDoPagamento(novo)} ${emReais(novo.valor)}`,
+          novo.troco ? `troco ${emReais(novo.troco)}` : null,
+          itens ? plural(itens.length, "item", "itens") : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      },
+    )
+    return resumoDaConta(paga).saldo > 0 ? paga : fechada(paga, agora, pagamento.por)
+  }
+
   return {
     async base(): Promise<BaseLoja> {
       return responder(await carregar())
@@ -980,6 +1198,10 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             throw new Error("Pedido cancelado não recebe pagamento.")
           }
           if (pedido.situacaoPagamento === "pago") throw new Error("Este pedido já está pago.")
+          // A comanda aberta tem saldo, troco e histórico: recebe-se por mesas.pagar.
+          if (pedido.tipo === "mesa" && pedido.mesa && EM_ANDAMENTO.includes(pedido.status)) {
+            throw new Error("Receba a conta pela tela de Mesas.")
+          }
           if (faltaPesar(pedido)) throw new Error("Pese o pedido antes de receber.")
           return {
             ...pedido,
@@ -1594,15 +1816,18 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const id = (base.pedidos.at(-1)?.id ?? 0) + 1
         const comanda = comEvento(
           comEtapa(
-            comandaNova(base, mesa, {
-              id,
-              agora,
-              cliente: clienteNome?.trim().slice(0, 80),
-              garcom,
-              pessoas,
-              itens: [],
-              enviarParaCozinha: false,
-            }),
+            // O couvert já entra na conta da mesa vazia.
+            recalcular(
+              comandaNova(base, mesa, {
+                id,
+                agora,
+                cliente: clienteNome?.trim().slice(0, 80),
+                garcom,
+                pessoas,
+                itens: [],
+                enviarParaCozinha: false,
+              }),
+            ),
             agora,
           ),
           eventoAberta(agora, pessoas, garcom ?? por),
@@ -1737,6 +1962,10 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           if (quantidade > item.quantidade && cozinhaJaPreparou(comanda, item)) {
             throw new Error(`A cozinha já preparou ${item.nome}. Lance de novo para pedir mais.`)
           }
+          // A cortesia e o pagamento por item valem para o que já estava: o a mais é item novo.
+          if (quantidade > item.quantidade && (item.cortesia || itensPagos(comanda).has(item.id))) {
+            throw new Error("Lance o item de novo.")
+          }
           if (quantidade >= item.quantidade) return mudado
           return retirar(mudado, {
             comanda,
@@ -1820,6 +2049,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           if (comanda.itens.length === 0) throw new Error("A comanda está vazia. Libere a mesa.")
           const texto = motivo?.trim().slice(0, 140)
           if (!texto) throw new Error("Diga o motivo do cancelamento.")
+          if (comanda.pagamentos?.length) throw new Error("Estorne os pagamentos antes.")
           for (const item of comanda.itens) {
             if (cozinhaJaPreparou(comanda, item)) {
               perder({ item, quantidade: item.quantidade, motivo: texto })
@@ -1859,30 +2089,216 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
       /** A mesa pediu a conta: fica a hora do primeiro pedido. */
       pedirConta(pedidoId: number, por?: string) {
+        return alterarComanda(pedidoId, (comanda) => comContaPedida(comanda, por))
+      },
+
+      /** A pré-conta saiu na impressora: a mesa pediu a conta (se ainda não tinha pedido). */
+      imprimirPreConta(pedidoId: number, por?: string) {
+        return alterarComanda(pedidoId, (comanda) =>
+          comEvento(comContaPedida(comanda, por), {
+            tipo: "pre-conta",
+            em: new Date().toISOString(),
+            ...autor(por),
+            texto: "Pré-conta impressa",
+          }),
+        )
+      },
+
+      /** Um pagamento contra o saldo da conta. */
+      pagar(pedidoId: number, pagamento: Pagamento) {
+        return alterarComanda(pedidoId, (comanda) => receber(comanda, pagamento))
+      },
+
+      /**
+       * Recebe o saldo inteiro de uma vez, numa forma só. Sem saldo (tudo em cortesia, ou a conta
+       * reaberta sem mudança), fecha sem pagamento, e a forma não importa.
+       */
+      fecharConta(
+        pedidoId: number,
+        forma?: PagamentoMesa,
+        { cartao, por }: { cartao?: CartaoPagamento; por?: string } = {},
+      ) {
         return alterarComanda(pedidoId, (comanda) => {
-          if (comanda.itens.length === 0)
-            throw new Error("Lance algum item antes de pedir a conta.")
-          if (comanda.contaPedidaEm) return comanda
-          const agora = new Date().toISOString()
+          if (comanda.itens.length === 0) throw new Error("A comanda está vazia.")
+          if (resumoDaConta(comanda).saldo === 0) {
+            return fechada(comanda, new Date().toISOString(), por)
+          }
+          return receber(comanda, {
+            forma: forma as PagamentoMesa,
+            ...(cartao ? { cartao } : {}),
+            ...(por ? { por } : {}),
+          })
+        })
+      },
+
+      /** Desconto da conta, em reais ou em %, com motivo. Valor zero tira o desconto (com motivo). */
+      descontar(pedidoId: number, { por, ...desconto }: DescontoConta & { por?: string }) {
+        return alterarComanda(pedidoId, ({ descontoConta: anterior, ...comanda }) => {
+          const motivo = desconto.motivo.trim().slice(0, 140)
+          if (desconto.valor === 0) {
+            if (!anterior) throw new Error("Esta conta não tem desconto.")
+            if (!motivo) throw new Error("Diga o motivo para tirar o desconto.")
+            return comEvento(comanda, {
+              tipo: "desconto",
+              em: new Date().toISOString(),
+              ...autor(por),
+              texto: "Tirou o desconto",
+              motivo,
+            })
+          }
+          const novo: DescontoConta = { modo: desconto.modo, valor: desconto.valor, motivo }
+          const { itens, cortesias } = resumoDaConta(comanda)
+          const erro = erroDoDesconto(novo, reais(itens - cortesias))
+          if (erro) throw new Error(erro)
+          const comDesconto = { ...comanda, descontoConta: novo }
+          const valor = emReais(resumoDaConta(comDesconto).descontos)
+          return comEvento(comDesconto, {
+            tipo: "desconto",
+            em: new Date().toISOString(),
+            ...autor(por),
+            texto:
+              novo.modo === "percentual"
+                ? `Desconto de ${novo.valor.toLocaleString("pt-BR")}% (${valor})`
+                : `Desconto de ${valor}`,
+            motivo,
+          })
+        })
+      },
+
+      /** Cortesia: o item fica na comanda, zerado, com o motivo. O estoque não volta (foi consumido). */
+      darCortesia(
+        pedidoId: number,
+        itemId: string,
+        { motivo, por }: { motivo: string; por?: string },
+      ) {
+        return alterarComanda(pedidoId, (comanda) => {
+          conferirItem(comanda, itemId)
+          const texto = motivo?.trim().slice(0, 140)
+          if (!texto) throw new Error("Diga o motivo da cortesia.")
+          const item = comanda.itens.find((atual) => atual.id === itemId) as ItemPedido
+          if (item.cortesia) throw new Error(`${item.nome} já é cortesia.`)
+          if (itensPagos(comanda).has(itemId)) throw new Error("Esse item já foi pago.")
           return comEvento(
-            { ...comanda, contaPedidaEm: agora },
-            { tipo: "conta-pedida", em: agora, ...autor(por), texto: "Pediu a conta" },
+            {
+              ...comanda,
+              itens: comanda.itens.map((atual) =>
+                atual.id === itemId ? { ...atual, cortesia: { motivo: texto } } : atual,
+              ),
+            },
+            {
+              tipo: "cortesia",
+              em: new Date().toISOString(),
+              ...autor(por),
+              texto: `Cortesia: ${itensEmTexto([item])}`,
+              motivo: texto,
+            },
           )
         })
       },
 
-      /** Recebe a conta: conclui a comanda, marca como paga e a mesa fica livre. */
-      fecharConta(pedidoId: number, pagamento: PagamentoMesa) {
+      /** Tira a taxa de serviço da conta, com motivo (fica guardado na própria taxa). */
+      tirarTaxa(pedidoId: number, { motivo, por }: { motivo: string; por?: string }) {
         return alterarComanda(pedidoId, (comanda) => {
-          conferirPagamento(pagamento)
-          if (comanda.itens.length === 0) throw new Error("A comanda está vazia.")
-          return {
-            ...comanda,
-            status: "concluido",
-            pagamento,
-            situacaoPagamento: "pago",
-            pagoEm: new Date().toISOString(),
+          if (!comanda.taxaServico || comanda.taxaServico.removida) {
+            throw new Error("Esta conta não tem taxa de serviço.")
           }
+          const texto = motivo?.trim().slice(0, 140)
+          if (!texto) throw new Error("Diga o motivo para tirar a taxa de serviço.")
+          return comEvento(
+            { ...comanda, taxaServico: { ...comanda.taxaServico, removida: { motivo: texto } } },
+            {
+              tipo: "taxa-removida",
+              em: new Date().toISOString(),
+              ...autor(por),
+              texto: "Tirou a taxa de serviço",
+              motivo: texto,
+            },
+          )
+        })
+      },
+
+      /** Tira o couvert da conta, com motivo (fica guardado no próprio couvert). */
+      tirarCouvert(pedidoId: number, { motivo, por }: { motivo: string; por?: string }) {
+        return alterarComanda(pedidoId, (comanda) => {
+          if (!comanda.couvert || comanda.couvert.removido) {
+            throw new Error("Esta conta não tem couvert.")
+          }
+          const texto = motivo?.trim().slice(0, 140)
+          if (!texto) throw new Error("Diga o motivo para tirar o couvert.")
+          return comEvento(
+            { ...comanda, couvert: { ...comanda.couvert, removido: { motivo: texto } } },
+            {
+              tipo: "couvert-removido",
+              em: new Date().toISOString(),
+              ...autor(por),
+              texto: "Tirou o couvert",
+              motivo: texto,
+            },
+          )
+        })
+      },
+
+      /** Tira um pagamento da conta aberta, com motivo: o saldo volta. */
+      estornarPagamento(
+        pedidoId: number,
+        pagamentoId: string,
+        { motivo, por }: { motivo: string; por?: string },
+      ) {
+        return alterarComanda(pedidoId, (comanda) => {
+          const pagamento = comanda.pagamentos?.find((item) => item.id === pagamentoId)
+          if (!pagamento) throw new Error("Pagamento não encontrado")
+          const texto = motivo?.trim().slice(0, 140)
+          if (!texto) throw new Error("Diga o motivo do estorno.")
+          return comEvento(
+            {
+              ...comanda,
+              pagamentos: (comanda.pagamentos ?? []).filter((item) => item.id !== pagamentoId),
+            },
+            {
+              tipo: "pagamento-estornado",
+              em: new Date().toISOString(),
+              ...autor(por),
+              texto: `Estornou ${rotuloDoPagamento(pagamento)} ${emReais(pagamento.valor)}`,
+              motivo: texto,
+            },
+          )
+        })
+      },
+
+      /** A conta da mesa que pode ser reaberta agora (a última, fechada hoje), ou `null`. */
+      async ultimaConta(mesaId: string): Promise<Pedido | null> {
+        const base = await carregar()
+        const conta = ultimaFechada(base, mesaId)
+        return responder(conta && !porQueNaoReabre(base, conta, new Date()) ? conta : null)
+      },
+
+      /** Reabre a última conta fechada da mesa, no mesmo dia, com motivo. Os pagamentos ficam. */
+      reabrir(pedidoId: number, { motivo, por }: { motivo: string; por?: string }) {
+        return alterar(pedidoId, (conta, base) => {
+          const texto = motivo?.trim().slice(0, 140)
+          if (!texto) throw new Error("Diga o motivo para reabrir a conta.")
+          const erro = porQueNaoReabre(base, conta, new Date())
+          if (erro) throw new Error(erro)
+          const { pagoEm: _pagoEm, trocoPara: _trocoPara, ...aberta } = conta
+          // Paga antes da Fase 4, sem `pagamentos`: o pagamento que ela teve fica gravado.
+          const pagamentos: PagamentoConta[] =
+            conta.pagamentos ??
+            pagamentosDoPedido(conta).map((pagamento) => ({
+              id: `pag-${crypto.randomUUID().slice(0, 8)}`,
+              forma: pagamento.forma as PagamentoMesa,
+              valor: pagamento.valor,
+              em: pagamento.em,
+            }))
+          return comEvento(
+            { ...aberta, pagamentos, status: "pronto", situacaoPagamento: "na-entrega" },
+            {
+              tipo: "reaberta",
+              em: new Date().toISOString(),
+              ...autor(por),
+              texto: "Conta reaberta",
+              motivo: texto,
+            },
+          )
         })
       },
 

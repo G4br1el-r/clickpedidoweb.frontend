@@ -11,6 +11,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import { usePreferenciasMesas } from "@/lib/admin/preferencias-mesas"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
+import { emReais as emReaisDoIntl } from "@/lib/formato"
 import { FormularioMesa } from "./formulario-mesa"
 import { PaginaMesas } from "./pagina-mesas"
 
@@ -57,8 +58,19 @@ function telaGrande() {
 
 const api = () => servidorDo("pizzaria")
 
+/** A pizzaria da demonstração cobra taxa e couvert: aqui o teste confere só a soma dos itens. */
+async function semTaxaNemCouvert(api: ReturnType<typeof servidorDo>) {
+  const salao = await api.salao.config()
+  await api.salao.salvar({
+    ...salao,
+    taxaServico: { ...salao.taxaServico, ativa: false },
+    couvert: { ...salao.couvert, ativo: false },
+  })
+}
+
 /** Mesa 60 com 2 itens de R$ 4,00 e R$ 9,50, lançados 25 minutos atrás. */
 async function mesaOcupada() {
+  await semTaxaNemCouvert(api())
   const mesa = await api().mesas.criar({ numero: 60 })
   vi.setSystemTime(new Date(2026, 10, 13, 20, 5))
   await api().mesas.lancar({
@@ -103,6 +115,9 @@ async function abrir(endereco?: string, aoMudarUrl?: OnUrlUpdateFunction) {
 
 const cartao = (numero: number) =>
   screen.findByRole("button", { name: new RegExp(`^Mesa ${numero}\\b`) })
+/** O texto do dinheiro como a tela mostra para a Testing Library (sem o espaço não separável). */
+const emReais = (valor: number) => emReaisDoIntl(valor).replace(/ /g, " ")
+
 const comanda = () => within(screen.getByRole("dialog", { name: /^Mesa 60/ }))
 const total = () => comanda().getByText("Total").closest("div")
 
@@ -292,11 +307,13 @@ describe("PaginaMesas", () => {
     await mesaOcupada()
     const usuario = await abrir()
     await usuario.click(await cartao(60))
-    await usuario.click(comanda().getByRole("button", { name: "Imprimir conta" }))
+    // Fase 4: a conta impressa é a pré-conta, que também marca "Pediu a conta".
+    await usuario.click(comanda().getByRole("button", { name: "Imprimir pré-conta" }))
     expect(imprimir).toHaveBeenCalled()
 
     await usuario.click(comanda().getByRole("button", { name: "Fechar conta" }))
-    const fechar = within(screen.getByRole("dialog", { name: "Fechar a conta da mesa 60" }))
+    // Fase 4: fechar a conta é receber o saldo, na janela "Receber".
+    const fechar = within(screen.getByRole("dialog", { name: "Receber da mesa 60" }))
     await usuario.click(fechar.getByRole("radio", { name: "Pix" }))
     // Dinheiro do Intl vem com espaço não separável, que o nome acessível mantém.
     await usuario.click(fechar.getByRole("button", { name: "Receber R$ 13,50" }))
@@ -312,18 +329,25 @@ describe("PaginaMesas", () => {
     const usuario = await abrir()
 
     const faixa = within(await screen.findByRole("region", { name: "Números do salão" }))
-    // A demonstração não tem conta de mesa paga hoje: faturamento zerado, médias sem valor.
+    // A demonstração tem uma conta de mesa fechada hoje, há 20 min, aberta 90 min antes, para 3:
+    // R$ 102,00 em itens + R$ 10,20 de taxa + R$ 24,00 de couvert = R$ 136,20, ou R$ 126,00 sem a
+    // taxa. E a mesa 2 pagou em Pix R$ 35,90 dos R$ 71,80 (com R$ 5,80 de taxa): R$ 33,00 sem ela.
     expect(faixa.getByText("Ocupação").nextElementSibling).toHaveTextContent("8/19 · 42%")
-    expect(faixa.getByText("Pessoas").nextElementSibling).toHaveTextContent("21")
-    expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent("R$ 0,00")
-    expect(faixa.getByText("Ticket por pessoa").nextElementSibling).toHaveTextContent("—")
+    expect(faixa.getByText("Pessoas").nextElementSibling).toHaveTextContent("16")
+    await waitFor(() =>
+      expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent(
+        emReais(159),
+      ),
+    )
+    // R$ 126,00 ÷ 3 pessoas.
+    expect(faixa.getByText("Ticket por pessoa").nextElementSibling).toHaveTextContent(emReais(42))
     expect(faixa.queryByText("Permanência média")).not.toBeInTheDocument()
 
     await usuario.click(faixa.getByRole("button", { name: "Ver mais" }))
 
-    expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("—")
-    expect(faixa.getByText("Giro das mesas").nextElementSibling).toHaveTextContent("—")
-    expect(faixa.getByText("Ticket por mesa").nextElementSibling).toHaveTextContent("—")
+    expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("90 min")
+    expect(faixa.getByText("Giro das mesas").nextElementSibling).toHaveTextContent("0,1")
+    expect(faixa.getByText("Ticket por mesa").nextElementSibling).toHaveTextContent(emReais(126))
   })
 
   test("a conta fechada hoje entra no faturamento, nos tickets, na permanência e no giro", async () => {
@@ -337,12 +361,19 @@ describe("PaginaMesas", () => {
     const faixa = within(await screen.findByRole("region", { name: "Números do salão" }))
     await usuario.click(faixa.getByRole("button", { name: "Ver mais" }))
 
+    // A conta da mesa 60 (R$ 13,50, 1 pessoa, 25 min) se soma à da demonstração (R$ 126,00 sem
+    // a taxa, 3 pessoas, 90 min) e à parcial da mesa 2 (R$ 33,00).
     await waitFor(() =>
-      expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent("R$ 13,50"),
+      expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent(
+        emReais(172.5),
+      ),
     )
-    expect(faixa.getByText("Ticket por pessoa").nextElementSibling).toHaveTextContent("R$ 13,50")
-    expect(faixa.getByText("Ticket por mesa").nextElementSibling).toHaveTextContent("R$ 13,50")
-    expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("25 min")
+    // R$ 139,50 ÷ 4 pessoas = 34,875, meio para cima; R$ 139,50 ÷ 2 contas.
+    expect(faixa.getByText("Ticket por pessoa").nextElementSibling).toHaveTextContent(
+      emReais(34.88),
+    )
+    expect(faixa.getByText("Ticket por mesa").nextElementSibling).toHaveTextContent(emReais(69.75))
+    expect(faixa.getByText("Permanência média").nextElementSibling).toHaveTextContent("58 min")
     expect(faixa.getByText("Giro das mesas").nextElementSibling).toHaveTextContent("0,1")
   })
 

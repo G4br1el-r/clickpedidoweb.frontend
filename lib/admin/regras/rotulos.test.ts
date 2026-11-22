@@ -1,10 +1,13 @@
 import { describe, expect, test } from "vitest"
+import { pedidoDeTeste } from "./pedidos-de-teste"
 import {
   MOTIVOS_CANCELAMENTO,
   rotuloCanal,
+  rotuloDoPagamento,
   rotuloMotivo,
   rotuloOrigem,
   rotuloPagamento,
+  rotuloPagamentoDoPedido,
 } from "./rotulos"
 
 describe("rótulos", () => {
@@ -21,6 +24,44 @@ describe("rótulos", () => {
     expect(rotuloPagamento("dinheiro")).toBe("Dinheiro")
     expect(rotuloPagamento("cartao-na-entrega")).toBe("Cartão na maquininha")
     expect(rotuloPagamento("pagar-apos-pesagem")).toBe("Após a pesagem")
+  })
+
+  test("um pagamento da conta: o cartão diz se é crédito ou débito", () => {
+    expect(rotuloDoPagamento({ forma: "pix" })).toBe("Pix")
+    expect(rotuloDoPagamento({ forma: "dinheiro" })).toBe("Dinheiro")
+    expect(rotuloDoPagamento({ forma: "cartao-na-entrega", cartao: "credito" })).toBe(
+      "Cartão de crédito",
+    )
+    expect(rotuloDoPagamento({ forma: "cartao-na-entrega", cartao: "debito" })).toBe(
+      "Cartão de débito",
+    )
+    expect(rotuloDoPagamento({ forma: "cartao-na-entrega" })).toBe("Cartão na maquininha")
+  })
+
+  test("a forma do pedido: Misto quando a conta foi paga em mais de uma forma", () => {
+    const pedido = pedidoDeTeste(1, new Date(2026, 10, 13, 20), 100, { pagamento: "dinheiro" })
+    const pagamento = (forma: "pix" | "dinheiro", valor: number) => ({
+      id: forma + valor,
+      forma,
+      valor,
+      em: "",
+    })
+    expect(
+      rotuloPagamentoDoPedido({
+        ...pedido,
+        pagamentos: [pagamento("pix", 40), pagamento("dinheiro", 60)],
+      }),
+    ).toBe("Misto")
+    expect(
+      rotuloPagamentoDoPedido({
+        ...pedido,
+        pagamento: "pix",
+        pagamentos: [pagamento("pix", 40), pagamento("pix", 60)],
+      }),
+    ).toBe("Pix")
+    expect(rotuloPagamentoDoPedido(pedido)).toBe("Dinheiro")
+    // A comanda aberta (forma "dinheiro" até fechar) que pagou uma parte em Pix diz Pix.
+    expect(rotuloPagamentoDoPedido({ ...pedido, pagamentos: [pagamento("pix", 40)] })).toBe("Pix")
   })
 
   test("motivos do cancelamento, na ordem da lista; sem motivo, Não informado", () => {

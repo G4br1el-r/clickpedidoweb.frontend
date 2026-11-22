@@ -1,11 +1,19 @@
 "use client"
 
 import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import { comTotais } from "../regras/conta"
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { chaves, servidorDo } from "./consultas"
-import type { AberturaMesa, LancamentoMesa, PagamentoMesa, Retirada, Servidor } from "./servidor"
-import type { ConfigSalao, Pedido } from "./tipos"
+import type {
+  AberturaMesa,
+  LancamentoMesa,
+  Pagamento,
+  PagamentoMesa,
+  Retirada,
+  Servidor,
+} from "./servidor"
+import type { ConfigSalao, DescontoConta, Pedido } from "./tipos"
 
 const chaveMesas = (segmento: SegmentoPainelId) => ["admin", segmento, "mesas"] as const
 const chaveSalao = (segmento: SegmentoPainelId) => ["admin", segmento, "salao"] as const
@@ -64,9 +72,6 @@ function useMudancaNasMesas<A, R>(
 /** A comanda volta inteira: atualiza na hora quem está com ela aberta. */
 const guardarComanda = (cliente: QueryClient, segmento: SegmentoPainelId, comanda: Pedido) =>
   cliente.setQueryData(chaves.pedido(segmento, comanda.id), comanda)
-
-const totalDe = (itens: Pedido["itens"]) =>
-  Math.round(itens.reduce((soma, item) => soma + item.total, 0) * 100) / 100
 
 export function useCriarMesa() {
   return useMudancaNasMesas((servidor, mesa: Parameters<Servidor["mesas"]["criar"]>[0]) =>
@@ -176,7 +181,7 @@ export function useAlterarQuantidade() {
                 }
               : item,
           )
-          return { ...pedido, itens, subtotal: totalDe(itens), total: totalDe(itens) }
+          return comTotais({ ...pedido, itens })
         },
       },
       aoSucesso: guardarComanda,
@@ -194,8 +199,7 @@ export function useRemoverItem() {
       previsao: {
         pedidoId: ({ pedidoId }) => pedidoId,
         mudar: (pedido, { itemId }) => {
-          const itens = pedido.itens.filter((item) => item.id !== itemId)
-          return { ...pedido, itens, subtotal: totalDe(itens), total: totalDe(itens) }
+          return comTotais({ ...pedido, itens: pedido.itens.filter((item) => item.id !== itemId) })
         },
       },
       aoSucesso: guardarComanda,
@@ -203,10 +207,13 @@ export function useRemoverItem() {
   )
 }
 
+/** Fecha a conta: recebe o saldo na forma dada ou, sem saldo, fecha sem pagamento. */
 export function useFecharConta() {
   return useMudancaNasMesas(
-    (servidor, { pedidoId, pagamento }: { pedidoId: number; pagamento: PagamentoMesa }) =>
-      servidor.mesas.fecharConta(pedidoId, pagamento),
+    (
+      servidor,
+      { pedidoId, pagamento, por }: { pedidoId: number; pagamento?: PagamentoMesa; por?: string },
+    ) => servidor.mesas.fecharConta(pedidoId, pagamento, por ? { por } : {}),
     { aoSucesso: guardarComanda },
   )
 }
@@ -226,4 +233,77 @@ export function useConfigSalao() {
 
 export function useSalvarConfigSalao() {
   return useMudancaNasMesas((servidor, config: ConfigSalao) => servidor.salao.salvar(config))
+}
+
+/** A conta fechada da mesa que ainda pode ser reaberta (a última, de hoje), ou `null`. */
+export function useUltimaConta(mesaId: string | null) {
+  const segmento = useSegmento()
+  return useQuery({
+    queryKey: [...chaveMesas(segmento), "ultima-conta", mesaId],
+    queryFn: () => servidorDo(segmento).mesas.ultimaConta(mesaId as string),
+    enabled: mesaId !== null,
+  })
+}
+
+type ComMotivo = { pedidoId: number; motivo: string; por?: string }
+
+export function usePagar() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, ...pagamento }: { pedidoId: number } & Pagamento) =>
+      servidor.mesas.pagar(pedidoId, pagamento),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useEstornarPagamento() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, pagamentoId, ...motivo }: ComMotivo & { pagamentoId: string }) =>
+      servidor.mesas.estornarPagamento(pedidoId, pagamentoId, motivo),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useDescontar() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, ...desconto }: { pedidoId: number; por?: string } & DescontoConta) =>
+      servidor.mesas.descontar(pedidoId, desconto),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useDarCortesia() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, itemId, ...motivo }: ComMotivo & { itemId: string }) =>
+      servidor.mesas.darCortesia(pedidoId, itemId, motivo),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useTirarTaxa() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, ...motivo }: ComMotivo) => servidor.mesas.tirarTaxa(pedidoId, motivo),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useTirarCouvert() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, ...motivo }: ComMotivo) => servidor.mesas.tirarCouvert(pedidoId, motivo),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useImprimirPreConta() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, por }: { pedidoId: number; por?: string }) =>
+      servidor.mesas.imprimirPreConta(pedidoId, por),
+    { aoSucesso: guardarComanda },
+  )
+}
+
+export function useReabrirConta() {
+  return useMudancaNasMesas(
+    (servidor, { pedidoId, ...motivo }: ComMotivo) => servidor.mesas.reabrir(pedidoId, motivo),
+    { aoSucesso: guardarComanda },
+  )
 }

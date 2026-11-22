@@ -4,8 +4,9 @@ import { format } from "date-fns"
 import { type Ref, useRef } from "react"
 import { useReactToPrint } from "react-to-print"
 import type { Pedido } from "@/lib/admin/dados/tipos"
+import { resumoDaConta } from "@/lib/admin/regras/conta"
 import { enderecoEmTexto, formatarTelefone } from "@/lib/admin/regras/mensagens"
-import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
+import { rotuloCanal, rotuloDoPagamento, rotuloPagamentoDoPedido } from "@/lib/admin/regras/rotulos"
 import { emReais } from "@/lib/formato"
 
 const PAGINA_80MM =
@@ -53,6 +54,10 @@ export function Cupom({
   area: Ref<HTMLDivElement>
 }) {
   const troco = pedido.trocoPara ? pedido.trocoPara - pedido.total : 0
+  // Conta de mesa: cortesias, taxa e couvert à parte, e o que falta é o saldo (Q30, Q34).
+  const conta = pedido.tipo === "mesa" ? resumoDaConta(pedido) : null
+  const pagamentos = pedido.pagamentos ?? []
+  const aCobrar = conta && pagamentos.length > 0 ? conta.saldo : pedido.total
   return (
     <div className="hidden">
       <div ref={area} className="flex flex-col gap-1.5 p-2 font-mono text-xs text-black">
@@ -66,7 +71,10 @@ export function Cupom({
         <hr className="border-dashed border-black" />
         {pedido.itens.map((item) => (
           <div key={item.id}>
-            <Linha esquerda={`${item.quantidade}x ${item.nome}`} direita={emReais(item.total)} />
+            <Linha
+              esquerda={`${item.quantidade}x ${item.nome}${item.cortesia ? " (cortesia)" : ""}`}
+              direita={emReais(item.total)}
+            />
             {item.opcoes.map((opcao) => (
               <p key={opcao} className="pl-3">
                 * {opcao}
@@ -77,18 +85,39 @@ export function Cupom({
         ))}
         <hr className="border-dashed border-black" />
         <Linha esquerda="Subtotal" direita={emReais(pedido.subtotal)} />
+        {conta && conta.cortesias > 0 && (
+          <Linha esquerda="Cortesias" direita={`- ${emReais(conta.cortesias)}`} />
+        )}
         {pedido.desconto > 0 && (
           <Linha esquerda="Desconto" direita={`- ${emReais(pedido.desconto)}`} />
+        )}
+        {conta && conta.taxa > 0 && (
+          <Linha
+            esquerda={`Taxa de serviço (${pedido.taxaServico?.percentual.toLocaleString("pt-BR")}%)`}
+            direita={emReais(conta.taxa)}
+          />
+        )}
+        {conta && conta.couvert > 0 && (
+          <Linha
+            esquerda={`Couvert (${pedido.mesa?.pessoas ?? 1} × ${emReais(pedido.couvert?.porPessoa ?? 0)})`}
+            direita={emReais(conta.couvert)}
+          />
         )}
         {pedido.taxaEntrega > 0 && (
           <Linha esquerda="Entrega" direita={emReais(pedido.taxaEntrega)} />
         )}
         <Linha esquerda="TOTAL" direita={emReais(pedido.total)} forte />
         <p>
-          {rotuloPagamento(pedido.pagamento)} ·{" "}
-          {pedido.situacaoPagamento === "pago" ? "PAGO" : `COBRAR ${emReais(pedido.total)}`}
+          {rotuloPagamentoDoPedido(pedido)} ·{" "}
+          {pedido.situacaoPagamento === "pago" ? "PAGO" : `COBRAR ${emReais(aCobrar)}`}
           {troco > 0 ? ` · troco para ${emReais(pedido.trocoPara ?? 0)} (${emReais(troco)})` : ""}
         </p>
+        {pagamentos.map((pagamento) => (
+          <p key={pagamento.id}>
+            {rotuloDoPagamento(pagamento)} {emReais(pagamento.valor)}
+            {pagamento.troco ? ` · troco ${emReais(pagamento.troco)}` : ""}
+          </p>
+        ))}
         <hr className="border-dashed border-black" />
         <p>
           {pedido.cliente.nome} · {formatarTelefone(pedido.cliente.telefone)}

@@ -49,6 +49,36 @@ export type TipoEventoComanda =
   | "pronta"
   | "servida"
   | "conta-pedida"
+  | "pagamento"
+  | "pagamento-estornado"
+  | "fechada"
+  | "desconto"
+  | "cortesia"
+  | "taxa-removida"
+  | "couvert-removido"
+  | "pre-conta"
+  | "reaberta"
+
+/** Cartão na maquininha: crédito ou débito é detalhe do pagamento, não forma nova. */
+export type CartaoPagamento = "credito" | "debito"
+
+/** Uma parte paga da conta da mesa. `valor` é o que abate do saldo. */
+export type PagamentoConta = {
+  id: string
+  forma: "dinheiro" | "pix" | "cartao-na-entrega"
+  valor: number
+  em: string
+  por?: string
+  /** Dinheiro: o que o cliente entregou. */
+  recebido?: number
+  troco?: number
+  cartao?: CartaoPagamento
+  /** Pagamento por item: os itens que ele cobre. */
+  itens?: string[]
+}
+
+/** Desconto da conta da mesa: em reais ou em % dos itens, sempre com motivo. */
+export type DescontoConta = { modo: "reais" | "percentual"; valor: number; motivo: string }
 
 /** Uma linha do histórico da comanda: o que houve, quando, quem fez e o texto pronto. */
 export type EventoComanda = {
@@ -91,6 +121,8 @@ export type ItemPedido = {
   lancadoEm?: string
   /** Comanda: as opções escolhidas (grupo → ids), para editar o item depois. */
   escolhas?: Record<string, string[]>
+  /** Comanda: o item saiu de graça, com o motivo. Continua na conta, zerado. */
+  cortesia?: { motivo: string }
 }
 
 export type EnderecoEntrega = {
@@ -151,6 +183,14 @@ export type Pedido = {
   eventos?: EventoComanda[]
   /** Comanda cancelada: o motivo escrito (`motivoCancelamento` fica "outro"). */
   detalheCancelamento?: string
+  /** Mesa: os pagamentos feitos contra o saldo, do mais antigo ao mais novo. */
+  pagamentos?: PagamentoConta[]
+  /** Mesa: o desconto da conta. `desconto` guarda o valor dele em reais. */
+  descontoConta?: DescontoConta
+  /** Mesa: a taxa de serviço do salão, congelada na abertura. */
+  taxaServico?: { percentual: number; removida?: { motivo: string } }
+  /** Mesa: o couvert por pessoa do salão, congelado na abertura. */
+  couvert?: { porPessoa: number; removido?: { motivo: string } }
 }
 
 export type Categoria = {

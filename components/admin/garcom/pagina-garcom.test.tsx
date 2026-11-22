@@ -40,6 +40,16 @@ function telaGrande() {
 
 const api = () => servidorDo("pizzaria")
 
+/** A pizzaria da demonstração cobra taxa e couvert: aqui o teste confere só a soma dos itens. */
+async function semTaxaNemCouvert(api: ReturnType<typeof servidorDo>) {
+  const salao = await api.salao.config()
+  await api.salao.salvar({
+    ...salao,
+    taxaServico: { ...salao.taxaServico, ativa: false },
+    couvert: { ...salao.couvert, ativo: false },
+  })
+}
+
 async function produtos() {
   const lista = await api().produtos.listar()
   const simples = lista.find(
@@ -197,6 +207,7 @@ describe("PaginaGarcom", () => {
   })
 
   test("na mesa ocupada, mostra a comanda e a rodada nova se soma a ela", async () => {
+    await semTaxaNemCouvert(api())
     const mesa = await api().mesas.criar({ numero: 72 })
     await api().mesas.lancar({
       mesaId: mesa.id,

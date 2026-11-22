@@ -157,6 +157,26 @@ for (const tema of ["light", "dark"] as const) {
     await expect(page).toHaveScreenshot(`painel-comanda-${tema}.png`)
   })
 
+  test(`painel: aba Conta e Receber da mesa (${tema})`, async ({ page }) => {
+    await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
+    // A mesa 2 da demonstração já pagou metade da conta em Pix.
+    await page.goto("/admin/mesas?mesa=2")
+    const gaveta = page.getByRole("dialog", { name: /^Mesa 2\b/ })
+    await gaveta.getByRole("tab", { name: "Conta" }).click({ timeout: 15_000 })
+    await expect(gaveta.getByRole("list", { name: "Pagamentos" })).toBeVisible()
+    await page.waitForLoadState("networkidle")
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-comanda-conta-${tema}.png`)
+
+    await gaveta.getByRole("button", { name: "Fechar conta" }).click()
+    const receber = page.getByRole("dialog", { name: "Receber da mesa 2" })
+    await receber.getByText("Dinheiro").click()
+    await receber.getByRole("group", { name: "Notas" }).getByRole("button").first().click()
+    await expect(receber.getByText(/^Troco: /)).toBeVisible()
+    await esperarAnimacoes(page)
+    await expect(page).toHaveScreenshot(`painel-receber-conta-${tema}.png`)
+  })
+
   test(`painel: abrir a mesa livre (${tema})`, async ({ page }) => {
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
     await page.goto("/admin/mesas?mesa=11")

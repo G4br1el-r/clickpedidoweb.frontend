@@ -535,6 +535,81 @@ describe("comandas de mesa ao vivo", () => {
     }
   })
 
+  test("uma comanda aberta já pagou metade em Pix, há 5 min", async () => {
+    const abertas = await comandasAbertas()
+    const pagas = abertas.filter((pedido) => pedido.pagamentos?.length)
+    expect(pagas).toHaveLength(1)
+    const [comanda] = pagas
+    const [pix] = comanda.pagamentos ?? []
+    expect(pix).toMatchObject({ forma: "pix", em: new Date(2026, 10, 13, 20, 25).toISOString() })
+    // Mesa 2 do açougue: R$ 113,70 + 10% (R$ 11,37) = R$ 125,07. A primeira metade é R$ 62,53;
+    // o centavo que sobra fica para a outra.
+    expect(comanda).toMatchObject({ mesa: { numero: 2 }, subtotal: 113.7, total: 125.07 })
+    expect(pix.valor).toBe(62.53)
+    expect(comanda.situacaoPagamento).toBe("na-entrega")
+  })
+
+  test("uma conta de mesa foi fechada hoje, há 20 min, em Pix e dinheiro", async () => {
+    const pedidos = gerarPedidos({
+      catalogo: await carregarCatalogo("acougue"),
+      segmento: "acougue",
+      de: new Date(2026, 10, 13),
+      agora: AGORA,
+    })
+    const fechadas = pedidos.filter(
+      (pedido) => pedido.tipo === "mesa" && pedido.status === "concluido" && pedido.pagamentos,
+    )
+    expect(fechadas).toHaveLength(1)
+    const [conta] = fechadas
+    expect(conta).toMatchObject({
+      situacaoPagamento: "pago",
+      pagoEm: new Date(2026, 10, 13, 20, 10).toISOString(),
+    })
+    // R$ 66,56 + 10% (R$ 6,66) = R$ 73,22, metade em cada forma.
+    expect(conta).toMatchObject({ subtotal: 66.56, total: 73.22 })
+    expect(conta.pagamentos?.map((pagamento) => [pagamento.forma, pagamento.valor])).toEqual([
+      ["pix", 36.61],
+      ["dinheiro", 36.61],
+    ])
+  })
+
+  test("as comandas de hoje levam a taxa e o couvert do salão (pizzaria: 10% e R$ 8,00)", async () => {
+    const pedidos = gerarPedidos({
+      catalogo: await carregarCatalogo("pizzaria"),
+      segmento: "pizzaria",
+      de: new Date(2026, 10, 13),
+      agora: AGORA,
+    })
+    const deHoje = pedidos.filter(
+      (pedido) =>
+        (pedido.tipo === "mesa" && pedido.pagamentos !== undefined) ||
+        (pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status)),
+    )
+    for (const comanda of deHoje) {
+      expect(comanda).toMatchObject({ taxaServico: { percentual: 10 }, couvert: { porPessoa: 8 } })
+    }
+    // Itens + 10% + R$ 8,00 por pessoa. A primeira é a conta fechada hoje (R$ 102,00, 3 pessoas:
+    // 102 + 10,20 + 24); a da mesa 4 tem R$ 8,50 para 2 (8,50 + 0,85 + 16).
+    expect(
+      deHoje.map((comanda) => [
+        comanda.mesa?.numero,
+        comanda.subtotal,
+        comanda.mesa?.pessoas,
+        comanda.total,
+      ]),
+    ).toEqual([
+      [1, 102, 3, 136.2],
+      [1, 207, 2, 243.7],
+      [2, 58, 1, 71.8],
+      [3, 116, 1, 135.6],
+      [4, 8.5, 2, 25.35],
+      [5, 118, 3, 153.8],
+      [6, 200, 4, 252],
+      [7, 112, 1, 131.2],
+      [8, 93, 2, 118.3],
+    ])
+  })
+
   test("o garçom vem dos garçons ativos da loja", async () => {
     const abertas = await comandasAbertas()
     for (const pedido of abertas) {

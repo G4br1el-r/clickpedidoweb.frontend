@@ -1,5 +1,6 @@
 import { isSameDay } from "date-fns"
 import type { Mesa, Pedido } from "../dados/tipos"
+import { emCentavos, pagoNoDiaSemTaxa, resumoDaConta } from "./conta"
 
 export type IndicadoresSalao = {
   ocupacao: { ocupadas: number; total: number; percentual: number; texto: string }
@@ -11,7 +12,6 @@ export type IndicadoresSalao = {
   giro: number | null
 }
 
-const emCentavos = (reais: number) => Math.round(reais * 100)
 const dePessoas = (pedido: Pedido) => pedido.mesa?.pessoas ?? 1
 
 /** Números do salão hoje: ocupação, pessoas, faturamento, tickets, permanência e giro. */
@@ -38,7 +38,16 @@ export function indicadoresSalao({
       pedido.pagoEm &&
       isSameDay(new Date(pedido.pagoEm), agora),
   )
-  const centavos = pagas.reduce((soma, pedido) => soma + emCentavos(pedido.total), 0)
+  // A conta fechada hoje, sem a taxa de serviço (que é do garçom): base dos tickets.
+  const centavos = pagas.reduce(
+    (soma, pedido) => soma + emCentavos(pedido.total) - emCentavos(resumoDaConta(pedido).taxa),
+    0,
+  )
+  // Faturamento: o que entrou hoje (inclusive o parcial de conta aberta), sem a taxa.
+  const faturamento = [...abertas, ...concluidos.filter((pedido) => pedido.tipo === "mesa")].reduce(
+    (soma, pedido) => soma + emCentavos(pagoNoDiaSemTaxa(pedido, agora)),
+    0,
+  )
   const pessoasPagas = pagas.reduce((soma, pedido) => soma + dePessoas(pedido), 0)
   const minutos = pagas.reduce(
     (soma, pedido) =>
@@ -50,7 +59,7 @@ export function indicadoresSalao({
   return {
     ocupacao: { ocupadas, total, percentual, texto: `${ocupadas}/${total} · ${percentual}%` },
     pessoas: abertas.reduce((soma, pedido) => soma + dePessoas(pedido), 0),
-    faturamento: centavos / 100,
+    faturamento: faturamento / 100,
     ticketPorPessoa: haPagas && pessoasPagas > 0 ? Math.round(centavos / pessoasPagas) / 100 : null,
     ticketPorMesa: haPagas ? Math.round(centavos / pagas.length) / 100 : null,
     permanenciaMin: haPagas ? Math.round(minutos / pagas.length) : null,

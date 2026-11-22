@@ -10,7 +10,7 @@
 
 **Origem:** as decisões Q1 a Q52 da sessão de perguntas de 18 e 19/11/2026, registradas abaixo. Base anterior: Fase 8 de [plano-painel-admin.md](plano-painel-admin.md).
 
-**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 está em andamento na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. As Fases 1, 2 e 3 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
+**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. As Fases 1 a 4 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
 
 ## Restrições gerais
 
@@ -1459,6 +1459,290 @@ Situação: pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilha
 3. **`lib/admin/regras/dashboard.ts` e `rotulos.ts`:** formas somadas por parte, "Misto" e taxa separada.
 4. **Componentes:** aba Conta, divisão, receber com troco, reabrir e a pré-conta com os campos certos.
 5. **E2E:** dividir por 3, pagar uma parte em Pix e o resto em dinheiro com troco, e ver "Misto" em Pedidos.
+
+**Branch:** `claude/admin-mesas-fase-4`, empilhada sobre as Fases 1 a 3. O PR vai para `main` depois delas.
+
+**Decisões de detalhe desta fase** (decorrem de Q8, Q9, Q19, Q20, Q30, Q34, Q37, Q45 e das decorrências 3, 4 e 5)
+
+- **Dinheiro:** as regras da conta trabalham em centavos inteiros (`emCentavos`, que arredonda o valor em reais antes) e só voltam para reais no fim. A taxa é `(base × percentual em centésimos + 5000) ÷ 10000`, arredondada para baixo: a conta inteira, sem `Math.round` de número quebrado. Assim 10% de R$ 87,45 dá R$ 8,75.
+- **Resumo da conta** (`resumoDaConta`, em `lib/admin/regras/conta.ts`):
+  - **itens:** a soma do `total` de todos os itens, inclusive as cortesias;
+  - **cortesias:** a soma dos itens com `cortesia`;
+  - **descontos:** o desconto da conta (`Pedido.descontoConta`), em R$ ou em % de (itens − cortesias), meio para cima;
+  - **base da taxa:** itens − cortesias − descontos;
+  - **taxa:** o percentual congelado (`Pedido.taxaServico`) sobre a base, ou 0 se tirada ou ausente;
+  - **couvert:** o valor congelado (`Pedido.couvert`) × pessoas (`mesa.pessoas`, ou 1), ou 0 se tirado ou ausente;
+  - **total:** base + taxa + couvert; **pago:** a soma dos pagamentos; **saldo:** total − pago (nunca negativo).
+- **Total no pedido:** toda mudança na comanda refaz `subtotal` (itens), `desconto` (o desconto da conta, sem as cortesias) e `total` (o total do resumo), por `comTotais`. Pedidos, Início e o cartão da mesa continuam lendo `total`.
+- **Congelamento (decorrência 3):** a comanda nova (por "Abrir mesa" ou pelo lançamento na mesa livre) guarda `taxaServico: { percentual }` se a taxa está ligada no salão e `couvert: { porPessoa }` se o couvert está ligado. Comanda sem os campos (base antiga, ou aberta com eles desligados) não tem taxa nem couvert. Mudar o salão não mexe em conta aberta.
+- **Pagamento** (`Pedido.pagamentos`, do mais antigo ao mais novo): `{ id, forma, valor, em, por?, recebido?, troco?, cartao?, itens? }`.
+  - `forma` é uma das três formas da loja (`PagamentoMesa`: dinheiro, Pix, cartão na maquininha). Crédito ou débito é o `cartao` (decorrência 4), obrigatório no cartão ("Escolha crédito ou débito.");
+  - `valor` é o que abate do saldo, de R$ 0,01 até o saldo ("Informe um valor acima de zero.", "O valor passa do saldo de R$ 66,67.");
+  - no dinheiro, `recebido` (opcional, padrão = valor) é o que o cliente entregou e não pode ser menor que o valor ("O valor recebido é menor que o da parte."). Dinheiro acima do saldo é aceito: o valor vira o saldo e o resto vira troco;
+  - `itens` (pagamento por item): ids dos itens que ele cobre. O servidor refaz o valor por `valorDosItens` (o item marcado mais a taxa sobre ele) e recusa item inexistente, em cortesia ou já pago ("Esse item já foi pago.");
+  - o evento `pagamento` tem o texto "Pix R$ 33,33", "Dinheiro R$ 66,67 · troco R$ 13,33" ou "Cartão de crédito R$ 10,00 · 2 itens".
+- **Fecha sozinha:** quando o saldo chega a zero, a comanda fica concluída e paga, com `pagoEm`, o evento `fechada` ("Conta fechada") e a mesa livre (em Limpeza, com a limpeza ligada). O `pagamento` do pedido passa a ser a forma do maior pagamento (o primeiro, no empate), e o `trocoPara` fica só quando houve um pagamento único em dinheiro. `fecharConta(pedidoId, forma)` continua existindo: é pagar o saldo inteiro de uma vez; sem saldo (tudo em cortesia, ou a conta reaberta sem mudança), fecha sem pagamento. Desconto, cortesia ou item tirado que zera o saldo de uma conta já paga em parte também fecha sozinho. Sem saldo, receber recusa ("Não há saldo a receber. Feche a conta.") (revisão).
+- **Limpeza unificada:** só fechar a conta põe a mesa em limpeza, e isso acontece no mesmo ponto (`alterar`), qualquer que seja o caminho. Por isso "Marcar como pago" em Pedidos deixa de valer para a comanda de mesa aberta: o servidor recusa ("Receba a conta pela tela de Mesas.") e o painel mostra o aviso com o link "Abrir a mesa 5", como no cancelar (decidido: um lugar só para o dinheiro da mesa, com saldo, troco e histórico).
+- **Desconto:** em R$ (até 2 casas) ou em % (de 0,01 a 100), com motivo obrigatório ("Diga o motivo do desconto."), nunca maior que itens − cortesias ("O desconto passa do valor dos itens."). Um desconto novo troca o anterior; valor zero tira o desconto, com motivo e o evento "Tirou o desconto" (revisão: botão "Tirar desconto" na aba Conta). Evento `desconto`: "Desconto de R$ 10,00" ou "Desconto de 10% (R$ 8,75)", com o motivo.
+- **Cortesia:** zera um item, com motivo. O item continua na comanda (o estoque não volta: foi consumido). Recusa item já em cortesia ou já pago. Evento `cortesia`: "Cortesia: 1× Coca", com o motivo. A cortesia não se desfaz nesta fase.
+- **Tirar taxa e couvert:** com motivo, guardado no próprio campo (`taxaServico.removida`, `couvert.removido`). Recusa se a comanda não tem taxa ("Esta conta não tem taxa de serviço.") ou couvert. Eventos `taxa-removida` ("Tirou a taxa de serviço") e `couvert-removido` ("Tirou o couvert").
+- **Conta menor que o pago:** desconto, cortesia, tirar taxa, tirar couvert e tirar item recusam quando o total ficaria abaixo do que já foi pago: "A conta ficaria menor que o já pago. Estorne um pagamento antes.".
+- **Estornar pagamento:** na comanda aberta, com motivo. Tira o pagamento e grava `pagamento-estornado` ("Estornou Pix R$ 33,33"). É o que torna os pagamentos editáveis depois de reabrir (Q37).
+- **Pré-conta (Q30):** `imprimirPreConta` marca "Pediu a conta" (se ainda não estava) e grava o evento `pre-conta` ("Pré-conta impressa"). A pré-conta sai em 80 mm com: loja, mesa e cliente, data e hora, itens (a cortesia com "cortesia"), itens, cortesias, desconto, taxa (com o %), couvert (pessoas × valor), total, pagamentos feitos, saldo e o valor por pessoa. O comprovante de cada pagamento sai em 80 mm com loja, mesa, data e hora, forma (com crédito ou débito), valor, recebido e troco no dinheiro, e o saldo que ficou. O comprovante não grava evento.
+- **Reabrir (Q37):** só a comanda de mesa concluída e paga, só no mesmo dia do `pagoEm` no fuso de São Paulo ("Só dá para reabrir a conta no mesmo dia."), só a última conta fechada da mesa ("Só dá para reabrir a última conta da mesa.") e só com a mesa livre ou em Limpeza, sem bloqueio ("A mesa 5 já está aberta." ou "A mesa 5 está bloqueada."). Exige motivo. A comanda volta para "pronto", sem `pagoEm`, com `situacaoPagamento: "na-entrega"`, os pagamentos mantidos e o evento `reaberta` com o motivo; a mesa volta a ficar ocupada e sai da limpeza. Na gaveta da mesa livre ou em Limpeza, "Reabrir a conta" aparece quando `mesas.ultimaConta(mesaId)` devolve a conta que pode ser reaberta.
+- **Virada do dia (ponto 3):** o faturamento usa o dia de cada pagamento (`em`), e reabrir usa o dia do `pagoEm`. A comanda aberta às 23:40 e paga às 00:10 entra no faturamento do dia seguinte e pode ser reaberta nesse dia.
+- **Faturamento do salão hoje (decorrência 5):** para cada comanda de mesa (aberta ou concluída), a soma dos pagamentos com `em` hoje, sem a parte da taxa: `pago hoje × (total − taxa) ÷ total`, em centavos, uma vez por comanda. A comanda paga antes desta fase, sem `pagamentos`, conta como um pagamento único do total no `pagoEm` (`pagamentosDoPedido`). Os tickets, a permanência e o giro continuam contando só as contas fechadas hoje, agora sem a taxa.
+- **Pedidos (Q34):**
+  - a forma de pagamento da lista e do detalhe é "Misto" quando os pagamentos têm mais de uma forma (`rotuloPagamentoDoPedido`); o filtro por forma põe a conta Misto em cada forma que ela tem (`formasDoPedido`), e a comanda aberta paga em parte numa forma só mostra essa forma (revisão);
+  - o detalhe lista cada pagamento ("Pix · R$ 33,33", "Dinheiro · R$ 66,67 · troco R$ 13,33", "Cartão de crédito · R$ 10,00") e mostra cortesias, taxa de serviço e couvert nos totais.
+- **Início (Q34):** em Financeiro, "Formas de pagamento" soma cada pagamento na sua forma (o pedido misto conta nas duas). A taxa de serviço aparece separada, abaixo, como "Taxa de serviço · dos garçons", com o total do período. O faturamento, o ticket, a série, o melhor dia, os canais e a meta do Início ficam sem a taxa (`valorSemTaxa`); "Formas de pagamento" continua com o que entrou no caixa e avisa que inclui a taxa; o bloco da taxa soma só as contas pagas, pelo dia do pagamento (revisão).
+- **Tela, aba Conta:**
+  - resumo (itens, cortesias, desconto, taxa, couvert, total, pago e saldo);
+  - lista de pagamentos, cada um com "Comprovante" e "Estornar" (motivo);
+  - "Dividir igualmente": partes de 2 a 20 (começa nas pessoas da mesa), com o valor de cada parte do **total** (a última leva o centavo) e "Receber" em cada uma;
+  - "Por item": os itens ainda não pagos e sem cortesia, com caixa de marcar; "Receber R$ X" leva os itens;
+  - "Desconto", "Tirar taxa" e "Tirar couvert" abrem a janela de motivo. A cortesia fica no item, na aba Itens ("Cortesia", com motivo), e o item em cortesia mostra "Cortesia" e o valor riscado;
+  - "Pediu a conta" e "Cancelar comanda" continuam.
+- **Receber:** janela "Receber da mesa 5" com a forma (Dinheiro, Pix, Cartão), crédito ou débito no cartão, o valor (o saldo, ou a parte escolhida) e, no dinheiro, "Valor recebido" com as notas de `sugestoesDeTroco(valor)` e o troco. O rodapé da gaveta mostra o total e, com pagamento feito, o saldo. "Fechar conta" abre o Receber com o saldo. "Imprimir conta" vira "Imprimir pré-conta".
+
+**Interfaces que a Fase 4 entrega**
+
+```ts
+// lib/admin/dados/tipos.ts
+export type CartaoPagamento = "credito" | "debito"
+export type PagamentoConta = {
+  id: string
+  forma: "dinheiro" | "pix" | "cartao-na-entrega"
+  valor: number
+  em: string
+  por?: string
+  recebido?: number
+  troco?: number
+  cartao?: CartaoPagamento
+  itens?: string[]
+}
+export type DescontoConta = { modo: "reais" | "percentual"; valor: number; motivo: string }
+// TipoEventoComanda ganha: "pagamento" | "pagamento-estornado" | "fechada" | "desconto" | "cortesia"
+//                          | "taxa-removida" | "couvert-removido" | "pre-conta" | "reaberta"
+// ItemPedido ganha: cortesia?: { motivo: string }
+// Pedido ganha: pagamentos?: PagamentoConta[]; descontoConta?: DescontoConta
+//   taxaServico?: { percentual: number; removida?: { motivo: string } }
+//   couvert?: { porPessoa: number; removido?: { motivo: string } }
+
+// lib/admin/regras/conta.ts
+export const emCentavos: (reais: number) => number
+export function taxaSobre(base: number, percentual: number): number // 87.45, 10 → 8.75
+export type ResumoConta = {
+  itens: number; cortesias: number; descontos: number; baseDaTaxa: number
+  taxa: number; couvert: number; total: number; pago: number; saldo: number
+}
+export function resumoDaConta(pedido: Pick<Pedido, "itens" | "mesa" | "taxaServico" | "couvert" | "descontoConta" | "pagamentos">): ResumoConta
+export function comTotais(pedido: Pedido): Pedido
+export function valorDoDesconto(desconto: DescontoConta | undefined, base: number): number
+export function erroDoDesconto(desconto: DescontoConta, base: number): string | null
+export function dividirIgualmente(valor: number, partes: number): number[] // (100, 3) → [33.33, 33.33, 33.34]
+export function valorDosItens(pedido: Pedido, itemIds: string[]): number
+export function itensPagos(pedido: Pick<Pedido, "pagamentos">): Set<string>
+export function pagamentosDoPedido(pedido: Pedido): Pick<PagamentoConta, "forma" | "valor" | "em" | "cartao" | "troco">[]
+export function pagoNoDiaSemTaxa(pedido: Pedido, dia: Date): number
+
+// lib/admin/regras/rotulos.ts
+export function rotuloPagamentoDoPedido(pedido: Pedido): string // "Misto"
+export function rotuloDoPagamento(pagamento: Pick<PagamentoConta, "forma" | "cartao">): string // "Cartão de crédito"
+
+// lib/admin/regras/dashboard/resumo.ts: Resumo ganha `taxaServico: number`; `pagamentos` soma por parte
+
+// servidor (api.mesas):
+pagar(pedidoId, { forma, valor?, recebido?, cartao?, itens?, por? }): Promise<Pedido>
+estornarPagamento(pedidoId, pagamentoId, { motivo, por? }): Promise<Pedido>
+descontar(pedidoId, { modo, valor, motivo, por? }): Promise<Pedido>
+darCortesia(pedidoId, itemId, { motivo, por? }): Promise<Pedido>
+tirarTaxa(pedidoId, { motivo, por? }): Promise<Pedido>
+tirarCouvert(pedidoId, { motivo, por? }): Promise<Pedido>
+imprimirPreConta(pedidoId, por?): Promise<Pedido>
+ultimaConta(mesaId): Promise<Pedido | null> // a que pode ser reaberta agora
+reabrir(pedidoId, { motivo, por? }): Promise<Pedido>
+// fecharConta(pedidoId, forma) = pagar o saldo; pedidos.marcarPago recusa a comanda de mesa aberta
+
+// consultas-mesas: usePagar, useEstornarPagamento, useDescontar, useDarCortesia, useTirarTaxa,
+//                  useTirarCouvert, useImprimirPreConta, useUltimaConta, useReabrirConta
+```
+
+**Arquivos**
+
+- Criar:
+  - `lib/admin/regras/conta.ts` e `conta.test.ts`;
+  - `lib/admin/dados/servidor-conta.test.ts` (os testes de servidor desta fase);
+  - `components/admin/mesas/conta-mesa.tsx` (aba Conta, dividir e por item), `receber-conta.tsx`, `motivo-conta.tsx` (janela de motivo), `impressao-conta.tsx` (pré-conta e comprovante) e `conta-mesa.test.tsx`.
+- Mudar:
+  - `lib/admin/dados/tipos.ts`, `servidor.ts`, `gerar-pedidos.ts` (e o teste), `consultas-mesas.ts` (e o teste);
+  - `lib/admin/regras/{rotulos,indicadores-salao}.ts`, `lib/admin/regras/dashboard/resumo.ts` e os seus testes;
+  - `components/admin/mesas/comanda-mesa.tsx`, `components/admin/pedidos/{detalhes-pedido,lista-pedidos}.tsx`, `components/admin/visao-geral/painel-visao-geral.tsx`;
+  - `tests/admin.spec.ts`.
+
+### Task 34 (Tarefa 34): regras da conta
+
+**Entrega:** `lib/admin/regras/conta.ts`, sem servidor nem tela.
+
+- [ ] Testes que falham em `conta.test.ts`, um comportamento por vez:
+  - `taxaSobre(87.45, 10)` = 8,75; `taxaSobre(100, 12.5)` = 12,50; `taxaSobre(0.05, 10)` = 0,01;
+  - `resumoDaConta`: itens R$ 87,45 (uma cortesia de R$ 5,00 dentro), desconto de R$ 10,00, taxa de 10% e couvert de R$ 8,00 para 2 pessoas, com R$ 30,00 pago: itens 87,45, cortesias 5, descontos 10, base 72,45, taxa 7,25, couvert 16, total 95,70, pago 30, saldo 65,70;
+  - taxa e couvert tirados não somam; comanda sem os campos (base antiga) não tem taxa, couvert nem pagamentos;
+  - desconto de 10% sobre 72,45 = 7,25; `erroDoDesconto` recusa acima dos itens, sem motivo e % acima de 100;
+  - `dividirIgualmente(100, 3)` → `[33.33, 33.33, 33.34]`; `(10, 4)` → `[2.5, 2.5, 2.5, 2.5]`; `(0.02, 3)` → `[0, 0, 0.02]`;
+  - `valorDosItens` soma os itens marcados com a taxa deles (R$ 40,00 com 10% → 44,00), sem as cortesias;
+  - `pagamentosDoPedido` da comanda paga sem `pagamentos` devolve um pagamento único do total no `pagoEm`; a não paga, nada;
+  - `pagoNoDiaSemTaxa`: total 110 com taxa 10, pago 55 hoje e 55 ontem → 50 hoje; a paga às 00:10 conta no dia do pagamento.
+- [ ] Implementar e fazer o commit `feat(mesas): regras da conta (taxa, couvert, desconto, divisão e pagamentos)`.
+
+### Task 35 (Tarefa 35): taxa e couvert congelados e o total da comanda
+
+- [ ] Testes que falham em `servidor-conta.test.ts` (lanchonete de teste com taxa de 10% e couvert de R$ 8,00 ligados):
+  - abrir a mesa para 2 pessoas guarda `taxaServico: { percentual: 10 }` e `couvert: { porPessoa: 8 }`; lançar R$ 23,00 deixa o total em R$ 41,30 (23 + 2,30 + 16);
+  - mudar o salão depois (taxa 15%, couvert desligado) não muda a conta aberta;
+  - lançar na mesa livre (pelo Garçom) também congela, com 1 pessoa;
+  - com a taxa e o couvert desligados, a comanda nasce sem os campos.
+- [ ] Ajustar a montagem de `mesaOcupada` em `pagina-mesas.test.tsx` para desligar taxa e couvert da pizzaria antes de lançar: os testes de lá conferem a soma dos itens (mudança planejada, decorrência 3).
+- [ ] Implementar (`comTotais` no lugar de `recalcular`) e fazer o commit `feat(mesas): taxa e couvert congelados na abertura da comanda`.
+
+### Task 36 (Tarefa 36): pagar contra o saldo
+
+- [ ] Testes que falham em `servidor-conta.test.ts`, com a comanda de R$ 100,00 (sem taxa):
+  - Pix de R$ 33,33: saldo 66,67, comanda aberta, evento "Pix R$ 33,33";
+  - misto: Pix 33,33 e dinheiro 66,67 recebendo 80: troco 13,33, a comanda fecha (`concluido`, `pago`, `pagoEm`), evento `fechada`, `pagamento: "dinheiro"` (o maior) e sem `trocoPara`;
+  - cartão sem crédito ou débito recusa; com crédito, guarda `cartao: "credito"`;
+  - Pix de R$ 100,01 recusa com "O valor passa do saldo de R$ 100,00."; dinheiro de R$ 150,00 fecha com valor 100 e troco 50; valor zero recusa;
+  - por item: o item de R$ 40,00 numa conta com 10% paga 44,00 e marca o item; pagar o mesmo item de novo recusa;
+  - a conta fechada pelo último pagamento deixa a mesa em limpeza (limpeza ligada) e livre sem ela;
+  - `fecharConta` paga o saldo inteiro e registra o pagamento;
+  - `pedidos.marcarPago` na comanda de mesa aberta recusa com "Receba a conta pela tela de Mesas.".
+- [ ] Mudar o teste de `detalhes-pedido.test.tsx` que marcava como pago, se ele usar comanda de mesa aberta (não usa: é entrega). Implementar e fazer o commit `feat(mesas): pagamentos contra o saldo, com troco, cartão e por item`.
+
+### Task 37 (Tarefa 37): desconto, cortesia, taxa, couvert e estorno no servidor
+
+- [ ] Testes que falham em `servidor-conta.test.ts`:
+  - desconto de R$ 10,00 com motivo muda o total e grava o evento; de 10% guarda o modo; sem motivo e acima dos itens recusam; zero tira;
+  - cortesia no Refri: o total cai 6, o estoque continua 3 (não devolve), o evento leva o motivo; cortesia de novo recusa;
+  - tirar a taxa e o couvert com motivo; sem motivo recusa; comanda sem taxa recusa;
+  - com R$ 30,00 pago numa conta de R$ 40,00, desconto de R$ 15,00 recusa com "A conta ficaria menor que o já pago. Estorne um pagamento antes.";
+  - estornar o Pix devolve o saldo e grava "Estornou Pix R$ 33,33"; sem motivo recusa.
+- [ ] Implementar e fazer o commit `feat(mesas): desconto, cortesia, tirar taxa e couvert, e estornar pagamento`.
+
+### Task 38 (Tarefa 38): pré-conta e reabrir no servidor
+
+- [ ] Testes que falham em `servidor-conta.test.ts`:
+  - `imprimirPreConta` marca `contaPedidaEm` e grava `pre-conta`; imprimir de novo mantém a primeira hora;
+  - reabrir a conta fechada hoje (mesa em limpeza): a comanda volta aberta com os pagamentos, a mesa ocupada e sem limpeza, evento `reaberta` com o motivo;
+  - sem motivo recusa; no dia seguinte recusa; com a mesa já aberta de novo recusa; a penúltima conta da mesa recusa;
+  - virada do dia: aberta às 23:40 e paga às 00:10, reabre às 00:30 e recusa no dia seguinte às 00:30;
+  - `ultimaConta` devolve a última conta fechada hoje da mesa livre, e `null` para a mesa ocupada ou sem conta hoje.
+- [ ] Implementar e fazer o commit `feat(mesas): pré-conta marca pediu a conta; reabrir a última conta do dia`.
+
+### Task 39 (Tarefa 39): demonstração com conta paga em parte e conta fechada hoje
+
+- [ ] Testes que falham em `gerar-pedidos.test.ts`:
+  - uma comanda aberta tem um pagamento parcial em Pix (metade do total, há 5 min);
+  - uma comanda de mesa foi fechada hoje, há 20 min, em Pix e dinheiro (Misto), com `pagamentos` somando o total;
+  - as comandas de hoje levam a taxa e o couvert do salão (pizzaria: 10% e R$ 8,00), e o total bate com `resumoDaConta`.
+- [ ] Mudar o teste antigo de `pagina-mesas.test.tsx` "a faixa Números do salão mostra os quatro números da demonstração": a demonstração passa a ter a conta fechada hoje (pendência da Fase 2), e o faturamento deixa de ser R$ 0,00.
+- [ ] Implementar e fazer o commit `feat(mesas): a demonstração tem conta paga em parte e conta fechada hoje`.
+
+### Task 40 (Tarefa 40): faturamento por parte, Misto e taxa separada
+
+- [ ] Testes que falham:
+  - `indicadores-salao.test.ts`: o faturamento soma os pagamentos de hoje sem a taxa (inclusive o parcial de uma comanda aberta); a comanda aberta às 23:40 e paga às 00:10 entra no dia do pagamento; o ticket por pessoa conta só as fechadas, sem a taxa;
+  - `rotulos.test.ts`: `rotuloPagamentoDoPedido` dá "Misto" com Pix e dinheiro, "Pix" com dois Pix e a forma do pedido sem `pagamentos`; `rotuloDoPagamento` dá "Cartão de crédito" e "Cartão de débito";
+  - `resumo.test.ts`: o pedido de R$ 100,00 pago 40 em Pix e 60 em dinheiro soma 40 no Pix e 60 no dinheiro; `taxaServico` soma a taxa do período.
+- [ ] Implementar e fazer o commit `feat(mesas): faturamento por parte, Misto e taxa de serviço separada`.
+
+### Task 41 (Tarefa 41): hooks da conta
+
+- [ ] Testes que falham em `consultas-mesas.test.tsx`: `usePagar`, `useDescontar`, `useDarCortesia`, `useTirarTaxa`, `useTirarCouvert`, `useEstornarPagamento`, `useImprimirPreConta` e `useReabrirConta` chegam ao servidor e guardam a comanda; `useUltimaConta` lê a conta que pode ser reaberta.
+- [ ] Implementar e fazer o commit `feat(mesas): hooks da conta`.
+
+### Task 42 (Tarefa 42): aba Conta, receber e dividir na tela
+
+- [ ] Testes que falham em `conta-mesa.test.tsx` (pizzaria):
+  - a aba Conta mostra o resumo com taxa e couvert, o total e o saldo;
+  - "Fechar conta" abre "Receber da mesa N" com o saldo; Pix recebe tudo e a mesa fica em Limpeza;
+  - dinheiro: "Valor recebido" sugere as notas de `sugestoesDeTroco` e mostra o troco;
+  - cartão pede crédito ou débito;
+  - "Dividir igualmente" em 3 mostra as partes e "Receber" de uma parte abre com o valor dela; o pagamento aparece na lista e o saldo cai;
+  - "Por item" soma os itens marcados com a taxa.
+- [ ] Mudar o teste antigo "imprimir a conta e fechar com a forma de pagamento…" de `pagina-mesas.test.tsx`: "Imprimir pré-conta" e a janela "Receber da mesa 60" (mudança planejada).
+- [ ] Implementar `conta-mesa.tsx` e `receber-conta.tsx`. Commit `feat(mesas): aba Conta com pagamentos, saldo, receber e dividir`.
+
+### Task 43 (Tarefa 43): desconto, cortesia, taxa, couvert e estorno na tela
+
+- [ ] Testes que falham em `conta-mesa.test.tsx`: "Desconto" com motivo muda o total; "Cortesia" no item com motivo mostra "Cortesia"; "Tirar taxa" e "Tirar couvert" pedem motivo e somem do resumo; "Estornar" pede motivo e devolve o saldo; o erro do servidor aparece no aviso.
+- [ ] Implementar `motivo-conta.tsx` e os botões. Commit `feat(mesas): desconto, cortesia, tirar taxa e couvert e estornar pela tela`.
+
+### Task 44 (Tarefa 44): pré-conta, comprovante e reabrir na tela
+
+- [ ] Testes que falham:
+  - `impressao-conta` (em `conta-mesa.test.tsx`): a pré-conta tem itens, cortesia, desconto, taxa com o %, couvert com as pessoas, total, pagamentos, saldo e o valor por pessoa; o comprovante tem a forma, o valor, o troco e o saldo;
+  - "Imprimir pré-conta" imprime e deixa o cartão em "Pediu a conta";
+  - a gaveta da mesa em Limpeza com a conta fechada hoje mostra "Reabrir a conta"; com o motivo, a comanda volta com os pagamentos.
+- [ ] Implementar `impressao-conta.tsx` e o reabrir. Commit `feat(mesas): pré-conta e comprovante em 80 mm; reabrir a conta`.
+
+### Task 45 (Tarefa 45): Pedidos e Início
+
+- [ ] Testes que falham:
+  - `detalhes-pedido.test.tsx`: a comanda paga em Pix e dinheiro mostra "Misto" e cada pagamento, com o troco; os totais mostram a taxa de serviço e o couvert; a comanda de mesa aberta não tem "Marcar como pago" e mostra "Receba pela tela de Mesas.";
+  - `lista-pedidos.test.tsx`: a coluna de pagamento diz "Misto";
+  - a aba Financeiro do Início mostra "Taxa de serviço".
+- [ ] Implementar e fazer o commit `feat(pedidos): Misto, pagamentos, taxa e couvert; Início com a taxa separada`.
+
+### Task 46 (Tarefa 46): E2E e fechamento
+
+- [ ] Em `tests/admin.spec.ts`: na pizzaria, abrir a mesa 11 com 2 pessoas, lançar um item, dividir por 3, receber uma parte em Pix e o resto em dinheiro com troco, e ver "Misto" no pedido em Pedidos.
+- [ ] `pnpm check`, mostrando a saída. `pnpm test:coverage` e subir os mínimos se a cobertura subiu.
+- [ ] O E2E rápido e os screenshots (`painel-mesas-*`, `painel-comanda-*` e os de Pedidos e Início) ficam para a revisão.
+- [ ] Registrar a "Situação" no fim desta seção.
+
+Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3, depois da revisão. O PR sai depois que as Fases 1 a 3 estiverem no `main`.
+
+- **O que a revisão pegou** (cada correção com o teste vermelho antes):
+  - a conta com saldo zero não fechava: tudo em cortesia, desconto que iguala o já pago e a conta reaberta sem mudança ficavam em "Receber R$ 0,00" desabilitado. Agora `fecharConta` fecha sem pagamento quando não há saldo, a mudança que zera o saldo de uma conta paga em parte fecha sozinha, e receber sem saldo recusa (antes gravava pagamento de R$ 0,00 com troco). O rodapé usa `useFecharConta`, que estava sem uso;
+  - recarregar a página no dia seguinte dava como paga a conta de mesa aberta (o `encerrar` da virada do dia). Agora a comanda que alguém mexeu (tem histórico) continua aberta, e a demonstração do dia novo não senta ninguém na mesa dela (`mesasOcupadas` em `gerarPedidos`). Só a comanda da demonstração, intocada, fecha sozinha, e a paga em parte recebe o resto na forma dela: a demonstração não fica com comanda de ontem pendurada;
+  - o troco da tela e o gravado diferiam com a parte acima do saldo: os dois usam `trocoDoPagamento`;
+  - "Mais um" no item em cortesia ou já pago por item: o servidor recusa ("Lance o item de novo.") e a tela esconde o botão;
+  - o comprovante de um pagamento antigo mostrava o saldo de agora (`saldoDepoisDe`);
+  - cancelar a comanda com pagamento sumia com o dinheiro: recusa com "Estorne os pagamentos antes.";
+  - o Início somava a taxa no faturamento (Q34; ver "Início" nas decisões, já atualizado);
+  - tirar o desconto não tinha tela nem histórico: "Tirar desconto", com motivo, e o evento "Tirou o desconto";
+  - testes que recalculavam o esperado com a própria regra (`indicadoresSalao`, `resumoDaConta`) ou trocavam valores por "não é —": agora com valores literais, conferidos à mão (o teste da conta fechada hoje volta a conferir os tickets);
+  - menores: a mensagem quando o desconto passaria dos itens ("O desconto passaria do valor dos itens. Tire ou diminua o desconto antes.", em vez de "menor que o já pago"); a comanda paga antes da Fase 4 reaberta grava o pagamento que teve (`pagamentosDoPedido`); valor recebido com fração de centavo é recusado; em Pedidos, a comanda aberta paga em parte numa forma diz essa forma, o filtro e a contagem por forma põem a conta Misto em cada forma que ela tem (`formasDoPedido`), e o "Reimprimir cupom" da conta de mesa mostra cortesias, desconto, taxa, couvert, Misto, cada pagamento e, na conta aberta, cobra o saldo; no Receber, o recebido menor que a parte e o valor acima do saldo avisam no campo; "Partes" fora de 2 a 20 avisa; "Por item" não perde a marcação ao fechar a janela; as partes já recebidas aparecem como "Recebida" (`partesRecebidas`).
+- **Mudou fora do plano:**
+  - o `rotuloDoPagamento` ("Cartão de crédito") entrou na Tarefa 36, porque o texto do evento de pagamento depende dele;
+  - a previsão da tela (`useAlterarQuantidade`, `useRemoverItem`) passou a usar `comTotais`: sem isso, o total da comanda com taxa caía e voltava ao mudar a quantidade (teste novo em `consultas-mesas.test.tsx`, com o servidor sem responder);
+  - "Marcar como pago" em Pedidos sai na comanda de mesa aberta, e o aviso junta os dois caminhos: "Receba ou cancele a conta pela tela de Mesas.";
+  - a comanda aberta já soma o couvert, mesmo vazia;
+  - "Por item" e "Dividir igualmente" só aparecem com saldo; as partes da divisão são do total;
+  - na lista de definição do resumo, "Tirar taxa", "Tirar couvert" e "Tirar desconto" ficam dentro do `dd` (o axe do E2E recusou o botão solto);
+  - a demonstração ganhou a conta fechada no roteiro ao vivo (há 20 min, aberta 90 min antes) e a parcial na comanda de 80 min. O sorteio do dia muda com isso: as pessoas no salão da pizzaria passam de 21 para 16, e os pedidos de hoje de todas as lojas mudam (por isso mudam também a fila, a cozinha, os motoboys e a pesagem do açougue);
+  - **por item com desconto** (revisão): em vez de ratear o desconto entre os itens, o pagamento por item fica de fora quando a conta tem desconto ("Com desconto na conta, divida igualmente ou receba um valor.");
+  - **Início e Mesas** (revisão): o faturamento do Início fica sem a taxa e conta as vendas pelo dia do pedido (inclusive a conta aberta); o de Mesas conta o que entrou no dia, pelo pagamento. Os dois batem na conta aberta e fechada no mesmo dia (teste em `resumo.test.ts`); a conta aberta paga em parte, e a que atravessa a meia-noite, contam diferente nas duas telas, de propósito.
+- **Testes antigos que mudaram (mudança de comportamento planejada):**
+  - `mesaOcupada` em `pagina-mesas.test.tsx`, dois testes de `consultas-mesas.test.tsx` e um de `pagina-garcom.test.tsx` desligam a taxa e o couvert da pizzaria na montagem: eles conferem a soma dos itens (decorrência 3);
+  - "a faixa Números do salão…" e "a conta fechada hoje entra no faturamento…": a demonstração passou a ter conta fechada hoje; na revisão, os valores ficaram literais (R$ 159,00, R$ 42,00 e R$ 126,00; com a mesa 60, R$ 172,50, R$ 34,88 e R$ 69,75);
+  - em `gerar-pedidos.test.ts`, a parcial (R$ 62,53 de R$ 125,07), a conta fechada (R$ 36,61 + R$ 36,61) e os totais das comandas de hoje da pizzaria passaram a valores literais;
+  - "imprimir a conta e fechar…": "Imprimir pré-conta" e a janela "Receber da mesa 60";
+  - "a comanda de mesa aberta não se cancela aqui": o aviso agora é "Receba ou cancele a conta pela tela de Mesas.";
+  - E2E "salão: o garçom lança…": a janela é "Receber da mesa 90";
+  - revisão: "reabrir a base em outro dia encerra a comanda aberta…" virou "…mantém a comanda aberta, e a mesa ocupada sem limpeza"; "desconto… zero tira o desconto" passa a pedir motivo e conferir o evento; em `resumo.test.ts`, a conta Misto ganhou `pagoEm` (a taxa conta pelo dia do pagamento).
+- **Fica para depois:**
+  - desfazer a cortesia;
+  - ratear o desconto no pagamento por item (com o centavo na última parte);
+  - diminuir um item já pago por item (hoje só o aumento é recusado);
+  - o "Por item" da conta já paga em parte por valor mostra os itens a preço cheio (o servidor recusa quando passa do saldo);
+  - a pré-conta não ganhou teste visual: ela só existe no papel (fica escondida na tela); o conteúdo tem teste de componente.
+- **Screenshots** (revisados nas imagens esperada, atual e diferença, claro e escuro, celular e desktop, antes de atualizar):
+  - mudaram pela Fase 4: `painel-comanda-*` (rodapé com saldo, "Imprimir pré-conta", "Cortesia" no item, a mesa 2 com a parcial), `painel-mesas-*` (totais com taxa e couvert, faturamento de R$ 159,00 e ticket de R$ 42,00), `painel-abrir-mesa-*`, `painel-adicionar-itens-*`, `painel-atalhos-mesas-*`, `painel-nova-mesa-*` e `painel-configurar-salao-*` (os números do salão por trás da janela), `painel-pedidos-*` (Misto, e Pix na comanda aberta paga em parte), `painel-visao-geral-*` (faturamento sem a taxa) e `painel-visao-geral-financeiro-*` (o aviso nas formas e a taxa de R$ 10,20);
+  - mudaram pelo sorteio novo da demonstração (só dados, sem mudança de layout): `painel-fila-*`, `painel-cozinha-*`, `painel-motoboys-*`, `painel-pesagem-*`, `painel-visao-geral-vendas-*` e `painel-visao-geral-abas-rolada-*`;
+  - entraram `painel-comanda-conta-*` (aba Conta com pagamento, partes e "Recebida") e `painel-receber-conta-*` (Receber em dinheiro com troco);
+  - atualizados em `celular-390` e `desktop-1920` e gerados nos outros 9 tamanhos, com uma amostra de cada tamanho conferida.
+- **Testes e cobertura:** 1550 testes no Vitest; 456 no E2E rápido (`celular-390` e `desktop-1920`, 28 pulados, nenhuma falha), contra o `next start` na porta 3011 (o `next dev` para no aviso de segurança do Next; atualizar o Next é decisão do usuário). A cobertura ficou em 84,03/76,94/82,49/85,09 no geral e 98,25/95,33/98,89/98,94 em `lib/**`: os mínimos subiram para 84/76/82/85 no geral; `lib/**` continua em 98/95/98/98.
 
 ## Fase 5: movimentações
 

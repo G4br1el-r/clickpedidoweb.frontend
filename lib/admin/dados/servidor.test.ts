@@ -327,6 +327,56 @@ describe("servidor de demonstração", () => {
     expect(new Set(ids).size).toBe(ids.length)
   })
 
+  test("ao reabrir em outro dia, a conta da demonstração paga em parte fecha com o resto pago", async () => {
+    await servidor().pedidos.listar()
+
+    vi.setSystemTime(new Date(2026, 10, 15, 21, 0))
+    const pedidos = await servidor().pedidos.listar()
+    const contas = pedidos.filter(
+      (pedido) =>
+        pedido.tipo === "mesa" &&
+        new Date(pedido.criadoEm).getDate() === 13 &&
+        pedido.pagamentos?.length,
+    )
+    expect(contas.length).toBeGreaterThan(0)
+    for (const conta of contas) {
+      expect(conta.status).toBe("concluido")
+      const pago = (conta.pagamentos ?? []).reduce((soma, parte) => soma + parte.valor * 100, 0)
+      expect(Math.round(pago)).toBe(Math.round(conta.total * 100))
+    }
+  })
+
+  test("ao reabrir em outro dia, a comanda de mesa aberta por alguém continua aberta, e a demonstração não senta ninguém na mesa dela", async () => {
+    const api = servidor()
+    const [mesa1] = await api.mesas.listar()
+    if (mesa1.pedidoAtivoId) {
+      await api.mesas.cancelarComanda(mesa1.pedidoAtivoId, { motivo: "Abrir de novo" })
+    }
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa1.id,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+
+    vi.setSystemTime(new Date(2026, 10, 15, 21, 0))
+    const outra = servidor()
+    const pedidos = await outra.pedidos.listar()
+    expect(pedidos.find((pedido) => pedido.id === comanda.id)).toMatchObject({
+      status: comanda.status,
+      situacaoPagamento: "na-entrega",
+      total: 4,
+    })
+    expect(pedidos.find((pedido) => pedido.id === comanda.id)).not.toHaveProperty("pagoEm")
+    const mesasAbertas = pedidos
+      .filter((pedido) => pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status))
+      .map((pedido) => pedido.mesa?.id)
+    expect(new Set(mesasAbertas).size).toBe(mesasAbertas.length)
+    expect((await outra.mesas.listar()).find((mesa) => mesa.id === mesa1.id)).toMatchObject({
+      status: "ocupada",
+      pedidoAtivoId: comanda.id,
+    })
+  })
+
   describe("histórico de status", () => {
     const etapas = (pedido: Pedido) => pedido.historico.map((etapa) => etapa.status)
 
@@ -1607,7 +1657,8 @@ describe("servidor de demonstração", () => {
         expect((await mesaDe(api, mesa.id)).limpezaDesde).toBeUndefined()
       })
 
-      test("reabrir a base em outro dia encerra a comanda aberta sem pôr a mesa em limpeza", async () => {
+      // Antes da revisão da Fase 4, a virada do dia encerrava (e dava como paga) esta comanda.
+      test("reabrir a base em outro dia mantém a comanda aberta, e a mesa ocupada sem limpeza", async () => {
         const api = servidor()
         await api.salao.salvar({ ...(await api.salao.config()), limpeza: true })
         // A demonstração do dia novo ocupa as primeiras mesas: a da comanda velha fica no fim.
@@ -1617,7 +1668,7 @@ describe("servidor de demonstração", () => {
 
         vi.setSystemTime(new Date(2026, 10, 15, 21, 0))
         const depois = await mesaDe(servidor(), ultima.id)
-        expect(depois.status).toBe("livre")
+        expect(depois.status).toBe("ocupada")
         expect(depois.limpezaDesde).toBeUndefined()
       })
 

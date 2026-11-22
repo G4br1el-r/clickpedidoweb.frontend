@@ -1,5 +1,6 @@
 import { endOfDay, startOfDay } from "date-fns"
 import type { Pedido } from "../../dados/tipos"
+import { valorSemTaxa } from "../conta"
 import type { Periodo } from "../periodo"
 
 /** Venda que conta no faturamento: nem cancelada, nem esperando o pagamento online. */
@@ -8,8 +9,9 @@ export const ehValido = (pedido: Pedido) =>
 
 export const reais = (valor: number) => Math.round(valor * 100) / 100
 
+/** O faturamento da casa: sem a taxa de serviço das contas de mesa (é do garçom, Q34). */
 export const soma = (pedidos: Pedido[]) =>
-  reais(pedidos.reduce((total, pedido) => total + pedido.total, 0))
+  reais(pedidos.reduce((total, pedido) => total + valorSemTaxa(pedido), 0))
 
 export const ticket = (pedidos: Pedido[]) =>
   pedidos.length ? reais(soma(pedidos) / pedidos.length) : 0

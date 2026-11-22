@@ -47,7 +47,12 @@ import {
 import type { Pedido } from "@/lib/admin/dados/tipos"
 import { contarPor, filtrarPedidos, totaisDaLista } from "@/lib/admin/regras/filtro-pedidos"
 import { formatarTelefone } from "@/lib/admin/regras/mensagens"
-import { rotuloCanal, rotuloOrigem, rotuloPagamento } from "@/lib/admin/regras/rotulos"
+import {
+  rotuloCanal,
+  rotuloOrigem,
+  rotuloPagamento,
+  rotuloPagamentoDoPedido,
+} from "@/lib/admin/regras/rotulos"
 import { rotuloStatusComum } from "@/lib/admin/regras/status"
 import { emReais, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
@@ -138,7 +143,7 @@ const COLUNAS: ColumnDef<typeof recursos, Pedido>[] = [
     enableSorting: false,
     cell: ({ row }) => (
       <div className="flex flex-col gap-0.5">
-        <span>{rotuloPagamento(row.original.pagamento)}</span>
+        <span>{rotuloPagamentoDoPedido(row.original)}</span>
         <span className="text-xs text-muted-foreground">
           {rotuloSituacao(row.original.situacaoPagamento)}
         </span>
