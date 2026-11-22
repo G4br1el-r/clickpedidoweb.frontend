@@ -50,7 +50,9 @@ async function abrir(endereco?: string) {
       <PaginaMesas />
     </Provedores>,
   )
-  await screen.findByRole("searchbox", { name: "Buscar mesa" }, { timeout: 8000 })
+  // Com ?mesa= a gaveta abre por cima e esconde a busca: vale ela.
+  if (endereco?.includes("mesa=")) await screen.findByRole("dialog", {}, { timeout: 8000 })
+  else await screen.findByRole("searchbox", { name: "Buscar mesa" }, { timeout: 8000 })
   return usuario
 }
 
@@ -159,5 +161,93 @@ describe("Mesas: transferir, juntar e separar pelo menu ⋯", () => {
     await usuario.click(await screen.findByRole("button", { name: "Desfazer" }))
 
     await waitFor(async () => expect(await cartao(9)).toHaveAccessibleDescription(/^Limpeza/))
+  })
+})
+
+describe("Mesas: a gaveta das mesas juntadas e transferir itens", () => {
+  /** Mesa 60 com 1 Água e 3 Sucos, lançados sem cozinha. */
+  async function mesa60(cozinha = false) {
+    const mesa = await api().mesas.criar({ numero: 60 })
+    return api().mesas.lancar({
+      mesaId: mesa.id,
+      garcom: "Rafa",
+      enviarParaCozinha: cozinha,
+      itens: [
+        { avulso: { nome: "Água", preco: 4 }, quantidade: 1 },
+        { avulso: { nome: "Suco", preco: 9.5 }, quantidade: 3 },
+      ],
+    })
+  }
+
+  test("a gaveta da mesa 15 diz que está junto com a 16", async () => {
+    await abrir("?mesa=15")
+    const gaveta = await screen.findByRole("dialog", { name: "Mesa 15" })
+    expect(await within(gaveta).findByText(/Junto com a mesa 16/)).toBeInTheDocument()
+  })
+
+  test("transferir 1 de 3 Sucos da mesa 60 para a 8: a linha se divide e o aviso tem Desfazer", async () => {
+    const comanda = await mesa60()
+    const usuario = await abrir("?mesa=60")
+    const gaveta = within(await screen.findByRole("dialog", { name: "Mesa 60" }))
+    await usuario.click(await gaveta.findByRole("button", { name: "Transferir itens" }))
+    const janela = within(
+      await screen.findByRole("dialog", { name: "Transferir itens da mesa 60" }),
+    )
+    await usuario.type(janela.getByRole("spinbutton", { name: "3× Suco" }), "1")
+    await usuario.click(janela.getByRole("combobox", { name: "Para a mesa" }))
+    await usuario.click(await screen.findByRole("option", { name: "Mesa 8" }))
+    await usuario.click(janela.getByRole("button", { name: "Transferir" }))
+
+    expect(await screen.findByText("1× Suco foi para a mesa 8.")).toBeInTheDocument()
+    expect(await screen.findByRole("button", { name: "Desfazer" })).toBeInTheDocument()
+    const origem = await api().pedidos.buscar(comanda.id)
+    expect(origem?.itens.map((item) => `${item.quantidade}× ${item.nome}`)).toEqual([
+      "1× Água",
+      "2× Suco",
+    ])
+    const mesa8 = (await api().mesas.listar()).find((mesa) => mesa.numero === 8)
+    const destino = await api().pedidos.buscar(mesa8?.pedidoAtivoId ?? 0)
+    expect(destino?.itens.map((item) => `${item.quantidade}× ${item.nome}`)).toEqual(["1× Suco"])
+  })
+
+  test("o item que a cozinha ainda tem fica travado, com Na cozinha", async () => {
+    await mesa60(true)
+    const usuario = await abrir("?mesa=60")
+    const gaveta = within(await screen.findByRole("dialog", { name: "Mesa 60" }))
+    await usuario.click(await gaveta.findByRole("button", { name: "Transferir itens" }))
+    const janela = within(
+      await screen.findByRole("dialog", { name: "Transferir itens da mesa 60" }),
+    )
+
+    expect(janela.getByRole("spinbutton", { name: "3× Suco" })).toBeDisabled()
+    expect(janela.getAllByText("Na cozinha")).toHaveLength(2)
+  })
+
+  test("sem item e sem mesa, Transferir diz o que falta", async () => {
+    await mesa60()
+    const usuario = await abrir("?mesa=60")
+    const gaveta = within(await screen.findByRole("dialog", { name: "Mesa 60" }))
+    await usuario.click(await gaveta.findByRole("button", { name: "Transferir itens" }))
+    const janela = within(
+      await screen.findByRole("dialog", { name: "Transferir itens da mesa 60" }),
+    )
+    await usuario.click(janela.getByRole("button", { name: "Transferir" }))
+
+    expect(janela.getByText("Escolha os itens.")).toBeInTheDocument()
+    expect(janela.getByText("Escolha a mesa.")).toBeInTheDocument()
+  })
+
+  test("marcar limpa na gaveta da mesa 9 avisa com Desfazer, e desfazer não fecha a gaveta", async () => {
+    const usuario = await abrir("?mesa=9")
+    const gaveta = await screen.findByRole("dialog", { name: "Mesa 9" })
+    await usuario.click(within(gaveta).getByRole("button", { name: "Marcar limpa" }))
+    await waitFor(() => expect(gaveta).toHaveAccessibleDescription("Mesa livre."))
+
+    // A gaveta é modal e o jsdom não lê o CSS do aviso (que recebe o clique por cima dela).
+    const porCima = userEvent.setup({ pointerEventsCheck: 0 })
+    await porCima.click(await screen.findByRole("button", { name: "Desfazer" }))
+
+    await waitFor(() => expect(gaveta).toHaveAccessibleDescription("Limpeza."))
+    expect(screen.getByRole("dialog", { name: "Mesa 9" })).toBeInTheDocument()
   })
 })
