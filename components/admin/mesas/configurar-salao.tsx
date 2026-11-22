@@ -10,8 +10,11 @@ import {
   FieldDescription,
   FieldGroup,
   FieldLabel,
+  FieldLegend,
+  FieldSet,
 } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import {
   Sheet,
   SheetContent,
@@ -52,6 +55,9 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
   const [limpeza, setLimpeza] = useState(salao.limpeza)
   const [mapa, setMapa] = useState(salao.funcoes.mapa)
   const [reservas, setReservas] = useState(salao.funcoes.reservas)
+  const [qr, setQr] = useState(salao.funcoes.qr)
+  const [aceite, setAceite] = useState(salao.qr.aceite)
+  const [abrirPeloQr, setAbrirPeloQr] = useState(salao.qr.abrirMesaPeloQr)
   const [antecedencia, setAntecedencia] = useState(String(salao.reservas.antecedenciaMin))
   const [tolerancia, setTolerancia] = useState(String(salao.reservas.toleranciaMin))
   const [alertas, setAlertas] = useState(() =>
@@ -64,7 +70,6 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
     setGarcons(garcons.map((garcom, i) => (i === indice ? { ...garcom, ...mudanca } : garcom)))
 
   const enviar = () => {
-    // O QR fica como o servidor devolveu.
     const config: ConfigSalao = {
       ...salao,
       areas: areas.map((area, indice) => ({ ...area, ordem: indice })),
@@ -77,7 +82,8 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
         ? { ativo: true, porPessoa: numero(couvert) }
         : { ...salao.couvert, ativo: false },
       limpeza,
-      funcoes: { ...salao.funcoes, mapa, reservas },
+      funcoes: { ...salao.funcoes, mapa, reservas, qr },
+      qr: { aceite, abrirMesaPeloQr: abrirPeloQr },
       reservas: { antecedenciaMin: numero(antecedencia), toleranciaMin: numero(tolerancia) },
       alertas: {
         semPedidoMin: numero(alertas.semPedidoMin),
@@ -280,6 +286,45 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
               </FieldDescription>
             </FieldContent>
             <Switch id="salao-reservas" checked={reservas} onCheckedChange={setReservas} />
+          </Field>
+          <Field orientation="horizontal">
+            <FieldContent>
+              <FieldLabel htmlFor="salao-qr" className="flex flex-wrap items-center gap-2">
+                {FUNCOES_PRO_SALAO.qr.nome}
+                <SeloPro liberada={qr} />
+              </FieldLabel>
+              <FieldDescription>
+                O cliente pede, chama o garçom e pede a conta pelo QR da mesa.{" "}
+                {emReais(FUNCOES_PRO_SALAO.qr.preco)} por mês.
+              </FieldDescription>
+            </FieldContent>
+            <Switch id="salao-qr" checked={qr} onCheckedChange={setQr} />
+          </Field>
+        </BlocoSecao>
+
+        <BlocoSecao titulo="QR na mesa" descricao="Como o pedido do cliente chega ao salão.">
+          <FieldSet>
+            <FieldLegend variant="label">Quem aceita o pedido</FieldLegend>
+            <RadioGroup
+              value={aceite}
+              onValueChange={(valor) => setAceite(valor as ConfigSalao["qr"]["aceite"])}
+            >
+              <Field orientation="horizontal">
+                <RadioGroupItem id="salao-qr-garcom" value="garcom" />
+                <FieldLabel htmlFor="salao-qr-garcom">O garçom aceita</FieldLabel>
+              </Field>
+              <Field orientation="horizontal">
+                <RadioGroupItem id="salao-qr-direto" value="direto" />
+                <FieldLabel htmlFor="salao-qr-direto">Vai direto para a cozinha</FieldLabel>
+              </Field>
+            </RadioGroup>
+          </FieldSet>
+          <Field orientation="horizontal">
+            <FieldContent>
+              <FieldLabel htmlFor="salao-qr-abrir">O primeiro pedido abre a mesa livre</FieldLabel>
+              <FieldDescription>Desligado, o cliente chama o garçom para abrir.</FieldDescription>
+            </FieldContent>
+            <Switch id="salao-qr-abrir" checked={abrirPeloQr} onCheckedChange={setAbrirPeloQr} />
           </Field>
         </BlocoSecao>
 
