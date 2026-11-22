@@ -161,6 +161,25 @@ describe("DetalhesPedido", () => {
     expect(detalhes.getByText("Motivo: Outro · Cliente foi embora")).toBeInTheDocument()
   })
 
+  test("a comanda de mesa aberta não se cancela aqui: o painel leva para a mesa", async () => {
+    const api = servidorDo(useSegmentoAtual.getState().segmento)
+    const mesa = await api.mesas.criar({ numero: 90 })
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    renderizar(comanda.id)
+    const detalhes = await painel(comanda)
+
+    expect(detalhes.queryByRole("button", { name: "Cancelar pedido" })).not.toBeInTheDocument()
+    expect(detalhes.getByText(/Cancele pela tela de Mesas\./)).toBeInTheDocument()
+    expect(detalhes.getByRole("link", { name: "Abrir a mesa 90" })).toHaveAttribute(
+      "href",
+      "/admin/mesas?mesa=90",
+    )
+  })
+
   test("cancelado sem motivo mostra Não informado", async () => {
     const pedido = await umPedido((p) => p.status === "cancelado" && !p.motivoCancelamento)
     renderizar(pedido.id)

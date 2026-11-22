@@ -600,6 +600,14 @@ describe("cancelar comanda", () => {
     expect(mesa).not.toHaveProperty("limpezaDesde")
   })
 
+  test("a comanda aberta não se cancela por Pedidos: só pela tela de Mesas, com motivo", async () => {
+    const api = servidor()
+    const { comanda } = await comRefri(api, true)
+    await expect(api.pedidos.cancelar(comanda.id, "em-preparo")).rejects.toThrow(
+      "Cancele a comanda pela tela de Mesas.",
+    )
+  })
+
   test("a comanda vazia não se cancela: libera-se a mesa", async () => {
     const api = servidor()
     const mesaId = await mesaLivre(api)

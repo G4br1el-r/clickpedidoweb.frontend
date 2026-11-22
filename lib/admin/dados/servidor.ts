@@ -959,6 +959,10 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           conferirEtapa(pedido, de)
           if (pedido.status === "concluido")
             throw new Error("Pedido concluído não pode ser cancelado")
+          // A comanda aberta tem motivo, perda e histórico: sai por mesas.cancelarComanda (Q36).
+          if (pedido.tipo === "mesa" && pedido.mesa) {
+            throw new Error("Cancele a comanda pela tela de Mesas.")
+          }
           return {
             ...pedido,
             status: "cancelado",
