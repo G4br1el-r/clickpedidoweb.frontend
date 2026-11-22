@@ -4,7 +4,7 @@ import { type QueryClient, useMutation, useQuery, useQueryClient } from "@tansta
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { chaves, servidorDo } from "./consultas"
-import type { LancamentoMesa, PagamentoMesa, Servidor } from "./servidor"
+import type { LancamentoMesa, PagamentoMesa, Retirada, Servidor } from "./servidor"
 import type { ConfigSalao, Pedido } from "./tipos"
 
 const chaveMesas = (segmento: SegmentoPainelId) => ["admin", segmento, "mesas"] as const
@@ -110,8 +110,13 @@ export function useAlterarQuantidade() {
   return useMudancaNasMesas(
     (
       servidor,
-      { pedidoId, itemId, quantidade }: { pedidoId: number; itemId: string; quantidade: number },
-    ) => servidor.mesas.alterarQuantidade(pedidoId, itemId, quantidade),
+      {
+        pedidoId,
+        itemId,
+        quantidade,
+        ...retirada
+      }: { pedidoId: number; itemId: string; quantidade: number } & Retirada,
+    ) => servidor.mesas.alterarQuantidade(pedidoId, itemId, quantidade, retirada),
     {
       previsao: {
         pedidoId: ({ pedidoId }) => pedidoId,
@@ -135,8 +140,10 @@ export function useAlterarQuantidade() {
 
 export function useRemoverItem() {
   return useMudancaNasMesas(
-    (servidor, { pedidoId, itemId }: { pedidoId: number; itemId: string }) =>
-      servidor.mesas.removerItem(pedidoId, itemId),
+    (
+      servidor,
+      { pedidoId, itemId, ...retirada }: { pedidoId: number; itemId: string } & Retirada,
+    ) => servidor.mesas.removerItem(pedidoId, itemId, retirada),
     {
       previsao: {
         pedidoId: ({ pedidoId }) => pedidoId,

@@ -238,3 +238,234 @@ describe("lançar na comanda", () => {
     expect(comanda).not.toHaveProperty("contaPedidaEm")
   })
 })
+
+const saldo = async (api: ReturnType<typeof servidor>, id: string) =>
+  (await api.produtos.listar()).find((produto) => produto.id === id)?.estoque?.quantidade
+
+/** Mesa 30 aberta com 2 Refri lata. Com `preparado`, foi para a cozinha e já está em preparo. */
+async function comRefri(api: ReturnType<typeof servidor>, preparado: boolean) {
+  const mesaId = await mesaLivre(api)
+  await api.mesas.abrir(mesaId, { pessoas: 2, garcom: "Rafa" })
+  const comanda = await api.mesas.lancar({
+    mesaId,
+    enviarParaCozinha: preparado,
+    itens: [{ produtoId: "refri", escolhas: {}, quantidade: 2 }],
+  })
+  if (preparado) await api.pedidos.avancar(comanda.id, "recebido")
+  return { mesaId, comanda, item: comanda.itens[0] }
+}
+
+describe("tirar e diminuir", () => {
+  test("o item que a cozinha não preparou sai sem motivo e devolve o estoque", async () => {
+    const api = servidor()
+    const { comanda, item } = await comRefri(api, false)
+    expect(await saldo(api, "refri")).toBe(3)
+
+    const depois = await api.mesas.removerItem(comanda.id, item.id, { por: "Bia" })
+    expect(depois.itens).toEqual([])
+    expect(await saldo(api, "refri")).toBe(5)
+    expect(depois.eventos?.at(-1)).toEqual({
+      tipo: "item-removido",
+      em: AGORA.toISOString(),
+      por: "Bia",
+      texto: "Tirou 2× Refri lata",
+    })
+  })
+
+  test("o item preparado só sai com motivo; o estoque não volta: a venda é desfeita e o mesmo tanto vira perda", async () => {
+    const api = servidor()
+    const { comanda, item } = await comRefri(api, true)
+    await expect(api.mesas.removerItem(comanda.id, item.id)).rejects.toThrow(
+      "Diga o motivo para tirar o que a cozinha já preparou.",
+    )
+    await expect(api.mesas.removerItem(comanda.id, item.id, { motivo: "  " })).rejects.toThrow(
+      "Diga o motivo para tirar o que a cozinha já preparou.",
+    )
+
+    const depois = await api.mesas.removerItem(comanda.id, item.id, { motivo: " Caiu no chão " })
+    expect(depois.itens).toEqual([])
+    expect(await saldo(api, "refri")).toBe(3)
+    const [perda, devolucao] = await api.estoque.movimentos("refri")
+    expect([devolucao, perda]).toMatchObject([
+      { tipo: "devolucao", quantidade: 2, saldo: 5, pedidoId: comanda.id },
+      { tipo: "perda", quantidade: -2, saldo: 3, pedidoId: comanda.id, motivo: "Caiu no chão" },
+    ])
+    expect(depois.eventos?.at(-1)).toEqual({
+      tipo: "item-removido",
+      em: AGORA.toISOString(),
+      texto: "Tirou 2× Refri lata",
+      motivo: "Caiu no chão",
+    })
+  })
+
+  test("diminuir o preparado pede motivo e perde a diferença; aumentar o preparado recusa", async () => {
+    const api = servidor()
+    const { comanda, item } = await comRefri(api, true)
+    await expect(api.mesas.alterarQuantidade(comanda.id, item.id, 1)).rejects.toThrow(
+      "Diga o motivo para tirar o que a cozinha já preparou.",
+    )
+    await expect(api.mesas.alterarQuantidade(comanda.id, item.id, 3)).rejects.toThrow(
+      "A cozinha já preparou Refri lata. Lance de novo para pedir mais.",
+    )
+
+    const depois = await api.mesas.alterarQuantidade(comanda.id, item.id, 1, {
+      motivo: "Derramou",
+      por: "Rafa",
+    })
+    expect(depois.itens[0]).toMatchObject({ quantidade: 1, total: 6 })
+    expect(await saldo(api, "refri")).toBe(3)
+    const [perda] = await api.estoque.movimentos("refri")
+    expect(perda).toMatchObject({ tipo: "perda", quantidade: -1, saldo: 3, motivo: "Derramou" })
+    expect(depois.eventos?.at(-1)).toEqual({
+      tipo: "item-removido",
+      em: AGORA.toISOString(),
+      por: "Rafa",
+      texto: "Tirou 1× Refri lata",
+      motivo: "Derramou",
+    })
+  })
+
+  test("diminuir o que não foi preparado devolve e não pede motivo", async () => {
+    const api = servidor()
+    const { comanda, item } = await comRefri(api, false)
+    const depois = await api.mesas.alterarQuantidade(comanda.id, item.id, 1)
+    expect(await saldo(api, "refri")).toBe(4)
+    expect(depois.eventos?.at(-1)).toMatchObject({
+      tipo: "item-removido",
+      texto: "Tirou 1× Refri lata",
+    })
+  })
+})
+
+describe("editar item", () => {
+  /** X-Burger com Adicional: Bacon (+R$ 3, ligado ao estoque do Bacon) ou Ovo (+R$ 2). */
+  const comOvo = (catalogo: CatalogoLoja) => {
+    catalogo.produtos[0].grupos[0].itens.push({
+      id: "opc-ovo",
+      nome: "Ovo",
+      precoAdicional: 2,
+      ordem: 2,
+      ativo: true,
+    })
+  }
+
+  async function comXBurger(api: ReturnType<typeof servidor>, enviarParaCozinha: boolean) {
+    const mesaId = await mesaLivre(api)
+    await api.mesas.abrir(mesaId, { pessoas: 2, garcom: "Rafa" })
+    const comanda = await api.mesas.lancar({
+      mesaId,
+      enviarParaCozinha,
+      itens: [
+        {
+          produtoId: "prod-x-burger",
+          escolhas: { "grp-x-burger-1": ["opc-x-burger-1-1"] },
+          quantidade: 1,
+        },
+      ],
+    })
+    return { comanda, item: comanda.itens[0] }
+  }
+
+  test("troca a observação e as opções, refaz o preço e o estoque, e grava o evento", async () => {
+    const api = servidor(comOvo)
+    const { comanda, item } = await comXBurger(api, true)
+    expect(item).toMatchObject({ total: 23, escolhas: { "grp-x-burger-1": ["opc-x-burger-1-1"] } })
+    expect(await saldo(api, "bacon")).toBe(9)
+
+    const depois = await api.mesas.editarItem(comanda.id, item.id, {
+      observacao: " Sem cebola ",
+      escolhas: { "grp-x-burger-1": ["opc-ovo"] },
+      por: "Bia",
+    })
+    expect(depois.itens[0]).toMatchObject({
+      id: item.id,
+      precoUnitario: 22,
+      total: 22,
+      opcoes: ["Adicional: Ovo"],
+      observacao: "Sem cebola",
+      escolhas: { "grp-x-burger-1": ["opc-ovo"] },
+    })
+    expect(depois.total).toBe(22)
+    expect(await saldo(api, "bacon")).toBe(10)
+    expect(depois.eventos?.at(-1)).toEqual({
+      tipo: "item-editado",
+      em: AGORA.toISOString(),
+      por: "Bia",
+      texto: "X-Burger: Adicional: Ovo · Sem cebola",
+    })
+  })
+
+  test("o item que a cozinha já preparou não muda", async () => {
+    const api = servidor(comOvo)
+    const { comanda, item } = await comXBurger(api, true)
+    await api.pedidos.avancar(comanda.id, "recebido")
+    await expect(
+      api.mesas.editarItem(comanda.id, item.id, { observacao: "Sem cebola" }),
+    ).rejects.toThrow("A cozinha já preparou X-Burger. Tire com motivo e lance de novo.")
+  })
+
+  test("sem escolhas novas, só a observação muda; observação vazia sai", async () => {
+    const api = servidor(comOvo)
+    const { comanda, item } = await comXBurger(api, false)
+    const comObservacao = await api.mesas.editarItem(comanda.id, item.id, {
+      observacao: "Bem passado",
+    })
+    expect(comObservacao.itens[0]).toMatchObject({ observacao: "Bem passado", total: 23 })
+    const sem = await api.mesas.editarItem(comanda.id, item.id, { observacao: "  " })
+    expect(sem.itens[0]).not.toHaveProperty("observacao")
+    expect(sem.itens[0].opcoes).toEqual(["Adicional: Bacon"])
+  })
+})
+
+describe("cancelar comanda", () => {
+  test("exige motivo; o não preparado volta, o preparado vira perda e a mesa fica livre sem limpeza", async () => {
+    const api = servidor((catalogo) => {
+      catalogo.salao.limpeza = true
+    })
+    const { mesaId, comanda } = await comRefri(api, true)
+    // Rodada 2, só lançada: 1 Refri que não passou pela cozinha.
+    await api.mesas.lancar({
+      mesaId,
+      enviarParaCozinha: false,
+      itens: [{ produtoId: "refri", escolhas: {}, quantidade: 1 }],
+    })
+    expect(await saldo(api, "refri")).toBe(2)
+    await expect(api.mesas.cancelarComanda(comanda.id, { motivo: " " })).rejects.toThrow(
+      "Diga o motivo do cancelamento.",
+    )
+
+    const cancelada = await api.mesas.cancelarComanda(comanda.id, {
+      motivo: " Cliente foi embora ",
+      por: "Rafa",
+    })
+    expect(cancelada).toMatchObject({
+      status: "cancelado",
+      situacaoPagamento: "cancelado",
+      motivoCancelamento: "outro",
+      detalheCancelamento: "Cliente foi embora",
+    })
+    expect(cancelada.eventos?.at(-1)).toEqual({
+      tipo: "cancelada",
+      em: AGORA.toISOString(),
+      por: "Rafa",
+      texto: "Comanda cancelada",
+      motivo: "Cliente foi embora",
+    })
+    // Voltou só o Refri da rodada 2; os 2 preparados saíram como perda.
+    expect(await saldo(api, "refri")).toBe(3)
+    const [perda] = await api.estoque.movimentos("refri")
+    expect(perda).toMatchObject({ tipo: "perda", quantidade: -2, motivo: "Cliente foi embora" })
+    const mesa = (await api.mesas.listar()).find((item) => item.id === mesaId)
+    expect(mesa?.status).toBe("livre")
+    expect(mesa).not.toHaveProperty("limpezaDesde")
+  })
+
+  test("a comanda vazia não se cancela: libera-se a mesa", async () => {
+    const api = servidor()
+    const mesaId = await mesaLivre(api)
+    const comanda = await api.mesas.abrir(mesaId, { pessoas: 2, garcom: "Rafa" })
+    await expect(api.mesas.cancelarComanda(comanda.id, { motivo: "Engano" })).rejects.toThrow(
+      "A comanda está vazia. Libere a mesa.",
+    )
+  })
+})

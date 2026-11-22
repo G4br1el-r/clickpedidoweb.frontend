@@ -239,7 +239,8 @@ describe("PaginaMesas", () => {
     expect(total()).toHaveTextContent("R$ 16,50")
   })
 
-  test("tirar ou diminuir o que a cozinha já preparou pede confirmação", async () => {
+  // Fase 3 (Q10, Q38): a confirmação passa a pedir o motivo, que vai para a perda no estoque.
+  test("tirar ou diminuir o que a cozinha já preparou pede confirmação com motivo", async () => {
     const mesa = await mesaOcupada()
     const comAPizza = await api().mesas.lancar({
       mesaId: mesa.id,
@@ -255,17 +256,15 @@ describe("PaginaMesas", () => {
     // Voltar não mexe na comanda.
     await usuario.click(pizza().getByRole("button", { name: "Remover" }))
     const pergunta = within(screen.getByRole("alertdialog", { name: "Tirar Pizza da comanda?" }))
-    expect(pergunta.getByText("A cozinha já preparou.")).toBeInTheDocument()
+    expect(pergunta.getByText(/A cozinha já preparou/)).toBeInTheDocument()
+    expect(pergunta.getByRole("button", { name: "Tirar da comanda" })).toBeDisabled()
     await usuario.click(pergunta.getByRole("button", { name: "Voltar" }))
     expect(total()).toHaveTextContent("R$ 93,50")
 
     await usuario.click(pizza().getByRole("button", { name: "Menos um" }))
-    await usuario.click(
-      within(screen.getByRole("alertdialog", { name: "Tirar Pizza da comanda?" })).getByRole(
-        "button",
-        { name: "Tirar da comanda" },
-      ),
-    )
+    const motivo = within(screen.getByRole("alertdialog", { name: "Tirar Pizza da comanda?" }))
+    await usuario.type(motivo.getByRole("textbox", { name: "Motivo" }), "Caiu no chão")
+    await usuario.click(motivo.getByRole("button", { name: "Tirar da comanda" }))
     await waitFor(() => expect(total()).toHaveTextContent("R$ 53,50"))
 
     // O que não foi para a cozinha sai direto, sem perguntar.

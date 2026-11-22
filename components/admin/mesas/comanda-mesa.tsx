@@ -20,16 +20,6 @@ import { useRef, useState } from "react"
 import { NumericFormat } from "react-number-format"
 import { useReactToPrint } from "react-to-print"
 import { toast } from "sonner"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -72,6 +62,7 @@ import { emReais, formatoMoeda } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
 import { ConfirmarExclusaoMesa } from "./excluir-mesa"
+import { TirarItem } from "./tirar-item"
 
 const PAGAMENTOS: { valor: PagamentoMesa; rotulo: string; icone: typeof BanknoteIcon }[] = [
   { valor: "dinheiro", rotulo: "Dinheiro", icone: BanknoteIcon },
@@ -281,18 +272,27 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   const vazia = pedido.itens.length === 0
   const aoErrar = (erro: Error) => toast.error(erro.message)
   // Item que a cozinha já preparou: tirar ou diminuir pergunta antes.
-  const [confirmando, setConfirmando] = useState<{ item: ItemPedido; tirar: () => void } | null>(
-    null,
-  )
-  const comConfirmacao = (item: ItemPedido, tirar: () => void) =>
+  const [confirmando, setConfirmando] = useState<{
+    item: ItemPedido
+    tirar: (motivo: string) => void
+  } | null>(null)
+  const comConfirmacao = (item: ItemPedido, tirar: (motivo?: string) => void) =>
     cozinhaJaPreparou(pedido, item) ? setConfirmando({ item, tirar }) : tirar()
-  const diminuir = (item: ItemPedido) =>
+  const diminuir = (item: ItemPedido, motivo?: string) =>
     alterar.mutate(
-      { pedidoId: pedido.id, itemId: item.id, quantidade: item.quantidade - 1 },
+      {
+        pedidoId: pedido.id,
+        itemId: item.id,
+        quantidade: item.quantidade - 1,
+        ...(motivo ? { motivo } : {}),
+      },
       { onError: aoErrar },
     )
-  const tirar = (item: ItemPedido) =>
-    remover.mutate({ pedidoId: pedido.id, itemId: item.id }, { onError: aoErrar })
+  const tirar = (item: ItemPedido, motivo?: string) =>
+    remover.mutate(
+      { pedidoId: pedido.id, itemId: item.id, ...(motivo ? { motivo } : {}) },
+      { onError: aoErrar },
+    )
   const semMovimento = useReducedMotion()
   const estado = estadoDaMesa(mesa, pedido)
 
@@ -359,7 +359,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                       variant="outline"
                       aria-label="Menos um"
                       disabled={item.quantidade <= 1}
-                      onClick={() => comConfirmacao(item, () => diminuir(item))}
+                      onClick={() => comConfirmacao(item, (motivo) => diminuir(item, motivo))}
                     >
                       <MinusIcon />
                     </Button>
@@ -388,7 +388,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                       className="max-md:size-10"
                       variant="ghost"
                       aria-label="Remover"
-                      onClick={() => comConfirmacao(item, () => tirar(item))}
+                      onClick={() => comConfirmacao(item, (motivo) => tirar(item, motivo))}
                     >
                       <Trash2Icon />
                     </Button>
@@ -458,29 +458,14 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
       </SheetFooter>
 
       <ContaImpressa pedido={pedido} mesa={mesa} loja={loja?.nome} ref={conta} />
-      <AlertDialog
-        open={confirmando !== null}
-        onOpenChange={(aberto) => !aberto && setConfirmando(null)}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Tirar {confirmando?.item.nome} da comanda?</AlertDialogTitle>
-            <AlertDialogDescription>A cozinha já preparou.</AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Voltar</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              onClick={() => {
-                confirmando?.tirar()
-                setConfirmando(null)
-              }}
-            >
-              Tirar da comanda
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <TirarItem
+        item={confirmando?.item ?? null}
+        aoMudar={(aberto) => !aberto && setConfirmando(null)}
+        aoTirar={(motivo) => {
+          confirmando?.tirar(motivo)
+          setConfirmando(null)
+        }}
+      />
       <FecharConta
         pedido={pedido}
         mesa={mesa}
