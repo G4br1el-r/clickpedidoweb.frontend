@@ -32,6 +32,7 @@ import {
   porQueNaoJunta,
   porQueNaoTransfere,
   separarQuantidade,
+  servirDesdeAoReceber,
 } from "../regras/movimentacoes"
 import { proximoNumero } from "../regras/numero"
 import {
@@ -2703,7 +2704,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
                   agora,
                 ),
           )
-          const novoDestino = comEvento(recebeu, {
+          // O item pronto e não servido leva o "Servir" para a mesa que o recebe.
+          const servirDesde = servirDesdeAoReceber(origem, vao, aberta)
+          const novoDestino = comEvento(servirDesde ? { ...recebeu, servirDesde } : recebeu, {
             tipo: "itens-transferidos",
             em: agora,
             ...autor(por),

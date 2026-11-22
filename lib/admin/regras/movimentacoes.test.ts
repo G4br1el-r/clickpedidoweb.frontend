@@ -7,6 +7,7 @@ import {
   porQueNaoJunta,
   porQueNaoTransfere,
   separarQuantidade,
+  servirDesdeAoReceber,
 } from "./movimentacoes"
 
 const AGORA = new Date(2026, 10, 13, 20, 30)
@@ -255,5 +256,33 @@ describe("juntarComandas", () => {
       "Mesa 5: Mesa aberta para 3 pessoas",
       "Rodada 1 para a cozinha: 1× Pizza",
     ])
+  })
+})
+
+describe("servirDesdeAoReceber", () => {
+  const pronta = comanda(1, 3, "pronto", [item("Calabresa")], { servirDesde: minutosAtras(5) })
+  const preparado = { ...item("Calabresa"), transferido: { daMesa: 3, preparado: true } }
+  const naoPreparado = {
+    ...item("Coca", { cozinha: false }),
+    transferido: { daMesa: 3, preparado: false },
+  }
+
+  test("o item preparado de uma mesa com Servir leva o Servir junto", () => {
+    expect(servirDesdeAoReceber(pronta, [preparado], undefined)).toBe(minutosAtras(5))
+  })
+
+  test("o destino que já tinha Servir fica com a hora mais antiga", () => {
+    const destino = comanda(2, 7, "pronto", [item("Pizza")], { servirDesde: minutosAtras(9) })
+    expect(servirDesdeAoReceber(pronta, [preparado], destino)).toBe(minutosAtras(9))
+    const maisNovo = { ...destino, servirDesde: minutosAtras(2) }
+    expect(servirDesdeAoReceber(pronta, [preparado], maisNovo)).toBe(minutosAtras(5))
+  })
+
+  test("sem item preparado, ou da mesa sem Servir, o destino fica como estava", () => {
+    expect(servirDesdeAoReceber(pronta, [naoPreparado], undefined)).toBeUndefined()
+    const servida = comanda(1, 3, "pronto", [item("Calabresa")])
+    expect(servirDesdeAoReceber(servida, [preparado], undefined)).toBeUndefined()
+    const destino = comanda(2, 7, "pronto", [item("Pizza")], { servirDesde: minutosAtras(9) })
+    expect(servirDesdeAoReceber(servida, [preparado], destino)).toBe(minutosAtras(9))
   })
 })

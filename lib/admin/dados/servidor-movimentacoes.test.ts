@@ -644,6 +644,37 @@ describe("transferir itens", () => {
     expect(await saldo(api, "refri")).toBe(5)
   })
 
+  test("o item pronto e não servido leva o Servir; a origem fica com ele enquanto sobrar algo pronto", async () => {
+    const api = servidor()
+    const mesaId = await mesaNova(api, 30)
+    const comanda = await api.mesas.lancar({
+      mesaId,
+      garcom: "Rafa",
+      enviarParaCozinha: true,
+      itens: X_BURGER(2),
+    })
+    await api.pedidos.avancar(comanda.id, "recebido")
+    await api.pedidos.avancar(comanda.id, "em-preparo")
+    const destino = await mesaNova(api, 31)
+    const outro = await mesaNova(api, 32)
+
+    // 1 dos 2 X-Burgers: sobra 1 pronto na 30, e as duas mesas ficam com o Servir.
+    const parte = await api.mesas.transferirItens(comanda.id, {
+      mesaDestinoId: destino,
+      itens: [{ itemId: comanda.itens[0].id, quantidade: 1 }],
+    })
+    expect(parte.comanda.servirDesde).toBe(AGORA.toISOString())
+    expect(parte.destino.servirDesde).toBe(AGORA.toISOString())
+
+    // O que sobrou: a 30 fica sem nada pronto e perde o Servir; a 32 ganha.
+    const resto = await api.mesas.transferirItens(comanda.id, {
+      mesaDestinoId: outro,
+      itens: [{ itemId: comanda.itens[0].id, quantidade: 1 }],
+    })
+    expect(resto.comanda.servirDesde).toBeUndefined()
+    expect(resto.destino.servirDesde).toBe(AGORA.toISOString())
+  })
+
   test("recusa sem itens, quantidade fora da linha, a mesma mesa e a bloqueada", async () => {
     const api = servidor()
     const { mesaId, comanda } = await aberta(api, 30, REFRI(3))

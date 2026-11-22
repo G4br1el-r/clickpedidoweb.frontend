@@ -118,3 +118,19 @@ export function separarQuantidade(
   })
   return { fica: parte(item.id, item.quantidade - quantidade), vai: parte(novoId, quantidade) }
 }
+
+/**
+ * O `servirDesde` do destino depois de receber itens: o item que a cozinha da origem já
+ * preparou e a mesa ainda não serviu leva o "Servir" junto. Fica a hora mais antiga.
+ */
+export function servirDesdeAoReceber(
+  origem: Pedido,
+  vao: ItemPedido[],
+  destino: Pedido | undefined,
+): string | undefined {
+  const leva = origem.servirDesde && vao.some((item) => item.transferido?.preparado)
+  const horas = [destino?.servirDesde, leva ? origem.servirDesde : undefined].filter(
+    (hora): hora is string => hora !== undefined,
+  )
+  return horas.toSorted((a, b) => Date.parse(a) - Date.parse(b))[0]
+}
