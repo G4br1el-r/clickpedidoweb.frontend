@@ -7,7 +7,14 @@ import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { carregarCatalogo } from "./catalogos"
 import { criarServidor, type FiltroPedidos, type Servidor, type VendaPdv } from "./servidor"
-import type { ConfigLoja, MotivoEscolhido, PausaPedidos, Pedido, StatusPedido } from "./tipos"
+import type {
+  ConfigLoja,
+  MotivoEscolhido,
+  PausaPedidos,
+  Pedido,
+  QuemMudou,
+  StatusPedido,
+} from "./tipos"
 
 /** Espera de rede simulada: dá para ver os estados de carregamento; zero nos testes. */
 const ESPERA = process.env.NODE_ENV === "test" ? 0 : 250
@@ -114,11 +121,11 @@ function useMutacaoDePedido<A extends number | { id: number }>(
 }
 
 /** `de`: a etapa que a tela mostrava. Se outra aba já mudou o pedido, o servidor recusa. */
-type MudancaDeEtapa = { id: number; de: StatusPedido }
+type MudancaDeEtapa = { id: number; de: StatusPedido; por?: QuemMudou }
 
 export function useAvancarPedido() {
   return useMutacaoDePedido<MudancaDeEtapa>(
-    (servidor, { id, de }) => servidor.pedidos.avancar(id, de),
+    (servidor, { id, de, por }) => servidor.pedidos.avancar(id, de, por),
     (pedido, { de }) => {
       const proximo = pedido.status === de && proximoStatus(pedido.tipo, pedido.status)
       return proximo ? { ...pedido, status: proximo } : pedido
@@ -177,6 +184,14 @@ export function useMotoboyVoltou() {
     mutationFn: (motoboyId: string) => servidorDo(segmento).pedidos.motoboyVoltou(motoboyId),
     onSettled: () => cliente.invalidateQueries({ queryKey: chaves.pedidos(segmento) }),
   })
+}
+
+/** Mesa: a rodada pronta chegou à mesa e sai da fila. */
+export function useServirMesa() {
+  return useMutacaoDePedido<number>(
+    (servidor, id) => servidor.pedidos.servir(id),
+    (pedido) => ({ ...pedido, servidoEm: pedido.servidoEm ?? new Date().toISOString() }),
+  )
 }
 
 export function useCancelarPedido() {

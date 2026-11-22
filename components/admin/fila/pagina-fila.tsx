@@ -8,6 +8,8 @@ import {
   InboxIcon,
   ListChecksIcon,
   MapPinIcon,
+  MaximizeIcon,
+  TvIcon,
   VolumeXIcon,
 } from "lucide-react"
 import { AnimatePresence } from "motion/react"
@@ -48,6 +50,7 @@ import {
   usePedidos,
   useReabrirPedido,
   useRecusarPedido,
+  useServirMesa,
   useSimularCancelamento,
   useSimularPedido,
   useVoltarPedido,
@@ -67,6 +70,7 @@ import {
 } from "@/lib/admin/preferencias-fila"
 import { alarmeTocando } from "@/lib/admin/regras/aceite"
 import { type HistoricoCliente, seloDoCliente } from "@/lib/admin/regras/clientes"
+import { estaNaCozinha } from "@/lib/admin/regras/cozinha"
 import { entregasParaAgrupar, situacaoDosMotoboys } from "@/lib/admin/regras/despacho"
 import {
   type ColunaFila,
@@ -113,6 +117,7 @@ import { EsteAparelho } from "./este-aparelho"
 import { FerramentasFila, PARAMETROS_FILA } from "./ferramentas-fila"
 import { GavetaBairros } from "./gaveta-bairros"
 import { GavetaFinalizados } from "./gaveta-finalizados"
+import { IndicadorImpressora } from "./indicador-impressora"
 import { JanelaDespacho } from "./janela-despacho"
 import { MetricasFila } from "./metricas-fila"
 import { PainelMotoboys } from "./painel-motoboys"
@@ -247,6 +252,7 @@ type AcoesDoCartao = {
   recusar: (pedido: Pedido, escolhido: MotivoEscolhido) => void
   cancelar: (pedido: Pedido, escolhido: MotivoEscolhido) => void
   avancar: (pedido: Pedido) => void
+  servir: (pedido: Pedido) => void
   abrir: (pedido: Pedido) => void
   imprimir: (pedido: Pedido) => void
   /** A loja tem motoboys: a entrega pronta se despacha. */
@@ -338,7 +344,9 @@ function Coluna({
                 aoCancelar={(escolhido) => acoes.cancelar(pedido, escolhido)}
                 despacha={acoes.despacha && pedido.tipo === "entrega" && pedido.status === "pronto"}
                 maioridade={acoes.comAlcool(pedido)}
+                naCozinha={estaNaCozinha(pedido)}
                 aoAvancar={() => acoes.avancar(pedido)}
+                aoServir={() => acoes.servir(pedido)}
                 aoAbrir={() => acoes.abrir(pedido)}
                 aoImprimir={() => acoes.imprimir(pedido)}
               />
@@ -385,8 +393,10 @@ export function PaginaFila({
     Boolean(filtro || ferramentas.busca) || ferramentas.canal.length > 0 || ferramentas.naoPagos
   const avancar = useAvancarPedido()
   const voltar = useVoltarPedido()
+  const servir = useServirMesa()
   const reabrir = useReabrirPedido()
   const [finalizadosAberto, setFinalizadosAberto] = useState(false)
+  const quadro = useRef<HTMLDivElement>(null)
   const [ajudaAberta, setAjudaAberta] = useState(false)
   // Seleção para ações em lote: o modo mostra as caixas; Shift+clique marca sem o modo.
   const [selecionando, setSelecionando] = useState(false)
@@ -413,7 +423,7 @@ export function PaginaFila({
     for (const pedido of chegaram) {
       if (pedido.impressoEm || enviadosParaImprimir.current.has(pedido.id)) continue
       enviadosParaImprimir.current.add(pedido.id)
-      impressao.imprimir(pedido)
+      impressao.imprimir(pedido, { automatica: true })
     }
   })
 
@@ -500,6 +510,11 @@ export function PaginaFila({
     imprimir: impressao.imprimir,
     despacha,
     comAlcool,
+    servir: (pedido) =>
+      servir.mutate(pedido.id, {
+        ...avisoDeErro,
+        onSuccess: (servido) => toast(`#${servido.numero} servido. A conta continua em Mesas.`),
+      }),
   }
   function avancarDeVez(pedido: Pedido) {
     avancar.mutate(
@@ -648,10 +663,36 @@ export function PaginaFila({
         ]
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
+    // Em tela cheia a fila vira a página toda (o monitor do balcão): precisa do próprio fundo.
+    <div
+      ref={quadro}
+      className="flex flex-1 flex-col gap-5 bg-card p-4 md:p-6 lg:px-8 [&:fullscreen]:overflow-y-auto"
+    >
       <CabecalhoPagina
         titulo="Fila de pedidos"
         vivo
+        acoes={
+          <>
+            {/* A TV virada ao cliente: só os números do balcão, numa aba que vai para a outra tela. */}
+            <Button variant="outline" size="sm" asChild>
+              <a href="/admin/chamada" target="_blank" rel="noreferrer">
+                <TvIcon data-icon="inline-start" />
+                Painel de chamada
+              </a>
+            </Button>
+            {/* Tela cheia é para o monitor do balcão: no celular não serve. */}
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="max-md:hidden"
+              onClick={() => void quadro.current?.requestFullscreen?.()}
+            >
+              <MaximizeIcon data-icon="inline-start" />
+              Tela cheia
+            </Button>
+          </>
+        }
         resumo={
           resumo
             ? [
@@ -691,6 +732,7 @@ export function PaginaFila({
               }
             />
           )}
+          <IndicadorImpressora />
           {/* No celular, o Mais fica na linha da pausa, sem ocupar uma linha só para ele. */}
           <div className="flex items-center gap-2 max-md:w-full">
             {loja && agora && <PausaPedidos loja={loja} agora={agora} comEntrega={temEntrega} />}

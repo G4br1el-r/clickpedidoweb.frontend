@@ -74,4 +74,22 @@ describe("alertasDaFila", () => {
       ["cancelou-7", "#7: o cliente cancelou"],
     ])
   })
+
+  test("a Cozinha marcou pronto depois que a fila abriu", () => {
+    const pelaCozinha = (id: number, minutos: number) =>
+      pedido(id, "pronto", {
+        historico: [{ tipo: "etapa", status: "pronto", em: antes(minutos), por: "cozinha" }],
+      })
+    const pelaFila = pedido(11, "pronto", {
+      historico: [{ tipo: "etapa", status: "pronto", em: antes(2) }],
+    })
+    const alertas = alertasDaFila({
+      ...opcoes,
+      todos: [pelaCozinha(9, 2), pelaCozinha(10, 40), pelaFila],
+      anteriores: [],
+    }).filter((alerta) => alerta.chave === "cozinha")
+    expect(alertas.map((alerta) => [alerta.id, alerta.texto])).toEqual([
+      ["cozinha-9", "#9 ficou pronto na Cozinha"],
+    ])
+  })
 })

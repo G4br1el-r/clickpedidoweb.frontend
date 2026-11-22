@@ -7,6 +7,14 @@ const EM = "2026-11-13T23:40:00.000Z"
 const recebido: Pedido = { ...PEDIDOS_DE_TESTE[2], status: "recebido" }
 
 describe("eventosDaMudanca", () => {
+  test('servir a mesa vira o evento "Servido na mesa"', () => {
+    const pronta: Pedido = { ...recebido, tipo: "mesa", status: "pronto" }
+    const em = "2026-11-13T23:40:00.000Z"
+    const eventos = eventosDaMudanca(pronta, { ...pronta, servidoEm: em }, em)
+    expect(eventos).toEqual([{ tipo: "servido", em }])
+    expect(linhaDoTempo({ ...pronta, historico: eventos }).at(-1)?.texto).toBe("Servido na mesa")
+  })
+
   test("a troca de etapa vira um evento com a etapa nova e a hora", () => {
     const depois: Pedido = { ...recebido, status: "em-preparo" }
 

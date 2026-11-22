@@ -89,6 +89,15 @@ describe("colunasDaFila", () => {
   })
 })
 
+describe("mesa servida", () => {
+  test("a mesa pronta fica em Prontos até ser servida; servida, sai da fila", () => {
+    const pronta = pedido(30, "pronto", 20, "mesa")
+    const servida = { ...pedido(31, "pronto", 20, "mesa"), servidoEm: AGORA.toISOString() }
+    const [, , prontos] = colunasDaFila([pronta, servida], "pizzaria", AGORA)
+    expect(prontos.pedidos.map((item) => item.id)).toEqual([30])
+  })
+})
+
 describe("pedidos de dias anteriores", () => {
   /** Criado ontem às 21:00, ainda em andamento. */
   const deOntem = (id: number, status: StatusPedido, tipo: TipoPedido = "entrega"): Pedido =>

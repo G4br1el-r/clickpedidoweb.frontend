@@ -195,7 +195,8 @@ describe("PaginaFila", () => {
     const barra = within(screen.getByRole("region", { name: "Pedidos selecionados" }))
     expect(barra.getByText("2 selecionados")).toBeInTheDocument()
     await usuario.click(barra.getByRole("button", { name: "Imprimir" }))
-    expect(imprimir).toHaveBeenCalledTimes(2)
+    // A mesa sai só na via de produção; a retirada, em produção e cliente.
+    await waitFor(() => expect(imprimir).toHaveBeenCalledTimes(3))
 
     await usuario.click(barra.getByRole("button", { name: "Avançar" }))
     const preparo = await coluna("Em preparo")
@@ -332,7 +333,7 @@ describe("PaginaFila", () => {
   test("alerta secundário desligado no Este aparelho não avisa", async () => {
     telaGrande()
     usePreferenciasFila.setState({
-      alertas: { parado: false, atraso: false, pago: true, cancelou: true },
+      alertas: { parado: false, atraso: false, pago: true, cancelou: true, cozinha: true },
     })
     renderizar()
     await coluna("Prontos")
@@ -384,6 +385,45 @@ describe("PaginaFila", () => {
     await waitFor(async () =>
       expect((await api.pedidos.buscar(comAlcool.id))?.status).toBe("concluido"),
     )
+  })
+
+  test("mesa pronta: Servido tira da fila; a conta continua em Mesas", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const prontos = await coluna("Prontos")
+    const servido = await prontos.findByRole("button", { name: "Servido" }, { timeout: 8000 })
+    const cartao = servido.closest("article") as HTMLElement
+    const numero = within(cartao).getByRole("heading").textContent ?? ""
+
+    await usuario.click(servido)
+    await waitFor(() =>
+      expect(prontos.queryByRole("heading", { name: numero })).not.toBeInTheDocument(),
+    )
+    const mesa = await servidorDo("pizzaria").pedidos.buscar(Number(numero.slice(1)))
+    expect(mesa?.status).toBe("pronto")
+    expect(mesa?.servidoEm).toBeDefined()
+  })
+
+  test("tela cheia: a fila ocupa a tela toda do monitor do balcão", async () => {
+    telaGrande()
+    const cheia = vi.fn(async () => {})
+    HTMLElement.prototype.requestFullscreen = cheia
+    const usuario = userEvent.setup()
+    renderizar()
+    await coluna("Novos")
+
+    await usuario.click(screen.getByRole("button", { name: "Tela cheia" }))
+    expect(cheia).toHaveBeenCalled()
+  })
+
+  test("painel de chamada: abre numa aba nova, para levar à TV do balcão", async () => {
+    telaGrande()
+    renderizar()
+    await coluna("Novos")
+    const link = screen.getByRole("link", { name: "Painel de chamada" })
+    expect(link).toHaveAttribute("href", "/admin/chamada")
+    expect(link).toHaveAttribute("target", "_blank")
   })
 
   test("no celular, as colunas viram abas com a contagem", async () => {
@@ -623,8 +663,59 @@ describe("PaginaFila", () => {
       expect(novos.length).toBeGreaterThan(0)
       for (const pedido of novos) expect(pedido.impressoEm).toBeDefined()
     })
-    // Uma impressão para cada pedido que chegou.
-    expect(imprimir).toHaveBeenCalledTimes((await chegaram()).length)
+    // Pedido do site é entrega ou retirada: duas vias (produção e cliente) para cada um.
+    expect(imprimir).toHaveBeenCalledTimes((await chegaram()).length * 2)
+  })
+
+  test("vias do cupom: a retirada sai em produção e cliente; a mesa, só na produção", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    renderizar()
+    const novos = await coluna("Novos")
+    const tipo = (canal: string) =>
+      novos
+        .getAllByRole("article")
+        .find((cartao) => within(cartao).queryByText(canal)) as HTMLElement
+    const imprimirDo = (cartao: HTMLElement) =>
+      within(cartao).getByRole("button", { name: /^Imprimir cupom de #/ })
+
+    await usuario.click(imprimirDo(tipo("Retirada")))
+    await waitFor(() => expect(imprimir).toHaveBeenCalledTimes(2))
+    imprimir.mockClear()
+    await usuario.click(imprimirDo(tipo("Mesa 3")))
+    await waitFor(() => expect(imprimir).toHaveBeenCalledTimes(1))
+  })
+
+  test("impressora offline: a barra mostra, o cupom não sai e a fila avisa", async () => {
+    telaGrande()
+    const usuario = userEvent.setup()
+    usePreferenciasFila.setState({ impressora: "agente", agenteLigado: false })
+    renderizar()
+    const [cartao] = (await coluna("Novos")).getAllByRole("article")
+    const numero = within(cartao).getByRole("heading").textContent ?? ""
+    expect(screen.getByText("Impressora offline")).toBeInTheDocument()
+
+    await usuario.click(within(cartao).getByRole("button", { name: `Imprimir cupom de ${numero}` }))
+    expect(
+      await screen.findByText(`Impressora offline: o cupom de ${numero} não saiu.`),
+    ).toBeInTheDocument()
+    expect(imprimir).not.toHaveBeenCalled()
+  })
+
+  test("impressão automática com a impressora offline: avisa que o pedido ficou sem cupom", async () => {
+    telaGrande()
+    const api = servidorDo("pizzaria")
+    await api.salvarLoja({ ...(await api.loja()), impressaoAutomatica: true })
+    usePreferenciasFila.setState({ simular: true, impressora: "agente", agenteLigado: false })
+    renderizar(300)
+    expect(
+      await screen.findByText(
+        /^A impressão automática falhou: #\d+ ficou sem cupom\./,
+        {},
+        { timeout: 8000 },
+      ),
+    ).toBeInTheDocument()
+    expect(imprimir).not.toHaveBeenCalled()
   })
 
   test("os detalhes do pedido também imprimem o cupom", async () => {

@@ -88,6 +88,7 @@ const AVISOS: Record<ChaveDoAlerta, Alerta> = {
   atraso: { volume: 0.2, notas: duasNotas(988, 784) },
   pago: { volume: 0.2, notas: duasNotas(784, 1175) },
   cancelou: { volume: 0.2, notas: duasNotas(523, 392) },
+  cozinha: { volume: 0.2, notas: duasNotas(880, 1047) },
 }
 
 function duasNotas(primeira: number, segunda: number): Nota[] {
@@ -102,6 +103,22 @@ function duasNotas(primeira: number, segunda: number): Nota[] {
 /** O som suave de um alerta secundário (pronto parado, atraso, pago, cliente cancelou). */
 export function tocarAviso(chave: ChaveDoAlerta) {
   tocar(AVISOS[chave])
+}
+
+/** Dim-dom de campainha (mi, dó), longo e alto: chama o cliente no balcão, não a equipe. */
+const CHAMADA: Alerta = {
+  volume: 0.7,
+  notas: [659.3, 523.3].map((frequencia, indice) => ({
+    frequencia,
+    inicio: indice * 0.45,
+    duracao: 0.9,
+    onda: "sine",
+  })),
+}
+
+/** O som do painel de chamada quando um número fica pronto. */
+export function tocarChamada() {
+  tocar(CHAMADA)
 }
 
 function tocar({ volume: pico, notas }: Alerta) {

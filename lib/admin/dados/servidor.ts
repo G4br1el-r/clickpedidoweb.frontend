@@ -18,6 +18,7 @@ import { comEtapa, eventosDaMudanca } from "../regras/historico"
 import { proximoNumero } from "../regras/numero"
 import { pausaAtiva } from "../regras/pausa"
 import {
+  CLIENTE_DO_BALCAO,
   type Desconto,
   descontoPassaDoSubtotal,
   type Escolhas,
@@ -50,6 +51,7 @@ import type {
   PausaPedidos,
   Pedido,
   Produto,
+  QuemMudou,
   StatusPedido,
   TipoMovimento,
   TipoPedido,
@@ -219,6 +221,11 @@ function avisoAoCliente(base: BaseLoja, antes: Pedido, depois: Pedido, em: strin
   const endereco = typeof window === "undefined" ? "" : window.location.origin
   const texto = textoDoAviso(avisos.textos[etapa], depois, { loja: base.loja.nome, endereco })
   return [{ tipo: "aviso", em, texto }]
+}
+
+/** A comanda sem a marca de servida. */
+function semServido({ servidoEm: _servidoEm, ...pedido }: Pedido): Pedido {
+  return pedido
 }
 
 /** O pagamento foi registrado no mesmo momento da conclusão (cobrado na entrega ou no balcão). */
@@ -454,6 +461,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     id: number,
     mudar: (pedido: Pedido, base: BaseLoja) => Pedido,
     estoque?: { conferir?: boolean; tipo?: TipoMovimento },
+    /** Quem mudou a etapa, quando não foi a fila (a Cozinha): fica no evento. */
+    por?: QuemMudou,
   ): Promise<Pedido> {
     const base = await carregar()
     const indice = base.pedidos.findIndex((pedido) => pedido.id === id)
@@ -463,7 +472,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const mudado = mudar(antes, base)
     // Toda ação passa por aqui: a linha do tempo se escreve sozinha.
     const eventos = [
-      ...eventosDaMudanca(antes, mudado, agora),
+      ...eventosDaMudanca(antes, mudado, agora).map((evento) =>
+        por && evento.tipo === "etapa" ? { ...evento, por } : evento,
+      ),
       ...avisoAoCliente(base, antes, mudado, agora),
     ]
     const novo = {
@@ -766,8 +777,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       },
 
       /** `de`: a etapa que a tela mostrava. Outra aba pode ter mudado o pedido antes. */
-      avancar(id: number, de: StatusPedido) {
-        return alterar(id, (pedido) => avancado(pedido, de))
+      /** `por`: a Cozinha, quando é ela que muda a etapa (a fila avisa). */
+      avancar(id: number, de: StatusPedido, por?: QuemMudou) {
+        return alterar(id, (pedido) => avancado(pedido, de), undefined, por)
       },
 
       /**
@@ -813,6 +825,17 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             return { ...semPagamento, status: destino, situacaoPagamento: "na-entrega" as const }
           }
           return { ...pedido, status: destino }
+        })
+      },
+
+      /** Mesa: a rodada pronta chegou à mesa. Sai da fila; a conta continua aberta em Mesas. */
+      servir(id: number) {
+        return alterar(id, (pedido) => {
+          if (pedido.tipo !== "mesa" || pedido.status !== "pronto") {
+            throw new Error("Só mesa pronta se serve.")
+          }
+          if (pedido.servidoEm) throw new Error("Esta mesa já foi servida.")
+          return { ...pedido, servidoEm: new Date().toISOString() }
         })
       },
 
@@ -1239,7 +1262,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             origem: "pdv",
             tipo: "retirada",
             status: venda.concluida ? "concluido" : "recebido",
-            cliente: { nome: clienteNome || "Venda no balcão", telefone: base.loja.telefone },
+            cliente: { nome: clienteNome || CLIENTE_DO_BALCAO, telefone: base.loja.telefone },
             itens: itens.map((item, indice) => ({
               id: `${id}-${indice + 1}`,
               produtoId: item.produtoId,
@@ -1462,7 +1485,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           recalcular(
             aberta
               ? {
-                  ...aberta,
+                  // Rodada nova para a cozinha: a mesa volta para a fila (deixa de estar servida).
+                  ...(vaiParaCozinha ? semServido(aberta) : aberta),
                   itens: [...aberta.itens, ...novos],
                   status: vaiParaCozinha ? "recebido" : aberta.status,
                   enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,

@@ -7,6 +7,7 @@ import type { Pedido } from "@/lib/admin/dados/tipos"
 import { AVISO_DE_MAIORIDADE } from "@/lib/admin/regras/maioridade"
 import { enderecoEmTexto, formatarTelefone } from "@/lib/admin/regras/mensagens"
 import { rotuloCanal, rotuloPagamento } from "@/lib/admin/regras/rotulos"
+import type { ViaDoCupom } from "@/lib/admin/regras/vias"
 import { emReais } from "@/lib/formato"
 
 const PAGINA_80MM =
@@ -49,18 +50,23 @@ export function Cupom({
   loja,
   area,
   maioridade = false,
+  via,
 }: {
   pedido: Pedido
   loja: string
   area: Ref<HTMLDivElement>
   /** Adega: bebida alcoólica, a via do entregador lembra de conferir o documento. */
   maioridade?: boolean
+  /** Sem via, o cupom completo de sempre (o de teste das configurações). */
+  via?: ViaDoCupom
 }) {
   const troco = pedido.trocoPara ? pedido.trocoPara - pedido.total : 0
+  if (via === "producao") return <ViaDeProducao pedido={pedido} area={area} />
   return (
     <div className="hidden">
       <div ref={area} className="flex flex-col gap-1.5 p-2 font-mono text-xs text-black">
         <p className="text-center font-bold">{loja}</p>
+        {via === "cliente" && <p className="text-center">CLIENTE E ENTREGADOR</p>}
         <p className="text-center text-sm font-bold">Pedido #{pedido.numero}</p>
         <p className="text-center">
           {rotuloCanal(pedido.tipo)}
@@ -101,6 +107,44 @@ export function Cupom({
         {pedido.endereco && <p>{enderecoEmTexto(pedido.endereco)}</p>}
         {pedido.endereco?.referencia && <p>Ref.: {pedido.endereco.referencia}</p>}
         {pedido.observacao && <p>Obs.: {pedido.observacao}</p>}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Via de produção: o que fazer, em letra grande, sem preço nem cobrança. A observação do
+ * item e a do pedido ficam em destaque.
+ */
+function ViaDeProducao({ pedido, area }: { pedido: Pedido; area: Ref<HTMLDivElement> }) {
+  return (
+    <div className="hidden">
+      <div ref={area} className="flex flex-col gap-2 p-2 font-mono text-sm text-black">
+        <p className="text-center font-bold">PRODUÇÃO</p>
+        <p className="text-center text-lg font-bold">Pedido #{pedido.numero}</p>
+        <p className="text-center">
+          {rotuloCanal(pedido.tipo)}
+          {pedido.mesa ? ` ${pedido.mesa.numero}` : ""} ·{" "}
+          {format(new Date(pedido.criadoEm), "HH:mm")}
+        </p>
+        <hr className="border-dashed border-black" />
+        {pedido.itens.map((item) => (
+          <div key={item.id}>
+            <p className="text-base font-bold">{`${item.quantidade}x ${item.nome}`}</p>
+            {item.opcoes.map((opcao) => (
+              <p key={opcao} className="pl-3">
+                * {opcao}
+              </p>
+            ))}
+            {item.observacao && <p className="pl-3 font-bold">Obs.: {item.observacao}</p>}
+          </div>
+        ))}
+        {pedido.observacao && (
+          <>
+            <hr className="border-dashed border-black" />
+            <p className="font-bold">OBS. DO PEDIDO: {pedido.observacao}</p>
+          </>
+        )}
       </div>
     </div>
   )

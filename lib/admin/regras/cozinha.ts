@@ -80,6 +80,17 @@ const PASSA_NO_FILTRO: Record<FiltroCozinha, (pedido: Pedido) => boolean> = {
   retirada: (pedido) => pedido.tipo === "retirada",
 }
 
+/** O pedido passa pela cozinha: aceito, com algo a preparar, fora do salão. */
+const passaPelaCozinha = (pedido: Pedido) =>
+  pedido.tipo !== "atendimento" &&
+  // A cozinha só começa o que a loja aceitou.
+  !pedido.esperaAceite &&
+  itensDaCozinha(pedido).atuais.length > 0
+
+/** Está na tela da cozinha agora, a fazer ou preparando: o selo "Na cozinha" da fila. */
+export const estaNaCozinha = (pedido: Pedido) =>
+  passaPelaCozinha(pedido) && (pedido.status === "recebido" || pedido.status === "em-preparo")
+
 /**
  * Quadro da cozinha. Fica de fora o salão (atendimento), o que não tem nada a
  * preparar e o pronto há mais de 15 minutos: dali em diante, entrega e retirada
@@ -91,12 +102,7 @@ export function colunasDaCozinha(
   agora: Date,
 ): ColunaCozinha[] {
   const naCozinha = pedidos.filter(
-    (pedido) =>
-      pedido.tipo !== "atendimento" &&
-      // A cozinha só começa o que a loja aceitou.
-      !pedido.esperaAceite &&
-      PASSA_NO_FILTRO[filtro](pedido) &&
-      itensDaCozinha(pedido).atuais.length > 0,
+    (pedido) => passaPelaCozinha(pedido) && PASSA_NO_FILTRO[filtro](pedido),
   )
   const com = (status: StatusPedido) =>
     naCozinha.filter((pedido) => pedido.status === status).sort((a, b) => chegada(a) - chegada(b))

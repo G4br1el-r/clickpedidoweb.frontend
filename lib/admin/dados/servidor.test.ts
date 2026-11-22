@@ -498,6 +498,42 @@ describe("servidor de demonstração", () => {
     })
   })
 
+  test("mesa servida: a rodada pronta chega à mesa; rodada nova para a cozinha volta à fila", async () => {
+    const api = servidor()
+    const mesa = await api.mesas.criar({ numero: 9 })
+    const comanda = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: false,
+      itens: [{ avulso: { nome: "Água", preco: 4 }, quantidade: 1 }],
+    })
+    expect(comanda.status).toBe("pronto")
+
+    const servida = await api.pedidos.servir(comanda.id)
+    expect(servida.servidoEm).toBe(AGORA.toISOString())
+    expect(servida.status).toBe("pronto")
+    await expect(api.pedidos.servir(comanda.id)).rejects.toThrow("Esta mesa já foi servida.")
+
+    const rodada = await api.mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [{ avulso: { nome: "Porção", preco: 30 }, quantidade: 1 }],
+    })
+    expect(rodada.status).toBe("recebido")
+    expect(rodada.servidoEm).toBeUndefined()
+  })
+
+  test("avançar pela Cozinha marca no evento da etapa que foi a Cozinha", async () => {
+    const api = servidor()
+    const [preparo] = await api.pedidos.listar({ status: ["em-preparo"] })
+    const pronto = await api.pedidos.avancar(preparo.id, "em-preparo", "cozinha")
+    expect(pronto.historico?.at(-1)).toEqual({
+      tipo: "etapa",
+      status: "pronto",
+      em: AGORA.toISOString(),
+      por: "cozinha",
+    })
+  })
+
   test("um pedido simulado chega como novo, com o número seguinte", async () => {
     const api = servidor()
     const [ultimo] = await api.pedidos.listar()

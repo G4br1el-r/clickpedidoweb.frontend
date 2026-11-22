@@ -3,6 +3,7 @@ import type { ItemPedido, Pedido, StatusPedido, TipoPedido } from "../dados/tipo
 import {
   colunasDaCozinha,
   cozinhaJaPreparou,
+  estaNaCozinha,
   type FiltroCozinha,
   itensDaCozinha,
   minutosNaCozinha,
@@ -104,6 +105,17 @@ const QUADRO = [
 
 const resumo = (colunas: ReturnType<typeof colunasDaCozinha>) =>
   colunas.map((coluna) => [coluna.titulo, coluna.pedidos.map((item) => item.id)])
+
+describe("estaNaCozinha", () => {
+  test("aceito, a fazer ou preparando e com o que preparar: está na tela da cozinha", () => {
+    expect(estaNaCozinha(pedido(1, "recebido", 5))).toBe(true)
+    expect(estaNaCozinha(pedido(2, "em-preparo", 5))).toBe(true)
+    expect(estaNaCozinha(pedido(3, "pronto", 5))).toBe(false)
+    expect(estaNaCozinha({ ...pedido(4, "recebido", 5), esperaAceite: true })).toBe(false)
+    expect(estaNaCozinha(pedido(5, "recebido", 5, "mesa", [item("Água", 1, false)]))).toBe(false)
+    expect(estaNaCozinha(pedido(6, "em-preparo", 5, "atendimento"))).toBe(false)
+  })
+})
 
 describe("colunasDaCozinha", () => {
   test("a fazer, preparando e prontos, do que chegou primeiro ao último", () => {

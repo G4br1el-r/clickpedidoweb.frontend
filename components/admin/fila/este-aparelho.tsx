@@ -20,6 +20,7 @@ import {
   usePreferenciasFila,
   useSomDoAparelho,
 } from "@/lib/admin/preferencias-fila"
+import type { OndeImprime } from "@/lib/admin/regras/impressora"
 import { tocarAlerta } from "@/lib/admin/som"
 import { pedirLicenca } from "./avisos-do-aparelho"
 
@@ -110,7 +111,12 @@ export function EsteAparelho({ loja }: { loja: ConfigLoja | undefined }) {
           Este aparelho
         </Button>
       </PopoverTrigger>
-      <PopoverContent aria-label="Este aparelho" align="end" className="w-80 gap-0 p-0">
+      <PopoverContent
+        aria-label="Este aparelho"
+        align="end"
+        // Com tantos grupos, passa da tela: limita à altura livre e rola por dentro.
+        className="max-h-(--radix-popover-content-available-height) w-80 gap-0 overflow-y-auto overscroll-contain p-0"
+      >
         <p className="px-4 pt-3 pb-1 text-sm font-semibold">Este aparelho</p>
         <Grupo titulo="Som">
           <Linha
@@ -225,12 +231,47 @@ export function EsteAparelho({ loja }: { loja: ConfigLoja | undefined }) {
             aoMudar={(ligado) => preferencias.ligarAlerta("pago", ligado)}
           />
           <Linha
+            id="alerta-cozinha"
+            rotulo="Pronto na Cozinha"
+            detalhe="Quando a Cozinha marca um pedido pronto."
+            marcada={preferencias.alertas.cozinha}
+            aoMudar={(ligado) => preferencias.ligarAlerta("cozinha", ligado)}
+          />
+          <Linha
             id="alerta-cancelou"
             rotulo="Cliente cancelou"
             detalhe="Quando o cliente cancela pelo site."
             marcada={preferencias.alertas.cancelou}
             aoMudar={(ligado) => preferencias.ligarAlerta("cancelou", ligado)}
           />
+        </Grupo>
+        <Grupo titulo="Impressora">
+          <div className="flex flex-col gap-2 py-2">
+            <Select
+              value={preferencias.impressora}
+              onValueChange={(onde) => preferencias.escolherImpressora(onde as OndeImprime)}
+            >
+              <SelectTrigger size="sm" aria-label="Onde este aparelho imprime" className="w-full">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectItem value="navegador">Pelo navegador</SelectItem>
+                  <SelectItem value="agente">Agente de impressão</SelectItem>
+                  <SelectItem value="nenhuma">Sem impressora</SelectItem>
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </div>
+          {preferencias.impressora === "agente" && (
+            <Linha
+              id="agente-ligado"
+              rotulo="Agente ligado"
+              detalhe="Simulação: desligue para ver como a fila avisa da impressora fora do ar."
+              marcada={preferencias.agenteLigado}
+              aoMudar={preferencias.ligarAgente}
+            />
+          )}
         </Grupo>
         <Grupo titulo="Tela">
           <Linha

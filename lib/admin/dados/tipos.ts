@@ -92,13 +92,16 @@ export type MotivoCancelamento =
   | "loja-fechou"
   | "outro"
 
-/** Uma mudança de etapa do pedido: para onde foi e quando. */
-export type EtapaDoPedido = { tipo: "etapa"; status: StatusPedido; em: string }
+/** Outra tela que mudou a etapa (a fila é o padrão). */
+export type QuemMudou = "cozinha"
+
+/** Uma mudança de etapa do pedido: para onde foi, quando e, se não foi a fila, quem mudou. */
+export type EtapaDoPedido = { tipo: "etapa"; status: StatusPedido; em: string; por?: QuemMudou }
 
 /** Uma linha do histórico do pedido: as etapas, desde a primeira, e o que mais aconteceu. */
 export type EventoPedido =
   | EtapaDoPedido
-  | { tipo: "pago" | "impresso" | "aceito"; em: string }
+  | { tipo: "pago" | "impresso" | "aceito" | "servido"; em: string }
   /** Mensagem que a loja mandou ao cliente (simulada): o texto que teria saído. */
   | { tipo: "aviso"; em: string; texto: string }
 
@@ -144,6 +147,8 @@ export type Pedido = {
   esperaAceite?: boolean
   /** Recusado no aceite ou cancelado depois: por quê e quando. */
   cancelamento?: Cancelamento
+  /** Mesa: quando a rodada pronta chegou à mesa. Sai da fila; a conta continua em Mesas. */
+  servidoEm?: string
   /** Minutos prometidos na chegada, com o acréscimo da hora. Sem o campo, vale o da loja. */
   prazoMin?: number
 }
@@ -390,6 +395,8 @@ export type ConfigLoja = {
   /** Salão: quantos atendimentos cabem ao mesmo tempo. Sem o campo, 1. */
   capacidadeAtendimentos?: number
   impressaoAutomatica: boolean
+  /** Vias do cupom em cada canal: produção (sem preço) e cliente/entregador. */
+  viasPorCanal?: Partial<Record<TipoPedido, { producao: boolean; cliente: boolean }>>
   cortarPapel: boolean
   som: SomAlerta
   /** Pedido do site espera a loja aceitar ou recusar na fila. */

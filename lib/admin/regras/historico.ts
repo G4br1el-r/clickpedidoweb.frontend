@@ -26,6 +26,7 @@ export function eventosDaMudanca(antes: Pedido, depois: Pedido, em: string): Eve
   if (depois.situacaoPagamento === "pago" && antes.situacaoPagamento !== "pago") {
     eventos.push({ tipo: "pago", em })
   }
+  if (depois.servidoEm && !antes.servidoEm) eventos.push({ tipo: "servido", em })
   if (depois.impressoEm && depois.impressoEm !== antes.impressoEm) {
     eventos.push({ tipo: "impresso", em })
   }
@@ -48,6 +49,8 @@ function textoDoEvento(evento: EventoPedido, pedido: Pedido): string {
       return "Cupom impresso"
     case "aceito":
       return "Pedido aceito"
+    case "servido":
+      return "Servido na mesa"
     case "aviso":
       return `Cliente avisado no WhatsApp: “${evento.texto}”`
   }

@@ -22,6 +22,7 @@ function renderizar(
   seloCliente: string | null = null,
   compacto = false,
   maioridade = false,
+  naCozinha = false,
 ) {
   const nada = () => {}
   return render(
@@ -34,6 +35,7 @@ function renderizar(
         nomeLoja="Casa da Pizza"
         compacto={compacto}
         maioridade={maioridade}
+        naCozinha={naCozinha}
         motoboys={[]}
         novo={false}
         ocupado={false}
@@ -120,5 +122,12 @@ describe("CartaoFila: adega", () => {
   test("pedido com bebida alcoólica avisa para conferir o documento", () => {
     renderizar(PEDIDO, AGORA, null, false, true)
     expect(screen.getByText("+18: conferir documento")).toBeInTheDocument()
+  })
+})
+
+describe("CartaoFila: cozinha", () => {
+  test("o pedido na tela da cozinha leva o selo Na cozinha", () => {
+    renderizar(PEDIDO, AGORA, null, false, false, true)
+    expect(screen.getByText("Na cozinha")).toBeInTheDocument()
   })
 })

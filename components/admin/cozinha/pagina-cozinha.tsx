@@ -134,7 +134,8 @@ export function PaginaCozinha({ intervalo = 4_000 }: { intervalo?: number }) {
   const colunas = pedidos && agora ? colunasDaCozinha(pedidos, filtro, agora) : null
   const aoAvancar = (pedido: Pedido) =>
     avancar.mutate(
-      { id: pedido.id, de: pedido.status },
+      // A fila fica sabendo que foi a Cozinha (avisa quando fica pronto).
+      { id: pedido.id, de: pedido.status, por: "cozinha" },
       { onError: (erro) => toast.error(erro.message) },
     )
   const emAndamento = avancar.isPending ? avancar.variables?.id : undefined
