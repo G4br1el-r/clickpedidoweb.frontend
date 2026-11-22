@@ -3,6 +3,8 @@
 import NumberFlow from "@number-flow/react"
 import { format } from "date-fns"
 import {
+  ArrowRightLeftIcon,
+  CombineIcon,
   ConciergeBellIcon,
   GiftIcon,
   LockOpenIcon,
@@ -12,6 +14,7 @@ import {
   PrinterIcon,
   ReceiptIcon,
   RotateCcwIcon,
+  SplitIcon,
   SprayCanIcon,
   Trash2Icon,
 } from "lucide-react"
@@ -20,6 +23,7 @@ import { useRef, useState } from "react"
 import { NumericFormat } from "react-number-format"
 import { useReactToPrint } from "react-to-print"
 import { toast } from "sonner"
+import { manterToastClicavel } from "@/components/sacola/manter-toast-clicavel"
 import { Button } from "@/components/ui/button"
 import { Field, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
@@ -46,6 +50,7 @@ import {
   useMarcarServido,
   useReabrirConta,
   useRemoverItem,
+  useSepararMesas,
   useUltimaConta,
 } from "@/lib/admin/dados/consultas-mesas"
 import type { ItemPedido, Mesa, Pedido } from "@/lib/admin/dados/tipos"
@@ -54,20 +59,25 @@ import { itensPagos, resumoDaConta } from "@/lib/admin/regras/conta"
 import { cozinhaJaPreparou } from "@/lib/admin/regras/cozinha"
 import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { type EstadoMesa, estadoDaMesa } from "@/lib/admin/regras/mesas"
+import { numerosEmTexto, porQueNaoTransfere } from "@/lib/admin/regras/movimentacoes"
 import { emReais, formatoMoeda } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
 import { AbrirMesa } from "./abrir-mesa"
 import { AdicionarItens, useLancarNaComanda } from "./adicionar-itens"
+import { useAvisoComDesfazer } from "./aviso-desfazer"
 import { CancelarComanda } from "./cancelar-comanda"
 import { ContaMesa } from "./conta-mesa"
 import { EditarItem } from "./editar-item"
 import { ConfirmarExclusaoMesa } from "./excluir-mesa"
 import { HistoricoComanda } from "./historico-comanda"
 import { PAPEL_80MM, PreConta } from "./impressao-conta"
+import { JuntarMesas } from "./juntar-mesas"
 import { MotivoConta } from "./motivo-conta"
 import { type ParteDaConta, ReceberConta } from "./receber-conta"
 import { TirarItem } from "./tirar-item"
+import { TransferirItens } from "./transferir-itens"
+import { TransferirMesa } from "./transferir-mesa"
 
 function ItemAvulso({ mesa, comanda }: { mesa: Mesa; comanda: Pedido }) {
   const [nome, setNome] = useState("")
@@ -149,6 +159,8 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   const preConta = useImprimirPreConta()
   const fecharConta = useFecharConta()
   const vazia = pedido.itens.length === 0
+  // Com tudo na cozinha ou pago por item, não há o que transferir: o botão some.
+  const temTransferivel = pedido.itens.some((item) => porQueNaoTransfere(pedido, item) === null)
   const aoErrar = (erro: Error) => toast.error(erro.message)
   // Quem assina no histórico: o nome do aparelho ou, sem ele, o garçom da comanda.
   const quem = autorDaAcao(por, pedido.mesa?.garcom)
@@ -187,6 +199,11 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   const estado = estadoDaMesa(mesa, pedido)
   const resumo = resumoDaConta(pedido)
   const pagos = itensPagos(pedido)
+  const juntadas = (pedido.mesa?.juntadas ?? []).map((junta) => junta.numero)
+  const [transferindo, setTransferindo] = useState(false)
+  const [movendo, setMovendo] = useState<"transferir" | "juntar" | null>(null)
+  const separar = useSepararMesas()
+  const avisar = useAvisoComDesfazer()
 
   return (
     <>
@@ -224,10 +241,49 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
             pedido.cliente.nome,
             `desde ${format(new Date(pedido.criadoEm), "HH:mm")}`,
             pedido.mesa?.garcom ? `Garçom ${pedido.mesa.garcom}` : null,
+            juntadas.length > 0
+              ? `Junto com ${juntadas.length === 1 ? "a mesa" : "as mesas"} ${numerosEmTexto(juntadas)}`
+              : null,
           ]
             .filter(Boolean)
             .join(" · ")}
         </SheetDescription>
+        {/* Transferir, juntar e separar também pela gaveta, como no menu ⋯ da grade. */}
+        <div className="flex flex-wrap gap-2 pt-1">
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => setMovendo("transferir")}
+          >
+            <ArrowRightLeftIcon data-icon="inline-start" />
+            Transferir mesa
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setMovendo("juntar")}>
+            <CombineIcon data-icon="inline-start" />
+            Juntar mesas
+          </Button>
+          {juntadas.length > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={separar.isPending}
+              onClick={() =>
+                separar.mutate(
+                  { pedidoId: pedido.id, ...quem },
+                  {
+                    onSuccess: ({ desfazer }) => avisar("Mesas separadas.", desfazer),
+                    onError: aoErrar,
+                  },
+                )
+              }
+            >
+              <SplitIcon data-icon="inline-start" />
+              Separar
+            </Button>
+          )}
+        </div>
       </SheetHeader>
 
       <Tabs defaultValue="itens" className="min-h-0 flex-1 gap-0">
@@ -358,15 +414,18 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
               </AnimatePresence>
             </ul>
           )}
-          <Button
-            type="button"
-            variant="outline"
-            className="self-start"
-            onClick={() => setAdicionando(true)}
-          >
-            <PlusIcon data-icon="inline-start" />
-            Adicionar itens
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" onClick={() => setAdicionando(true)}>
+              <PlusIcon data-icon="inline-start" />
+              Adicionar itens
+            </Button>
+            {temTransferivel && (
+              <Button type="button" variant="outline" onClick={() => setTransferindo(true)}>
+                <ArrowRightLeftIcon data-icon="inline-start" />
+                Transferir itens
+              </Button>
+            )}
+          </div>
           <ItemAvulso mesa={mesa} comanda={pedido} />
         </TabsContent>
         <TabsContent value="conta" className="flex flex-col gap-5 overflow-y-auto p-4">
@@ -502,6 +561,25 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
         aoCancelar={aoFechar}
       />
       <AdicionarItens mesa={mesa} comanda={pedido} aberta={adicionando} aoMudar={setAdicionando} />
+      <TransferirItens
+        mesa={mesa}
+        comanda={pedido}
+        aberta={transferindo}
+        aoMudar={setTransferindo}
+      />
+      <TransferirMesa
+        mesa={mesa}
+        comanda={pedido}
+        aberta={movendo === "transferir"}
+        aoMudar={(aberta) => !aberta && setMovendo(null)}
+        aoTransferir={aoFechar}
+      />
+      <JuntarMesas
+        mesa={mesa}
+        comanda={pedido}
+        aberta={movendo === "juntar"}
+        aoMudar={(aberta) => !aberta && setMovendo(null)}
+      />
       <ReceberConta
         mesa={mesa}
         pedido={pedido}
@@ -565,6 +643,7 @@ function ReabrirConta({ mesa }: { mesa: Mesa }) {
 function AcaoSemComanda({ mesa, estado }: { mesa: Mesa; estado: EstadoMesa }) {
   const desbloquear = useDesbloquearMesa()
   const marcarLimpa = useMarcarLimpa()
+  const avisar = useAvisoComDesfazer()
   const aoErrar = (erro: Error) => toast.error(erro.message)
   if (estado === "bloqueada") {
     return (
@@ -600,7 +679,7 @@ function AcaoSemComanda({ mesa, estado }: { mesa: Mesa; estado: EstadoMesa }) {
           disabled={marcarLimpa.isPending}
           onClick={() =>
             marcarLimpa.mutate(mesa.id, {
-              onSuccess: () => toast.success(`Mesa ${mesa.numero} limpa.`),
+              onSuccess: ({ desfazer }) => avisar(`Mesa ${mesa.numero} limpa.`, desfazer),
               onError: aoErrar,
             })
           }
@@ -680,6 +759,9 @@ export function ComandaMesa({ mesa, aoFechar }: { mesa: Mesa | null; aoFechar: (
   return (
     <Sheet open={mesa !== null} onOpenChange={(aberto) => !aberto && aoFechar()}>
       <SheetContent
+        // O "Desfazer" do aviso fica por cima: clicar nele não fecha a gaveta.
+        onPointerDownOutside={manterToastClicavel}
+        onInteractOutside={manterToastClicavel}
         side={telaGrande ? "right" : "bottom"}
         className="gap-0 data-[side=bottom]:max-h-[92dvh] data-[side=right]:w-full data-[side=right]:sm:max-w-lg data-[side=right]:xl:max-w-xl"
       >

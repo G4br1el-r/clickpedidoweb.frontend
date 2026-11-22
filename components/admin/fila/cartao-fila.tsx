@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card"
 import type { Motoboy, Pedido } from "@/lib/admin/dados/tipos"
+import { rotuloDaMesa } from "@/lib/admin/regras/cozinha"
 import { textoCobranca, type Urgencia, urgencia } from "@/lib/admin/regras/fila"
 import { textoRetirada } from "@/lib/admin/regras/numero"
 import { itensParaPesar } from "@/lib/admin/regras/pesagem"
@@ -93,8 +94,9 @@ export function CartaoFila({
   const motoboy = motoboys.find((item) => item.id === pedido.motoboyId)
   // Açougue: carne no quilo que ainda não passou pela balança.
   const aPesar = !pedido.pesagem && itensParaPesar(pedido).length > 0
+  // A comanda junta diz as mesas dela: "Mesa 15 + 16".
   const canal = pedido.mesa
-    ? `Mesa ${pedido.mesa.numero}`
+    ? rotuloDaMesa(pedido)
     : CANAL_CURTO[pedido.tipo as keyof typeof CANAL_CURTO]
 
   return (

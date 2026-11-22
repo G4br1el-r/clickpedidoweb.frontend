@@ -297,6 +297,40 @@ describe("servidor de demonstração", () => {
       expect(mesa9?.limpezaDesde).toBeUndefined()
     })
 
+    test("a mesa 16 está junto com a 15, que tem a comanda; a 8 fica livre", async () => {
+      const { mesas } = await salaoCheio()
+      const mesa16 = mesas.find((mesa) => mesa.id === "mesa-16")
+      expect(mesa16).toMatchObject({ status: "livre", juntadaCom: "mesa-15" })
+      expect(mesas.find((mesa) => mesa.id === "mesa-15")?.status).toBe("ocupada")
+      expect(mesas.find((mesa) => mesa.id === "mesa-8")?.status).toBe("livre")
+    })
+
+    test("na virada do dia, com as comandas de ontem mexidas, ninguém senta na 16 junta à 15", async () => {
+      await salaoCheio()
+      // Todas as comandas abertas de ontem foram mexidas: continuam abertas no dia novo.
+      const chave = "clickpedido-admin-dados:acougue"
+      const guardado = (await get(chave)) as { base: { pedidos: Pedido[] } }
+      guardado.base.pedidos = guardado.base.pedidos.map((pedido) =>
+        pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status)
+          ? { ...pedido, eventos: [{ tipo: "aberta", em: pedido.criadoEm, texto: "Mesa aberta" }] }
+          : pedido,
+      )
+      await set(chave, guardado)
+
+      vi.setSystemTime(new Date(2026, 10, 14, 21, 0))
+      const { mesas, base } = await salaoCheio()
+
+      expect(mesas.find((mesa) => mesa.id === "mesa-16")).toMatchObject({
+        status: "livre",
+        juntadaCom: "mesa-15",
+      })
+      expect(
+        base.pedidos.filter(
+          (pedido) => pedido.mesa?.id === "mesa-16" && EM_ANDAMENTO.includes(pedido.status),
+        ),
+      ).toEqual([])
+    })
+
     test("a mesa 9 está em limpeza há 3 min; a 20 continua bloqueada e nunca recebe comanda", async () => {
       const { mesas, base } = await salaoCheio()
       const mesa9 = mesas.find((mesa) => mesa.id === "mesa-9")
@@ -1592,7 +1626,8 @@ describe("servidor de demonstração", () => {
         const mesa = await servidor().mesas.criar({ numero: 20 })
         await alterarGuardada(mesa.id, { limpezaDesde: AGORA.toISOString() })
         const api = servidor()
-        const limpa = await api.mesas.marcarLimpa(mesa.id)
+        // Fase 5 (Q46): devolve a mesa junto com o id do desfazer.
+        const { mesa: limpa } = await api.mesas.marcarLimpa(mesa.id)
         expect(limpa.limpezaDesde).toBeUndefined()
         expect(
           (await api.mesas.listar()).find((item) => item.id === mesa.id)?.limpezaDesde,

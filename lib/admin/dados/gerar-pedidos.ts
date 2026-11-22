@@ -101,6 +101,8 @@ const AO_VIVO: readonly {
   pagouParte?: boolean
   /** Mesa que fechou a conta há tantos minutos, metade em Pix e o resto em dinheiro. */
   fechadaHa?: number
+  /** Senta na primeira destas mesas e junta as outras, se estiverem todas livres. */
+  juntas?: number[]
 }[] = [
   { idade: 110, tipo: "mesa", pagamento: "dinheiro", fechadaHa: 20 },
   { idade: 95, tipo: "mesa", pagamento: "dinheiro", contaPedidaHa: 12 },
@@ -115,7 +117,7 @@ const AO_VIVO: readonly {
   { idade: 21, tipo: "mesa", pagamento: "dinheiro" },
   { idade: 14, tipo: "entrega", pagamento: "cartao-na-entrega" },
   { idade: 12, tipo: "mesa", pagamento: "dinheiro" },
-  { idade: 7, tipo: "mesa", pagamento: "dinheiro" },
+  { idade: 7, tipo: "mesa", pagamento: "dinheiro", juntas: [15, 16] },
   { idade: 5, tipo: "retirada", pagamento: "dinheiro", pesar: true },
   { idade: 2, tipo: "entrega", pagamento: "pix" },
 ]
@@ -560,13 +562,24 @@ export function gerarPedidos({
       // Mesa: no máximo uma comanda aberta por mesa.
       let mesa: Pedido["mesa"]
       if (tipo === "mesa") {
-        const livre = mesasUsaveis.find((item) => !mesasAbertas.has(item.id)) as Mesa
-        if (status !== "concluido" && status !== "cancelado") mesasAbertas.add(livre.id)
+        // O roteiro pode pedir mesas juntas: valem se estiverem todas livres.
+        const pedidas = vivo?.juntas?.map((numero) =>
+          mesasUsaveis.find((item) => item.numero === numero && !mesasAbertas.has(item.id)),
+        )
+        const juntas = pedidas?.every((item) => item !== undefined) ? (pedidas as Mesa[]) : []
+        const livre = juntas[0] ?? (mesasUsaveis.find((item) => !mesasAbertas.has(item.id)) as Mesa)
+        const outras = juntas.slice(1)
+        if (status !== "concluido" && status !== "cancelado") {
+          for (const item of [livre, ...outras]) mesasAbertas.add(item.id)
+        }
         mesa = {
           id: livre.id,
           numero: livre.numero,
           ...(garcons.length > 0 ? { garcom: sorte.um(garcons).nome } : {}),
           pessoas: sorte.inteiro(1, livre.lugares),
+          ...(outras.length > 0
+            ? { juntadas: outras.map((item) => ({ id: item.id, numero: item.numero })) }
+            : {}),
         }
       }
 

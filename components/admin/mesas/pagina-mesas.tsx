@@ -80,12 +80,16 @@ export function PaginaMesas() {
     else toast.error(`Não existe a mesa ${numero}.`)
   }
 
+  // A mesa juntada mostra a principal e leva a comanda dela (para o garçom e o menu ⋯).
+  const principalDe = (mesa: Mesa) =>
+    mesa.juntadaCom ? mesas?.find((outra) => outra.id === mesa.juntadaCom) : undefined
   const linhas: MesaNaGrade[] = (mesas ?? []).map((mesa) => {
-    const comanda = comandaDa(mesa)
+    const principal = principalDe(mesa)
+    const comanda = comandaDa(principal ?? mesa)
     return {
       mesa,
       comanda,
-      estado: estadoDaMesa(mesa, comanda),
+      estado: estadoDaMesa(mesa, comanda, principal ? { principal } : undefined),
       alertas: salao && agora ? alertasDaMesa(mesa, comanda, salao.alertas, agora) : [],
     }
   })
@@ -206,7 +210,9 @@ export function PaginaMesas() {
                     <CartaoMesa
                       {...linha}
                       agora={agora}
-                      aoAbrir={() => void setNumeroAberto(linha.mesa.numero)}
+                      aoAbrir={() =>
+                        void setNumeroAberto((principalDe(linha.mesa) ?? linha.mesa).numero)
+                      }
                       aoEditar={(gatilho) => {
                         setGatilhoMenu(gatilho)
                         setEditandoId(linha.mesa.id)

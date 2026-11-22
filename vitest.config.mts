@@ -36,8 +36,8 @@ export default defineConfig({
       // Mínimos medidos em 2026-11-19, arredondados para baixo. Só sobem, nunca descem.
       thresholds: {
         statements: 84,
-        branches: 76,
-        functions: 82,
+        branches: 77,
+        functions: 83,
         lines: 85,
         "lib/**": { statements: 98, branches: 95, functions: 98, lines: 98 },
       },

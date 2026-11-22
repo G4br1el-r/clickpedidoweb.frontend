@@ -2,13 +2,13 @@ import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { clear } from "idb-keyval"
+import { clear, get, set } from "idb-keyval"
 import { type ReactNode, useState } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
-import type { Produto } from "@/lib/admin/dados/tipos"
+import type { Pedido, Produto } from "@/lib/admin/dados/tipos"
 import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { PaginaCozinha } from "./pagina-cozinha"
@@ -133,6 +133,25 @@ describe("PaginaCozinha", () => {
     expect((await api().pedidos.buscar(comanda.id))?.servirDesde).toBe(
       new Date(2026, 10, 13, 20, 30).toISOString(),
     )
+  })
+
+  test("o ticket da comanda de mesas juntadas diz Mesa 50 + 51", async () => {
+    telaGrande()
+    const { comanda } = await comandaNaMesa(50)
+    const outra = await api().mesas.criar({ numero: 51 })
+    // A junção entra direto na base guardada: aqui só importa o rótulo do ticket.
+    const chave = "clickpedido-admin-dados:pizzaria"
+    const guardado = (await get(chave)) as { base: { pedidos: Pedido[] } }
+    guardado.base.pedidos = guardado.base.pedidos.map((pedido) =>
+      pedido.id === comanda.id && pedido.mesa
+        ? { ...pedido, mesa: { ...pedido.mesa, juntadas: [{ id: outra.id, numero: 51 }] } }
+        : pedido,
+    )
+    await set(chave, guardado)
+    reiniciarServidores()
+    renderizar()
+
+    expect(await ticket("Mesa 50 \\+ 51")).toBeInTheDocument()
   })
 
   test("rodada nova mostra só os itens novos; o que já foi servido fica à parte", async () => {

@@ -90,6 +90,15 @@ export function PaginaGarcom() {
   const [vendoComanda, setVendoComanda] = useState(false)
 
   const mesa = mesas.find((item) => item.id === mesaId) ?? null
+  // A mesa juntada lança na comanda da principal: o resumo e o aviso são os dela.
+  const principal = mesa?.juntadaCom
+    ? (mesas.find((item) => item.id === mesa.juntadaCom) ?? null)
+    : mesa
+  const rotulo = principal
+    ? [principal, ...mesas.filter((item) => item.juntadaCom === principal.id)]
+        .map((item) => item.numero)
+        .join(" + ")
+    : ""
   const aoLancar = (enviarParaCozinha: boolean) => {
     if (!mesa) return
     lancar.mutate(
@@ -97,13 +106,15 @@ export function PaginaGarcom() {
         mesaId: mesa.id,
         enviarParaCozinha,
         ...(nome.trim() ? { garcom: nome } : {}),
-        ...(mesa.status === "livre" && cliente.trim() ? { clienteNome: cliente } : {}),
+        ...(mesa.status === "livre" && !mesa.juntadaCom && cliente.trim()
+          ? { clienteNome: cliente }
+          : {}),
         itens: rodada.lancados(),
       },
       {
         onSuccess: () => {
           toast.success(
-            `Mesa ${mesa.numero}: ${enviarParaCozinha ? "enviado para a cozinha" : "lançado na comanda"}.`,
+            `Mesa ${mesa.juntadaCom ? rotulo : mesa.numero}: ${enviarParaCozinha ? "enviado para a cozinha" : "lançado na comanda"}.`,
           )
           rodada.limpar()
           setCliente("")
@@ -180,14 +191,18 @@ export function PaginaGarcom() {
                           <SelectItem key={item.id} value={item.id}>
                             <Traco tom={estadoDaMesa(item, undefined).tom} />
                             Mesa {item.numero} ·{" "}
-                            {item.status === "livre" ? "livre" : item.clienteNome}
+                            {item.juntadaCom
+                              ? `com a mesa ${mesas.find((outra) => outra.id === item.juntadaCom)?.numero}`
+                              : item.status === "livre"
+                                ? "livre"
+                                : item.clienteNome}
                           </SelectItem>
                         ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
               </Field>
-              {mesa?.status === "livre" && (
+              {mesa?.status === "livre" && !mesa.juntadaCom && (
                 <Field>
                   <FieldLabel htmlFor="garcom-cliente">Cliente</FieldLabel>
                   <Input
@@ -200,10 +215,10 @@ export function PaginaGarcom() {
                 </Field>
               )}
             </div>
-            {mesa?.pedidoAtivoId && (
+            {principal?.pedidoAtivoId && (
               <ResumoDaComanda
-                mesa={mesa}
-                pedidoId={mesa.pedidoAtivoId}
+                mesa={principal}
+                pedidoId={principal.pedidoAtivoId}
                 aoVer={() => setVendoComanda(true)}
               />
             )}
@@ -250,7 +265,7 @@ export function PaginaGarcom() {
       </div>
 
       {rodada.janela}
-      <ComandaMesa mesa={vendoComanda ? mesa : null} aoFechar={() => setVendoComanda(false)} />
+      <ComandaMesa mesa={vendoComanda ? principal : null} aoFechar={() => setVendoComanda(false)} />
     </div>
   )
 }

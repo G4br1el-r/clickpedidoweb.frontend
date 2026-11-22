@@ -26,6 +26,14 @@ import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoqu
 import { normalizar } from "../regras/filtro-pedidos"
 import { comEtapa, comEvento, itensEmTexto } from "../regras/historico"
 import { nomePadraoDaMesa } from "../regras/mesas"
+import {
+  juntarComandas,
+  numerosEmTexto,
+  porQueNaoJunta,
+  porQueNaoTransfere,
+  separarQuantidade,
+  servirDesdeAoReceber,
+} from "../regras/movimentacoes"
 import { proximoNumero } from "../regras/numero"
 import {
   type Desconto,
@@ -151,6 +159,7 @@ export type LancamentoMesa = {
   enviarParaCozinha: boolean
   /** Na mesa livre, tem que estar na lista do salão (quando ela existe). */
   garcom?: string
+  /** Só abre a comanda com ele: a comanda aberta (a da principal, na juntada) não muda de nome. */
   clienteNome?: string
   /** Quem lançou, para o histórico. Sem ele, assina o garçom do lançamento. */
   por?: string
@@ -211,36 +220,73 @@ function abrirMesas(base: BaseLoja): BaseLoja {
       )
       .map((pedido) => [pedido.mesa?.id, pedido]),
   )
+  // A mesa juntada não tem comanda: fica com a principal enquanto a comanda dela está aberta.
+  const juntas = new Map(
+    [...abertas.values()].flatMap((comanda) =>
+      (comanda.mesa?.juntadas ?? []).map((junta) => [junta.id, comanda.mesa?.id as string]),
+    ),
+  )
   return {
     ...base,
-    mesas: base.mesas.map(({ pedidoAtivoId: _pedidoAtivoId, clienteNome, ocupadaEm, ...mesa }) => {
-      const comanda = abertas.get(mesa.id)
-      // Mesa ocupada deixa de estar em limpeza.
-      const { limpezaDesde: _limpezaDesde, ...semLimpeza } = mesa
-      return comanda
-        ? {
+    mesas: base.mesas.map(
+      ({ pedidoAtivoId: _pedidoAtivoId, clienteNome, ocupadaEm, juntadaCom: _junta, ...mesa }) => {
+        const comanda = abertas.get(mesa.id)
+        const principal = juntas.get(mesa.id)
+        // Mesa ocupada (ou junta a outra) deixa de estar em limpeza.
+        const { limpezaDesde: _limpezaDesde, ...semLimpeza } = mesa
+        if (comanda) {
+          return {
             ...semLimpeza,
             status: "ocupada",
             pedidoAtivoId: comanda.id,
             clienteNome: comanda.cliente.nome,
             ocupadaEm: comanda.criadoEm,
           }
-        : { ...mesa, status: "livre" }
-    }),
+        }
+        return principal
+          ? { ...semLimpeza, status: "livre", juntadaCom: principal }
+          : { ...mesa, status: "livre" }
+      },
+    ),
   }
 }
 
 const reais = (valor: number) => Math.round(valor * 100) / 100
 
+/**
+ * O pedido mais novo que a base já teve: o de maior id em Pedidos ou o que já saiu de lá (a
+ * comanda juntada). O id e o número do pedido novo seguem dele, nunca do último da lista.
+ */
+function ultimoPedido(
+  base: BaseLoja,
+): { id: number; numero: number; criadoEm: string } | undefined {
+  const maior = base.pedidos.reduce<Pedido | undefined>(
+    (atual, pedido) => (!atual || pedido.id > atual.id ? pedido : atual),
+    undefined,
+  )
+  const saiu = base.ultimoPedido
+  return saiu && (!maior || saiu.id > maior.id) ? saiu : maior
+}
+
+/** Id do pedido criado agora: um a mais que o do pedido mais novo que a base já teve. */
+const proximoId = (base: BaseLoja) => (ultimoPedido(base)?.id ?? 0) + 1
+
 /** Valor em reais e centavos, sem fração de centavo. */
 const emCentavosExatos = (valor: number) => Number.isInteger(Number((valor * 100).toFixed(6)))
 
-/** Comanda aberta da mesa, se houver. */
-const comandaDa = (base: BaseLoja, mesaId: string) =>
-  base.pedidos.find(
-    (pedido) =>
-      pedido.tipo === "mesa" && pedido.mesa?.id === mesaId && EM_ANDAMENTO.includes(pedido.status),
+/**
+ * Comanda aberta da mesa, se houver. A mesa juntada aponta para a comanda da principal; a
+ * comanda da própria mesa vem antes.
+ */
+function comandaDa(base: BaseLoja, mesaId: string) {
+  const abertas = base.pedidos.filter(
+    (pedido) => pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status),
   )
+  return (
+    abertas.find((pedido) => pedido.mesa?.id === mesaId) ??
+    abertas.find((pedido) => pedido.mesa?.juntadas?.some((junta) => junta.id === mesaId))
+  )
+}
 
 /**
  * A reserva marcada da mesa que já está dentro da antecedência e ainda na tolerância. Confere
@@ -339,6 +385,17 @@ function retirar(
  * O saldo zerou: a comanda fica concluída e paga. A forma do pedido é a do maior pagamento (o
  * primeiro, no empate), e o troco do pedido só vale quando houve um pagamento único em dinheiro.
  */
+/**
+ * Desconto, cortesia, item tirado ou transferido zerou o saldo de uma conta já paga em parte:
+ * ela fecha.
+ */
+const quitou = (antes: Pedido, depois: Pedido, saldo = resumoDaConta(depois).saldo) =>
+  EM_ANDAMENTO.includes(depois.status) &&
+  depois.itens.length > 0 &&
+  (depois.pagamentos?.length ?? 0) > 0 &&
+  resumoDaConta(antes).saldo > 0 &&
+  saldo === 0
+
 function fechada(comanda: Pedido, agora: string, por: string | undefined): Pedido {
   const pagamentos = comanda.pagamentos ?? []
   const maior = pagamentos.reduce<PagamentoConta | undefined>(
@@ -474,6 +531,65 @@ function aplicarEstoque(
   return atual
 }
 
+/** Por quanto tempo o servidor guarda a foto de uma movimentação (a tela oferece por 6 s). */
+const PRAZO_DO_DESFAZER_MS = 10_000
+
+/** As mesas e comandas envolvidas numa movimentação, na ordem dos ids (a que não existe, vazia). */
+type Recorte = { mesas: (Mesa | null)[]; pedidos: (Pedido | null)[] }
+
+type Foto = { ate: number; mesas: string[]; pedidos: number[]; antes: Recorte; depois: Recorte }
+
+const recorte = (base: BaseLoja, mesas: string[], pedidos: number[]): Recorte => ({
+  mesas: mesas.map((id) => base.mesas.find((mesa) => mesa.id === id) ?? null),
+  pedidos: pedidos.map((id) => base.pedidos.find((pedido) => pedido.id === id) ?? null),
+})
+
+/**
+ * A comanda de mesa aberta que a tela mostrava. Outra aba pode tê-la fechado: recusa sem mexer
+ * em nada.
+ */
+function comandaAberta(base: BaseLoja, pedidoId: number): Pedido & { mesa: { numero: number } } {
+  const comanda = base.pedidos.find((pedido) => pedido.id === pedidoId)
+  if (!comanda?.mesa || comanda.tipo !== "mesa") throw new Error("Pedido não encontrado")
+  if (!EM_ANDAMENTO.includes(comanda.status)) {
+    throw new Error(
+      `A comanda da mesa ${comanda.mesa.numero} não está mais aberta. Atualize a tela.`,
+    )
+  }
+  return comanda as Pedido & { mesa: { numero: number } }
+}
+
+/**
+ * A mesa livre que recebe a comanda: outra (nem a própria, nem uma junta a ela), sem bloqueio,
+ * sem comanda e, se reservada agora, só com a confirmação.
+ */
+function mesaLivreParaReceber(
+  base: BaseLoja,
+  origem: Pedido,
+  mesaId: string,
+  confirmarReserva: boolean | undefined,
+): Mesa {
+  const mesa = base.mesas.find((item) => item.id === mesaId)
+  if (!mesa) throw new Error("Mesa não encontrada")
+  const doGrupo = [origem.mesa?.id, ...(origem.mesa?.juntadas ?? []).map((item) => item.id)]
+  if (doGrupo.includes(mesa.id)) throw new Error("Escolha outra mesa.")
+  if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
+  if (mesa.juntadaCom) {
+    const principal = base.mesas.find((item) => item.id === mesa.juntadaCom)
+    throw new Error(`A mesa ${mesa.numero} está junto com a mesa ${principal?.numero}.`)
+  }
+  if (comandaDa(base, mesa.id)) {
+    throw new Error(`A mesa ${mesa.numero} já está aberta. Junte as mesas ou transfira os itens.`)
+  }
+  const reserva = reservaDaVez(base, mesa.id, new Date())
+  if (reserva && !confirmarReserva) {
+    throw new Error(
+      `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}. Confirme para transferir.`,
+    )
+  }
+  return mesa
+}
+
 /**
  * Pedido de um dia que já passou não fica aberto: entrega e comanda viram concluídas. A conta de
  * mesa só fecha recebendo: a comanda que alguém mexeu (tem histórico) continua aberta na virada
@@ -575,7 +691,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const anteriores = base.pedidos.map((pedido) =>
       new Date(pedido.criadoEm) < hoje ? encerrar(pedido, momento) : pedido,
     )
-    const ultimo = anteriores.at(-1)
+    const ultimo = ultimoPedido({ ...base, pedidos: anteriores })
     const novos = gerarPedidos({
       catalogo: base,
       segmento,
@@ -583,9 +699,14 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       agora,
       ...(ultimo ? { ultimo } : {}),
       agendamentos: anteriores,
+      // A comanda que continuou aberta ocupa a mesa dela e as juntadas a ela.
       mesasOcupadas: anteriores
         .filter((pedido) => pedido.tipo === "mesa" && EM_ANDAMENTO.includes(pedido.status))
-        .flatMap((pedido) => (pedido.mesa ? [pedido.mesa.id] : [])),
+        .flatMap((pedido) =>
+          pedido.mesa
+            ? [pedido.mesa.id, ...(pedido.mesa.juntadas ?? []).map((junta) => junta.id)]
+            : [],
+        ),
     })
     const completa = abrirMesas({
       ...base,
@@ -655,14 +776,16 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const comEstoque = depois ? depois(aplicado, novo) : aplicado
     const pedidos = comEstoque.pedidos.with(indice, novo)
     const atualizada = abrirMesas({ ...comEstoque, pedidos })
-    // A conta da mesa foi paga agora (e não por um dia que virou): a mesa espera a limpeza.
+    // A conta da mesa foi paga agora (e não por um dia que virou): a mesa (e as que estavam
+    // juntas a ela) espera a limpeza.
     const contaFechada = novo.tipo === "mesa" && !antes.pagoEm && novo.pagoEm
+    const usadas = [novo.mesa?.id, ...(novo.mesa?.juntadas ?? []).map((junta) => junta.id)]
     await substituir(
       contaFechada && atualizada.salao.limpeza
         ? {
             ...atualizada,
             mesas: atualizada.mesas.map((mesa) =>
-              mesa.id === novo.mesa?.id ? { ...mesa, limpezaDesde: novo.pagoEm } : mesa,
+              usadas.includes(mesa.id) ? { ...mesa, limpezaDesde: novo.pagoEm } : mesa,
             ),
           }
         : atualizada,
@@ -707,14 +830,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         if (novo.status !== "cancelado" && pago > total) {
           throw new Error("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
         }
-        // Desconto, cortesia ou item tirado zerou o saldo de uma conta já paga em parte: fecha.
-        const quitada =
-          EM_ANDAMENTO.includes(novo.status) &&
-          novo.itens.length > 0 &&
-          (novo.pagamentos?.length ?? 0) > 0 &&
-          resumoDaConta(pedido).saldo > 0 &&
-          saldo === 0
-        return quitada ? fechada(novo, new Date().toISOString(), novo.eventos?.at(-1)?.por) : novo
+        return quitou(pedido, novo, saldo)
+          ? fechada(novo, new Date().toISOString(), novo.eventos?.at(-1)?.por)
+          : novo
       },
       // O garçom não lança mais do que há.
       { conferir: true },
@@ -811,7 +929,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     proximoNumero({
       id,
       mensal: temRecurso(segmento, "numeroMensal"),
-      ultimo: base.pedidos.at(-1),
+      ultimo: ultimoPedido(base),
       agora: new Date(),
     })
 
@@ -1007,7 +1125,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
 
   /**
    * Por que a conta não pode ser reaberta agora, ou `null`: só a última conta fechada da mesa,
-   * no mesmo dia do pagamento, com a mesa livre ou em limpeza (Q37).
+   * no mesmo dia do pagamento, com a mesa livre ou em limpeza (Q37). A conta que tinha mesas
+   * juntadas reabre junta: cada uma delas também tem que estar livre.
    */
   function porQueNaoReabre(base: BaseLoja, conta: Pedido, agora: Date): string | null {
     const mesa = base.mesas.find((item) => item.id === conta.mesa?.id)
@@ -1020,6 +1139,19 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     }
     if (mesa.bloqueio) return `A mesa ${mesa.numero} está bloqueada.`
     if (comandaDa(base, mesa.id)) return `A mesa ${mesa.numero} já está aberta.`
+    for (const junta of conta.mesa?.juntadas ?? []) {
+      const secundaria = base.mesas.find((item) => item.id === junta.id)
+      const porQue = !secundaria
+        ? `A mesa ${junta.numero} foi excluída.`
+        : secundaria.bloqueio
+          ? `A mesa ${secundaria.numero} está bloqueada.`
+          : secundaria.juntadaCom
+            ? `A mesa ${secundaria.numero} já está junto com a mesa ${base.mesas.find((item) => item.id === secundaria.juntadaCom)?.numero}.`
+            : comandaDa(base, secundaria.id)
+              ? `A mesa ${secundaria.numero} já está aberta.`
+              : null
+      if (porQue) return `${porQue} Reabrir não junta de novo.`
+    }
     return null
   }
 
@@ -1096,6 +1228,40 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       },
     )
     return resumoDaConta(paga).saldo > 0 ? paga : fechada(paga, agora, pagamento.por)
+  }
+
+  /** As fotos do desfazer: o antes e o depois das mesas e comandas de cada movimentação. */
+  const fotos = new Map<string, Foto>()
+
+  /**
+   * A base guardada, e não a desta aba: outra aba pode ter mudado a mesa. As movimentações e o
+   * desfazer partem daqui (ponto de atenção 2).
+   */
+  function reler(): Promise<BaseLoja> {
+    carregando = undefined
+    return carregar()
+  }
+
+  /**
+   * Faz uma movimentação sobre a base relida, guarda e tira a foto para o desfazer: as mesas e
+   * comandas envolvidas, antes e depois. Devolve a base nova e o id da foto.
+   */
+  async function mover(
+    fazer: (base: BaseLoja) => { nova: BaseLoja; mesas: string[]; pedidos: number[] },
+  ): Promise<{ base: BaseLoja; desfazer: string }> {
+    const base = await reler()
+    const { nova, mesas, pedidos } = fazer(base)
+    const final = abrirMesas(nova)
+    await substituir(final)
+    const desfazer = `desfazer-${crypto.randomUUID().slice(0, 8)}`
+    fotos.set(desfazer, {
+      ate: Date.now() + PRAZO_DO_DESFAZER_MS,
+      mesas,
+      pedidos,
+      antes: recorte(base, mesas, pedidos),
+      depois: recorte(final, mesas, pedidos),
+    })
+    return { base: final, desfazer }
   }
 
   return {
@@ -1219,7 +1385,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       async simular(): Promise<Pedido> {
         const base = await carregar()
         const agora = new Date()
-        const ultimo = base.pedidos.at(-1)
+        const ultimo = ultimoPedido(base)
         const novo = {
           ...gerarPedidoAgora({
             catalogo: base,
@@ -1476,8 +1642,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const agora = new Date().toISOString()
         const clienteNome = venda.clienteNome?.trim().slice(0, 80)
         const observacao = venda.observacao?.trim().slice(0, 280)
-        const ultimo = base.pedidos.at(-1)
-        const id = (ultimo?.id ?? 0) + 1
+        const id = proximoId(base)
         const pedido: Pedido = comEtapa(
           {
             id,
@@ -1580,7 +1745,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         conferirHorario(base, inicio, duracaoMin)
 
         const agora = new Date().toISOString()
-        const id = (base.pedidos.at(-1)?.id ?? 0) + 1
+        const id = proximoId(base)
         const itens: ItemPedido[] = servicos.map((servico, indice) => ({
           id: `${id}-${indice + 1}`,
           produtoId: servico.id,
@@ -1779,8 +1944,24 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         return mudarMesa(id, ({ bloqueio: _bloqueio, ...mesa }) => mesa)
       },
 
-      marcarLimpa(id: string) {
-        return mudarMesa(id, ({ limpezaDesde: _limpezaDesde, ...mesa }) => mesa)
+      /** A mesa saiu da limpeza. Dá para desfazer por 10 s (Q46). */
+      async marcarLimpa(id: string): Promise<{ mesa: Mesa; desfazer: string }> {
+        const { base, desfazer } = await mover((base) => {
+          if (!base.mesas.some((mesa) => mesa.id === id)) throw new Error("Mesa não encontrada")
+          return {
+            nova: {
+              ...base,
+              mesas: base.mesas.map((mesa) => {
+                if (mesa.id !== id) return mesa
+                const { limpezaDesde: _limpezaDesde, ...limpa } = mesa
+                return limpa
+              }),
+            },
+            mesas: [id],
+            pedidos: [],
+          }
+        })
+        return responder({ mesa: base.mesas.find((mesa) => mesa.id === id) as Mesa, desfazer })
       },
 
       async excluir(id: string): Promise<void> {
@@ -1813,7 +1994,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         }
         const garcom = garcomDaLista(base, garcomPedido, true)
         const agora = new Date().toISOString()
-        const id = (base.pedidos.at(-1)?.id ?? 0) + 1
+        const id = proximoId(base)
         const comanda = comEvento(
           comEtapa(
             // O couvert já entra na conta da mesa vazia.
@@ -1859,7 +2040,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           : (garcomDaLista(base, lancamento.garcom, false) ??
             lancamento.garcom?.trim().slice(0, 80))
         const rodada = Math.max(0, ...(aberta?.itens.map((item) => item.rodada ?? 1) ?? [])) + 1
-        const id = aberta?.id ?? (base.pedidos.at(-1)?.id ?? 0) + 1
+        const id = aberta?.id ?? proximoId(base)
         const vaiParaCozinha = lancamento.enviarParaCozinha
         const novos: ItemPedido[] = lancamento.itens.map((lancado, indice) => {
           const { produtoId, nome, precoUnitario, custoUnitario, opcoes, produtosDasOpcoes } =
@@ -1901,7 +2082,6 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
                     itens: [...aberta.itens, ...novos],
                     status: vaiParaCozinha ? "recebido" : aberta.status,
                     enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
-                    ...(cliente ? { cliente: { ...aberta.cliente, nome: cliente } } : {}),
                     atualizadoEm: agora,
                     estoqueBaixado: true,
                   }
@@ -2300,6 +2480,353 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             },
           )
         })
+      },
+
+      /**
+       * Leva a comanda para uma mesa livre. A de origem fica livre, sem limpeza (só fechar a
+       * conta põe em limpeza); o estoque não muda. Dá para desfazer por 10 s.
+       */
+      async transferir(
+        pedidoId: number,
+        mesaDestinoId: string,
+        { confirmarReserva, por }: { confirmarReserva?: boolean; por?: string } = {},
+      ): Promise<{ comanda: Pedido; desfazer: string }> {
+        const { base, desfazer } = await mover((base) => {
+          const comanda = comandaAberta(base, pedidoId)
+          if (comanda.mesa.juntadas?.length) throw new Error("Separe as mesas antes de transferir.")
+          const destino = mesaLivreParaReceber(base, comanda, mesaDestinoId, confirmarReserva)
+          const origem = base.mesas.find((mesa) => mesa.id === comanda.mesa.id)
+          const agora = new Date().toISOString()
+          const novo = comEvento(
+            {
+              ...comanda,
+              mesa: { ...comanda.mesa, id: destino.id, numero: destino.numero },
+              // Sem cliente, a comanda leva o nome da mesa: ele acompanha a mesa nova.
+              ...(comanda.cliente.nome === origem?.nome
+                ? { cliente: { ...comanda.cliente, nome: destino.nome } }
+                : {}),
+              atualizadoEm: agora,
+            },
+            {
+              tipo: "transferida",
+              em: agora,
+              ...autor(por),
+              texto: `Transferida da mesa ${comanda.mesa.numero} para a mesa ${destino.numero}`,
+            },
+          )
+          return {
+            nova: {
+              ...base,
+              pedidos: base.pedidos.map((pedido) => (pedido.id === novo.id ? novo : pedido)),
+            },
+            mesas: [comanda.mesa.id, destino.id],
+            pedidos: [novo.id],
+          }
+        })
+        return responder({
+          comanda: base.pedidos.find((pedido) => pedido.id === pedidoId) as Pedido,
+          desfazer,
+        })
+      },
+
+      /**
+       * Junta mesas à da comanda (a principal). A mesa livre só fica "Com a mesa X"; a aberta traz
+       * a comanda dela, que sai de Pedidos (`juntarComandas`). O estoque não muda.
+       */
+      async juntar(
+        pedidoId: number,
+        mesaIds: string[],
+        { por }: { por?: string } = {},
+      ): Promise<{ comanda: Pedido; desfazer: string }> {
+        const { base, desfazer } = await mover((base) => {
+          let comanda: Pedido = comandaAberta(base, pedidoId)
+          if (mesaIds.length === 0) throw new Error("Escolha as mesas para juntar.")
+          const principalId = comanda.mesa?.id as string
+          const agora = new Date().toISOString()
+          const saem: number[] = []
+          for (const mesaId of new Set(mesaIds)) {
+            const mesa = base.mesas.find((item) => item.id === mesaId)
+            if (!mesa) throw new Error("Mesa não encontrada")
+            if (mesa.id === principalId) throw new Error("Escolha outra mesa.")
+            if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
+            if (mesa.juntadaCom) {
+              const com = base.mesas.find((item) => item.id === mesa.juntadaCom)
+              throw new Error(`A mesa ${mesa.numero} já está junto com a mesa ${com?.numero}.`)
+            }
+            const daMesa = comandaDa(base, mesa.id)
+            let texto = `Juntou a mesa ${mesa.numero}`
+            if (daMesa) {
+              const erro = porQueNaoJunta(comanda, daMesa)
+              if (erro) throw new Error(erro)
+              comanda = juntarComandas(comanda, daMesa)
+              saem.push(daMesa.id)
+              if (daMesa.itens.length > 0) texto += `: ${itensEmTexto(daMesa.itens)}`
+            } else {
+              const reserva = reservaDaVez(base, mesa.id, new Date())
+              if (reserva) {
+                throw new Error(
+                  `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}.`,
+                )
+              }
+              const juntadas = [
+                ...(comanda.mesa?.juntadas ?? []),
+                { id: mesa.id, numero: mesa.numero },
+              ]
+              comanda = {
+                ...comanda,
+                mesa: {
+                  ...(comanda.mesa as NonNullable<Pedido["mesa"]>),
+                  juntadas: juntadas.toSorted((a, b) => a.numero - b.numero),
+                },
+              }
+            }
+            comanda = comEvento(comanda, { tipo: "juntada", em: agora, ...autor(por), texto })
+          }
+          // A taxa da principal vale para tudo: se a secundária pagou com uma taxa maior, recusa.
+          const { pago, total } = resumoDaConta(comanda)
+          if (pago > total) {
+            throw new Error("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
+          }
+          const junta = { ...comanda, atualizadoEm: agora }
+          // A comanda que sai de Pedidos pode ser a mais nova: o id e o número dela ficam guardados.
+          const ultimo = ultimoPedido(base)
+          return {
+            nova: {
+              ...base,
+              ...(ultimo
+                ? {
+                    ultimoPedido: {
+                      id: ultimo.id,
+                      numero: ultimo.numero,
+                      criadoEm: ultimo.criadoEm,
+                    },
+                  }
+                : {}),
+              pedidos: base.pedidos
+                .filter((pedido) => !saem.includes(pedido.id))
+                .map((pedido) => (pedido.id === junta.id ? junta : pedido)),
+            },
+            mesas: [principalId, ...mesaIds],
+            pedidos: [junta.id, ...saem],
+          }
+        })
+        return responder({
+          comanda: base.pedidos.find((pedido) => pedido.id === pedidoId) as Pedido,
+          desfazer,
+        })
+      },
+
+      /**
+       * Leva itens (ou parte de uma linha) para outra mesa: a aberta recebe na comanda dela (a
+       * juntada, na da principal); a livre abre com o garçom da origem e 1 pessoa. O item chega
+       * com `transferido`, preparado ou não. O estoque não muda.
+       */
+      async transferirItens(
+        pedidoId: number,
+        {
+          mesaDestinoId,
+          itens,
+          confirmarReserva,
+          por,
+        }: {
+          mesaDestinoId: string
+          itens: { itemId: string; quantidade: number }[]
+          confirmarReserva?: boolean
+          por?: string
+        },
+      ): Promise<{ comanda: Pedido; destino: Pedido; desfazer: string }> {
+        let destinoId = 0
+        const { base, desfazer } = await mover((base) => {
+          const origem = comandaAberta(base, pedidoId)
+          if (itens.length === 0) throw new Error("Escolha os itens.")
+          const aberta = comandaDa(base, mesaDestinoId)
+          const mesa = aberta
+            ? (base.mesas.find((item) => item.id === mesaDestinoId) as Mesa)
+            : mesaLivreParaReceber(base, origem, mesaDestinoId, confirmarReserva)
+          // A mesa aberta não fica bloqueada (bloquear pede a conta fechada); a livre passa por
+          // mesaLivreParaReceber, que recusa a bloqueada.
+          if (aberta?.id === origem.id) throw new Error("Escolha outra mesa.")
+          const agora = new Date().toISOString()
+          let ficam = origem.itens
+          const vao: ItemPedido[] = []
+          for (const { itemId, quantidade } of itens) {
+            const item = ficam.find((atual) => atual.id === itemId)
+            if (!item) throw new Error("Item não encontrado na comanda")
+            if (!Number.isInteger(quantidade) || quantidade < 1 || quantidade > item.quantidade) {
+              throw new Error("Informe uma quantidade válida.")
+            }
+            const erro = porQueNaoTransfere(origem, item)
+            if (erro) throw new Error(erro)
+            const { fica, vai } = separarQuantidade(
+              item,
+              quantidade,
+              `${item.id}-t${crypto.randomUUID().slice(0, 4)}`,
+            )
+            ficam = fica
+              ? ficam.map((atual) => (atual.id === item.id ? fica : atual))
+              : ficam.filter((atual) => atual.id !== item.id)
+            vao.push({
+              ...vai,
+              transferido: {
+                daMesa: origem.mesa.numero,
+                preparado: cozinhaJaPreparou(origem, item),
+              },
+            })
+          }
+          const saiu = recalcular(depoisDeTirar(origem, { ...origem, itens: ficam }))
+          const { pago, total, itens: valorDosItens, cortesias, descontos } = resumoDaConta(saiu)
+          if (descontos > reais(valorDosItens - cortesias)) {
+            throw new Error(
+              "O desconto passaria do valor dos itens. Tire ou diminua o desconto antes.",
+            )
+          }
+          if (pago > total) {
+            throw new Error("A conta ficaria menor que o já pago. Estorne um pagamento antes.")
+          }
+          const texto = itensEmTexto(vao)
+          const transferiu = comEvento(
+            { ...saiu, atualizadoEm: agora },
+            {
+              tipo: "itens-transferidos",
+              em: agora,
+              ...autor(por),
+              texto: `Transferiu ${texto} para a mesa ${mesa.numero}`,
+            },
+          )
+          // O que ficou já estava pago: a conta da origem fecha, como ao tirar um item.
+          const fechou = quitou(origem, transferiu)
+          const novaOrigem = fechou ? fechada(transferiu, agora, por) : transferiu
+          const id = aberta?.id ?? proximoId(base)
+          destinoId = id
+          const garcom = origem.mesa.garcom
+          const recebeu = recalcular(
+            aberta
+              ? // Receber itens muda a conta, como lançar: o "Pediu a conta" sai (Q23).
+                { ...semContaPedida(aberta), itens: [...aberta.itens, ...vao], atualizadoEm: agora }
+              : comEtapa(
+                  comEvento(
+                    comandaNova(base, mesa, {
+                      id,
+                      agora,
+                      garcom,
+                      pessoas: 1,
+                      itens: vao,
+                      enviarParaCozinha: false,
+                    }),
+                    eventoAberta(agora, 1, por ?? garcom),
+                  ),
+                  agora,
+                ),
+          )
+          // O item pronto e não servido leva o "Servir" para a mesa que o recebe.
+          const servirDesde = servirDesdeAoReceber(origem, vao, aberta)
+          const novoDestino = comEvento(servirDesde ? { ...recebeu, servirDesde } : recebeu, {
+            tipo: "itens-transferidos",
+            em: agora,
+            ...autor(por),
+            texto: `Recebeu ${texto} da mesa ${origem.mesa.numero}`,
+          })
+          const pedidos = base.pedidos.map((pedido) =>
+            pedido.id === novaOrigem.id
+              ? novaOrigem
+              : pedido.id === novoDestino.id
+                ? novoDestino
+                : pedido,
+          )
+          return {
+            nova: {
+              ...base,
+              pedidos: aberta ? pedidos : [...pedidos, novoDestino],
+              // Com a limpeza ligada, a mesa da conta que fechou (e as juntas a ela) espera a limpeza.
+              mesas:
+                fechou && base.salao.limpeza
+                  ? base.mesas.map((item) =>
+                      [
+                        origem.mesa.id,
+                        ...(origem.mesa.juntadas ?? []).map((junta) => junta.id),
+                      ].includes(item.id)
+                        ? { ...item, limpezaDesde: agora }
+                        : item,
+                    )
+                  : base.mesas,
+            },
+            mesas: [...new Set([origem.mesa.id, mesa.id, novoDestino.mesa?.id as string])],
+            pedidos: [novaOrigem.id, novoDestino.id],
+          }
+        })
+        const buscar = (id: number) => base.pedidos.find((pedido) => pedido.id === id) as Pedido
+        return responder({ comanda: buscar(pedidoId), destino: buscar(destinoId), desfazer })
+      },
+
+      /** Solta as mesas juntadas: elas voltam livres, e itens, pessoas e pagamentos ficam. */
+      async separar(
+        pedidoId: number,
+        { por }: { por?: string } = {},
+      ): Promise<{ comanda: Pedido; desfazer: string }> {
+        const { base, desfazer } = await mover((base) => {
+          const comanda = comandaAberta(base, pedidoId)
+          const { juntadas = [], ...mesa } = comanda.mesa
+          if (juntadas.length === 0) {
+            throw new Error(`A mesa ${mesa.numero} não está junto com outra.`)
+          }
+          const numeros = juntadas.map((junta) => junta.numero)
+          const agora = new Date().toISOString()
+          const separada = comEvento(
+            { ...comanda, mesa, atualizadoEm: agora },
+            {
+              tipo: "separada",
+              em: agora,
+              ...autor(por),
+              texto:
+                numeros.length === 1
+                  ? `Separou a mesa ${numeros[0]}`
+                  : `Separou as mesas ${numerosEmTexto(numeros)}`,
+            },
+          )
+          return {
+            nova: {
+              ...base,
+              pedidos: base.pedidos.map((pedido) =>
+                pedido.id === separada.id ? separada : pedido,
+              ),
+            },
+            mesas: [mesa.id, ...juntadas.map((junta) => junta.id)],
+            pedidos: [separada.id],
+          }
+        })
+        return responder({
+          comanda: base.pedidos.find((pedido) => pedido.id === pedidoId) as Pedido,
+          desfazer,
+        })
+      },
+
+      /**
+       * Volta a movimentação: as mesas e comandas da foto voltam a ser como eram, se nada mudou
+       * nelas desde então. A foto vale 10 s e uma vez só.
+       */
+      async desfazer(id: string): Promise<void> {
+        const foto = fotos.get(id)
+        if (!foto || Date.now() > foto.ate) {
+          fotos.delete(id)
+          throw new Error("O tempo para desfazer acabou.")
+        }
+        const base = await reler()
+        const agora = recorte(base, foto.mesas, foto.pedidos)
+        if (JSON.stringify(agora) !== JSON.stringify(foto.depois)) {
+          throw new Error("A mesa mudou depois disso. Desfaça pela comanda.")
+        }
+        fotos.delete(id)
+        // A comanda que a movimentação criou sai; a que ela tirou volta no lugar, pelo id.
+        const pedidos = base.pedidos.filter((pedido) => !foto.pedidos.includes(pedido.id))
+        for (const antes of foto.antes.pedidos) {
+          if (!antes) continue
+          const depois = pedidos.findIndex((pedido) => pedido.id > antes.id)
+          pedidos.splice(depois < 0 ? pedidos.length : depois, 0, antes)
+        }
+        const mesas = base.mesas.map(
+          (mesa) => foto.antes.mesas.find((antes) => antes?.id === mesa.id) ?? mesa,
+        )
+        await substituir(abrirMesas({ ...base, mesas, pedidos }))
       },
 
       /** Mesa com itens só sai pelo fechamento da conta; comanda vazia é cancelada. */

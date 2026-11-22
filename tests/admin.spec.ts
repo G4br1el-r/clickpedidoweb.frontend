@@ -1078,3 +1078,57 @@ test("mesas: dividir a conta por 3, uma parte no Pix e o resto em dinheiro com t
   await expect(pagamentos).toContainText("Dinheiro · R$ 84,00 · troco R$ 16,00")
   await verificarAcessibilidade(page)
 })
+
+test("mesas: juntar a mesa 8 à 1, ver Mesa 1 + 8 na cozinha, separar e desfazer pelo aviso", async ({
+  page,
+}) => {
+  test.setTimeout(90_000)
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+
+  // Mesas: a mesa 1 (aberta) junta a 8 (livre) pelo menu ⋯.
+  await page.goto("/admin/mesas")
+  const menu = page.getByRole("button", { name: "Ações da mesa 1", exact: true })
+  await expect(menu).toBeVisible({ timeout: 15_000 })
+  await menu.click()
+  await page.getByRole("menuitem", { name: "Juntar mesas" }).click()
+  const juntar = page.getByRole("dialog", { name: "Juntar à mesa 1" })
+  await juntar.getByRole("checkbox", { name: /^Mesa 8\b/ }).click()
+  await verificarAcessibilidade(page)
+  await juntar.getByRole("button", { name: "Juntar" }).click()
+  await expect(page.getByText("Mesa 8 junto com a mesa 1.")).toBeVisible()
+  const mesa8 = page.getByRole("button", { name: "Mesa 8", exact: true })
+  await expect(mesa8).toContainText("Com a mesa 1")
+
+  // Uma rodada nova da mesa 1 vai para a cozinha.
+  await page.getByRole("button", { name: "Mesa 1", exact: true }).click()
+  const gaveta = page.getByRole("dialog", { name: "Mesa 1" })
+  await expect(gaveta).toContainText("Junto com a mesa 8")
+  await gaveta.getByRole("button", { name: "Adicionar itens" }).click()
+  const adicionar = page.getByRole("dialog", { name: "Adicionar itens · Mesa 1" })
+  await adicionar
+    .getByRole("button", { name: /^Adicionar .*\d$/ })
+    .first()
+    .click()
+  await adicionar
+    .getByRole("region", { name: "Bandeja" })
+    .getByRole("button", { name: "Enviar para a cozinha" })
+    .click()
+  await expect(page.getByText("Mesa 1: enviado para a cozinha.")).toBeVisible()
+
+  // Cozinha: o ticket diz as duas mesas.
+  await page.goto("/admin/cozinha")
+  await expect(
+    page.getByRole("region", { name: /^A fazer/ }).getByRole("article", { name: /^Mesa 1 \+ 8 ·/ }),
+  ).toBeVisible({ timeout: 15_000 })
+
+  // Mesas: separar e desfazer pelo aviso.
+  await page.goto("/admin/mesas")
+  await expect(menu).toBeVisible({ timeout: 15_000 })
+  await menu.click()
+  await page.getByRole("menuitem", { name: "Separar" }).click()
+  await expect(page.getByText("Mesas separadas.")).toBeVisible()
+  await expect(mesa8).toContainText("Livre")
+  await page.getByRole("button", { name: "Desfazer" }).click()
+  await expect(page.getByText("Desfeito.")).toBeVisible()
+  await expect(mesa8).toContainText("Com a mesa 1")
+})

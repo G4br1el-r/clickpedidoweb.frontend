@@ -9,6 +9,7 @@ import {
   minutosNaCozinha,
   rodadasNaCozinha,
   rodadasNovas,
+  rotuloDaMesa,
   urgenciaNaCozinha,
 } from "./cozinha"
 import { AGORA_DE_TESTE as AGORA, PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
@@ -67,6 +68,39 @@ describe("cozinhaJaPreparou", () => {
     expect(cozinhaJaPreparou(comanda, pizza)).toBe(true)
     expect(cozinhaJaPreparou(comanda, esfiha)).toBe(false)
     expect(cozinhaJaPreparou(comanda, agua)).toBe(false)
+  })
+
+  test("o item transferido de outra mesa vale como chegou: preparado ou não, qualquer que seja o status", () => {
+    const preparada = { ...item("Pizza", 3, true), transferido: { daMesa: 4, preparado: true } }
+    const coca = { ...item("Coca", 3, false), transferido: { daMesa: 4, preparado: false } }
+    for (const status of ["recebido", "em-preparo", "pronto"] as const) {
+      const comanda = pedido(1, status, 5, "mesa", [item("Esfiha", 1, true), preparada, coca])
+      expect(cozinhaJaPreparou(comanda, preparada)).toBe(true)
+      expect(cozinhaJaPreparou(comanda, coca)).toBe(false)
+    }
+  })
+})
+
+describe("rotuloDaMesa", () => {
+  test("a mesa sozinha, e a principal com as juntadas pelo número", () => {
+    expect(rotuloDaMesa({ mesa: { id: "mesa-3", numero: 3 } })).toBe("Mesa 3")
+    expect(
+      rotuloDaMesa({
+        mesa: { id: "mesa-15", numero: 15, juntadas: [{ id: "mesa-16", numero: 16 }] },
+      }),
+    ).toBe("Mesa 15 + 16")
+    expect(
+      rotuloDaMesa({
+        mesa: {
+          id: "mesa-3",
+          numero: 3,
+          juntadas: [
+            { id: "mesa-4", numero: 4 },
+            { id: "mesa-5", numero: 5 },
+          ],
+        },
+      }),
+    ).toBe("Mesa 3 + 4 + 5")
   })
 })
 
@@ -132,6 +166,18 @@ describe("itensDaCozinha", () => {
     const comanda = pedido(3, "pronto", 10, "mesa", [item("Cerveja", 1, false)])
     expect(itensDaCozinha(comanda)).toEqual({ atuais: [], anteriores: [] })
   })
+
+  test("o item transferido de outra mesa não é rodada desta cozinha, nem muda a atual", () => {
+    const transferida = { ...item("Calzone", 5, true), transferido: { daMesa: 4, preparado: true } }
+    const comanda = pedido(4, "recebido", 10, "mesa", [
+      item("Pizza", 1, true),
+      item("Batata", 2, true),
+      transferida,
+    ])
+    const { atuais, anteriores } = itensDaCozinha(comanda)
+    expect(nomes(atuais)).toEqual(["Batata"])
+    expect(nomes(anteriores)).toEqual(["Pizza"])
+  })
 })
 
 const QUADRO = [
@@ -191,6 +237,29 @@ describe("rodadasNovas", () => {
     // A comanda 20 só tem bebida: não chega nada na cozinha, nada toca.
     const depois = [QUADRO[0], QUADRO[1], QUADRO[2], QUADRO[3], QUADRO[10]]
     expect(rodadasNovas(antes, depois)).toEqual(["11:1", "12:2"])
+  })
+
+  test("juntar mesas renumera as rodadas, mas a que já estava na cozinha não toca de novo", () => {
+    const comItem = (id: string, rodada: number) => ({ ...item("Pizza", rodada, true), id })
+    // A secundária (31) tem a rodada na cozinha: ela entra na principal (30) como rodada 2.
+    const antes = rodadasNaCozinha([
+      pedido(30, "pronto", 30, "mesa", [comItem("30-1-1", 1)]),
+      pedido(31, "recebido", 5, "mesa", [comItem("31-1-1", 1)]),
+    ])
+    const junta = pedido(30, "recebido", 30, "mesa", [comItem("30-1-1", 1), comItem("31-1-1", 2)])
+    expect(rodadasNovas(antes, [junta])).toEqual([])
+
+    // A principal tem a rodada na cozinha: as dela passam para depois das da secundária.
+    const antes2 = rodadasNaCozinha([
+      pedido(30, "recebido", 30, "mesa", [comItem("30-1-1", 1)]),
+      pedido(31, "pronto", 5, "mesa", [comItem("31-1-1", 1)]),
+    ])
+    const junta2 = pedido(30, "recebido", 30, "mesa", [comItem("31-1-1", 1), comItem("30-1-1", 2)])
+    expect(rodadasNovas(antes2, [junta2])).toEqual([])
+
+    // A rodada lançada depois, na comanda junta, toca.
+    const nova = { ...junta2, itens: [...junta2.itens, comItem("30-3-1", 3)] }
+    expect(rodadasNovas(rodadasNaCozinha([junta2]), [nova])).toEqual(["30:3"])
   })
 })
 

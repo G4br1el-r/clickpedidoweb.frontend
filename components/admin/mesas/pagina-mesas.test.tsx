@@ -140,7 +140,7 @@ afterEach(() => {
 describe("PaginaMesas", () => {
   // Fase 3 (Q23): a rodada nova limpa o "Pediu a conta", e a mesa volta para Na cozinha.
   test("a rodada lançada depois de pedir a conta limpa o pedido e entra no resumo da cozinha", async () => {
-    // Na demonstração, as mesas 6, 7 e 8 têm rodada na cozinha; a mesa 1 já pediu a conta.
+    // Na demonstração, as mesas 6, 7 e 15 têm rodada na cozinha; a mesa 1 já pediu a conta.
     const [mesas, base] = await Promise.all([api().mesas.listar(), api().base()])
     const contaPedida = mesas.find((mesa) => mesa.numero === 1)
     const comanda = base.pedidos.find((pedido) => pedido.id === contaPedida?.pedidoAtivoId)
@@ -160,10 +160,10 @@ describe("PaginaMesas", () => {
   })
 
   test("o resumo conta como livre só a mesa livre: a bloqueada e a em limpeza ficam de fora", async () => {
-    // Na demonstração: 8 ocupadas, 10 livres, a 9 em limpeza e a 20 bloqueada.
+    // Na demonstração: 8 ocupadas, 9 livres, a 9 em limpeza, a 16 junto com a 15 e a 20 bloqueada.
     await abrir()
     expect(
-      await screen.findByText("8 ocupadas · 10 livres · 3 com rodada na cozinha"),
+      await screen.findByText("8 ocupadas · 9 livres · 3 com rodada na cozinha"),
     ).toBeInTheDocument()
   })
 
@@ -332,8 +332,8 @@ describe("PaginaMesas", () => {
     // A demonstração tem uma conta de mesa fechada hoje, há 20 min, aberta 90 min antes, para 3:
     // R$ 102,00 em itens + R$ 10,20 de taxa + R$ 24,00 de couvert = R$ 136,20, ou R$ 126,00 sem a
     // taxa. E a mesa 2 pagou em Pix R$ 35,90 dos R$ 71,80 (com R$ 5,80 de taxa): R$ 33,00 sem ela.
-    expect(faixa.getByText("Ocupação").nextElementSibling).toHaveTextContent("8/19 · 42%")
-    expect(faixa.getByText("Pessoas").nextElementSibling).toHaveTextContent("16")
+    expect(faixa.getByText("Ocupação").nextElementSibling).toHaveTextContent("9/19 · 47%")
+    expect(faixa.getByText("Pessoas").nextElementSibling).toHaveTextContent("20")
     await waitFor(() =>
       expect(faixa.getByText("Faturamento hoje").nextElementSibling).toHaveTextContent(
         emReais(159),
@@ -583,7 +583,8 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
     )
   })
 
-  test("o filtro de estado não oferece Reservada nem Juntada, que só chegam nas Fases 5 e 7", async () => {
+  // Fase 5: Juntada volta ao filtro; Reservada só com as reservas (Fase 7).
+  test("o filtro de estado não oferece Reservada, que só chega na Fase 7", async () => {
     const usuario = await abrir()
     await usuario.click(screen.getByRole("combobox", { name: "Estado" }))
     const opcoes = within(await screen.findByRole("listbox")).getAllByRole("option")
@@ -595,6 +596,7 @@ describe("PaginaMesas: busca e filtros no endereço", () => {
       "Na cozinha",
       "Servir",
       "Pediu a conta",
+      "Juntada",
       "Limpeza",
       "Bloqueada",
     ])

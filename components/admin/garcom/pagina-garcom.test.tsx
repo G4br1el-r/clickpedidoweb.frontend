@@ -231,6 +231,21 @@ describe("PaginaGarcom", () => {
     expect(comanda.getByRole("listitem", { name: simples.nome })).toBeInTheDocument()
   })
 
+  test("na mesa juntada, mostra a principal: sem Cliente, o resumo da comanda dela e o aviso com as duas", async () => {
+    const usuario = await abrir()
+    const { simples } = await produtos()
+    await usuario.click(await screen.findByRole("combobox", { name: "Mesa" }))
+    await usuario.click(await screen.findByRole("option", { name: "Mesa 16 · com a mesa 15" }))
+
+    // A comanda da 15 na demonstração: 6 pessoas, R$ 150,30.
+    expect(await screen.findByText(/R\$\s150,30/)).toBeInTheDocument()
+    expect(screen.queryByRole("textbox", { name: "Cliente" })).not.toBeInTheDocument()
+
+    await usuario.click(botao(simples.nome))
+    await usuario.click(bandeja().getByRole("button", { name: "Lançar na mesa" }))
+    expect(await screen.findByText("Mesa 15 + 16: lançado na comanda.")).toBeInTheDocument()
+  })
+
   test("os garçons ativos do salão aparecem para tocar e preencher Seu nome", async () => {
     const usuario = await abrir()
     const garcons = within(await screen.findByRole("group", { name: "Garçons do salão" }))

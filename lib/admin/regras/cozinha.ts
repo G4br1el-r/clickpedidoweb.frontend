@@ -21,7 +21,10 @@ const rodadaDo = (item: ItemPedido) => item.rodada ?? 1
  * lançada direto na mesa) não aparece.
  */
 export function itensDaCozinha(pedido: Pedido): { atuais: ItemPedido[]; anteriores: ItemPedido[] } {
-  const daCozinha = pedido.itens.filter((item) => item.vaiParaCozinha ?? pedido.enviarParaCozinha)
+  // O item que veio de outra mesa não é rodada desta cozinha.
+  const daCozinha = pedido.itens.filter(
+    (item) => !item.transferido && (item.vaiParaCozinha ?? pedido.enviarParaCozinha),
+  )
   const ultima = Math.max(0, ...daCozinha.map(rodadaDo))
   return {
     atuais: daCozinha.filter((item) => rodadaDo(item) === ultima),
@@ -35,10 +38,20 @@ export function itensDaCozinha(pedido: Pedido): { atuais: ItemPedido[]; anterior
  * preparo ou pronta. O item sem cozinha nunca conta. Tirar esse item exige motivo.
  */
 export function cozinhaJaPreparou(comanda: Pedido, item: ItemPedido): boolean {
+  // Veio de outra mesa: vale o que a cozinha de lá já tinha feito.
+  if (item.transferido) return item.transferido.preparado
   if (!(item.vaiParaCozinha ?? comanda.enviarParaCozinha)) return false
   const [atual] = itensDaCozinha(comanda).atuais
   if (atual && rodadaDo(item) < rodadaDo(atual)) return true
   return comanda.status === "em-preparo" || comanda.status === "pronto"
+}
+
+/** "Mesa 3", ou "Mesa 15 + 16" com as mesas juntadas. */
+export function rotuloDaMesa({ mesa }: Pick<Pedido, "mesa">): string {
+  return [
+    "Mesa",
+    [mesa?.numero, ...(mesa?.juntadas ?? []).map((item) => item.numero)].join(" + "),
+  ].join(" ")
 }
 
 const ultimaRodada = (pedido: Pedido) => Math.max(0, ...itensDaCozinha(pedido).atuais.map(rodadaDo))
@@ -71,15 +84,46 @@ function chaveDaRodada(pedido: Pedido): string | null {
   return primeiro ? `${pedido.id}:${rodadaDo(primeiro)}` : null
 }
 
-export const rodadasNaCozinha = (pedidos: Pedido[]): Set<string> =>
-  new Set(pedidos.map(chaveDaRodada).filter((chave) => chave !== null))
+/** "item:pedido:item" de cada item da rodada que a cozinha tem: ele sobrevive à junção. */
+const chavesDosItens = (pedido: Pedido) =>
+  itensDaCozinha(pedido).atuais.map((item) => `item:${pedido.id}:${item.id}`)
 
-/** Rodadas que chegaram desde a última leitura: pedido novo ou mais itens numa comanda. */
+/** O que a cozinha tem agora: a chave de cada rodada e a de cada item dela. */
+export const rodadasNaCozinha = (pedidos: Pedido[]): Set<string> =>
+  new Set(
+    pedidos.flatMap((pedido) => {
+      const chave = chaveDaRodada(pedido)
+      return chave ? [chave, ...chavesDosItens(pedido)] : []
+    }),
+  )
+
+/**
+ * Rodadas que chegaram desde a última leitura: pedido novo ou mais itens numa comanda. Juntar
+ * mesas renumera as rodadas (e a da secundária muda de comanda): a rodada com um item que a
+ * cozinha já tinha, na mesma comanda ou numa que saiu da tela, não é nova.
+ */
 export function rodadasNovas(conhecidas: ReadonlySet<string>, pedidos: Pedido[]): string[] {
+  const naTela = new Set(pedidos.map((pedido) => pedido.id))
+  const itensConhecidos = [...conhecidas]
+    .filter((chave) => chave.startsWith("item:"))
+    .map((chave) => {
+      const [, pedido, ...item] = chave.split(":")
+      return { pedido: Number(pedido), item: item.join(":") }
+    })
+  const jaTinha = (pedido: Pedido) =>
+    itensDaCozinha(pedido).atuais.some((item) =>
+      itensConhecidos.some(
+        (conhecido) =>
+          conhecido.item === item.id &&
+          (conhecido.pedido === pedido.id || !naTela.has(conhecido.pedido)),
+      ),
+    )
   return pedidos
     .filter((pedido) => pedido.status === "recebido")
-    .map(chaveDaRodada)
-    .filter((chave) => chave !== null && !conhecidas.has(chave)) as string[]
+    .flatMap((pedido) => {
+      const chave = chaveDaRodada(pedido)
+      return chave && !conhecidas.has(chave) && !jaTinha(pedido) ? [chave] : []
+    })
 }
 
 /** Quando a rodada atual chegou à cozinha: o lançamento do garçom ou a criação do pedido. */

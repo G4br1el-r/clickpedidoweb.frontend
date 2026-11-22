@@ -4,7 +4,12 @@ import { AlertTriangleIcon, ClockIcon } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
 import { Button } from "@/components/ui/button"
 import type { ItemPedido, Pedido } from "@/lib/admin/dados/tipos"
-import { itensDaCozinha, minutosNaCozinha, urgenciaNaCozinha } from "@/lib/admin/regras/cozinha"
+import {
+  itensDaCozinha,
+  minutosNaCozinha,
+  rotuloDaMesa,
+  urgenciaNaCozinha,
+} from "@/lib/admin/regras/cozinha"
 import type { Urgencia } from "@/lib/admin/regras/fila"
 import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
@@ -31,7 +36,7 @@ const DEPOIS_DE_PRONTO: Partial<Record<Pedido["tipo"], string>> = {
 }
 
 const origem = (pedido: Pedido) =>
-  pedido.mesa ? `Mesa ${pedido.mesa.numero}` : pedido.tipo === "entrega" ? "Entrega" : "Retirada"
+  pedido.mesa ? rotuloDaMesa(pedido) : pedido.tipo === "entrega" ? "Entrega" : "Retirada"
 
 function Itens({
   itens,
