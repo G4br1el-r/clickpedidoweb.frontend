@@ -75,6 +75,7 @@ import { PAPEL_80MM, PreConta } from "./impressao-conta"
 import { JuntarMesas } from "./juntar-mesas"
 import { MotivoConta } from "./motivo-conta"
 import { type ParteDaConta, ReceberConta } from "./receber-conta"
+import { SimularCliente } from "./simular-cliente"
 import { TirarItem } from "./tirar-item"
 import { TransferirItens } from "./transferir-itens"
 import { TransferirMesa } from "./transferir-mesa"
@@ -283,6 +284,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
               Separar
             </Button>
           )}
+          <SimularCliente mesa={mesa} />
         </div>
       </SheetHeader>
 
@@ -716,6 +718,9 @@ function MesaSemComanda({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void }
       </SheetHeader>
       <div className="flex flex-1 flex-col gap-3 p-4 text-sm text-muted-foreground">
         <AcaoSemComanda mesa={mesa} estado={estado.estado} />
+        <div>
+          <SimularCliente mesa={mesa} />
+        </div>
       </div>
       <SheetFooter className="border-t border-border/70">
         <Button

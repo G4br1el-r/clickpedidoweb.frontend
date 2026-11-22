@@ -14,17 +14,19 @@ import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { PaginaMesas } from "./pagina-mesas"
 
-vi.mock("react-to-print", () => ({ useReactToPrint: () => vi.fn() }))
+// Impressora: a fronteira com o navegador.
+const imprimir = vi.fn()
+vi.mock("react-to-print", () => ({ useReactToPrint: () => imprimir }))
 
 let ultimoCliente: QueryClient
 
-function Provedores({ children }: { children: ReactNode }) {
+function Provedores({ children, endereco }: { children: ReactNode; endereco?: string }) {
   const [cliente] = useState(() => {
     ultimoCliente = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     return ultimoCliente
   })
   return (
-    <NuqsTestingAdapter hasMemory>
+    <NuqsTestingAdapter hasMemory searchParams={endereco}>
       <QueryClientProvider client={cliente}>
         <TooltipProvider>
           {children}
@@ -35,9 +37,9 @@ function Provedores({ children }: { children: ReactNode }) {
   )
 }
 
-const renderizar = () =>
+const renderizar = (endereco?: string) =>
   render(
-    <Provedores>
+    <Provedores endereco={endereco}>
       <PaginaMesas />
     </Provedores>,
   )
@@ -175,5 +177,64 @@ describe("Chamados", () => {
     await usuario.click(within(explicacao).getByRole("button", { name: "Abrir Configurar salão" }))
     expect(await screen.findByRole("dialog", { name: "Configurar salão" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: /^Chamados/ })).not.toBeInTheDocument()
+  })
+})
+
+describe("Simular cliente na mesa", () => {
+  test("a gaveta da mesa livre e a da aberta abrem a vitrine da mesa numa aba nova", async () => {
+    const abrir = vi.spyOn(window, "open").mockReturnValue(null)
+    const usuario = userEvent.setup()
+    renderizar("?mesa=11")
+    await usuario.click(await screen.findByRole("button", { name: "Simular cliente na mesa" }))
+    expect(abrir).toHaveBeenCalledWith(
+      `${window.location.origin}/mesa?loja=pizzaria&mesa=mesa-11`,
+      "_blank",
+      "noopener",
+    )
+  })
+
+  test("na comanda aberta também", async () => {
+    const abrir = vi.spyOn(window, "open").mockReturnValue(null)
+    const usuario = userEvent.setup()
+    renderizar("?mesa=1")
+    await usuario.click(await screen.findByRole("button", { name: "Simular cliente na mesa" }))
+    expect(abrir).toHaveBeenCalledWith(
+      `${window.location.origin}/mesa?loja=pizzaria&mesa=mesa-1`,
+      "_blank",
+      "noopener",
+    )
+  })
+
+  test("com o QR desligado, não aparece", async () => {
+    const salao = await api().salao.config()
+    await api().salao.salvar({ ...salao, funcoes: { ...salao.funcoes, qr: false } })
+    renderizar("?mesa=11")
+    expect(await screen.findByRole("heading", { name: "Mesa 11" })).toBeInTheDocument()
+    expect(
+      screen.queryByRole("button", { name: "Simular cliente na mesa" }),
+    ).not.toBeInTheDocument()
+  })
+})
+
+describe("Folha de QR", () => {
+  test("um QR por mesa sem bloqueio, com o número, o nome da loja e a URL, e Imprimir", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("button", { name: "Chamados, 1 esperando" }))
+    await usuario.click(await screen.findByRole("button", { name: "Folha de QR" }))
+
+    const folha = await screen.findByRole("dialog", { name: "Folha de QR" })
+    // 20 mesas na demonstração; a 20 está bloqueada.
+    const qrs = within(folha).getAllByRole("figure")
+    expect(qrs).toHaveLength(19)
+    expect(within(qrs[0]).getByText("Mesa 1")).toBeInTheDocument()
+    expect(within(qrs[0]).getByText("Casa da Pizza")).toBeInTheDocument()
+    expect(
+      within(qrs[0]).getByText(`${window.location.origin}/mesa?loja=pizzaria&mesa=mesa-1`),
+    ).toBeInTheDocument()
+    expect(within(qrs[0]).getByRole("img", { name: "QR da mesa 1" })).toBeInTheDocument()
+
+    await usuario.click(within(folha).getByRole("button", { name: "Imprimir" }))
+    expect(imprimir).toHaveBeenCalled()
   })
 })

@@ -16,7 +16,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAgora } from "@/hooks/use-agora"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
-import { useFila } from "@/lib/admin/dados/consultas"
+import { useFila, useLoja } from "@/lib/admin/dados/consultas"
 import {
   useChamados,
   useConfigSalao,
@@ -44,6 +44,7 @@ import { ComandaMesa } from "./comanda-mesa"
 import { ConfigurarSalao } from "./configurar-salao"
 import { LIMPAR_GRADE, useEstadoGrade, useMesaAberta, useVista, type Vista } from "./estado-grade"
 import { FiltrosMesas } from "./filtros-mesas"
+import { FolhaQr } from "./folha-qr"
 import { FormularioMesa } from "./formulario-mesa"
 import { MapaPro, MapaSalao } from "./mapa-salao"
 import { NovaMesa } from "./nova-mesa"
@@ -61,6 +62,7 @@ export function PaginaMesas() {
   const { data: mesas } = useMesas(4_000)
   const { data: salao } = useConfigSalao()
   const { data: fila } = useFila()
+  const { data: loja } = useLoja()
   const { data: reservas } = useReservas(4_000)
   const qrLigado = salao?.funcoes.qr ?? false
   const { data: chamados } = useChamados(4_000, { ativo: qrLigado })
@@ -214,6 +216,7 @@ export function PaginaMesas() {
                 pedidos={pedidosQr}
                 agora={agora}
                 aoConfigurar={() => setSalaoAberto(true)}
+                rodape={<FolhaQr mesas={mesas} loja={loja?.nome ?? ""} />}
               />
             )}
             <ConfigurarSalao salao={salao} aberto={salaoAberto} aoMudar={setSalaoAberto} />
