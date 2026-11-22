@@ -12,7 +12,7 @@ import {
 } from "@dnd-kit/core"
 import { CSS } from "@dnd-kit/utilities"
 import { MoveIcon } from "lucide-react"
-import { type RefObject, useRef, useState } from "react"
+import { type RefObject, useEffect, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -126,7 +126,9 @@ function MesaNoMapa({
         {...(editando ? arraste.listeners : {})}
         onClick={() => !editando && aoAbrir(linha)}
         onKeyDown={(evento) => {
-          const direcao = editando ? SETAS[evento.key] : undefined
+          // Com Alt, Ctrl ou Meta a seta é do navegador ou do sistema (voltar, trocar de aba).
+          const comModificador = evento.altKey || evento.ctrlKey || evento.metaKey
+          const direcao = editando && !comModificador ? SETAS[evento.key] : undefined
           if (!direcao) return
           evento.preventDefault()
           aoMover(direcao, evento.shiftKey ? 4 : 1)
@@ -158,11 +160,14 @@ function MesaNoMapa({
         </span>
 
         <span id={`mapa-${mesa.id}-detalhes`} className="sr-only">
-          {editando
-            ? [descreverPosicao(posicao), sobreOutra ? "sobre outra mesa" : null]
-                .filter(Boolean)
-                .join(", ")
-            : descricaoDaMesa(linha, agora)}
+          {/* Na edição, o estado continua e a posição vem depois dele. */}
+          {[
+            descricaoDaMesa(linha, agora),
+            editando ? descreverPosicao(posicao) : null,
+            editando && sobreOutra ? "sobre outra mesa" : null,
+          ]
+            .filter(Boolean)
+            .join(", ")}
         </span>
       </button>
       {/* O estado fica por cima do botão, fora dele: dentro, o texto visível não caberia no nome
@@ -221,6 +226,9 @@ const ANUNCIOS_DO_ARRASTE: Announcements = {
   onDragEnd: () => undefined,
   onDragCancel: () => undefined,
 }
+
+/** Fora da edição a planta mostra as posições salvas, mesmo quando a edição saiu por fora. */
+const SEM_RASCUNHO = new Map<string, PosicaoMesa>()
 
 /** As mesas como estão na tela: na edição, com as posições do rascunho. */
 const naTela = (linhas: MesaNaGrade[], rascunho: Map<string, PosicaoMesa>): Mesa[] =>
@@ -282,7 +290,8 @@ function Planta({
               agora={agora}
               editando={editando}
               posicao={naPlanta(linha).posicao}
-              sobreOutra={colide(naPlanta(linha), mesas)}
+              // Só a mesa do rascunho fica marcada: a parada embaixo dela não é o erro.
+              sobreOutra={rascunho.has(linha.mesa.id) && colide(naPlanta(linha), mesas)}
               aoMover={(direcao, passo) =>
                 aoMover(naPlanta(linha), moverPorTeclado(naPlanta(linha), direcao, passo))
               }
@@ -338,8 +347,30 @@ export function MapaSalao({
     mudarEdicao(editar)
   }
 
+  // Só as mesas que saíram do lugar salvo: mover e voltar não é mudança.
+  const lote =
+    editando && atual
+      ? daArea(atual).flatMap(({ mesa }) => {
+          const posicao = rascunho.get(mesa.id)
+          const mudou = posicao && (posicao.x !== mesa.posicao.x || posicao.y !== mesa.posicao.y)
+          return mudou ? [{ id: mesa.id, posicao }] : []
+        })
+      : []
+  const alterado = lote.length > 0
+
+  // Fechar a aba com posição não salva pede confirmação do navegador.
+  useEffect(() => {
+    if (!alterado) return
+    const avisar = (evento: BeforeUnloadEvent) => evento.preventDefault()
+    window.addEventListener("beforeunload", avisar)
+    return () => window.removeEventListener("beforeunload", avisar)
+  }, [alterado])
+
   const mover = (mesa: Mesa, posicao: PosicaoMesa) => {
-    const proximo = new Map(rascunho).set(mesa.id, posicao)
+    // Tira e põe de novo: a ordem do rascunho é a do último movimento de cada mesa.
+    const proximo = new Map(rascunho)
+    proximo.delete(mesa.id)
+    proximo.set(mesa.id, posicao)
     setRascunho(proximo)
     const movida = { ...mesa, posicao }
     const sobre = colide(movida, naTela(daArea(atual), proximo))
@@ -348,19 +379,20 @@ export function MapaSalao({
     )
   }
 
-  /** Confere por cima de outra na tela e manda só as mesas que mudaram de lugar. */
+  /**
+   * Confere as mesas do rascunho por cima de outra (o aviso fala da última movida) e manda
+   * só as que mudaram de lugar.
+   */
   const salvar = () => {
     const mesas = naTela(daArea(atual), rascunho)
-    const porCima = mesas.find((mesa) => colide(mesa, mesas))
+    const porCima = [...rascunho.keys()]
+      .reverse()
+      .map((id) => mesas.find((mesa) => mesa.id === id))
+      .find((mesa) => mesa && colide(mesa, mesas))
     if (porCima) {
       toast.error(`A mesa ${porCima.numero} está sobre outra mesa. Mova antes de salvar.`)
       return
     }
-    const lote = daArea(atual).flatMap(({ mesa }) => {
-      const posicao = rascunho.get(mesa.id)
-      const mudou = posicao && (posicao.x !== mesa.posicao.x || posicao.y !== mesa.posicao.y)
-      return mudou ? [{ id: mesa.id, posicao }] : []
-    })
     if (lote.length === 0) {
       aoMudarEdicao(false)
       return
@@ -393,7 +425,13 @@ export function MapaSalao({
         </TabsList>
         {editando ? (
           <div className="flex gap-2">
-            <Button type="button" size="sm" variant="outline" onClick={() => aoMudarEdicao(false)}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={posicionar.isPending}
+              onClick={() => aoMudarEdicao(false)}
+            >
               Cancelar
             </Button>
             <Button type="button" size="sm" disabled={posicionar.isPending} onClick={salvar}>
@@ -416,7 +454,7 @@ export function MapaSalao({
             linhas={daArea(area)}
             agora={agora}
             editando={editando}
-            rascunho={rascunho}
+            rascunho={editando ? rascunho : SEM_RASCUNHO}
             aoMover={mover}
             {...acoes}
           />

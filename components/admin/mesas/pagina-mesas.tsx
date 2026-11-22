@@ -62,7 +62,12 @@ export function PaginaMesas() {
     else void setVista(nova)
   }
   const telaGrande = useTelaGrande()
-  const [editandoMapa, setEditandoMapa] = useState(false)
+  const [edicaoPedida, setEditandoMapa] = useState(false)
+  // A edição só vale no mapa liberado e em tela grande: desligar a função ou a tela encolher sai dela.
+  const editandoMapa = edicaoPedida && noMapa && telaGrande
+  useEffect(() => {
+    if (!noMapa || !telaGrande) setEditandoMapa(false)
+  }, [noMapa, telaGrande])
   const [editandoId, setEditandoId] = useState<string | null>(null)
   const [bloqueandoId, setBloqueandoId] = useState<string | null>(null)
   // O botão ⋯ que abriu Editar ou Bloquear: o foco volta a ele quando a janela fecha.
@@ -305,8 +310,9 @@ export function PaginaMesas() {
       )}
       <ComandaMesa mesa={aberta} aoFechar={() => void setNumeroAberto(null)} />
       <AtalhosMesas
-        aoAbrirMesa={abrirPeloNumero}
-        aoNovaMesa={() => setNovaAberta(true)}
+        // Na edição do mapa os atalhos que abrem janela travam, como o M.
+        aoAbrirMesa={(numero) => !editandoMapa && abrirPeloNumero(numero)}
+        aoNovaMesa={() => !editandoMapa && setNovaAberta(true)}
         aoAjuda={() => setAjudaAberta(true)}
         aoAlternarVista={() => !editandoMapa && mudarVista(noMapa ? "grade" : "mapa")}
       />

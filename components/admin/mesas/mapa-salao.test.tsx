@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, within } from "@testing-library/react"
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter } from "nuqs/adapters/testing"
@@ -52,6 +52,26 @@ function telaGrande() {
     addEventListener: () => {},
     removeEventListener: () => {},
   }))
+}
+
+/** Tela grande que pode mudar de tamanho no meio do teste (avisando quem ouve a consulta). */
+function telaQueMuda() {
+  let grande = true
+  const ouvintes = new Set<() => void>()
+  vi.stubGlobal("matchMedia", (consulta: string) => ({
+    get matches() {
+      return consulta.includes("min-width") && grande
+    },
+    media: consulta,
+    addEventListener: (_tipo: string, ouvinte: () => void) => ouvintes.add(ouvinte),
+    removeEventListener: (_tipo: string, ouvinte: () => void) => ouvintes.delete(ouvinte),
+  }))
+  return {
+    mudar(novo: boolean) {
+      grande = novo
+      for (const ouvinte of ouvintes) ouvinte()
+    },
+  }
 }
 
 async function abrir(inicial?: string) {
@@ -243,21 +263,87 @@ describe("editar o mapa", () => {
     expect(await mapa("Salão")).toBeInTheDocument()
   })
 
+  test("na edição, a descrição continua com o estado da mesa e ganha a posição", async () => {
+    const usuario = await abrir("?vista=mapa&area=area-balcao")
+    const balcao = await mapa("Balcão")
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+    expect(within(balcao).getByRole("button", { name: "Mesa 20" })).toHaveAccessibleDescription(
+      "Bloqueada, Em manutenção, coluna 15, linha 8",
+    )
+  })
+
+  test("na edição, número + Enter não abre a gaveta e o N não abre Nova mesa", async () => {
+    const usuario = await abrir("?vista=mapa")
+    const salao = await mapa("Salão")
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+    within(salao).getByRole("button", { name: "Mesa 1" }).focus()
+
+    await usuario.keyboard("3{Enter}")
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(endereco).not.toContain("mesa=")
+
+    await usuario.keyboard("n")
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Salvar posições" })).toBeInTheDocument()
+  })
+
   test("com o foco na mesa, as setas movem 1 célula e Shift+setas 4, e a região viva anuncia", async () => {
     const usuario = await abrir("?vista=mapa")
     const salao = await mapa("Salão")
     await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
     const mesa1 = within(salao).getByRole("button", { name: "Mesa 1" })
-    expect(mesa1).toHaveAccessibleDescription("coluna 2, linha 2")
+    expect(mesa1).toHaveAccessibleDescription(/, coluna 2, linha 2$/)
 
     mesa1.focus()
     await usuario.keyboard("{ArrowRight}")
-    expect(mesa1).toHaveAccessibleDescription("coluna 3, linha 2")
+    expect(mesa1).toHaveAccessibleDescription(/, coluna 3, linha 2$/)
     expect(screen.getByText("Mesa 1: coluna 3, linha 2")).toBeInTheDocument()
 
     await usuario.keyboard("{Shift>}{ArrowDown}{ArrowDown}{/Shift}")
-    expect(mesa1).toHaveAccessibleDescription("coluna 3, linha 10")
+    expect(mesa1).toHaveAccessibleDescription(/, coluna 3, linha 10$/)
     expect(mesa1).toHaveFocus()
+  })
+
+  test.each([
+    ["Alt", { altKey: true }],
+    ["Ctrl", { ctrlKey: true }],
+    ["Meta", { metaKey: true }],
+  ])("seta com %s fica para o navegador: não move a mesa", async (_tecla, modificador) => {
+    const usuario = await abrir("?vista=mapa")
+    const salao = await mapa("Salão")
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+    const mesa1 = within(salao).getByRole("button", { name: "Mesa 1" })
+    mesa1.focus()
+
+    // fireEvent devolve false quando a tela chamou preventDefault.
+    expect(fireEvent.keyDown(mesa1, { key: "ArrowRight", ...modificador })).toBe(true)
+    expect(mesa1).toHaveAccessibleDescription(/, coluna 2, linha 2$/)
+  })
+
+  test("fechar a aba com posição não salva pede confirmação do navegador", async () => {
+    /** Dispara o fechamento da aba e diz se a tela pediu para confirmar. */
+    const fecharAba = () => {
+      const evento = new Event("beforeunload", { cancelable: true })
+      window.dispatchEvent(evento)
+      return evento.defaultPrevented
+    }
+    const usuario = await abrir("?vista=mapa")
+    const salao = await mapa("Salão")
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+    expect(fecharAba()).toBe(false)
+
+    const mesa1 = within(salao).getByRole("button", { name: "Mesa 1" })
+    mesa1.focus()
+    await usuario.keyboard("{ArrowRight}")
+    expect(fecharAba()).toBe(true)
+
+    // Voltar ao lugar salvo não é alteração.
+    await usuario.keyboard("{ArrowLeft}")
+    expect(fecharAba()).toBe(false)
+
+    await usuario.keyboard("{ArrowRight}")
+    await usuario.click(screen.getByRole("button", { name: "Cancelar" }))
+    expect(fecharAba()).toBe(false)
   })
 
   test("Salvar posições grava só a mesa que mudou, avisa e sai da edição", async () => {
@@ -287,7 +373,7 @@ describe("editar o mapa", () => {
     mesa1.focus()
     // Em (2, 5) a mesa 1 fica por cima da 5, que está em (1, 4).
     await usuario.keyboard("{ArrowRight}{Shift>}{ArrowDown}{/Shift}")
-    expect(mesa1).toHaveAccessibleDescription("coluna 3, linha 6, sobre outra mesa")
+    expect(mesa1).toHaveAccessibleDescription(/, coluna 3, linha 6, sobre outra mesa$/)
     expect(screen.getByText("Mesa 1: coluna 3, linha 6, sobre outra mesa")).toBeInTheDocument()
     const posicionar = vi.spyOn(api().mesas, "posicionar")
 
@@ -300,10 +386,63 @@ describe("editar o mapa", () => {
     expect(screen.getByRole("button", { name: "Salvar posições" })).toBeInTheDocument()
   })
 
+  test("só a mesa movida fica marcada por cima, e o aviso fala dela", async () => {
+    const usuario = await abrir("?vista=mapa")
+    const salao = await mapa("Salão")
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+    const mesa5 = within(salao).getByRole("button", { name: "Mesa 5" })
+    mesa5.focus()
+    // A 5, em (1, 4), sobe até (1, 2), por cima da 1, que está em (1, 1) e não se mexeu.
+    await usuario.keyboard("{ArrowUp}{ArrowUp}")
+    expect(mesa5).toHaveAccessibleDescription(/, coluna 2, linha 3, sobre outra mesa$/)
+    expect(within(salao).getByRole("button", { name: "Mesa 1" })).toHaveAccessibleDescription(
+      /, coluna 2, linha 2$/,
+    )
+
+    await usuario.click(screen.getByRole("button", { name: "Salvar posições" }))
+
+    expect(
+      await screen.findByText("A mesa 5 está sobre outra mesa. Mova antes de salvar."),
+    ).toBeInTheDocument()
+  })
+
+  test("com duas mesas movidas por cima de outras, o aviso fala da última", async () => {
+    const usuario = await abrir("?vista=mapa")
+    const salao = await mapa("Salão")
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+    // A 1 vai de (1, 1) para (2, 5), por cima da 5; depois a 5 vai de (1, 4) para (2, 4).
+    within(salao).getByRole("button", { name: "Mesa 1" }).focus()
+    await usuario.keyboard("{ArrowRight}{Shift>}{ArrowDown}{/Shift}")
+    const mesa5 = within(salao).getByRole("button", { name: "Mesa 5" })
+    mesa5.focus()
+    await usuario.keyboard("{ArrowRight}")
+    expect(mesa5).toHaveAccessibleDescription(/, coluna 3, linha 5, sobre outra mesa$/)
+
+    await usuario.click(screen.getByRole("button", { name: "Salvar posições" }))
+
+    expect(
+      await screen.findByText("A mesa 5 está sobre outra mesa. Mova antes de salvar."),
+    ).toBeInTheDocument()
+  })
+
   test("sem nada mudado, Salvar posições só sai da edição", async () => {
     const usuario = await abrir("?vista=mapa")
     await mapa("Salão")
     await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+    const posicionar = vi.spyOn(api().mesas, "posicionar")
+
+    await usuario.click(screen.getByRole("button", { name: "Salvar posições" }))
+
+    expect(await screen.findByRole("button", { name: "Editar mapa" })).toBeInTheDocument()
+    expect(posicionar).not.toHaveBeenCalled()
+  })
+
+  test("mover e voltar ao lugar salvo não chama o servidor", async () => {
+    const usuario = await abrir("?vista=mapa")
+    const salao = await mapa("Salão")
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+    within(salao).getByRole("button", { name: "Mesa 1" }).focus()
+    await usuario.keyboard("{ArrowRight}{ArrowLeft}")
     const posicionar = vi.spyOn(api().mesas, "posicionar")
 
     await usuario.click(screen.getByRole("button", { name: "Salvar posições" }))
@@ -326,6 +465,28 @@ describe("editar o mapa", () => {
     expect(screen.getByRole("button", { name: "Salvar posições" })).toBeInTheDocument()
   })
 
+  test("enquanto o salvar não volta, Cancelar fica travado", async () => {
+    const usuario = await abrir("?vista=mapa")
+    const salao = await mapa("Salão")
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+    within(salao).getByRole("button", { name: "Mesa 1" }).focus()
+    await usuario.keyboard("{Shift>}{ArrowDown}{ArrowDown}{/Shift}")
+    let soltar: () => void = () => {}
+    const original = api().mesas.posicionar
+    vi.spyOn(api().mesas, "posicionar").mockImplementation(async (lote) => {
+      await new Promise<void>((pronto) => {
+        soltar = pronto
+      })
+      return original(lote)
+    })
+
+    await usuario.click(screen.getByRole("button", { name: "Salvar posições" }))
+
+    await waitFor(() => expect(screen.getByRole("button", { name: "Cancelar" })).toBeDisabled())
+    soltar()
+    expect(await screen.findByText("Mapa salvo.")).toBeInTheDocument()
+  })
+
   test("Cancelar volta a mesa para onde estava, sem gravar", async () => {
     const usuario = await abrir("?vista=mapa")
     const salao = await mapa("Salão")
@@ -337,12 +498,61 @@ describe("editar o mapa", () => {
     await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
 
     expect(within(salao).getByRole("button", { name: "Mesa 1" })).toHaveAccessibleDescription(
-      "coluna 2, linha 2",
+      /, coluna 2, linha 2$/,
     )
     expect((await api().mesas.listar()).find((mesa) => mesa.id === "mesa-1")?.posicao).toEqual({
       x: 1,
       y: 1,
     })
+  })
+
+  test("desligar o mapa em Configurar salão durante a edição solta o alternador e o M", async () => {
+    const usuario = await abrir("?vista=mapa")
+    await mapa("Salão")
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+    await usuario.click(screen.getByRole("button", { name: "Configurar salão" }))
+    const painel = within(await screen.findByRole("dialog", { name: "Configurar salão" }))
+    await usuario.click(painel.getByRole("switch", { name: /^Mapa do salão/ }))
+    await usuario.click(painel.getByRole("button", { name: "Salvar" }))
+    await screen.findByText("Salão salvo.")
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Configurar salão" })).not.toBeInTheDocument(),
+    )
+
+    expect(await screen.findByRole("radio", { name: "Mapa Pro" })).toBeEnabled()
+    await usuario.keyboard("m")
+    expect(await screen.findByRole("dialog", { name: "Mapa do salão é Pro" })).toBeInTheDocument()
+  })
+
+  test("a tela que cai abaixo de 768 px sai da edição e solta o alternador", async () => {
+    const tela = telaQueMuda()
+    const usuario = await abrir("?vista=mapa")
+    await mapa("Salão")
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+    within(await mapa("Salão"))
+      .getByRole("button", { name: "Mesa 1" })
+      .focus()
+    await usuario.keyboard("{ArrowRight}")
+
+    act(() => tela.mudar(false))
+
+    expect(screen.queryByRole("button", { name: "Salvar posições" })).not.toBeInTheDocument()
+    expect(screen.getByRole("radio", { name: "Grade" })).toBeEnabled()
+    expect(screen.getByRole("button", { name: "Ações da mesa 1" })).toBeInTheDocument()
+    // A planta volta a desenhar a mesa 1 onde ela está salva, na coluna 2.
+    expect(
+      within(await mapa("Salão"))
+        .getByRole("button", { name: "Mesa 1" })
+        .closest("li")?.style.gridColumn,
+    ).toMatch(/^2 \//)
+
+    // De volta à tela grande, a edição não volta sozinha, e o rascunho foi esquecido.
+    act(() => tela.mudar(true))
+    expect(screen.getByRole("button", { name: "Editar mapa" })).toBeInTheDocument()
+    await usuario.click(screen.getByRole("button", { name: "Editar mapa" }))
+    expect(
+      within(await mapa("Salão")).getByRole("button", { name: "Mesa 1" }),
+    ).toHaveAccessibleDescription(/coluna 2, linha 2$/)
   })
 
   test("tocar na mesa durante a edição não abre a gaveta", async () => {
