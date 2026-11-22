@@ -28,6 +28,10 @@ export default defineConfig({
     setupFiles: ["./vitest.setup.ts"],
     restoreMocks: true,
     unstubGlobals: true,
+    // As telas do painel geram a base da demonstração (90 dias de pedidos) ao abrir: sozinhas
+    // levam 1 a 4 s, mas na suíte inteira (e com cobertura) passavam dos 5 s padrão.
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
     coverage: {
       provider: "v8",
       reporter: ["text", "html"],
@@ -35,10 +39,10 @@ export default defineConfig({
       exclude: ["components/ui/**", "lib/mock/**", "**/*.d.ts", "**/*.test.{ts,tsx}"],
       // Mínimos medidos em 2026-11-21, arredondados para baixo. Só sobem, nunca descem.
       thresholds: {
-        statements: 82,
+        statements: 83,
         branches: 74,
-        functions: 81,
-        lines: 83,
+        functions: 82,
+        lines: 84,
         "lib/**": { statements: 98, branches: 94, functions: 98, lines: 98 },
       },
     },

@@ -32,6 +32,7 @@ import { type SegmentoPainelId, temRecurso } from "@/lib/admin/segmentos-painel"
 import { emReais, plural } from "@/lib/formato"
 import { BlocoSecao } from "../../bloco-secao"
 import { Indicador, Regua } from "../../regua"
+import { BaixarCsv, useImprimindo } from "../exportar"
 import { Numero } from "../numero"
 import { ListaDeFatias, Secao } from "../partes"
 
@@ -106,8 +107,10 @@ function TabelaDeProdutos({
   margens: Map<string, number>
 }) {
   const [aberta, setAberta] = useState(false)
+  // Na impressão, a tabela sai aberta.
+  const imprimindo = useImprimindo()
   return (
-    <Collapsible open={aberta} onOpenChange={setAberta}>
+    <Collapsible open={aberta || imprimindo} onOpenChange={setAberta}>
       <div className="border-y border-border/70">
         <CollapsibleTrigger className="flex w-full cursor-pointer items-center justify-between py-4 text-left text-[15px] font-semibold tracking-[-0.01em] outline-none focus-visible:ring-2 focus-visible:ring-ring">
           Todos os produtos, em tabela
@@ -118,7 +121,39 @@ function TabelaDeProdutos({
           />
         </CollapsibleTrigger>
         <CollapsibleContent>
-          <div className="pb-4">
+          <div className="flex flex-col gap-2 pb-4">
+            <div className="flex justify-end">
+              <BaixarCsv
+                tabela="Produtos do período"
+                linhas={curva}
+                colunas={[
+                  { titulo: "Produto", valor: (produto) => produto.nome },
+                  { titulo: "Classe", valor: (produto) => produto.classe },
+                  {
+                    titulo: "Quantidade",
+                    tipo: "numero",
+                    valor: (produto) => produto.kg ?? produto.quantidade,
+                  },
+                  {
+                    titulo: "Unidade",
+                    valor: (produto) => (produto.kg !== undefined ? "kg" : "un"),
+                  },
+                  {
+                    titulo: "Faturamento",
+                    tipo: "dinheiro",
+                    valor: (produto) => produto.faturamento,
+                  },
+                  {
+                    titulo: "Margem (%)",
+                    tipo: "numero",
+                    valor: (produto) => {
+                      const margem = margens.get(produto.chave)
+                      return margem === undefined ? undefined : Math.round(margem * 10) / 10
+                    },
+                  },
+                ]}
+              />
+            </div>
             <Table aria-label="Produtos do período">
               <TableHeader>
                 <TableRow>

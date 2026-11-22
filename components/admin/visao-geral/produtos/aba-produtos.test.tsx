@@ -8,6 +8,8 @@ import {
   PERIODO_DE_TESTE,
   pedidoDeTeste,
 } from "@/lib/admin/regras/pedidos-de-teste"
+import { capturarCsv } from "../csv-de-teste"
+import { ProvedorDaAba } from "../exportar"
 import { AbaProdutos } from "./aba-produtos"
 
 const regiao = (nome: string) => within(screen.getByRole("region", { name: nome }))
@@ -344,5 +346,31 @@ describe("AbaProdutos: o que não vendeu e a tabela", () => {
       ["Coca", "A", "4 un.", "R$ 60,00", "—"],
       ["Guaraná", "B", "1 un.", "R$ 20,00", "—"],
     ])
+  })
+})
+
+describe("AbaProdutos: CSV", () => {
+  test("a tabela de todos os produtos sai em CSV, com a unidade e a margem em %", async () => {
+    const csv = capturarCsv()
+    render(
+      <ProvedorDaAba loja="Casa da Pizza" aba="Produtos" periodo={PERIODO_DE_TESTE}>
+        <AbaProdutos
+          pedidos={PEDIDOS_DE_TESTE}
+          periodo={PERIODO_DE_TESTE}
+          segmento="pizzaria"
+          produtos={PRODUTOS}
+          categorias={CATEGORIAS}
+        />
+      </ProvedorDaAba>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Todos os produtos, em tabela" }))
+    fireEvent.click(screen.getByRole("button", { name: "Baixar CSV: Produtos do período" }))
+    expect(await csv.texto()).toBe(
+      "﻿Produto;Classe;Quantidade;Unidade;Faturamento;Margem (%)\r\n" +
+        "Calabresa;A;2;un;80,00;\r\n" +
+        "Coca;A;4;un;60,00;\r\n" +
+        "Guaraná;B;1;un;20,00;\r\n",
+    )
+    csv.soltar()
   })
 })

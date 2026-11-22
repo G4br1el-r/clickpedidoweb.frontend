@@ -17,7 +17,7 @@ import { useAgora } from "@/hooks/use-agora"
 import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import type { MovimentoControlado } from "@/lib/admin/dados/tipos"
 import { useFarmacia } from "@/lib/admin/farmacia-estado"
-import { saidasDaReceita, saldosControlados } from "@/lib/admin/regras/farmacia"
+import { escrituracao, saldosControlados } from "@/lib/admin/regras/farmacia"
 import type { TomStatus } from "@/lib/admin/regras/status"
 import { movimentosDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { cn } from "@/lib/utils"
@@ -68,13 +68,7 @@ export function PaginaControlados() {
     )
   }
 
-  const dispensadas = receitasDemo(agora).flatMap((receita) => {
-    const decisao = decisoes[receita.id]
-    return decisao?.situacao === "aprovada" ? saidasDaReceita(receita, produtos, decisao.em) : []
-  })
-  const movimentos = [...movimentosDemo(agora), ...dispensadas].toSorted(
-    (a, b) => Date.parse(b.em) - Date.parse(a.em),
-  )
+  const movimentos = escrituracao(movimentosDemo(agora), receitasDemo(agora), produtos, decisoes)
   const saldos = saldosControlados(movimentos)
   const controlados = produtos.filter((produto) => produto.medicamento?.lista)
   const nomeDe = (id: string) => produtos.find((produto) => produto.id === id)?.nome ?? id

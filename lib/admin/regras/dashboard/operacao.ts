@@ -11,7 +11,7 @@ const quando = (pedido: Pedido, status: StatusPedido) => {
   return etapa ? Date.parse(etapa.em) : undefined
 }
 
-const minutosEntre = (pedido: Pedido, de: StatusPedido, ate: StatusPedido) => {
+export const minutosEntre = (pedido: Pedido, de: StatusPedido, ate: StatusPedido) => {
   const inicio = quando(pedido, de)
   const fim = quando(pedido, ate)
   return inicio === undefined || fim === undefined ? undefined : (fim - inicio) / 60_000
@@ -30,7 +30,7 @@ export const minutosNaLoja = (pedido: Pedido) => minutosEntre(pedido, "recebido"
 export type Tempo = { pedidos: number; media: number; noveEmDez: number }
 
 /** Média e o tempo em que 9 de cada 10 ficam (o percentil 90), em minutos inteiros. */
-function tempo(minutos: number[]): Tempo {
+export function tempo(minutos: number[]): Tempo {
   if (minutos.length === 0) return { pedidos: 0, media: 0, noveEmDez: 0 }
   const ordenados = minutos.toSorted((a, b) => a - b)
   return {

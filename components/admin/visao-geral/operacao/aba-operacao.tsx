@@ -29,6 +29,7 @@ import { rotuloCanal, rotuloMotivo } from "@/lib/admin/regras/rotulos"
 import { type SegmentoPainelId, temModulo } from "@/lib/admin/segmentos-painel"
 import { emReais, plural } from "@/lib/formato"
 import { Indicador, Regua } from "../../regua"
+import { BaixarCsv } from "../exportar"
 import { Numero } from "../numero"
 import { ListaDeFatias, Secao } from "../partes"
 
@@ -139,7 +140,31 @@ export function AbaOperacao({
           </Secao>
 
           <div className="grid gap-x-10 gap-y-10 lg:grid-cols-2">
-            <Secao titulo="Tempo por etapa" descricao={`${n.Pedidos} concluídos, em minutos`}>
+            <Secao
+              titulo="Tempo por etapa"
+              descricao={`${n.Pedidos} concluídos, em minutos`}
+              acao={
+                etapas.length > 0 && (
+                  <BaixarCsv
+                    tabela="Tempo por etapa"
+                    linhas={etapas}
+                    colunas={[
+                      { titulo: "Etapa", valor: (etapa) => etapa.nome },
+                      {
+                        titulo: "Média (min)",
+                        tipo: "numero",
+                        valor: (etapa) => etapa.tempo.media,
+                      },
+                      {
+                        titulo: "9 em 10 em até (min)",
+                        tipo: "numero",
+                        valor: (etapa) => etapa.tempo.noveEmDez,
+                      },
+                    ]}
+                  />
+                )
+              }
+            >
               {etapas.length === 0 ? (
                 <p className="text-sm text-muted-foreground">{`Nenhum ${n.pedido} concluído no período.`}</p>
               ) : (
