@@ -3,7 +3,7 @@ import { clear, get, set } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { catalogoDeTeste } from "./catalogo-de-teste"
 import { carregarCatalogo } from "./catalogos"
-import type { BaseLojaV3 } from "./migracao"
+import type { BaseLojaV4 } from "./migracao"
 import {
   criarServidor,
   type NovoAgendamento,
@@ -1714,8 +1714,8 @@ describe("servidor de demonstração", () => {
 describe("migração", () => {
   const CHAVE = "clickpedido-admin-dados:lanchonete"
 
-  /** Base como o servidor da versão 3 a guardava (já com custos): sem salão, reservas, espera, chamados e campos novos das mesas. */
-  async function baseDaVersao3(): Promise<BaseLojaV3> {
+  /** Base como o servidor da versão 4 do main a guardava (custos e clientes novos): sem salão, reservas, espera, chamados e campos novos das mesas. */
+  async function baseDaVersao4(): Promise<BaseLojaV4> {
     await servidor().pedidos.listar()
     const { base } = (await get(CHAVE)) as { base: Record<string, unknown> & { mesas: Mesa[] } }
     const { salao, reservas, espera, chamados, ...resto } = base
@@ -1732,15 +1732,15 @@ describe("migração", () => {
           ocupadaEm,
         }),
       ),
-    } as unknown as BaseLojaV3
+    } as unknown as BaseLojaV4
   }
 
-  test("base da versão 3 é migrada: mesmos pedidos, mesa ocupada com a mesma comanda e o mesmo total", async () => {
-    const antiga = await baseDaVersao3()
+  test("base da versão 4 é migrada: mesmos pedidos, mesa ocupada com a mesma comanda e o mesmo total", async () => {
+    const antiga = await baseDaVersao4()
     const ocupadaAntes = antiga.mesas.find((mesa) => mesa.status === "ocupada")
     const comandaAntes = antiga.pedidos.find((pedido) => pedido.id === ocupadaAntes?.pedidoAtivoId)
     expect(comandaAntes).toBeDefined()
-    await set(CHAVE, { versao: 3, geradoEm: AGORA.toISOString(), base: antiga })
+    await set(CHAVE, { versao: 4, geradoEm: AGORA.toISOString(), base: antiga })
     const api = servidor()
     const mesas = await api.mesas.listar()
     expect(mesas.every((mesa) => mesa.areaId === "area-salao")).toBe(true)
@@ -1753,26 +1753,36 @@ describe("migração", () => {
     expect(comandaDepois?.total).toBe(comandaAntes?.total)
     const guardado = (await get(CHAVE)) as { versao: number; base: { pedidos: unknown[] } }
     expect(guardado.base.pedidos).toHaveLength(antiga.pedidos.length)
-    expect(guardado.versao).toBe(4)
+    expect(guardado.versao).toBe(5)
   })
 
-  test("base da versão 3 que já tem salão (das mesas, sem custos) é recriada", async () => {
+  test("base da versão 4 que já tem salão (das mesas, antes do main) é recriada", async () => {
     const atual = await servidor().base()
     const semCusto = {
       ...atual,
       produtos: atual.produtos.map(({ custo, ...produto }) => produto),
       pedidos: [],
     }
-    await set(CHAVE, { versao: 3, geradoEm: AGORA.toISOString(), base: semCusto })
+    await set(CHAVE, { versao: 4, geradoEm: AGORA.toISOString(), base: semCusto })
 
     const base = await servidor().base()
     expect(base.pedidos.length).toBeGreaterThan(0)
     expect(base.produtos.some((produto) => produto.custo !== undefined)).toBe(true)
-    expect(((await get(CHAVE)) as { versao: number }).versao).toBe(4)
+    expect(((await get(CHAVE)) as { versao: number }).versao).toBe(5)
   })
 
-  test("base da versão 3 guardada há 3 dias: migra, completa os dias que faltam e mantém os garçons", async () => {
-    const antiga = await baseDaVersao3()
+  test("base da versão 3, de antes dos clientes novos do main, é recriada", async () => {
+    const antiga = await baseDaVersao4()
+    await set(CHAVE, { versao: 3, geradoEm: AGORA.toISOString(), base: { ...antiga, pedidos: [] } })
+
+    const base = await servidor().base()
+    expect(base.pedidos.length).toBeGreaterThan(0)
+    expect(base.salao).toBeDefined()
+    expect(((await get(CHAVE)) as { versao: number }).versao).toBe(5)
+  })
+
+  test("base da versão 4 guardada há 3 dias: migra, completa os dias que faltam e mantém os garçons", async () => {
+    const antiga = await baseDaVersao4()
     const encerrados = antiga.pedidos.filter((pedido) => pedido.status === "concluido")
     encerrados[0].tipo = "mesa"
     encerrados[0].mesa = { id: "mesa-1", numero: 1, garcom: "Paula" }
@@ -1783,12 +1793,12 @@ describe("migração", () => {
     ]
     expect(garconsAntigos.length).toBeGreaterThan(0)
     const tresDiasAntes = new Date(2026, 10, 10, 20, 30)
-    await set(CHAVE, { versao: 3, geradoEm: tresDiasAntes.toISOString(), base: antiga })
+    await set(CHAVE, { versao: 4, geradoEm: tresDiasAntes.toISOString(), base: antiga })
 
     const api = servidor()
     const pedidos = await api.pedidos.listar()
     const guardado = (await get(CHAVE)) as { versao: number }
-    expect(guardado.versao).toBe(4)
+    expect(guardado.versao).toBe(5)
     // dias 11, 12 e 13 de novembro, na hora local
     for (const dia of [11, 12, 13])
       expect(pedidos.some((pedido) => new Date(pedido.criadoEm).getDate() === dia)).toBe(true)
@@ -1808,7 +1818,7 @@ describe("migração", () => {
   })
 
   test("depois de migrar uma base com 'Bia', 'bia ' e 'Bía', o salão ainda salva", async () => {
-    const antiga = await baseDaVersao3()
+    const antiga = await baseDaVersao4()
     const [primeiro, segundo, terceiro] = antiga.pedidos
     antiga.pedidos = [
       { ...primeiro, mesa: { id: "mesa-1", numero: 1, garcom: "Bia" } },
@@ -1816,7 +1826,7 @@ describe("migração", () => {
       { ...terceiro, mesa: { id: "mesa-1", numero: 1, garcom: "Bía" } },
       ...antiga.pedidos.slice(3),
     ]
-    await set(CHAVE, { versao: 3, geradoEm: AGORA.toISOString(), base: antiga })
+    await set(CHAVE, { versao: 4, geradoEm: AGORA.toISOString(), base: antiga })
     const api = servidor()
     const config = await api.salao.config()
     expect(config.garcons).toEqual([{ id: "garcom-bia", nome: "Bia", ativo: true }])

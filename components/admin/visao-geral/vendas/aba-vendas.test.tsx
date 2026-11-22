@@ -6,6 +6,8 @@ import {
   PEDIDOS_DE_TESTE,
   PERIODO_DE_TESTE,
 } from "@/lib/admin/regras/pedidos-de-teste"
+import { capturarCsv } from "../csv-de-teste"
+import { ProvedorDaAba } from "../exportar"
 import { AbaVendas } from "./aba-vendas"
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }))
@@ -110,5 +112,23 @@ describe("AbaVendas", () => {
       .slice(1)
       .map((linha) => linha.textContent?.replace(/\s/g, " "))
     expect(linhas).toEqual(["sexta, 13/112R$ 90,00R$ 45,00", "quinta, 12/112R$ 80,00R$ 40,00"])
+  })
+})
+
+describe("AbaVendas: CSV", () => {
+  test("o dia a dia sai em CSV, do mais novo ao mais antigo, como na tabela", async () => {
+    const csv = capturarCsv()
+    render(
+      <ProvedorDaAba loja="Casa da Pizza" aba="Vendas" periodo={PERIODO_DE_TESTE}>
+        <AbaVendas pedidos={PEDIDOS_DE_TESTE} periodo={PERIODO_DE_TESTE} segmento="pizzaria" />
+      </ProvedorDaAba>,
+    )
+    fireEvent.click(screen.getByRole("button", { name: "Dia a dia do período, em tabela" }))
+    fireEvent.click(screen.getByRole("button", { name: "Baixar CSV: Dia a dia do período" }))
+    expect(csv.nome()).toBe("casa-da-pizza-vendas-2026-11-12-a-2026-11-13.csv")
+    expect(await csv.texto()).toBe(
+      "﻿Dia;Pedidos;Faturamento;Ticket médio\r\n13/11/2026;2;90,00;45,00\r\n12/11/2026;2;80,00;40,00\r\n",
+    )
+    csv.soltar()
   })
 })
