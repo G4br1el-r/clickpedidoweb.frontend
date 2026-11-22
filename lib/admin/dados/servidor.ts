@@ -474,6 +474,61 @@ function aplicarEstoque(
   return atual
 }
 
+/** Por quanto tempo o servidor guarda a foto de uma movimentação (a tela oferece por 6 s). */
+const PRAZO_DO_DESFAZER_MS = 10_000
+
+/** As mesas e comandas envolvidas numa movimentação, na ordem dos ids (a que não existe, vazia). */
+type Recorte = { mesas: (Mesa | null)[]; pedidos: (Pedido | null)[] }
+
+type Foto = { ate: number; mesas: string[]; pedidos: number[]; antes: Recorte; depois: Recorte }
+
+const recorte = (base: BaseLoja, mesas: string[], pedidos: number[]): Recorte => ({
+  mesas: mesas.map((id) => base.mesas.find((mesa) => mesa.id === id) ?? null),
+  pedidos: pedidos.map((id) => base.pedidos.find((pedido) => pedido.id === id) ?? null),
+})
+
+/**
+ * A comanda de mesa aberta que a tela mostrava. Outra aba pode tê-la fechado: recusa sem mexer
+ * em nada.
+ */
+function comandaAberta(base: BaseLoja, pedidoId: number): Pedido & { mesa: { numero: number } } {
+  const comanda = base.pedidos.find((pedido) => pedido.id === pedidoId)
+  if (!comanda?.mesa || comanda.tipo !== "mesa") throw new Error("Pedido não encontrado")
+  if (!EM_ANDAMENTO.includes(comanda.status)) {
+    throw new Error(
+      `A comanda da mesa ${comanda.mesa.numero} não está mais aberta. Atualize a tela.`,
+    )
+  }
+  return comanda as Pedido & { mesa: { numero: number } }
+}
+
+/**
+ * A mesa livre que recebe a comanda: outra (nem a própria, nem uma junta a ela), sem bloqueio,
+ * sem comanda e, se reservada agora, só com a confirmação.
+ */
+function mesaLivreParaReceber(
+  base: BaseLoja,
+  origem: Pedido,
+  mesaId: string,
+  confirmarReserva: boolean | undefined,
+): Mesa {
+  const mesa = base.mesas.find((item) => item.id === mesaId)
+  if (!mesa) throw new Error("Mesa não encontrada")
+  const doGrupo = [origem.mesa?.id, ...(origem.mesa?.juntadas ?? []).map((item) => item.id)]
+  if (doGrupo.includes(mesa.id)) throw new Error("Escolha outra mesa.")
+  if (mesa.bloqueio) throw new Error(`A mesa ${mesa.numero} está bloqueada.`)
+  if (comandaDa(base, mesa.id)) {
+    throw new Error(`A mesa ${mesa.numero} já está aberta. Junte as mesas ou transfira os itens.`)
+  }
+  const reserva = reservaDaVez(base, mesa.id, new Date())
+  if (reserva && !confirmarReserva) {
+    throw new Error(
+      `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}. Confirme para transferir.`,
+    )
+  }
+  return mesa
+}
+
 /**
  * Pedido de um dia que já passou não fica aberto: entrega e comanda viram concluídas. A conta de
  * mesa só fecha recebendo: a comanda que alguém mexeu (tem histórico) continua aberta na virada
@@ -1096,6 +1151,40 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       },
     )
     return resumoDaConta(paga).saldo > 0 ? paga : fechada(paga, agora, pagamento.por)
+  }
+
+  /** As fotos do desfazer: o antes e o depois das mesas e comandas de cada movimentação. */
+  const fotos = new Map<string, Foto>()
+
+  /**
+   * A base guardada, e não a desta aba: outra aba pode ter mudado a mesa. As movimentações e o
+   * desfazer partem daqui (ponto de atenção 2).
+   */
+  function reler(): Promise<BaseLoja> {
+    carregando = undefined
+    return carregar()
+  }
+
+  /**
+   * Faz uma movimentação sobre a base relida, guarda e tira a foto para o desfazer: as mesas e
+   * comandas envolvidas, antes e depois. Devolve a base nova e o id da foto.
+   */
+  async function mover(
+    fazer: (base: BaseLoja) => { nova: BaseLoja; mesas: string[]; pedidos: number[] },
+  ): Promise<{ base: BaseLoja; desfazer: string }> {
+    const base = await reler()
+    const { nova, mesas, pedidos } = fazer(base)
+    const final = abrirMesas(nova)
+    await substituir(final)
+    const desfazer = `desfazer-${crypto.randomUUID().slice(0, 8)}`
+    fotos.set(desfazer, {
+      ate: Date.now() + PRAZO_DO_DESFAZER_MS,
+      mesas,
+      pedidos,
+      antes: recorte(base, mesas, pedidos),
+      depois: recorte(final, mesas, pedidos),
+    })
+    return { base: final, desfazer }
   }
 
   return {
@@ -2300,6 +2389,82 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             },
           )
         })
+      },
+
+      /**
+       * Leva a comanda para uma mesa livre. A de origem fica livre, sem limpeza (só fechar a
+       * conta põe em limpeza); o estoque não muda. Dá para desfazer por 10 s.
+       */
+      async transferir(
+        pedidoId: number,
+        mesaDestinoId: string,
+        { confirmarReserva, por }: { confirmarReserva?: boolean; por?: string } = {},
+      ): Promise<{ comanda: Pedido; desfazer: string }> {
+        const { base, desfazer } = await mover((base) => {
+          const comanda = comandaAberta(base, pedidoId)
+          if (comanda.mesa.juntadas?.length) throw new Error("Separe as mesas antes de transferir.")
+          const destino = mesaLivreParaReceber(base, comanda, mesaDestinoId, confirmarReserva)
+          const origem = base.mesas.find((mesa) => mesa.id === comanda.mesa.id)
+          const agora = new Date().toISOString()
+          const novo = comEvento(
+            {
+              ...comanda,
+              mesa: { ...comanda.mesa, id: destino.id, numero: destino.numero },
+              // Sem cliente, a comanda leva o nome da mesa: ele acompanha a mesa nova.
+              ...(comanda.cliente.nome === origem?.nome
+                ? { cliente: { ...comanda.cliente, nome: destino.nome } }
+                : {}),
+              atualizadoEm: agora,
+            },
+            {
+              tipo: "transferida",
+              em: agora,
+              ...autor(por),
+              texto: `Transferida da mesa ${comanda.mesa.numero} para a mesa ${destino.numero}`,
+            },
+          )
+          return {
+            nova: {
+              ...base,
+              pedidos: base.pedidos.map((pedido) => (pedido.id === novo.id ? novo : pedido)),
+            },
+            mesas: [comanda.mesa.id, destino.id],
+            pedidos: [novo.id],
+          }
+        })
+        return responder({
+          comanda: base.pedidos.find((pedido) => pedido.id === pedidoId) as Pedido,
+          desfazer,
+        })
+      },
+
+      /**
+       * Volta a movimentação: as mesas e comandas da foto voltam a ser como eram, se nada mudou
+       * nelas desde então. A foto vale 10 s e uma vez só.
+       */
+      async desfazer(id: string): Promise<void> {
+        const foto = fotos.get(id)
+        if (!foto || Date.now() > foto.ate) {
+          fotos.delete(id)
+          throw new Error("O tempo para desfazer acabou.")
+        }
+        const base = await reler()
+        const agora = recorte(base, foto.mesas, foto.pedidos)
+        if (JSON.stringify(agora) !== JSON.stringify(foto.depois)) {
+          throw new Error("A mesa mudou depois disso. Desfaça pela comanda.")
+        }
+        fotos.delete(id)
+        // A comanda que a movimentação criou sai; a que ela tirou volta no lugar, pelo id.
+        const pedidos = base.pedidos.filter((pedido) => !foto.pedidos.includes(pedido.id))
+        for (const antes of foto.antes.pedidos) {
+          if (!antes) continue
+          const depois = pedidos.findIndex((pedido) => pedido.id > antes.id)
+          pedidos.splice(depois < 0 ? pedidos.length : depois, 0, antes)
+        }
+        const mesas = base.mesas.map(
+          (mesa) => foto.antes.mesas.find((antes) => antes?.id === mesa.id) ?? mesa,
+        )
+        await substituir(abrirMesas({ ...base, mesas, pedidos }))
       },
 
       /** Mesa com itens só sai pelo fechamento da conta; comanda vazia é cancelada. */
