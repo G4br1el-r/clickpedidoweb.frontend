@@ -295,3 +295,26 @@ describe("lista de espera", () => {
     await expect(api.espera.chamar("ninguem")).rejects.toThrow("Não está na espera.")
   })
 })
+
+describe("a mesa com reserva não some", () => {
+  test("excluir e bloquear a mesa com reserva ativa recusam", async () => {
+    const api = servidor()
+    const mesaId = await mesaNova(api, 30)
+    await api.reservas.criar({ ...marina, inicio: as("22:30"), mesaId })
+    const erro = "A mesa 30 tem reserva às 22:30. Tire a mesa da reserva antes."
+    await expect(api.mesas.excluir(mesaId)).rejects.toThrow(erro)
+    await expect(api.mesas.bloquear(mesaId)).rejects.toThrow(erro)
+    expect((await servidor().mesas.listar()).find((mesa) => mesa.id === mesaId)).toBeDefined()
+  })
+
+  test("a reserva vencida e a cancelada não impedem", async () => {
+    const api = servidor()
+    const [trinta, trintaEUm] = [await mesaNova(api, 30), await mesaNova(api, 31)]
+    await api.reservas.criar({ ...marina, mesaId: trinta })
+    const cancelada = await api.reservas.criar({ ...marina, mesaId: trintaEUm })
+    await api.reservas.cancelar(cancelada.id)
+    vi.setSystemTime(new Date(2026, 10, 13, 21, 6))
+    await expect(api.mesas.bloquear(trinta)).resolves.toBeDefined()
+    await expect(api.mesas.excluir(trintaEUm)).resolves.toBeUndefined()
+  })
+})

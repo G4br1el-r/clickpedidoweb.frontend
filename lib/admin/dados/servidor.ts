@@ -51,6 +51,7 @@ import {
   conferirReserva,
   type NovaEntradaEspera,
   type NovaReserva,
+  reservaAtiva,
   reservaDaMesa,
   reservaEmConflito,
 } from "../regras/reservas"
@@ -308,6 +309,19 @@ function comandaDa(base: BaseLoja, mesaId: string) {
  */
 const reservaDaVez = (base: BaseLoja, mesaId: string, agora: Date) =>
   reservaDaMesa({ id: mesaId }, base.reservas, agora, base.salao.reservas)
+
+/** A mesa com reserva ativa (marcada, ainda na tolerância) não some por baixo dela (ponto de atenção 5). */
+function conferirSemReserva(base: BaseLoja, mesa: Mesa) {
+  const agora = new Date()
+  const reserva = base.reservas
+    .filter((item) => item.mesaId === mesa.id && reservaAtiva(item, agora, base.salao.reservas))
+    .toSorted((a, b) => Date.parse(a.inicio) - Date.parse(b.inicio))[0]
+  if (reserva) {
+    throw new Error(
+      `A mesa ${mesa.numero} tem reserva às ${format(new Date(reserva.inicio), "HH:mm")}. Tire a mesa da reserva antes.`,
+    )
+  }
+}
 
 /**
  * O garçom pela lista do salão, com o nome escrito como lá (sem diferenciar acento e
@@ -2194,6 +2208,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       bloquear(id: string, motivo?: string) {
         return mudarMesa(id, (mesa, base) => {
           if (comandaDa(base, id)) throw new Error("Feche a conta antes de bloquear a mesa.")
+          conferirSemReserva(base, mesa)
           const texto = motivo?.trim().slice(0, 80)
           return { ...mesa, bloqueio: texto ? { motivo: texto } : {} }
         })
@@ -2255,6 +2270,8 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       async excluir(id: string): Promise<void> {
         const base = await carregar()
         if (comandaDa(base, id)) throw new Error("Feche a conta antes de excluir a mesa.")
+        const mesa = base.mesas.find((item) => item.id === id)
+        if (mesa) conferirSemReserva(base, mesa)
         await substituir({ ...base, mesas: base.mesas.filter((mesa) => mesa.id !== id) })
       },
 
@@ -2787,7 +2804,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       async juntar(
         pedidoId: number,
         mesaIds: string[],
-        { por }: { por?: string } = {},
+        { confirmarReserva, por }: { confirmarReserva?: boolean; por?: string } = {},
       ): Promise<{ comanda: Pedido; desfazer: string }> {
         const { base, desfazer } = await mover((base) => {
           let comanda: Pedido = comandaAberta(base, pedidoId)
@@ -2814,9 +2831,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
               if (daMesa.itens.length > 0) texto += `: ${itensEmTexto(daMesa.itens)}`
             } else {
               const reserva = reservaDaVez(base, mesa.id, new Date())
-              if (reserva) {
+              if (reserva && !confirmarReserva) {
                 throw new Error(
-                  `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}.`,
+                  `A mesa ${mesa.numero} está reservada às ${format(new Date(reserva.inicio), "HH:mm")}. Confirme para juntar.`,
                 )
               }
               const juntadas = [
