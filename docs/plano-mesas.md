@@ -10,7 +10,7 @@
 
 **Origem:** as decisões Q1 a Q52 da sessão de perguntas de 18 e 19/11/2026, registradas abaixo. Base anterior: Fase 8 de [plano-painel-admin.md](plano-painel-admin.md).
 
-**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. A Fase 5 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4. As Fases 1 a 5 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
+**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. A Fase 5 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4. A Fase 6 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-6`, empilhada sobre a Fase 5. As Fases 1 a 6 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
 
 ## Restrições gerais
 
@@ -2155,6 +2155,32 @@ posicionar(lote: { id: string; posicao: PosicaoMesa }[]): Promise<Mesa[]>
 - [ ] Em `tests/visual-admin.spec.ts`: os screenshots `painel-mapa-*` (mapa do Salão) e `painel-mapa-edicao-*` (modo edição). Eles e os que mudam (`painel-mesas-*` pelo alternador, `painel-configurar-salao-*` pelo bloco Funções Pro) ficam para a revisão.
 - [ ] `pnpm check`, mostrando a saída. `pnpm test:coverage` e subir os mínimos se a cobertura subiu.
 - [ ] Registrar a "Situação" no fim desta seção.
+
+Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-6`, empilhada sobre a Fase 5, aguardando a revisão e os screenshots. O PR sai depois que as Fases 1 a 5 estiverem no `main`.
+
+- **O que os testes pegaram** (cada correção com o teste vermelho antes):
+  - editar a quadrada em x 22 para retangular de 8 lugares deixava metade da mesa fora do mapa (Tarefa 60);
+  - a primeira versão do teste do hook conferia a lista logo depois da mutação e falhava de vez em quando (o React Query avisa a tela num tempo próprio). Agora a leitura do servidor fica pendurada no teste e só a cópia que o hook grava pode trazer a posição nova;
+  - o axe do E2E recusou o contraste das abas inativas (texto mais forte, como na Cozinha e na Agenda) e o texto visível do estado dentro do botão da mesa, que não cabia no nome "Mesa 3".
+- **Mudou fora do plano:**
+  - a lista de cada área se chama "Mapa: Salão" (e não "Mapa do Salão": o artigo depende do nome da área);
+  - no botão da mesa, o nome vem de um texto só para o leitor ("Mesa 3"), o número visível fica escondido dele e o rótulo do estado fica por cima do botão, fora dele. A descrição falada continua a do cartão, que já começa pelo estado;
+  - na edição, a mesa com o foco fica por cima das outras, e a que está por cima de outra ganha o anel de erro (`ring-destructive`);
+  - `ConfigurarSalao` passou a aceitar `aberto` e `aoMudar` de fora: "Abrir Configurar salão", na janela do Pro, abre o painel;
+  - `FUNCOES_PRO_SALAO` já tem os três preços da decorrência 6 (reservas e QR só são usados nas fases deles);
+  - o E2E ganhou um segundo teste, o do arrasto da mesa 2 (o arrasto não tem teste de componente).
+- **Testes antigos que mudaram (mudança de comportamento planejada):** "reservas, QR e funções Pro não aparecem…" (`configurar-salao.test.tsx`) virou "reservas e QR não aparecem…", porque o mapa entrou no painel.
+- **Testes que passaram de primeira**, porque a regra já saía do desenho de outra fatia: em `servidor-mapa.test.ts`, trocar duas mesas de lugar, a mesa de outra área, a mesa aberta e a bloqueada e o lote vazio; em `mapa-salao.test.tsx`, as fatias da Tarefa 63 depois da primeira, o celular, o `M` travado, cancelar e tocar na edição. Cada grupo foi conferido desligando a regra no código e vendo o vermelho.
+- **Fica para depois:**
+  - ligar a função na sacola do painel (`CATALOGO_PRO`), na Fase 8, como já estava no desenho dela;
+  - filtros no mapa (o mapa mostra a área inteira) e editar mais de uma área de uma vez;
+  - desfazer a edição do mapa depois de salvar;
+  - o E2E do mapa nas outras telas (só rodou em `desktop-1920`) e os screenshots abaixo.
+- **Screenshots** (para a revisão, nada foi gerado nem atualizado):
+  - novos: `painel-mapa-*` e `painel-mapa-edicao-*` (este só onde aparece "Editar mapa", de 768 px para cima);
+  - mudam pela tela: `painel-mesas-*` (o alternador Grade/Mapa acima dos filtros), `painel-configurar-salao-*` (o bloco Funções Pro) e `painel-atalhos-mesas-*` (a linha do `M`);
+  - podem mudar pelo fundo, com a grade descendo por causa do alternador: `painel-comanda-*`, `painel-comanda-conta-*`, `painel-receber-conta-*`, `painel-adicionar-itens-*`, `painel-abrir-mesa-*`, `painel-nova-mesa-*`, `painel-transferir-mesa-*`, `painel-juntar-mesas-*` e `painel-transferir-itens-*`.
+- **Testes e cobertura:** 1697 testes no Vitest (`pnpm check` verde). Os dois E2E novos passaram em `desktop-1920`, contra o `next start` na porta 3010. A cobertura ficou em 84,87/77,92/83,28/85,91 no geral: os mínimos continuam em 84/77/83/85 (nenhum ponto inteiro a mais), e `lib/**` em 98/95/98/98.
 
 ## Fase 7: reservas e lista de espera
 
