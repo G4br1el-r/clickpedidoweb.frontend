@@ -10,7 +10,7 @@
 
 **Origem:** as decisões Q1 a Q52 da sessão de perguntas de 18 e 19/11/2026, registradas abaixo. Base anterior: Fase 8 de [plano-painel-admin.md](plano-painel-admin.md).
 
-**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. A Fase 5 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4. A Fase 6 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-6`, empilhada sobre a Fase 5. As Fases 1 a 6 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
+**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. A Fase 5 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4. A Fase 6 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-6`, empilhada sobre a Fase 5. As Fases 1 a 7 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
 
 ## Restrições gerais
 
@@ -2221,6 +2221,187 @@ Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-6`, empilha
    - excluir mesa com reserva marcada é recusado.
 3. **Componentes:** formulários, sugestão e o rótulo "Reservada 20:00" no cartão.
 4. **E2E:** reservar, chegar a hora, sentar e fechar.
+
+**Branch:** `claude/admin-mesas-fase-7`, empilhada sobre as Fases 1 a 6. O PR vai para `main` depois delas.
+
+**Decisões de detalhe desta fase** (decorrem de Q6, Q11, Q24, Q25, Q32, Q42, da decorrência 6 e do ponto de atenção 5)
+
+- **Reserva só para hoje:** o formulário pede nome (obrigatório, até 80), telefone (opcional, com DDD: 10 ou 11 números, guardado só com os dígitos), horário (`HH:MM`, hoje), pessoas (1 a 99) e mesa (opcional). O horário não pode ser antes do minuto de agora ("Esse horário já passou."). Reservar para outro dia fica para depois: o painel é "do dia".
+- **Janela da reserva** (`reservaDaMesa`): a reserva marcada segura a mesa de `antecedenciaMin` antes do horário até `toleranciaMin` depois. Dentro dela a mesa livre fica "Reservada 20:50" (já era assim em `estadoDaMesa`), abrir e transferir pedem `confirmarReserva` e o Garçom recusa. Passada a tolerância, a reserva conta como **"não compareceu"** sem gravar nada (`statusDaReserva`, derivado da hora): ela some da mesa, e o painel mostra "Não compareceu". O botão "Não compareceu" grava o status antes disso (libera a mesa na hora). A reserva atrasada ainda pode ser sentada: a pessoa chegou tarde.
+- **Reserva ativa e conflito:** ativa é a marcada que ainda não passou da tolerância. Duas reservas ativas na mesma mesa conflitam quando os horários ficam a menos de **2 h** um do outro (`DURACAO_RESERVA_MIN = 120`, o tempo que a mesa fica com a reserva). Criar ou editar com conflito recusa: "A mesa 13 já tem reserva às 20:50.". Reservar mesa bloqueada recusa ("A mesa 20 está bloqueada."). Mesa ocupada ou juntada agora pode ser reservada para mais tarde (ela pode liberar até lá); a sugestão é que evita.
+- **Sugestão de mesa** (`sugerirMesa(pessoas, mesas, reservas, { agora, config, inicio?, ignorar? })`): a menor mesa que cabe (lugares ≥ pessoas), desempatada pelo número. Pula a bloqueada, a juntada e a que tem reserva ativa em conflito (a menos de 2 h do horário; sem horário, de agora). Quando o horário está dentro da antecedência (ou é agora, na espera), a mesa precisa estar livre já: pula também a ocupada e a em **limpeza** (ela ainda não liberou; quem quiser escolhe a mesa à mão). Para uma reserva mais tarde, a mesa ocupada agora entra.
+- **Espera:** a fila mostra quem está esperando, pela chegada, com "há 12 min" correndo (`useAgora`). A mesa livre é sugerida ao primeiro da fila que cabe nela (`sugestoesDaEspera`: cada um, na ordem da chegada, fica com a menor que cabe entre as que sobraram). "Chamar" grava `chamadaEm` e, com telefone, é um link que abre `https://wa.me/55{telefone}` numa aba nova com a mensagem pronta ("Olá! Sua mesa na {loja} está pronta. Pode vir, estamos te esperando."): nada é enviado sozinho. Sem telefone, "Chamar" só marca a hora (chama-se pelo nome). "Desistiu" tira da fila.
+- **Sentar** (reserva e espera): a janela "Sentar Marina Costa" pede a mesa (a da reserva, ou a sugestão já escolhida; a lista traz as mesas que podem abrir: livres e em limpeza, sem bloqueio e sem junção) e o garçom (como em Abrir mesa). O servidor abre a mesa com as regras de `abrir`, com o nome e as pessoas da reserva ou da espera, e grava o status `sentou` (a reserva guarda a mesa em que sentou). A própria reserva não pede confirmação; outra reserva da vez na mesa escolhida pede `confirmarReserva`, como abrir.
+- **Recusas na mesa (ponto de atenção 5, Q42):** excluir e bloquear a mesa com reserva ativa recusam com "A mesa 13 tem reserva às 20:50. Tire a mesa da reserva antes.". Mudar a mesa da reserva é pelo "Editar" da reserva.
+- **Confirmação na tela** (pendência das Fases 3 e 5): Abrir mesa, Transferir, Transferir itens e Juntar mostram o aviso "Reservada às 20:50 para Marina Costa, 2 pessoas." quando a mesa escolhida (livre e sem comanda) está na janela de uma reserva, e o botão vira "… mesmo assim", que manda `confirmarReserva`. Juntar passa a aceitar `confirmarReserva` no servidor (antes recusava a reservada sem opção). A gaveta da mesa reservada oferece também "Sentar Marina Costa", que senta a reserva com o garçom escolhido.
+- **Grade, mapa e Garçom:** o cartão e a mesa do mapa mostram "Reservada 20:50" (a grade passa a reserva da vez para `estadoDaMesa`) e, no lugar dos lugares, "Marina Costa · 2 pessoas", também na descrição falada. "Reservada" volta ao filtro de estado (depois de "Livre"). O Garçom diz "Mesa 13 · reservada 20:50" na lista, com o traço de tom espera (pendência "Garçom e reservas": o servidor já recusa e manda abrir pela tela de Mesas).
+- **Painel:** "Reservas e espera" é uma coluna à direita da grade a partir de 1280 px (`xl`); abaixo disso fica acima da grade. Duas abas: "Reservas" (as de hoje, pelo horário: hora, nome, pessoas, mesa ou "Sem mesa", e "Não compareceu", "Sentou" ou "Cancelada" quando for o caso; nas marcadas, "Sentar" e o ⋯ com Editar, Não compareceu e Cancelar) e "Espera" (nome, pessoas, tempo, "Chamada há 2 min", a sugestão "Mesa 8 livre", "Chamar", "Sentar" e "Desistiu"). Cada aba tem o seu botão "Nova reserva" / "Entrar na espera" e mostra o vazio quando não há ninguém. O painel aparece na grade e no mapa.
+- **Cadeado Pro (Q32, decorrência 6):** com `funcoes.reservas` desligada, o painel vira o bloco "Reservas e lista de espera" com o selo Pro, o texto, o preço (R$ 24,90 por mês) e "Abrir Configurar salão". As reservas que já existem continuam valendo na grade e no servidor (o servidor não confere o plano, como no mapa). Configurar salão ganha o bloco "Reservas" (antecedência e tolerância, em minutos, de 0 a 600) e o interruptor "Reservas e lista de espera" em Funções Pro. A entrada no `CATALOGO_PRO` fica para a Fase 8.
+- **Demonstração** (só com `funcoes.reservas` ligada; o catálogo de teste do servidor vem desligado e continua sem reservas): 2 reservas de hoje e 3 pessoas na espera, relativas à hora de gerar:
+  - Marina Costa, 2 pessoas, (12) 99123-4567, às `agora + 20 min` arredondado para baixo de 5 em 5 (20:50 às 20:30), na **mesa 13** (2 lugares, Varanda, livre; nenhuma outra fase usa a 13 nos testes): a mesa já fica "Reservada 20:50";
+  - Roberto Andrade, 6 pessoas, (12) 99765-4321, às `agora + 2 h` arredondado para baixo de 15 em 15 (22:30), sem mesa (o painel sugere);
+  - na espera: Carlos Mendes (2 pessoas, (12) 99876-1234, chegou há 25 min, chamado há 2 min), Juliana Rocha (4 pessoas, sem telefone, há 12 min) e Pedro Alves (5 pessoas, (12) 99654-3210, há 5 min). As sugestões às 20:30 são as mesas 11, 8 e 10.
+
+  A mesa 13 só recebe a reserva se estiver livre, sem bloqueio e sem junção (senão a reserva fica sem mesa), e a reserva que cairia depois da meia-noite não entra. A grade da pizzaria passa a ter 8 livres (a 13 fica reservada).
+- **Virada do dia:** ao completar os dias, a reserva marcada de um dia que passou vira `nao-compareceu`, quem estava na espera vira `desistiu`, e a demonstração do dia novo ganha as reservas e a espera dela (ids com a data, sem repetir).
+
+**Interfaces que a Fase 7 entrega**
+
+```ts
+// lib/admin/regras/reservas.ts
+export const DURACAO_RESERVA_MIN = 120
+type ConfigReservas = ConfigSalao["reservas"]
+export function statusDaReserva(reserva, agora, config): Reserva["status"] // marcada vencida → "nao-compareceu"
+export function reservaAtiva(reserva, agora, config): boolean
+export function reservaDaMesa(mesa: Pick<Mesa, "id">, reservas, agora, config): Reserva | undefined
+export function reservaEmConflito(mesaId, inicio: Date, reservas, agora, config, ignorar?): Reserva | undefined
+export type MesaParaSugerir = Pick<Mesa, "id" | "numero" | "lugares" | "status" | "bloqueio" | "juntadaCom" | "limpezaDesde">
+export function sugerirMesa<M extends MesaParaSugerir>(pessoas, mesas: M[], reservas, quando: { agora; config; inicio?: Date; ignorar?: string }): M | undefined
+export function sugestoesDaEspera<M extends MesaParaSugerir>(espera: EntradaEspera[], mesas: M[], reservas, quando): Map<string, M>
+export function chamadaPeloWhatsApp(telefone: string, loja: string): string // https://wa.me/55…?text=…
+export function conferirReserva(campos: { nome; telefone; horario; pessoas: string }, agora): { erros; reserva?: NovaReserva }
+export function conferirEspera(campos: { nome; telefone; pessoas: string }): { erros; entrada?: NovaEntradaEspera }
+
+// servidor
+reservas: {
+  listar(): Promise<Reserva[]> // as de hoje, pelo horário
+  criar(dados: NovaReserva): Promise<Reserva>
+  editar(id, dados: NovaReserva): Promise<Reserva>
+  cancelar(id): Promise<Reserva>
+  naoCompareceu(id): Promise<Reserva>
+  sentar(id, { mesaId?, garcom?, confirmarReserva?, por? }): Promise<{ reserva: Reserva; comanda: Pedido }>
+}
+espera: {
+  listar(): Promise<EntradaEspera[]> // quem está esperando, pela chegada
+  entrar(dados: NovaEntradaEspera): Promise<EntradaEspera>
+  chamar(id): Promise<EntradaEspera>
+  sentar(id, { mesaId, garcom?, confirmarReserva?, por? }): Promise<{ entrada: EntradaEspera; comanda: Pedido }>
+  desistir(id): Promise<EntradaEspera>
+}
+mesas.juntar(pedidoId, mesaIds, { confirmarReserva?, por? })
+// NovaReserva = { nome; telefone?; inicio; pessoas; mesaId? }; NovaEntradaEspera = { nome; pessoas; telefone? }
+
+// lib/admin/dados/reservas-demo.ts
+export function reservasDemo(mesas: Mesa[], agora: Date): { reservas: Reserva[]; espera: EntradaEspera[] }
+
+// consultas-mesas: useReservas, useEspera, useCriarReserva, useEditarReserva, useCancelarReserva,
+// useNaoCompareceu, useSentarReserva, useEntrarNaEspera, useChamarDaEspera, useSentarDaEspera, useDesistirDaEspera
+// components/admin/mesas/aviso-reserva.tsx: useReservaDaVez() → (mesa) => Reserva | undefined; <AvisoReserva />
+// components/admin/mesas/reservas-espera.tsx: <PainelReservas />; sentar.tsx: <Sentar />
+// MesaNaGrade ganha reserva?: Reserva
+```
+
+**Arquivos**
+
+- Criar:
+  - `lib/admin/regras/reservas.ts` e `reservas.test.ts`;
+  - `lib/admin/dados/reservas-demo.ts` e `reservas-demo.test.ts`;
+  - `lib/admin/dados/servidor-reservas.test.ts`;
+  - `components/admin/mesas/{aviso-reserva,reservas-espera,formulario-reserva,sentar}.tsx` e `reservas-espera.test.tsx`.
+- Mudar:
+  - `lib/admin/dados/servidor.ts` (e `servidor-movimentacoes.test.ts`, `servidor.test.ts`), `consultas-mesas.ts` (e o teste);
+  - `lib/admin/regras/filtro-mesas.ts`;
+  - `components/admin/mesas/{pagina-mesas,cartao-mesa,estado-grade,abrir-mesa,transferir-mesa,transferir-itens,juntar-mesas,configurar-salao,comanda-mesa}.tsx` e os testes deles;
+  - `components/admin/garcom/pagina-garcom.tsx` e o teste;
+  - `tests/admin.spec.ts`.
+
+### Task 68 (Tarefa 68): regras das reservas
+
+- [ ] Testes que falham em `reservas.test.ts`, um comportamento por vez (agora 20:30, antecedência 30, tolerância 15):
+  - `reservaDaMesa`: a reserva das 20:50 da mesa vale às 20:30 e às 21:05; às 20:19 e às 21:06 não; a de outra mesa, a cancelada e a que sentou não; com duas na janela, a mais cedo;
+  - `statusDaReserva`: a marcada das 20:10 continua marcada às 20:25 e às 20:26 vira "nao-compareceu"; as gravadas voltam como estão;
+  - `reservaEmConflito`: outra ativa na mesma mesa às 22:00 conflita com 20:50 (1h10) e às 22:50 não (2 h); a da mesa vizinha, a ignorada e a vencida não;
+  - `sugerirMesa`: para 3 pessoas entre mesas de 2, 4, 4 e 8 lugares, a 4 de menor número; pula bloqueada, juntada, ocupada, em limpeza e com reserva em conflito; para as 22:30 a ocupada agora entra; sem mesa que caiba, nada;
+  - `sugestoesDaEspera`: o primeiro da fila fica com a menor; o segundo com a próxima que sobra; quem não cabe fica sem;
+  - `chamadaPeloWhatsApp("(12) 99123-4567", "Pizzaria Bella")` → "https://wa.me/5512991234567?text=Ol%C3%A1!%20Sua%20mesa%20na%20Pizzaria%20Bella%20est%C3%A1%20pronta.%20Pode%20vir%2C%20estamos%20te%20esperando.";
+  - `conferirReserva`: nome vazio, telefone com 9 números, sem horário, horário passado (20:29), pessoas 0; o certo devolve o `inicio` de hoje às 20:50 (ISO) e o telefone só com dígitos;
+  - `conferirEspera`: nome vazio, pessoas 100, telefone curto; o certo devolve os dados limpos.
+- [ ] Implementar e fazer o commit `feat(mesas): regras das reservas e da lista de espera`.
+
+### Task 69 (Tarefa 69): reservas no servidor
+
+- [ ] Testes que falham em `servidor-reservas.test.ts` (lanchonete de teste, sexta 13/11/2026 às 20:30):
+  - criar grava e `listar` devolve as de hoje pelo horário (a de ontem, posta direto na base, fica de fora);
+  - recusas, uma por teste: nome vazio, telefone curto, pessoas 0, horário passado, outro dia, mesa inexistente, mesa bloqueada, conflito ("A mesa 1 já tem reserva às 20:50.");
+  - editar troca os dados (sem mudar o horário passado, ele não é conferido de novo) e não conflita consigo; editar a cancelada recusa ("Essa reserva não está mais marcada.");
+  - cancelar e não compareceu gravam o status; a mesa deixa de estar reservada (abrir sem confirmação passa);
+  - `abrir` e `transferir` usam a janela de `reservaDaMesa` (os testes antigos continuam verdes).
+- [ ] Implementar e fazer o commit `feat(mesas): criar, editar, cancelar e marcar a reserva que não veio`.
+
+### Task 70 (Tarefa 70): sentar a reserva
+
+- [ ] Testes que falham em `servidor-reservas.test.ts`:
+  - sentar a reserva da mesa 1 abre a mesa com o nome e as pessoas, o garçom e o evento "Mesa aberta para 2 pessoas"; a reserva fica `sentou`, sem pedir confirmação;
+  - sentar sem mesa na reserva usa a `mesaId` dada e guarda nela; sem nenhuma, "Escolha a mesa.";
+  - a atrasada (20:50 sentada às 21:10) senta; a cancelada recusa;
+  - outra reserva da vez na mesa escolhida pede `confirmarReserva`.
+- [ ] Implementar (o miolo de `abrir` vira `abrirComanda`) e fazer o commit `feat(mesas): sentar a reserva abre a mesa com o nome e as pessoas`.
+
+### Task 71 (Tarefa 71): lista de espera no servidor
+
+- [ ] Testes que falham em `servidor-reservas.test.ts`: entrar (com as recusas de nome, pessoas e telefone); listar só quem espera, pela chegada; chamar grava `chamadaEm`; desistir tira da lista; sentar abre a mesa com nome e pessoas e tira da lista; sentar quem desistiu recusa ("Essa pessoa não está mais na espera.").
+- [ ] Implementar e fazer o commit `feat(mesas): lista de espera no servidor: entrar, chamar, sentar e desistir`.
+
+### Task 72 (Tarefa 72): a mesa com reserva não some
+
+- [ ] Testes que falham: excluir e bloquear a mesa com reserva ativa recusam (a vencida e a cancelada não impedem) em `servidor-reservas.test.ts`; em `servidor-movimentacoes.test.ts`, juntar a mesa reservada recusa sem `confirmarReserva` e junta com ela.
+- [ ] Implementar e fazer o commit `feat(mesas): excluir e bloquear respeitam a reserva, e juntar aceita a confirmação`.
+
+### Task 73 (Tarefa 73): demonstração e virada do dia
+
+- [ ] Testes que falham em `reservas-demo.test.ts` (as reservas e a espera das decisões, a mesa 13 ocupada deixa a reserva sem mesa, a das 23:00 + 2 h não entra) e em `servidor-reservas.test.ts` (o catálogo com `funcoes.reservas` ligada abre com elas; na virada a marcada de ontem vira `nao-compareceu`, a espera de ontem `desistiu`, e o dia novo ganha a demonstração dele).
+- [ ] Mudar os testes antigos que contam as livres da demonstração (`pagina-mesas.test.tsx`: "8 livres", mudança planejada).
+- [ ] Implementar e fazer o commit `feat(mesas): a demonstração tem 2 reservas e 3 pessoas na espera`.
+
+### Task 74 (Tarefa 74): hooks
+
+- [ ] Testes que falham em `consultas-mesas.test.tsx`: `useReservas` e `useEspera` leem o servidor; criar, sentar (reserva e espera), entrar e desistir chegam ao servidor e invalidam.
+- [ ] Implementar e fazer o commit `feat(mesas): hooks das reservas e da espera`.
+
+### Task 75 (Tarefa 75): Reservada na grade, no mapa, no filtro e no Garçom
+
+- [ ] Testes que falham:
+  - `pagina-mesas.test.tsx`: a mesa 13 diz "Reservada 20:50" e "Marina Costa · 2 pessoas"; o filtro oferece "Reservada" e `?estado=reservada` mostra só a 13 (os dois testes antigos de "não oferece Reservada" mudam, mudança planejada);
+  - `mapa-salao.test.tsx`: a 13 no mapa da Varanda com a mesma descrição;
+  - `pagina-garcom.test.tsx`: "Mesa 13 · reservada 20:50".
+- [ ] Implementar e fazer o commit `feat(mesas): a mesa reservada na grade, no mapa, no filtro e no Garçom`.
+
+### Task 76 (Tarefa 76): confirmação de reserva na tela
+
+- [ ] Testes que falham (pizzaria, 20:30): a gaveta da 13 avisa "Reservada às 20:50 para Marina Costa, 2 pessoas.", e "Abrir mesmo assim" abre; "Sentar Marina Costa" senta a reserva; Transferir e Transferir itens para a 13 avisam e transferem com "Transferir mesmo assim"; Juntar a 13 avisa e junta com "Juntar mesmo assim".
+- [ ] Implementar `aviso-reserva.tsx` e os quatro fluxos. Commit `feat(mesas): confirmar a reserva ao abrir, transferir e juntar`.
+
+### Task 77 (Tarefa 77): painel de reservas
+
+- [ ] Testes que falham em `reservas-espera.test.tsx`:
+  - o painel "Reservas e espera" lista Marina Costa às 20:50 na mesa 13 e Roberto Andrade às 22:30 sem mesa;
+  - "Nova reserva" valida ao enviar (as mensagens de `conferirReserva` nos campos) e, com 4 pessoas às 21:00, sugere "mesa 8" com "Usar a mesa 8"; salvar mostra a reserva na lista;
+  - Editar, Não compareceu e Cancelar pelo ⋯; às 21:06 a reserva da Marina diz "Não compareceu";
+  - o erro do servidor aparece no aviso.
+- [ ] Implementar e fazer o commit `feat(mesas): painel das reservas do dia`.
+
+### Task 78 (Tarefa 78): sentar e a espera na tela
+
+- [ ] Testes que falham em `reservas-espera.test.tsx`:
+  - a aba Espera lista Carlos (há 25 min, chamado há 2 min), Juliana e Pedro, com as sugestões 11, 8 e 10; um minuto depois, "há 26 min";
+  - "Chamar" do Pedro é um link para o WhatsApp numa aba nova e grava a chamada; o da Juliana (sem telefone) só grava;
+  - "Entrar na espera" valida e põe no fim da fila; "Desistiu" tira;
+  - "Sentar" da Juliana já vem com a mesa 8 e o garçom do aparelho: senta, a mesa 8 fica ocupada com "Juliana Rocha" e ela sai da fila; "Sentar" da Marina abre a mesa 13.
+- [ ] Implementar `sentar.tsx` e a aba Espera. Commit `feat(mesas): lista de espera, chamar pelo WhatsApp e sentar`.
+
+### Task 79 (Tarefa 79): cadeado Pro e Configurar salão
+
+- [ ] Testes que falham:
+  - `reservas-espera.test.tsx`, com `funcoes.reservas` desligada: o bloco com o selo Pro, "R$ 24,90" e "Abrir Configurar salão", sem as abas;
+  - `configurar-salao.test.tsx`: o interruptor "Reservas e lista de espera" grava `funcoes.reservas`; antecedência e tolerância gravam os minutos, e 700 mostra o erro do servidor. O teste antigo "reservas e QR não aparecem…" vira "o QR não aparece…" (mudança planejada: as reservas entraram no painel).
+- [ ] Implementar e fazer o commit `feat(mesas): reservas com cadeado Pro e ajustes em Configurar salão`.
+
+### Task 80 (Tarefa 80): E2E e fechamento
+
+- [ ] Em `tests/admin.spec.ts`: na pizzaria às 20:30, nova reserva para as 21:00 com 4 pessoas na mesa 8; às 20:40 a mesa 8 diz "Reservada 21:00"; "Sentar" a reserva com o garçom; a mesa 8 ocupada com o nome; receber a conta (o couvert) e a mesa vai para Limpeza. Rodar só ele, em `desktop-1920` e `celular-390`.
+- [ ] `pnpm check`, mostrando a saída. `pnpm test:coverage` e subir os mínimos se a cobertura subiu.
+- [ ] Os screenshots ficam para a revisão.
+- [ ] Registrar a "Situação" no fim desta seção.
 
 ## Fase 8: QR na mesa
 
