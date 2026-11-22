@@ -764,17 +764,32 @@ export function criarServidor({
     }
   }
 
-  async function salvar(base: BaseLoja) {
+  /**
+   * Grava a base. A transação do IndexedDB entra na fila já (quem ler depois, de qualquer aba,
+   * espera por ela) e a revisão muda na hora; o que volta é o fim da gravação, que avisa as
+   * outras abas.
+   */
+  function salvar(base: BaseLoja): Promise<void> {
     const guardado: Guardado = { versao: VERSAO, geradoEm: new Date().toISOString(), base }
     const nova = crypto.randomUUID()
-    await set(chave, guardado)
+    const gravando = set(chave, guardado)
     try {
       localStorage.setItem(chaveRevisao, nova)
     } catch {
       // Sem onde guardar, a revisão vale só nesta aba.
     }
     revisao = nova
-    aoGravar?.()
+    return gravando.then(() => aoGravar?.())
+  }
+
+  /** As gravações de `substituir` que a chamada da vez ainda não esperou. */
+  let gravacoes: Promise<void>[] = []
+  const tomarGravacoes = () => {
+    const tomadas = Promise.all(gravacoes)
+    gravacoes = []
+    // A falha chega a quem chamou, fora da vez; até lá, não é "rejeição sem dono".
+    tomadas.catch(() => {})
+    return tomadas
   }
 
   async function doZero(): Promise<BaseLoja> {
@@ -914,9 +929,21 @@ export function criarServidor({
    */
   function naVez<A extends unknown[], R>(fazer: (...argumentos: A) => Promise<R>, ler: boolean) {
     return async (...argumentos: A): Promise<R> => {
-      const resultado = await (ler
-        ? fazer(...argumentos)
-        : exclusivo(chave, () => fazer(...argumentos)))
+      const resultado = ler
+        ? await fazer(...argumentos)
+        : await exclusivo(chave, async () => {
+            // A vez acaba quando a base mudou e a gravação entrou na fila; o fim dela, a chamada
+            // espera fora da vez (dando certo ou não).
+            try {
+              return { valor: await fazer(...argumentos), gravando: tomarGravacoes() }
+            } catch (erro) {
+              return { erro, gravando: tomarGravacoes() }
+            }
+          }).then(async (feito) => {
+            await feito.gravando
+            if ("erro" in feito) throw feito.erro
+            return feito.valor
+          })
       if (espera > 0) await new Promise((pronto) => setTimeout(pronto, espera))
       return resultado
     }
@@ -1366,7 +1393,8 @@ export function criarServidor({
   async function substituir(nova: BaseLoja) {
     const final = vencerPedidosQr(nova, new Date())
     carregando = Promise.resolve(final)
-    await salvar(final)
+    // A chamada espera a gravação fora da vez: a próxima já parte desta base.
+    gravacoes.push(salvar(final))
   }
 
   /**
