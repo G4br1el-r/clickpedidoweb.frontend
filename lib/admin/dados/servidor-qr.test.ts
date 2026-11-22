@@ -339,6 +339,27 @@ describe("QR: o pedido aguardando é da comanda da hora", () => {
     expect((await api.qr.pedir(ocupada, umXBurger)).pedido?.comandaId).toBe(comanda.id)
   })
 
+  test("a mesa diz ao cliente como ficou o último pedido dele", async () => {
+    const api = servidor()
+    await ligarQr(api)
+    const mesaId = await mesaNova(api)
+    expect((await api.qr.mesa(mesaId)).ultimoPedido).toBeNull()
+
+    const { pedido } = await api.qr.pedir(mesaId, umXBurger)
+    expect((await api.qr.mesa(mesaId)).ultimoPedido).toBe("aguardando")
+
+    await api.pedidosQr.recusar(pedido?.id as string)
+    expect((await api.qr.mesa(mesaId)).ultimoPedido).toBe("recusado")
+
+    // Quem senta depois (outra comanda) não vê o pedido de antes.
+    const comanda = await comComanda(api, mesaId)
+    expect((await api.qr.mesa(mesaId)).ultimoPedido).toBeNull()
+    const { pedido: segundo } = await api.qr.pedir(mesaId, umXBurger)
+    await api.pedidosQr.aceitar(segundo?.id as string, {})
+    expect((await api.qr.mesa(mesaId)).ultimoPedido).toBe("aceito")
+    expect(comanda.id).toBeGreaterThan(0)
+  })
+
   test("a mesa abriu depois do pedido: aceitar recusa", async () => {
     const api = servidor()
     await ligarQr(api)

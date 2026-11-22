@@ -228,6 +228,8 @@ export type MesaQr = {
   conta: ContaQr | null
   /** Pedidos desta mesa esperando o garçom aceitar. */
   aguardando: number
+  /** Como ficou o último pedido pelo QR de quem está na mesa (hoje, na comanda de agora). */
+  ultimoPedido: PedidoQr["status"] | null
 }
 
 export type OpcoesServidor = {
@@ -2392,6 +2394,15 @@ export function criarServidor({
           aguardando: (base.pedidosQr ?? []).filter(
             (pedido) => pedido.mesaId === mesa.id && pedido.status === "aguardando",
           ).length,
+          ultimoPedido:
+            (base.pedidosQr ?? [])
+              .filter(
+                (pedido) =>
+                  pedido.mesaId === mesa.id &&
+                  pedido.comandaId === (comanda?.id ?? null) &&
+                  isSameDay(new Date(pedido.criadoEm), new Date()),
+              )
+              .at(-1)?.status ?? null,
         })
       },
 

@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
+import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { useLojaAtual } from "@/lib/loja-atual"
 import { useSacola } from "@/lib/sacola"
 import { VitrineMesa } from "./vitrine-mesa"
@@ -25,6 +26,7 @@ beforeEach(async () => {
   reiniciarServidores()
   useLojaAtual.setState({ ...useLojaAtual.getInitialState(), id: "adega-da-vila" }, true)
   useSacola.setState(useSacola.getInitialState(), true)
+  useSegmentoAtual.setState(useSegmentoAtual.getInitialState(), true)
   document.documentElement.dataset.loja = "adega-da-vila"
 })
 
@@ -139,6 +141,60 @@ describe("VitrineMesa", () => {
     renderizar()
     await usuario.click(await screen.findByRole("button", { name: "Ver a conta" }))
     expect(await screen.findByText("A mesa ainda não tem pedidos.")).toBeInTheDocument()
+  })
+
+  test("cada produto que entra no pedido é anunciado", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("button", { name: "Adicionar Água sem gás" }))
+    const pedido = screen.getByRole("region", { name: "Seu pedido" })
+    expect(within(pedido).getByRole("status")).toHaveTextContent("Água sem gás: 1 no seu pedido")
+
+    await usuario.click(screen.getByRole("button", { name: "Adicionar Água sem gás" }))
+    expect(within(pedido).getByRole("status")).toHaveTextContent("Água sem gás: 2 no seu pedido")
+  })
+
+  test("o pedido enviado fica aguardando o garçom; o recusado avisa para chamar o garçom", async () => {
+    const usuario = userEvent.setup()
+    renderizar()
+    await usuario.click(await screen.findByRole("button", { name: "Adicionar Água sem gás" }))
+    await usuario.click(screen.getByRole("button", { name: "Pedir para a mesa" }))
+    expect(await screen.findByText("Seu pedido está aguardando o garçom.")).toBeInTheDocument()
+
+    const [aguardando] = await servidorDo("pizzaria").pedidosQr.listar()
+    await servidorDo("pizzaria").pedidosQr.recusar(aguardando.id)
+    await usuario.click(screen.getByRole("button", { name: "Chamar o garçom" }))
+    expect(
+      await screen.findByText("O garçom não aceitou o seu último pedido. Fale com ele."),
+    ).toBeInTheDocument()
+    expect(screen.queryByText("Seu pedido está aguardando o garçom.")).not.toBeInTheDocument()
+  })
+
+  test("na loja de fora do painel, o pedido sai no preço de balcão dela", async () => {
+    // O painel está na lanchonete (sem preço de balcão); a mesa é da pizzaria (com).
+    useSegmentoAtual.setState({ segmento: "lanchonete" })
+    const api = servidorDo("pizzaria")
+    const agua = (await api.produtos.listar()).find((produto) => produto.id === "prod-agua")
+    if (!agua) throw new Error("A água devia existir")
+    await api.produtos.salvar({ ...agua, preco: 6, precoBalcao: 4 })
+    const usuario = userEvent.setup()
+    renderizar()
+
+    await usuario.click(await screen.findByRole("button", { name: "Adicionar Água sem gás" }))
+
+    const pedido = screen.getByRole("region", { name: "Seu pedido" })
+    expect(within(pedido).getAllByText("R$ 4,00")).toHaveLength(2)
+  })
+
+  test("um erro que passa mostra tentar de novo, não Mesa indisponível", async () => {
+    vi.spyOn(servidorDo("pizzaria").qr, "mesa").mockRejectedValueOnce(new Error("Falhou a leitura"))
+    const usuario = userEvent.setup()
+    renderizar()
+
+    expect(await screen.findByText("Não deu para carregar. Tente de novo.")).toBeInTheDocument()
+    expect(screen.queryByText("Mesa indisponível.")).not.toBeInTheDocument()
+    await usuario.click(screen.getByRole("button", { name: "Tentar de novo" }))
+    expect(await screen.findByRole("heading", { level: 1, name: "Mesa 11" })).toBeInTheDocument()
   })
 
   test("a mesa bloqueada e a loja que não existe mostram Mesa indisponível", async () => {

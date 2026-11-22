@@ -30,6 +30,18 @@ function Indisponivel() {
   )
 }
 
+/** Falhou a leitura (não a mesa): dá para tentar de novo. */
+function ErroAoCarregar({ aoTentar }: { aoTentar: () => void }) {
+  return (
+    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col items-center justify-center gap-3 px-4 text-center">
+      <p className="text-base font-medium">Não deu para carregar. Tente de novo.</p>
+      <Button type="button" variant="outline" onClick={aoTentar}>
+        Tentar de novo
+      </Button>
+    </main>
+  )
+}
+
 /** A conta da comanda, como a pré-conta: itens, taxa, couvert, o pago e o que falta. */
 function ContaDaMesa({
   dados,
@@ -118,6 +130,14 @@ function Mesa({
   const [aviso, setAviso] = useState("")
   const [contaAberta, setContaAberta] = useState(false)
   const total = rodada.itens.reduce((soma, item) => soma + item.precoUnitario * item.quantidade, 0)
+  // O produto que entrou (ou cresceu) no pedido, para o leitor de tela.
+  const mudou = rodada.itens.find((item) => item.chave === rodada.aviso?.chave)
+  const situacao =
+    dados.aguardando > 0
+      ? "Seu pedido está aguardando o garçom."
+      : dados.ultimoPedido === "recusado"
+        ? "O garçom não aceitou o seu último pedido. Fale com ele."
+        : ""
   const avisarErro = (erro: Error) => setAviso(erro.message)
 
   const enviar = () =>
@@ -174,6 +194,9 @@ function Mesa({
       </div>
       <p role="status" className="min-h-5 text-sm font-medium empty:min-h-0">
         {aviso}
+      </p>
+      <p aria-live="polite" className="text-sm text-muted-foreground empty:hidden">
+        {situacao}
       </p>
 
       {dados.categorias.map((categoria) => {
@@ -244,6 +267,9 @@ function Mesa({
             </span>
           )}
         </h2>
+        <p role="status" className="sr-only">
+          {mudou ? `${mudou.nome}: ${mudou.quantidade} no seu pedido` : ""}
+        </p>
         {rodada.itens.length === 0 ? (
           <p className="text-sm text-muted-foreground">Toque nos produtos para pedir.</p>
         ) : (
@@ -317,7 +343,7 @@ export function VitrineMesa({ segmento, mesaId }: { segmento: string; mesaId: st
 function VitrineDaLoja({ segmento, mesaId }: { segmento: SegmentoPainelId; mesaId: string }) {
   // O que o garçom faz em outra aba aparece aqui na hora.
   useAoVivo()
-  const { data, isError } = useMesaQr(segmento, mesaId, 4_000)
+  const { data, error, refetch } = useMesaQr(segmento, mesaId, 4_000)
   // As cores são as da vitrine desta loja, só nesta página: a loja escolhida na vitrine (e a
   // sacola dela) fica como estava.
   useEffect(() => {
@@ -332,7 +358,10 @@ function VitrineDaLoja({ segmento, mesaId }: { segmento: SegmentoPainelId; mesaI
     }
   }, [segmento])
 
-  if (isError) return <Indisponivel />
+  // A mesa recusada é "Mesa indisponível."; outro erro, sem nada na tela, pede para tentar de
+  // novo (com a mesa já na tela, fica o que estava até a próxima consulta).
+  if (error?.message === "Mesa indisponível.") return <Indisponivel />
+  if (!data && error) return <ErroAoCarregar aoTentar={() => void refetch()} />
   if (!data) {
     return (
       <main
