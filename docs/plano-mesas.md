@@ -10,7 +10,7 @@
 
 **Origem:** as decisões Q1 a Q52 da sessão de perguntas de 18 e 19/11/2026, registradas abaixo. Base anterior: Fase 8 de [plano-painel-admin.md](plano-painel-admin.md).
 
-**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. A Fase 5 está na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4. As Fases 1 a 5 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
+**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. A Fase 5 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4. As Fases 1 a 5 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
 
 ## Restrições gerais
 
@@ -1942,28 +1942,45 @@ desfazer(id: string): Promise<void>
 - [ ] Os screenshots ficam para a revisão.
 - [ ] Registrar a "Situação" no fim desta seção.
 
-Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4, antes da revisão. O PR sai depois que as Fases 1 a 4 estiverem no `main`.
+Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4, depois da revisão. O PR sai depois que as Fases 1 a 4 estiverem no `main`.
 
+- **O que a revisão pegou** (cada correção com o teste vermelho antes):
+  - **ids repetidos:** juntar tira a comanda da secundária de Pedidos, e o pedido novo usava o id do último da lista: o id e o número voltavam a ser usados, os itens ficavam com ids repetidos (tirar uma linha tirava as duas) e o estoque apontava para a comanda errada. O id agora segue do pedido mais novo que a base já teve (`proximoId`), e a junção guarda o último em `base.ultimoPedido`;
+  - **reabrir a principal:** a conta reabria com as juntadas mesmo com a secundária ocupada, bloqueada, junta a outra ou excluída. Escolha: recusar ("A mesa 31 já está aberta. Reabrir não junta de novo."), e o botão some; com as secundárias livres, reabre junta. `comandaDa` prefere a comanda da própria mesa;
+  - **Garçom na mesa juntada:** a 16 aparecia "livre", com Cliente, e o nome digitado renomeava a comanda da 15. Agora diz "Mesa 16 · com a mesa 15", sem Cliente, com o resumo da comanda da 15, e o aviso diz "Mesa 15 + 16"; o servidor só usa `clienteNome` ao abrir a comanda;
+  - fechar Transferir e Juntar devolve o foco ao ⋯ (`devolverFocoA`);
+  - na virada do dia, a demonstração não senta ninguém nas juntadas de uma comanda que continuou aberta (o teste da Tarefa 53 que tinha ficado de fora);
+  - transferir o item pronto e não servido leva o "Servir" para o destino (`servirDesdeAoReceber`, a hora mais antiga); a origem só perde quando não sobra nada pronto;
+  - transferir itens que deixa a origem já paga com saldo zero fecha a conta (a mesma regra `quitou` do `alterarComanda`), com limpeza se ligada; desfazer volta tudo;
+  - transferir para uma secundária diz "A mesa 16 está junto com a mesa 15.";
+  - juntar não toca o alerta de rodada nova na cozinha: a leitura guarda também os itens da rodada, e a rodada com um item que a cozinha já tinha (na mesma comanda ou numa que saiu da tela) não é nova;
+  - o leitor de tela não lê o total da principal no cartão da secundária;
+  - Juntar não oferece a mesa que já tem outras juntas a ela;
+  - Transferir itens: "Na cozinha" e "Pago" descrevem o campo travado, a mesma coisa em linhas de rodadas diferentes diz a rodada ("3× Suco · rodada 1"), mais de uma unidade diz "foram para", e com todos os itens travados a gaveta não oferece o botão;
+  - a conferência de bloqueio repetida em `transferirItens` saiu (não era alcançável);
+  - ganhou teste a recusa "O desconto passaria do valor dos itens" ao transferir itens.
 - **Mudou fora do plano:**
-  - o cartão da Fila continua dizendo "Mesa 15": só o ticket da Cozinha ganhou "Mesa 15 + 16" (o cartão da Fila não tinha teste de mesa para começar);
-  - a virada do dia com a comanda junta mexida não ganhou teste nem código: a demonstração do dia novo só senta nas primeiras mesas livres e nunca chega à 16 enquanto houver livre antes dela. Fica para depois;
+  - na gaveta, abaixo da descrição, "Transferir mesa", "Juntar mesas" e (com junção) "Separar"; transferir pela gaveta fecha a gaveta (a mesa dela ficou livre);
+  - o cartão da Fila diz "Mesa 15 + 16" (`rotuloDaMesa`);
   - o teste "juntar que ficaria menor que o pago" entrou junto com o E2E, depois do código da Tarefa 50 (a regra já estava lá; o teste a fixa);
   - na gaveta, o clique em "Desfazer" passa por cima dela (`manterToastClicavel`, como a sacola); no teste de componente o clique no aviso desliga a conferência de `pointer-events` do jsdom, que não lê o CSS do sonner.
 - **Testes antigos que mudaram (mudança de comportamento planejada):**
   - "marcar limpa tira a limpeza" (`servidor.test.ts`): o retorno passa a ser `{ mesa, desfazer }` (Q46);
   - "abre 8 comandas, nas mesas 1 a 8" (`gerar-pedidos.test.ts`) virou "nas mesas 1 a 7 e 15"; a lista das comandas de hoje da pizzaria troca a mesa 8 (2 pessoas, R$ 118,30) pela 15 (6 pessoas, R$ 150,30: 93 + 9,30 + 6 × 8);
   - em `pagina-mesas.test.tsx`: "8 ocupadas · 9 livres", ocupação "9/19 · 47%" e 20 pessoas no salão (a demonstração tem a 16 junto com a 15); o filtro de estado volta a oferecer "Juntada" (o teste "não oferece Reservada nem Juntada" virou "não oferece Reservada");
-  - a tabela do menu ⋯ em `cartao-mesa.test.tsx` ganha "Transferir" e "Juntar mesas" na mesa aberta.
+  - a tabela do menu ⋯ em `cartao-mesa.test.tsx` ganha "Transferir" e "Juntar mesas" na mesa aberta;
+  - revisão: "o item que a cozinha ainda tem fica travado" (`movimentacoes.test.tsx`) ganhou uma rodada sem cozinha, porque com tudo na cozinha o botão Transferir itens agora some; e passou a conferir a descrição "Na cozinha" do campo.
 - **Fica para depois:**
-  - a confirmação de reserva na tela (transferir e transferir itens já aceitam `confirmarReserva` no servidor) e juntar mesa reservada com confirmação, com as reservas (Fase 7);
+  - a confirmação de reserva na tela (transferir e transferir itens já aceitam `confirmarReserva` no servidor) e juntar mesa reservada com confirmação, com as reservas (Fase 7). Até lá nenhuma reserva chega à tela (não há como criar uma, e a demonstração não tem), então Transferir e Transferir itens não marcam a mesa reservada: o servidor recusa com "Confirme para transferir";
   - as outras operações continuam na base em memória da aba: duas abas mexendo na mesma comanda por fora das movimentações ainda podem se sobrescrever (Fase 8, `BroadcastChannel`);
   - separar só uma das mesas juntadas; transferir a comanda com mesas juntadas (hoje pede para separar antes); transferir item que a cozinha ainda prepara;
-  - na gaveta, "Transferir", "Juntar" e "Separar" ficam só no menu ⋯ da grade.
-- **Screenshots** (para a revisão; nenhum foi atualizado aqui):
-  - mudam pela demonstração (a comanda da mesa 8 passou para a 15, com a 16 junta): `painel-mesas-*` (a 8 livre, a 15 ocupada, a 16 "Com a mesa 15", ocupação 9/19 · 47% e 20 pessoas), `painel-cozinha-*` (o ticket "Mesa 15 + 16"), `painel-fila-*` (o cartão da comanda diz "Mesa 15") e, por trás das janelas, `painel-abrir-mesa-*`, `painel-adicionar-itens-*`, `painel-atalhos-mesas-*`, `painel-nova-mesa-*` e `painel-configurar-salao-*`;
-  - mudam pela tela: `painel-comanda-*` e `painel-adicionar-itens-*` ("Transferir itens" ao lado de "Adicionar itens", na aba Itens); `painel-comanda-conta-*` e `painel-receber-conta-*` (aba Conta da mesa 2) só mudam se a grade aparecer por trás da gaveta;
-  - o resto da demonstração não muda: o sorteio é o mesmo.
-- **Testes e cobertura:** 1612 testes no Vitest (`pnpm check` verde). O E2E novo passou em `desktop-1920`, contra o `next start` na porta 3010; o E2E completo fica para a revisão. A cobertura ficou em 84,58/77,47/83,01/85,66 no geral: os mínimos subiram para 84/77/83/85; `lib/**` continua em 98/95/98/98.
+  - juntar uma mesa em limpeza e separar depois deixa ela livre, sem a limpeza de antes (achado H da revisão, sem correção pedida).
+- **Screenshots** (revisados nas imagens esperada, atual e diff, claro e escuro, em celular-390 e desktop-1920; depois gerados nas outras 9 telas, com uma amostra de cada tamanho conferida):
+  - pela demonstração: `painel-mesas-*` (a 8 livre, a 15 ocupada com R$ 150,30, a 16 "Com a mesa 15", 9/19 · 47% e 20 pessoas), `painel-cozinha-*` ("Mesa 15 + 16"), `painel-fila-*` ("Mesa 15 + 16" e o valor a cobrar), `painel-pedidos-*` e `painel-visao-geral-*` (o #1416 passa de R$ 118,30 para R$ 150,30, e os totais do dia e da semana sobem R$ 32,00) e, por trás das janelas, `painel-abrir-mesa-*`, `painel-atalhos-mesas-*`, `painel-nova-mesa-*` e `painel-configurar-salao-*`;
+  - pela tela: `painel-comanda-*`, `painel-comanda-conta-*`, `painel-receber-conta-*` e `painel-adicionar-itens-*` (a gaveta ganhou "Transferir mesa" e "Juntar mesas"; na aba Itens, "Transferir itens");
+  - novos: `painel-transferir-mesa-*`, `painel-juntar-mesas-*` e `painel-transferir-itens-*`;
+  - `painel-garcom-*` não mudou.
+- **Testes e cobertura:** 1639 testes no Vitest (`pnpm check` verde). E2E rápido (celular-390 e desktop-1920) verde contra o `next start` na porta 3010: 466 passaram, 28 pulados, nenhum falhou. Na primeira rodada, as únicas falhas eram os screenshots acima. A cobertura ficou em 84,72/77,65/83,18/85,76 no geral: os mínimos continuam em 84/77/83/85 (nenhum ponto inteiro a mais); `lib/**` continua em 98/95/98/98.
 
 ## Fase 6: mapa do salão
 
