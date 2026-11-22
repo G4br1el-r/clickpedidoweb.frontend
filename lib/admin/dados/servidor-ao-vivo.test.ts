@@ -52,6 +52,20 @@ describe("duas abas sobre a mesma base", () => {
 })
 
 describe("aviso e memória", () => {
+  test("com o localStorage bloqueado, a aba continua lendo e gravando", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("Bloqueado")
+    })
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("Bloqueado")
+    })
+    const api = aba()
+
+    await api.mesas.criar({ numero: 30 })
+
+    expect(await numeros(api)).toEqual([1, 2, 30])
+  })
+
   test("aoGravar é chamado uma vez por gravação", async () => {
     const aoGravar = vi.fn()
     const api = aba(aoGravar)

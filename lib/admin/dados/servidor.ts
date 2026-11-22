@@ -698,17 +698,31 @@ export function criarServidor({
   const chave = `clickpedido-admin-dados:${segmento}`
   /**
    * Muda a cada gravação, de qualquer aba. A cópia em memória vale enquanto a revisão guardada
-   * for a dela: outra aba gravou, a próxima leitura (ou gravação) relê a base.
+   * for a dela: outra aba gravou, a próxima leitura (ou gravação) relê a base. Fica no
+   * `localStorage`, que as abas dividem e se lê na hora, sem esperar o IndexedDB.
    */
   const chaveRevisao = `${chave}:revisao`
   let carregando: Promise<BaseLoja> | undefined
-  let revisao: string | undefined
+  let revisao: string | null = null
+
+  /** Sem `localStorage` (bloqueado no navegador), fica a cópia em memória, como antes. */
+  function revisaoGuardada(): string | null {
+    try {
+      return localStorage.getItem(chaveRevisao)
+    } catch {
+      return revisao
+    }
+  }
 
   async function salvar(base: BaseLoja) {
     const guardado: Guardado = { versao: VERSAO, geradoEm: new Date().toISOString(), base }
     const nova = crypto.randomUUID()
     await set(chave, guardado)
-    await set(chaveRevisao, nova)
+    try {
+      localStorage.setItem(chaveRevisao, nova)
+    } catch {
+      // Sem onde guardar, a revisão vale só nesta aba.
+    }
     revisao = nova
     aoGravar?.()
   }
@@ -817,7 +831,7 @@ export function criarServidor({
 
   async function carregar(): Promise<BaseLoja> {
     // Outra aba gravou depois desta cópia: ela não vale mais.
-    const guardada = await get<string>(chaveRevisao)
+    const guardada = revisaoGuardada()
     if (guardada !== revisao) {
       revisao = guardada
       carregando = undefined
