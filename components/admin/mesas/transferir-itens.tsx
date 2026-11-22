@@ -26,6 +26,7 @@ import { useGarcom } from "@/lib/admin/garcom"
 import { autorDaAcao, itensEmTexto } from "@/lib/admin/regras/historico"
 import { porQueNaoTransfere } from "@/lib/admin/regras/movimentacoes"
 import { useAvisoComDesfazer } from "./aviso-desfazer"
+import { AvisoReserva, nomeNaLista, useReservaDaVez } from "./aviso-reserva"
 
 /** O motivo curto, ao lado do item que não pode sair agora. */
 const travado = (motivo: string) => (motivo.startsWith("A cozinha") ? "Na cozinha" : "Pago")
@@ -46,12 +47,14 @@ function Campos({
   const [quantas, setQuantas] = useState<Record<string, number>>({})
   const [destino, setDestino] = useState("")
   const [tentou, setTentou] = useState(false)
+  const reservaDa = useReservaDaVez()
   // A própria mesa e as juntas a ela não recebem; a bloqueada também não.
   const doGrupo = [mesa.id, ...(comanda.mesa?.juntadas ?? []).map((junta) => junta.id)]
   const destinos = (mesas ?? []).filter((outra) => !doGrupo.includes(outra.id) && !outra.bloqueio)
   const escolhidos = comanda.itens.flatMap((item) =>
     quantas[item.id] ? [{ item, quantidade: quantas[item.id] }] : [],
   )
+  const reserva = reservaDa(mesas?.find((outra) => outra.id === destino))
   const erros = {
     itens: tentou && escolhidos.length === 0 ? "Escolha os itens." : null,
     mesa: tentou && !destino ? "Escolha a mesa." : null,
@@ -74,6 +77,7 @@ function Campos({
             pedidoId: comanda.id,
             mesaDestinoId: destino,
             itens: escolhidos.map(({ item, quantidade }) => ({ itemId: item.id, quantidade })),
+            ...(reserva ? { confirmarReserva: true } : {}),
             ...autorDaAcao(por, comanda.mesa?.garcom),
           },
           {
@@ -159,16 +163,17 @@ function Campos({
           <SelectContent>
             {destinos.map((outra) => (
               <SelectItem key={outra.id} value={outra.id}>
-                Mesa {outra.numero}
+                {nomeNaLista(outra, reservaDa(outra))}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         {erros.mesa && <FieldError id="transferir-itens-destino-erro">{erros.mesa}</FieldError>}
       </Field>
+      {reserva && <AvisoReserva reserva={reserva} />}
       <DialogFooter>
         <Button type="submit" disabled={transferir.isPending}>
-          Transferir
+          {reserva ? "Transferir mesmo assim" : "Transferir"}
         </Button>
       </DialogFooter>
     </form>

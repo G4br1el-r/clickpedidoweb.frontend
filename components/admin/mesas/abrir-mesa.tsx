@@ -12,28 +12,40 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { useAbrirMesa, useConfigSalao } from "@/lib/admin/dados/consultas-mesas"
+import { useAbrirMesa, useConfigSalao, useSentarReserva } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
 import { conferirAbertura, garcomDoAparelho } from "@/lib/admin/regras/abrir-mesa"
+import { AvisoReserva, useReservaDaVez } from "./aviso-reserva"
 
 /**
  * Abre a mesa livre (Q6): pessoas (obrigatório, de 1 a 99), garçom da lista e o cliente,
  * se quiser. Mais pessoas que lugares só avisa (Q17). O que falta aparece ao tentar abrir.
+ * Na mesa reservada agora, avisa a reserva: "Abrir mesmo assim" confirma, e "Sentar" senta quem
+ * reservou, com o nome e as pessoas da reserva.
  */
 export function AbrirMesa({ mesa }: { mesa: Mesa }) {
   const { data: salao } = useConfigSalao()
   const doAparelho = useGarcom((estado) => estado.nome)
   const abrir = useAbrirMesa()
+  const sentar = useSentarReserva()
+  const reserva = useReservaDaVez()(mesa)
   const garcons = salao?.garcons.filter((garcom) => garcom.ativo).map((item) => item.nome) ?? []
   const [pessoas, setPessoas] = useState("")
   const [escolhido, setEscolhido] = useState<string | null>(null)
   const [cliente, setCliente] = useState("")
   const [tentou, setTentou] = useState(false)
+  // Sentar a reserva só pede o garçom: as pessoas vêm da reserva.
+  const [tentouSentar, setTentouSentar] = useState(false)
   // Sem escolha, vale o garçom deste aparelho quando ele está na lista.
   const garcom = escolhido ?? garcomDoAparelho(garcons, doAparelho)
   const conferida = conferirAbertura({ mesa, pessoas, garcom, garcons })
-  const erros = tentou ? conferida.erros : {}
+  const erros = tentou
+    ? conferida.erros
+    : tentouSentar && conferida.erros.garcom
+      ? { garcom: conferida.erros.garcom }
+      : {}
+  const por = doAparelho.trim() ? { por: doAparelho } : {}
 
   return (
     <form
@@ -49,7 +61,8 @@ export function AbrirMesa({ mesa }: { mesa: Mesa }) {
             pessoas: conferida.pessoas,
             ...(garcom ? { garcom } : {}),
             ...(cliente.trim() ? { clienteNome: cliente } : {}),
-            ...(doAparelho.trim() ? { por: doAparelho } : {}),
+            ...(reserva ? { confirmarReserva: true } : {}),
+            ...por,
           },
           {
             onSuccess: () => toast.success(`Mesa ${mesa.numero} aberta.`),
@@ -58,6 +71,7 @@ export function AbrirMesa({ mesa }: { mesa: Mesa }) {
         )
       }}
     >
+      {reserva && <AvisoReserva reserva={reserva} />}
       <FieldGroup>
         <div className="grid grid-cols-2 gap-3">
           <Field data-invalid={Boolean(erros.pessoas)}>
@@ -123,9 +137,31 @@ export function AbrirMesa({ mesa }: { mesa: Mesa }) {
           />
         </Field>
       </FieldGroup>
-      <Button type="submit" className="self-start" disabled={abrir.isPending}>
-        Abrir mesa
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button type="submit" disabled={abrir.isPending}>
+          {reserva ? "Abrir mesmo assim" : "Abrir mesa"}
+        </Button>
+        {reserva && (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={sentar.isPending}
+            onClick={() => {
+              setTentouSentar(true)
+              if (conferida.erros.garcom) return
+              sentar.mutate(
+                { id: reserva.id, mesaId: mesa.id, ...(garcom ? { garcom } : {}), ...por },
+                {
+                  onSuccess: () => toast.success(`${reserva.nome} na mesa ${mesa.numero}.`),
+                  onError: (erro) => toast.error(erro.message),
+                },
+              )
+            }}
+          >
+            Sentar {reserva.nome}
+          </Button>
+        )}
+      </div>
     </form>
   )
 }

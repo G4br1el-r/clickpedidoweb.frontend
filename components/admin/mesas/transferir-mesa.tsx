@@ -24,6 +24,7 @@ import type { Mesa, Pedido } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
 import { autorDaAcao } from "@/lib/admin/regras/historico"
 import { useAvisoComDesfazer } from "./aviso-desfazer"
+import { AvisoReserva, nomeNaLista, useReservaDaVez } from "./aviso-reserva"
 import { devolverFocoA } from "./devolver-foco"
 
 /** Mesa que pode receber a comanda inteira: livre, sem bloqueio e sem estar junto de outra. */
@@ -47,9 +48,12 @@ function Campos({
   const por = useGarcom((estado) => estado.nome)
   const [destino, setDestino] = useState("")
   const [tentou, setTentou] = useState(false)
+  const reservaDa = useReservaDaVez()
   const livres = (mesas ?? []).filter((outra) => outra.id !== mesa.id && recebeComanda(outra))
   const numero = mesas?.find((outra) => outra.id === destino)?.numero
   const erro = tentou && !destino ? "Escolha a mesa." : null
+  // A mesa escolhida está reservada agora: o aviso aparece e o botão confirma.
+  const reserva = reservaDa(mesas?.find((outra) => outra.id === destino))
   return (
     <form
       noValidate
@@ -62,6 +66,7 @@ function Campos({
           {
             pedidoId: comanda.id,
             mesaDestinoId: destino,
+            ...(reserva ? { confirmarReserva: true } : {}),
             ...autorDaAcao(por, comanda.mesa?.garcom),
           },
           {
@@ -96,16 +101,17 @@ function Campos({
           <SelectContent>
             {livres.map((outra) => (
               <SelectItem key={outra.id} value={outra.id}>
-                Mesa {outra.numero}
+                {nomeNaLista(outra, reservaDa(outra))}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
         {erro && <FieldError id="transferir-destino-erro">{erro}</FieldError>}
       </Field>
+      {reserva && <AvisoReserva reserva={reserva} />}
       <DialogFooter>
         <Button type="submit" disabled={transferir.isPending}>
-          Transferir
+          {reserva ? "Transferir mesmo assim" : "Transferir"}
         </Button>
       </DialogFooter>
     </form>
