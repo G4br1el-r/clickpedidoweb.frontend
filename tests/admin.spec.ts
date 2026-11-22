@@ -1228,3 +1228,61 @@ test("mesas: no celular o mapa só é visto, e a página não rola de lado", asy
   expect(sobra).toBeLessThanOrEqual(0)
   await verificarAcessibilidade(page)
 })
+
+test("mesas: reservar a mesa 8, chegar a hora, sentar a reserva e fechar a conta", async ({
+  page,
+}) => {
+  test.setTimeout(90_000)
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/mesas")
+
+  // Às 20:30, Helena reserva a mesa 8 para as 21:15, com 4 pessoas.
+  const painel = page.getByRole("region", { name: "Reservas e espera" })
+  await painel.getByRole("button", { name: "Nova reserva" }).click({ timeout: 15_000 })
+  const janela = page.getByRole("dialog", { name: "Nova reserva" })
+  await janela.getByRole("textbox", { name: "Nome" }).fill("Helena")
+  await janela.getByLabel("Horário").fill("21:15")
+  await janela.getByRole("spinbutton", { name: "Pessoas" }).fill("4")
+  await janela.getByRole("combobox", { name: "Mesa" }).click()
+  await page.getByRole("option", { name: "Mesa 8 · 4 lugares" }).click()
+  await verificarAcessibilidade(page)
+  await janela.getByRole("button", { name: "Salvar reserva" }).click()
+  await expect(page.getByText("Reserva de Helena salva.")).toBeVisible()
+  const mesa8 = page.getByRole("button", { name: "Mesa 8", exact: true })
+  await expect(mesa8).toContainText("Livre")
+
+  // Às 20:50 (25 min antes), a mesa 8 já está reservada.
+  await page.clock.setFixedTime(new Date("2026-11-13T20:50:00-03:00"))
+  await page.reload()
+  await expect(mesa8).toContainText("Reservada 21:15", { timeout: 15_000 })
+  await expect(mesa8).toContainText("Helena · 4 pessoas")
+
+  // Helena chegou: sentar abre a mesa 8 no nome dela, com a Bia.
+  await painel.getByRole("button", { name: "Sentar Helena" }).click()
+  const sentar = page.getByRole("dialog", { name: "Sentar Helena" })
+  await expect(sentar.getByRole("combobox", { name: "Mesa" })).toContainText("Mesa 8")
+  await sentar.getByRole("combobox", { name: "Garçom" }).click()
+  await page.getByRole("option", { name: "Bia" }).click()
+  await verificarAcessibilidade(page)
+  await sentar.getByRole("button", { name: "Sentar" }).click()
+  await expect(page.getByText("Helena na mesa 8.")).toBeVisible()
+  await expect(mesa8).toContainText("Helena")
+  await expect(painel.getByRole("list", { name: "Reservas de hoje" })).toContainText("Sentou")
+
+  // Uma água de R$ 4,00: a conta fica em 4 + 0,40 de taxa + 4 × 8 de couvert = R$ 36,40.
+  await mesa8.click()
+  const gaveta = page.getByRole("dialog", { name: "Mesa 8" })
+  await gaveta.getByRole("textbox", { name: "Item avulso" }).fill("Água")
+  await gaveta.getByRole("textbox", { name: "Valor" }).fill("4")
+  await gaveta.getByRole("button", { name: "Incluir item avulso" }).click()
+  await expect(gaveta.getByRole("listitem", { name: "Água" })).toBeVisible()
+
+  // Recebe no Pix e a mesa vai para a limpeza.
+  await gaveta.getByRole("tab", { name: "Conta" }).click()
+  await gaveta.getByRole("button", { name: "Fechar conta" }).click()
+  const receber = page.getByRole("dialog", { name: "Receber da mesa 8" })
+  await receber.getByText("Pix").click()
+  await receber.getByRole("button", { name: "Receber R$ 36,40" }).click()
+  await expect(page.getByText("Conta da mesa 8 fechada.")).toBeVisible()
+  await expect(mesa8).toContainText("Limpeza")
+})

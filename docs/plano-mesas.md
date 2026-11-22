@@ -10,7 +10,7 @@
 
 **Origem:** as decisões Q1 a Q52 da sessão de perguntas de 18 e 19/11/2026, registradas abaixo. Base anterior: Fase 8 de [plano-painel-admin.md](plano-painel-admin.md).
 
-**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. A Fase 5 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4. A Fase 6 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-6`, empilhada sobre a Fase 5. As Fases 1 a 7 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
+**Situação:** a Fase 1 ficou pronta em 19/11/2026 e está no PR #1. A Fase 2 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-2`, empilhada sobre a Fase 1. A Fase 3 ficou pronta em 21/11/2026, na branch `claude/admin-mesas-fase-3`, empilhada sobre a Fase 2. A Fase 4 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-4`, empilhada sobre a Fase 3. A Fase 5 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-5`, empilhada sobre a Fase 4. A Fase 6 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-6`, empilhada sobre a Fase 5. A Fase 7 ficou pronta em 22/11/2026, na branch `claude/admin-mesas-fase-7`, empilhada sobre a Fase 6. As Fases 1 a 7 já têm passo a passo. Cada fase seguinte ganha o seu quando a anterior estiver pronta, já sobre o código real.
 
 ## Restrições gerais
 
@@ -2402,6 +2402,32 @@ export function reservasDemo(mesas: Mesa[], agora: Date): { reservas: Reserva[];
 - [ ] `pnpm check`, mostrando a saída. `pnpm test:coverage` e subir os mínimos se a cobertura subiu.
 - [ ] Os screenshots ficam para a revisão.
 - [ ] Registrar a "Situação" no fim desta seção.
+
+Situação: pronta em 22/11/2026, na branch `claude/admin-mesas-fase-7`, empilhada sobre a Fase 6, antes da revisão. O PR sai depois que as Fases 1 a 6 estiverem no `main`.
+
+- **Mudou fora do plano:**
+  - a confirmação de reserva na tela ganhou o arquivo de teste próprio, `aviso-reserva.test.tsx`, e "Entrar na espera" ganhou o componente `entrar-na-espera.tsx` (botão "Pôr na fila");
+  - as abas do painel dizem a contagem: "Reservas 2" (as marcadas dentro da tolerância) e "Espera 3";
+  - com o painel à direita a partir de 1280 px, a grade passa a ter 5 colunas só de 1536 px para cima (`2xl`; antes, `xl`);
+  - o E2E escolhe a mesa 8 na lista: às 20:30, para as 21:15 (fora da antecedência), a sugestão para 4 pessoas é a mesa 1, ocupada agora (a regra deixa a ocupada entrar para mais tarde). A conta ganha uma Água antes de fechar, porque a comanda vazia só oferece "Liberar mesa";
+  - minutos da reserva fora de 0 a 600 em Configurar salão mostram a mensagem que o esquema já tinha ("Informe os minutos.").
+- **Testes antigos que mudaram (mudança de comportamento planejada):**
+  - `pagina-mesas.test.tsx`: o resumo passa a "8 ocupadas · 8 livres" (a 13 fica reservada); "o filtro de estado não oferece Reservada" virou "oferece Reservada, depois de Livre"; "?estado=reservada não filtra" virou "mostra só a mesa 13"; "uma seção por área…" passa a esperar o título "Reservas e espera" antes das áreas; os dois que contavam todos os `listitem` da página (`?estado=bloqueada` e "Precisam de atenção") passam a contar os botões das mesas (`/^Mesa \d+$/`), porque o painel também tem listas;
+  - `movimentacoes.test.tsx`: "?estado=juntada mostra só a 16" conta os botões das mesas, pelo mesmo motivo;
+  - `configurar-salao.test.tsx`: "reservas e QR não aparecem…" virou "o QR não aparece…" (as reservas entraram no painel).
+- **Testes que passaram de primeira**, porque a regra já saía do desenho de outra fatia: em `reservas.test.ts`, "quem conta" em `reservaDaMesa` e "sem mesa que caiba"; em `servidor-reservas.test.ts`, a reserva de ontem fora da lista, as recusas de sentar (mesa dada, atrasada, cancelada, outra reserva da vez; a exclusão da própria reserva foi conferida tirando-a do código e vendo o vermelho) e a reserva vencida ou cancelada que não impede excluir e bloquear; em `mapa-salao.test.tsx`, a mesa 13 no mapa (o mapa recebe as linhas da grade).
+- **Fica para depois:**
+  - reservar para outro dia (o painel é "do dia");
+  - confirmação antes de cancelar a reserva e desfazer o cancelamento;
+  - "Sentar a reserva" no menu ⋯ da mesa reservada (hoje está na gaveta e no painel);
+  - entradas `salao.reservas` no `CATALOGO_PRO` (Fase 8, com as outras);
+  - avisar sozinho quando uma mesa libera (a sugestão aparece na fila, sem som nem destaque);
+  - os E2E antigos e os screenshots não foram rodados nesta fase (ficaram para a revisão).
+- **Telas que mudam nos screenshots** (para a revisão):
+  - pela tela e pela demonstração: `painel-mesas-*` (o painel "Reservas e espera", a 13 "Reservada 20:50" com "Marina Costa · 2 pessoas", "8 livres", a grade com 4 colunas entre 1280 e 1535 px), `painel-mapa-*` e `painel-mapa-edicao-*` (a 13 reservada no mapa da Varanda não aparece no Salão, mas o painel fica ao lado), `painel-configurar-salao-*` (o interruptor de reservas em Funções Pro e o bloco Reservas);
+  - por trás das janelas e da gaveta: `painel-comanda-*`, `painel-comanda-conta-*`, `painel-receber-conta-*`, `painel-adicionar-itens-*`, `painel-abrir-mesa-*`, `painel-nova-mesa-*`, `painel-atalhos-mesas-*`, `painel-transferir-mesa-*`, `painel-juntar-mesas-*` (a 13 "reservada 20:50" na lista) e `painel-transferir-itens-*`;
+  - sem screenshot ainda: a janela "Nova reserva", "Sentar" e "Entrar na espera", a aba Espera e o painel com o cadeado Pro.
+- **Testes e cobertura:** 1801 testes no Vitest (`pnpm check` verde). O E2E novo ("mesas: reservar a mesa 8, chegar a hora, sentar a reserva e fechar a conta") passou em `desktop-1920` e `celular-390`, contra o `next start` na porta 3010. A cobertura ficou em 85,42/78,64/83,81/86,45 no geral: os mínimos sobem para 85/78/83/86; `lib/**` continua em 98/95/98/98.
 
 ## Fase 8: QR na mesa
 
