@@ -1,4 +1,5 @@
 import { describe, expect, test } from "vitest"
+import { clientesDos90Dias, reguaDeClientes, sumidos } from "../regras/dashboard/clientes"
 import { MOTIVOS_CANCELAMENTO } from "../regras/rotulos"
 import { proximoStatus } from "../regras/status"
 import { catalogoDeTeste as catalogo } from "./catalogo-de-teste"
@@ -280,6 +281,24 @@ describe("gerarPedidos", () => {
     }).filter((item) => item.status !== "cancelado")) {
       expect(pedido).not.toHaveProperty("motivoCancelamento")
     }
+  })
+
+  test("os clientes têm ritmos diferentes: uns sumiram, uns são novos e uns pediram uma vez só", async () => {
+    // O catálogo de verdade: com 42 clientes, todos os ritmos aparecem.
+    const loja = await carregarCatalogo("lanchonete")
+    const pedidos = gerarPedidos({
+      catalogo: loja,
+      segmento: "lanchonete",
+      de: new Date(2026, 7, 16),
+      agora: AGORA,
+    })
+    const clientes = clientesDos90Dias(pedidos, AGORA, loja.loja.telefone)
+    const regua = reguaDeClientes(clientes, AGORA)
+
+    expect(sumidos(clientes, AGORA).length).toBeGreaterThan(0)
+    expect(regua.novos).toBeGreaterThan(0)
+    expect(clientes.some((cliente) => cliente.pedidos === 1)).toBe(true)
+    expect(regua.recorrentes).toBeLessThan(100)
   })
 
   test("a demonstração abre com pedidos em todas as etapas, inclusive mesa aberta", () => {

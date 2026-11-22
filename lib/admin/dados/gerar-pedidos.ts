@@ -1,4 +1,12 @@
-import { addDays, addMinutes, format, isSameDay, isSameMonth, startOfDay } from "date-fns"
+import {
+  addDays,
+  addMinutes,
+  differenceInCalendarDays,
+  format,
+  isSameDay,
+  isSameMonth,
+  startOfDay,
+} from "date-fns"
 import { uniformInt } from "pure-rand/distribution/uniformInt"
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus"
 import type { RandomGenerator } from "pure-rand/types/RandomGenerator"
@@ -334,6 +342,37 @@ function historicoGerado({
 const comMotivo = (motivo: MotivoCancelamento | undefined) =>
   motivo ? { motivoCancelamento: motivo } : {}
 
+/** De quantos dias para cá os clientes "sumidos" deixaram de pedir. */
+const SUMIDO_HA = 40
+/** De quantos dias para cá os clientes "novos" começaram a pedir. */
+const NOVO_HA = 20
+
+/**
+ * Ritmo dos clientes da demonstração, para a aba Clientes ter o que mostrar: 1 em 7 sumiu
+ * (não pede há 40 dias), 1 em 9 é novo (começou há 20 dias). O pedido que sai deles vai
+ * para um cliente de uma vez só, com nome e telefone de um sorteador próprio do pedido.
+ */
+function clienteDaDemonstracao(
+  cliente: Pedido["cliente"],
+  clientes: Pedido["cliente"][],
+  criado: Date,
+  agora: Date,
+  id: number,
+): Pedido["cliente"] {
+  const indice = clientes.indexOf(cliente)
+  const dias = differenceInCalendarDays(agora, criado)
+  const sumiu = indice % 7 === 3 && dias < SUMIDO_HA
+  const novo = indice % 9 === 5 && dias > NOVO_HA
+  if (!sumiu && !novo) return cliente
+  const proprio = sorteadorDaSemente((id * 104_729 + 17) | 0)
+  const nome = proprio.um(clientes).nome.split(" ")[0]
+  const sobrenome = proprio.um(clientes).nome.split(" ").at(-1)
+  return {
+    nome: `${nome} ${sobrenome}`,
+    telefone: `1299${String(proprio.inteiro(0, 9_999_999)).padStart(7, "0")}`,
+  }
+}
+
 /** Motivos sorteados para os cancelados, com o peso de cada um. */
 const MOTIVOS_SORTEADOS: [MotivoCancelamento | undefined, number][] = [
   [undefined, 20],
@@ -496,7 +535,13 @@ export function gerarPedidos({
           : !vivo && tipo !== "entrega" && temPdv && sorte.chance(35)
             ? "pdv"
             : "site"
-      const cliente = sorte.um(catalogo.clientes)
+      const cliente = clienteDaDemonstracao(
+        sorte.um(catalogo.clientes),
+        catalogo.clientes,
+        criado,
+        agora,
+        id,
+      )
 
       const itens = Array.from({ length: sorte.inteiro(1, salao ? 2 : 3) }, (_, indice) =>
         montarItem(sorte, sorte.um(produtos), `${id}-${indice + 1}`, segmento, origem !== "site"),

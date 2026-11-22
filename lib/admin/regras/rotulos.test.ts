@@ -8,6 +8,7 @@ import {
   rotuloOrigem,
   rotuloPagamento,
   rotuloPagamentoDoPedido,
+  rotuloTaxa,
 } from "./rotulos"
 
 describe("rótulos", () => {
@@ -75,6 +76,12 @@ describe("rótulos", () => {
       "Outro",
     ])
     expect(rotuloMotivo(undefined)).toBe("Não informado")
+  })
+
+  test("formas que têm taxa de pagamento", () => {
+    expect(rotuloTaxa("pixOnline")).toBe("Pix online")
+    expect(rotuloTaxa("cartaoOnline")).toBe("Cartão online")
+    expect(rotuloTaxa("maquininha")).toBe("Cartão na maquininha")
   })
 
   test("origens dos pedidos", () => {
