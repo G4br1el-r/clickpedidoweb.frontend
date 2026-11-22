@@ -116,6 +116,25 @@ describe("PaginaCozinha", () => {
     expect(pronto.getByText("Servir na mesa")).toBeInTheDocument()
   })
 
+  test("marcar pronto o ticket da mesa deixa a comanda esperando ser servida", async () => {
+    telaGrande()
+    const { comanda } = await comandaNaMesa(52)
+    await api().pedidos.avancar(comanda.id, "recebido")
+    const usuario = userEvent.setup()
+    renderizar()
+
+    const preparando = await coluna("Preparando")
+    await usuario.click(
+      within(await preparando.findByRole("article", { name: /^Mesa 52 ·/ })).getByRole("button", {
+        name: "Marcar pronto",
+      }),
+    )
+    await (await coluna("Prontos")).findByRole("article", { name: /^Mesa 52 ·/ })
+    expect((await api().pedidos.buscar(comanda.id))?.servirDesde).toBe(
+      new Date(2026, 10, 13, 20, 30).toISOString(),
+    )
+  })
+
   test("rodada nova mostra só os itens novos; o que já foi servido fica à parte", async () => {
     telaGrande()
     const { produto, mesa, comanda } = await comandaNaMesa(51, 1)

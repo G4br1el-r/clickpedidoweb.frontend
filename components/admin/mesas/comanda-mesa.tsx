@@ -4,7 +4,9 @@ import NumberFlow from "@number-flow/react"
 import { format } from "date-fns"
 import {
   BanknoteIcon,
+  ConciergeBellIcon,
   CreditCardIcon,
+  HandCoinsIcon,
   LockOpenIcon,
   MinusIcon,
   PencilIcon,
@@ -53,10 +55,13 @@ import {
   useLancarNaMesa,
   useLiberarMesa,
   useMarcarLimpa,
+  useMarcarServido,
+  usePedirConta,
   useRemoverItem,
 } from "@/lib/admin/dados/consultas-mesas"
 import type { PagamentoMesa } from "@/lib/admin/dados/servidor"
 import type { ItemPedido, Mesa, Pedido } from "@/lib/admin/dados/tipos"
+import { useGarcom } from "@/lib/admin/garcom"
 import { cozinhaJaPreparou } from "@/lib/admin/regras/cozinha"
 import { type EstadoMesa, estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
@@ -68,6 +73,7 @@ import { AdicionarItens } from "./adicionar-itens"
 import { CancelarComanda } from "./cancelar-comanda"
 import { EditarItem } from "./editar-item"
 import { ConfirmarExclusaoMesa } from "./excluir-mesa"
+import { HistoricoComanda } from "./historico-comanda"
 import { TirarItem } from "./tirar-item"
 
 const PAGAMENTOS: { valor: PagamentoMesa; rotulo: string; icone: typeof BanknoteIcon }[] = [
@@ -263,8 +269,18 @@ function FecharConta({
 }
 
 /** Aba Conta: o resumo da comanda e as ações sobre ela. Pagamentos e divisão chegam na Fase 4. */
-function ContaComanda({ pedido, aoCancelar }: { pedido: Pedido; aoCancelar: () => void }) {
+function ContaComanda({
+  mesa,
+  pedido,
+  aoCancelar,
+}: {
+  mesa: Mesa
+  pedido: Pedido
+  aoCancelar: () => void
+}) {
   const quantidade = pedido.itens.reduce((soma, item) => soma + item.quantidade, 0)
+  const pedirConta = usePedirConta()
+  const por = useGarcom((estado) => estado.nome)
   return (
     <>
       <dl className="flex flex-col gap-2 text-sm">
@@ -281,6 +297,30 @@ function ContaComanda({ pedido, aoCancelar }: { pedido: Pedido; aoCancelar: () =
           </div>
         )}
       </dl>
+      {pedido.contaPedidaEm ? (
+        <p className="text-sm text-muted-foreground">
+          Pediu a conta às {format(new Date(pedido.contaPedidaEm), "HH:mm")}.
+        </p>
+      ) : (
+        <Button
+          type="button"
+          variant="outline"
+          className="self-start"
+          disabled={pedirConta.isPending}
+          onClick={() =>
+            pedirConta.mutate(
+              { pedidoId: pedido.id, ...(por.trim() ? { por } : {}) },
+              {
+                onSuccess: () => toast.success(`Mesa ${mesa.numero} pediu a conta.`),
+                onError: (erro) => toast.error(erro.message),
+              },
+            )
+          }
+        >
+          <HandCoinsIcon data-icon="inline-start" />
+          Pediu a conta
+        </Button>
+      )}
       {pedido.itens.length > 0 && (
         <Button
           type="button"
@@ -303,6 +343,8 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   const liberar = useLiberarMesa()
   const [fechando, setFechando] = useState(false)
   const [adicionando, setAdicionando] = useState(false)
+  const servir = useMarcarServido()
+  const por = useGarcom((estado) => estado.nome)
   const [editando, setEditando] = useState<ItemPedido | null>(null)
   const [cancelando, setCancelando] = useState(false)
   const conta = useRef<HTMLDivElement>(null)
@@ -348,6 +390,27 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
             <Traco tom={estado.tom} />
             {estado.rotulo}
           </span>
+          {pedido.servirDesde && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="ml-auto"
+              disabled={servir.isPending}
+              onClick={() =>
+                servir.mutate(
+                  { pedidoId: pedido.id, ...(por.trim() ? { por } : {}) },
+                  {
+                    onSuccess: () => toast.success(`Mesa ${mesa.numero} servida.`),
+                    onError: aoErrar,
+                  },
+                )
+              }
+            >
+              <ConciergeBellIcon data-icon="inline-start" />
+              Marcar servido
+            </Button>
+          )}
         </div>
         <SheetDescription>
           {[
@@ -478,9 +541,11 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
           <ItemAvulso mesaId={mesa.id} />
         </TabsContent>
         <TabsContent value="conta" className="flex flex-col gap-5 overflow-y-auto p-4">
-          <ContaComanda pedido={pedido} aoCancelar={() => setCancelando(true)} />
+          <ContaComanda mesa={mesa} pedido={pedido} aoCancelar={() => setCancelando(true)} />
         </TabsContent>
-        <TabsContent value="historico" className="flex flex-col gap-5 overflow-y-auto p-4" />
+        <TabsContent value="historico" className="flex flex-col gap-5 overflow-y-auto p-4">
+          <HistoricoComanda pedido={pedido} />
+        </TabsContent>
       </Tabs>
 
       <SheetFooter className="gap-3 border-t border-border/70">

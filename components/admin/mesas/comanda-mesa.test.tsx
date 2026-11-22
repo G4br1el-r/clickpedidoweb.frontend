@@ -17,6 +17,9 @@ import { PaginaMesas } from "./pagina-mesas"
 
 vi.mock("react-to-print", () => ({ useReactToPrint: () => () => {} }))
 
+// Cada teste monta a tela de mesas inteira e passa por várias janelas: 5 s é pouco com a máquina ocupada.
+vi.setConfig({ testTimeout: 15_000 })
+
 function Provedores({ children, endereco }: { children: ReactNode; endereco?: string }) {
   const [cliente] = useState(
     () => new QueryClient({ defaultOptions: { queries: { retry: false } } }),
@@ -234,5 +237,68 @@ describe("ComandaMesa: editar, tirar e cancelar", () => {
     expect(await screen.findByText("Comanda da mesa 11 cancelada.")).toBeInTheDocument()
     await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
     expect(await cartao(11)).toHaveTextContent("Livre")
+  })
+})
+
+describe("ComandaMesa: servir, pedir a conta e histórico", () => {
+  test("a mesa em Servir mostra Marcar servido; ao marcar, o botão some", async () => {
+    const comanda = await mesa11ComPizzaEmPreparo()
+    await api().pedidos.avancar(comanda.id, "em-preparo")
+    const { usuario, gaveta } = await abrirMesa(11)
+    await usuario.click(await gaveta.findByRole("button", { name: "Marcar servido" }))
+
+    expect(await screen.findByText("Mesa 11 servida.")).toBeInTheDocument()
+    await waitFor(() =>
+      expect(gaveta.queryByRole("button", { name: "Marcar servido" })).not.toBeInTheDocument(),
+    )
+    expect((await api().pedidos.buscar(comanda.id))?.servirDesde).toBeUndefined()
+  })
+
+  test("o menu ⋯ da mesa em Servir tem Marcar servido", async () => {
+    const comanda = await mesa11ComPizzaEmPreparo()
+    await api().pedidos.avancar(comanda.id, "em-preparo")
+    const { usuario } = await abrirMesa(11)
+    await usuario.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    await usuario.click(screen.getByRole("button", { name: "Ações da mesa 11" }))
+    await usuario.click(await screen.findByRole("menuitem", { name: "Marcar servido" }))
+
+    expect(await screen.findByText("Mesa 11 servida.")).toBeInTheDocument()
+    await waitFor(async () => expect(await cartao(11)).toHaveAccessibleDescription(/^Ocupada/))
+  })
+
+  test("Pediu a conta, na aba Conta, deixa o cartão em Pediu a conta", async () => {
+    await mesa11ComPizzaEmPreparo()
+    const { usuario, gaveta } = await abrirMesa(11)
+    await usuario.click(await gaveta.findByRole("tab", { name: "Conta" }))
+    await usuario.click(gaveta.getByRole("button", { name: "Pediu a conta" }))
+
+    expect(await screen.findByText("Mesa 11 pediu a conta.")).toBeInTheDocument()
+    expect(gaveta.queryByRole("button", { name: "Pediu a conta" })).not.toBeInTheDocument()
+    await usuario.keyboard("{Escape}")
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument())
+    await waitFor(async () =>
+      expect(await cartao(11)).toHaveAccessibleDescription(/^Pediu a conta/),
+    )
+  })
+
+  test("a aba Histórico lista os eventos do mais novo para o mais antigo, com hora e garçom", async () => {
+    await mesa11ComPizzaEmPreparo()
+    const { usuario, gaveta } = await abrirMesa(11)
+    await usuario.click(await gaveta.findByRole("tab", { name: "Histórico" }))
+    const linhas = within(gaveta.getByRole("list", { name: "Histórico da comanda" }))
+      .getAllByRole("listitem")
+      .map((linha) => linha.textContent)
+    expect(linhas).toEqual([
+      "20:30Rodada 2 para a cozinha: 1× Pizza",
+      "20:30Rodada 1 lançada na mesa: 1× Suco",
+      "20:30Mesa aberta para 2 pessoas · Bia",
+    ])
+  })
+
+  test("a comanda antiga, sem eventos, diz que não há histórico", async () => {
+    const { usuario, gaveta } = await abrirMesa(1)
+    await usuario.click(await gaveta.findByRole("tab", { name: "Histórico" }))
+    expect(gaveta.getByText("Sem histórico registrado.")).toBeInTheDocument()
   })
 })
