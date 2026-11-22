@@ -1,4 +1,14 @@
-import type { Mesa, PosicaoMesa } from "../dados/tipos"
+import type { ConfigSalao, Mesa, PosicaoMesa } from "../dados/tipos"
+
+/** As funções Pro do salão, com o preço mensal proposto (decorrência 6). */
+export const FUNCOES_PRO_SALAO: Record<
+  keyof ConfigSalao["funcoes"],
+  { nome: string; preco: number }
+> = {
+  mapa: { nome: "Mapa do salão", preco: 19.9 },
+  reservas: { nome: "Reservas e lista de espera", preco: 24.9 },
+  qr: { nome: "QR na mesa", preco: 39.9 },
+}
 
 /** Grade do mapa de cada área, em células. */
 export const GRADE_MAPA = { colunas: 24, linhas: 16 } as const

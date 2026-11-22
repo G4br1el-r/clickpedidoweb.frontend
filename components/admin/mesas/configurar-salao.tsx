@@ -23,7 +23,10 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { useSalvarConfigSalao } from "@/lib/admin/dados/consultas-mesas"
 import type { AreaSalao, ConfigSalao, Garcom } from "@/lib/admin/dados/tipos"
+import { FUNCOES_PRO_SALAO } from "@/lib/admin/regras/salao"
+import { emReais } from "@/lib/formato"
 import { BlocoSecao } from "../bloco-secao"
+import { SeloPro } from "../campos"
 
 /** O campo guarda o texto digitado; quem confere o valor é o servidor. */
 const numero = (texto: string) =>
@@ -47,6 +50,7 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
   const [couvertAtivo, setCouvertAtivo] = useState(salao.couvert.ativo)
   const [couvert, setCouvert] = useState(String(salao.couvert.porPessoa))
   const [limpeza, setLimpeza] = useState(salao.limpeza)
+  const [mapa, setMapa] = useState(salao.funcoes.mapa)
   const [alertas, setAlertas] = useState(() =>
     Object.fromEntries(ALERTAS.map(([chave]) => [chave, String(salao.alertas[chave])])),
   )
@@ -57,7 +61,7 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
     setGarcons(garcons.map((garcom, i) => (i === indice ? { ...garcom, ...mudanca } : garcom)))
 
   const enviar = () => {
-    // Reservas, QR e funções ficam como o servidor devolveu.
+    // Reservas, QR e as outras funções Pro ficam como o servidor devolveu.
     const config: ConfigSalao = {
       ...salao,
       areas: areas.map((area, indice) => ({ ...area, ordem: indice })),
@@ -70,6 +74,7 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
         ? { ativo: true, porPessoa: numero(couvert) }
         : { ...salao.couvert, ativo: false },
       limpeza,
+      funcoes: { ...salao.funcoes, mapa },
       alertas: {
         semPedidoMin: numero(alertas.semPedidoMin),
         contaPedidaMin: numero(alertas.contaPedidaMin),
@@ -243,6 +248,22 @@ function Campos({ salao, aoFechar }: { salao: ConfigSalao; aoFechar: () => void 
           </Field>
         </BlocoSecao>
 
+        <BlocoSecao titulo="Funções Pro" descricao="Recursos do plano Pro para o salão.">
+          <Field orientation="horizontal">
+            <FieldContent>
+              <FieldLabel htmlFor="salao-mapa" className="flex flex-wrap items-center gap-2">
+                {FUNCOES_PRO_SALAO.mapa.nome}
+                <SeloPro liberada={mapa} />
+              </FieldLabel>
+              <FieldDescription>
+                As mesas na planta de cada área, para ver e arrastar.{" "}
+                {emReais(FUNCOES_PRO_SALAO.mapa.preco)} por mês.
+              </FieldDescription>
+            </FieldContent>
+            <Switch id="salao-mapa" checked={mapa} onCheckedChange={setMapa} />
+          </Field>
+        </BlocoSecao>
+
         <BlocoSecao titulo="Alertas" descricao="Minutos até a mesa pedir atenção.">
           <div className="grid grid-cols-2 gap-3">
             {ALERTAS.map(([chave, rotulo]) => (
@@ -289,8 +310,19 @@ function PainelSalao({
 }
 
 /** Botão do cabeçalho que abre o painel Configurar salão. */
-export function ConfigurarSalao({ salao }: { salao: ConfigSalao | undefined }) {
-  const [aberto, setAberto] = useState(false)
+export function ConfigurarSalao({
+  salao,
+  aberto: abertoDeFora,
+  aoMudar,
+}: {
+  salao: ConfigSalao | undefined
+  /** Aberto por fora (a explicação do mapa Pro abre o painel). */
+  aberto?: boolean
+  aoMudar?: (aberto: boolean) => void
+}) {
+  const [abertoAqui, setAbertoAqui] = useState(false)
+  const aberto = abertoDeFora ?? abertoAqui
+  const setAberto = aoMudar ?? setAbertoAqui
   return (
     <>
       <Button

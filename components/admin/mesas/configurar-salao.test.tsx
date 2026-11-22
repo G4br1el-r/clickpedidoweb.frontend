@@ -191,11 +191,11 @@ describe("Configurar salão", () => {
     expect(painel.queryByLabelText("Couvert por pessoa (R$)")).not.toBeInTheDocument()
   })
 
-  test("reservas, QR e funções Pro não aparecem e voltam iguais no que é salvo", async () => {
+  test("reservas e QR não aparecem e voltam iguais no que é salvo", async () => {
     const antes = await api().salao.config()
     const { usuario, painel } = await abrirPainel()
 
-    expect(painel.queryByText(/reserva|QR|mapa/i)).not.toBeInTheDocument()
+    expect(painel.queryByText(/reserva|QR/i)).not.toBeInTheDocument()
     await usuario.click(painel.getByRole("switch", { name: "Limpeza depois de fechar a conta" }))
     await usuario.click(painel.getByRole("button", { name: "Salvar" }))
     await screen.findByText("Salão salvo.")
@@ -205,5 +205,18 @@ describe("Configurar salão", () => {
     expect(depois.reservas).toEqual(antes.reservas)
     expect(depois.qr).toEqual(antes.qr)
     expect(depois.funcoes).toEqual(antes.funcoes)
+  })
+
+  test("o mapa do salão, função Pro, liga e desliga aqui, sem mexer em reservas e QR", async () => {
+    const antes = await api().salao.config()
+    const { usuario, painel } = await abrirPainel()
+    const mapa = painel.getByRole("switch", { name: /^Mapa do salão/ })
+    expect(mapa).toBeChecked()
+
+    await usuario.click(mapa)
+    await usuario.click(painel.getByRole("button", { name: "Salvar" }))
+    await screen.findByText("Salão salvo.")
+
+    expect((await api().salao.config()).funcoes).toEqual({ ...antes.funcoes, mapa: false })
   })
 })

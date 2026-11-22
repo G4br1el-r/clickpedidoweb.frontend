@@ -348,3 +348,42 @@ describe("editar o mapa", () => {
     expect(endereco).not.toContain("mesa=")
   })
 })
+
+describe("cadeado Pro", () => {
+  /** O plano sem o mapa do salão (a demonstração vem com tudo ligado). */
+  async function semMapa() {
+    const salao = await api().salao.config()
+    await api().salao.salvar({ ...salao, funcoes: { ...salao.funcoes, mapa: false } })
+  }
+
+  test("com a função desligada, Mapa tem o cadeado e abre a explicação em vez de trocar a vista", async () => {
+    await semMapa()
+    const usuario = await abrir()
+    const opcao = screen.getByRole("radio", { name: "Mapa Pro" })
+
+    await usuario.click(opcao)
+
+    const janela = within(await screen.findByRole("dialog", { name: "Mapa do salão é Pro" }))
+    expect(janela.getByText(/R\$ 19,90 por mês/)).toBeInTheDocument()
+    // A janela esconde o resto do leitor de tela; a vista continua na grade por trás dela.
+    expect(screen.getByRole("radio", { name: "Grade", hidden: true })).toBeChecked()
+    expect(endereco).not.toContain("vista=mapa")
+
+    await usuario.click(janela.getByRole("button", { name: "Abrir Configurar salão" }))
+    expect(await screen.findByRole("dialog", { name: "Configurar salão" })).toBeInTheDocument()
+  })
+
+  test("com a função desligada, ?vista=mapa mostra a grade", async () => {
+    await semMapa()
+    await abrir("?vista=mapa")
+    expect(await screen.findByRole("list", { name: "Salão" })).toBeInTheDocument()
+    expect(screen.queryByRole("list", { name: "Mapa: Salão" })).not.toBeInTheDocument()
+  })
+
+  test("com a função desligada, o M abre a mesma explicação", async () => {
+    await semMapa()
+    const usuario = await abrir()
+    await usuario.keyboard("m")
+    expect(await screen.findByRole("dialog", { name: "Mapa do salão é Pro" })).toBeInTheDocument()
+  })
+})

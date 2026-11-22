@@ -26,6 +26,7 @@ import { filtrarMesas, type MesaNaGrade } from "@/lib/admin/regras/filtro-mesas"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { plural } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { SeloPro } from "../campos"
 import { AtalhosMesas, FolhaAtalhos } from "./atalhos-mesas"
 import { BloquearMesa } from "./bloquear-mesa"
 import { CartaoMesa } from "./cartao-mesa"
@@ -34,7 +35,7 @@ import { ConfigurarSalao } from "./configurar-salao"
 import { LIMPAR_GRADE, useEstadoGrade, useMesaAberta, useVista, type Vista } from "./estado-grade"
 import { FiltrosMesas } from "./filtros-mesas"
 import { FormularioMesa } from "./formulario-mesa"
-import { MapaSalao } from "./mapa-salao"
+import { MapaPro, MapaSalao } from "./mapa-salao"
 import { NovaMesa } from "./nova-mesa"
 import { NumerosSalao } from "./numeros-salao"
 
@@ -51,7 +52,15 @@ export function PaginaMesas() {
   const [filtros, setFiltros] = useEstadoGrade()
   const [numeroAberto, setNumeroAberto] = useMesaAberta()
   const [vista, setVista] = useVista()
-  const noMapa = vista === "mapa"
+  const mapaLiberado = salao?.funcoes.mapa ?? false
+  // Com a função Pro desligada, ?vista=mapa mostra a grade.
+  const noMapa = vista === "mapa" && mapaLiberado
+  const [mapaProAberto, setMapaProAberto] = useState(false)
+  const [salaoAberto, setSalaoAberto] = useState(false)
+  const mudarVista = (nova: Vista) => {
+    if (nova === "mapa" && !mapaLiberado) setMapaProAberto(true)
+    else void setVista(nova)
+  }
   const telaGrande = useTelaGrande()
   const [editandoMapa, setEditandoMapa] = useState(false)
   const [editandoId, setEditandoId] = useState<string | null>(null)
@@ -158,7 +167,7 @@ export function PaginaMesas() {
             >
               <KeyboardIcon />
             </Button>
-            <ConfigurarSalao salao={salao} />
+            <ConfigurarSalao salao={salao} aberto={salaoAberto} aoMudar={setSalaoAberto} />
             <NovaMesa aberta={novaAberta} aoMudar={setNovaAberta} />
           </>
         }
@@ -174,17 +183,22 @@ export function PaginaMesas() {
           variant="segmento"
           size="sm"
           aria-label="Vista"
-          value={vista}
+          value={noMapa ? "mapa" : "grade"}
           disabled={editandoMapa}
-          onValueChange={(nova) => nova && void setVista(nova as Vista)}
+          onValueChange={(nova) => nova && mudarVista(nova as Vista)}
         >
           <ToggleGroupItem value="grade" className="px-3">
             <LayoutGridIcon data-icon="inline-start" />
             Grade
           </ToggleGroupItem>
-          <ToggleGroupItem value="mapa" className="px-3">
+          <ToggleGroupItem
+            value="mapa"
+            className="px-3"
+            aria-label={mapaLiberado ? undefined : "Mapa Pro"}
+          >
             <MapIcon data-icon="inline-start" />
             Mapa
+            {!mapaLiberado && <SeloPro liberada={false} />}
           </ToggleGroupItem>
         </ToggleGroup>
       )}
@@ -294,9 +308,14 @@ export function PaginaMesas() {
         aoAbrirMesa={abrirPeloNumero}
         aoNovaMesa={() => setNovaAberta(true)}
         aoAjuda={() => setAjudaAberta(true)}
-        aoAlternarVista={() => !editandoMapa && void setVista(noMapa ? "grade" : "mapa")}
+        aoAlternarVista={() => !editandoMapa && mudarVista(noMapa ? "grade" : "mapa")}
       />
       <FolhaAtalhos aberta={ajudaAberta} aoMudar={setAjudaAberta} />
+      <MapaPro
+        aberta={mapaProAberto}
+        aoMudar={setMapaProAberto}
+        aoConfigurar={() => setSalaoAberto(true)}
+      />
     </div>
   )
 }

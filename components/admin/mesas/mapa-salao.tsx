@@ -15,6 +15,14 @@ import { MoveIcon } from "lucide-react"
 import { type RefObject, useRef, useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { usePosicionarMesas } from "@/lib/admin/dados/consultas-mesas"
 import type { AreaSalao, Mesa, PosicaoMesa } from "@/lib/admin/dados/tipos"
@@ -24,11 +32,14 @@ import {
   colide,
   type Direcao,
   descreverPosicao,
+  FUNCOES_PRO_SALAO,
   GRADE_MAPA,
   moverPorTeclado,
   tamanhoDaMesa,
 } from "@/lib/admin/regras/salao"
+import { emReais } from "@/lib/formato"
 import { cn } from "@/lib/utils"
+import { SeloPro } from "../campos"
 import { Traco } from "../traco"
 import { descricaoDaMesa, MenuMesa } from "./cartao-mesa"
 
@@ -396,5 +407,47 @@ export function MapaSalao({
         {anuncio}
       </output>
     </Tabs>
+  )
+}
+
+/** A explicação do mapa quando a função Pro está desligada no salão. */
+export function MapaPro({
+  aberta,
+  aoMudar,
+  aoConfigurar,
+}: {
+  aberta: boolean
+  aoMudar: (aberta: boolean) => void
+  aoConfigurar: () => void
+}) {
+  const { preco } = FUNCOES_PRO_SALAO.mapa
+  return (
+    <Dialog open={aberta} onOpenChange={aoMudar}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <SeloPro liberada={false} className="w-fit" />
+          <DialogTitle>Mapa do salão é Pro</DialogTitle>
+          <DialogDescription>
+            Veja as mesas na planta de cada área, com o estado de cada uma, e monte o salão
+            arrastando as mesas. {emReais(preco)} por mês no plano Pro. Ligue em Configurar salão,
+            em Funções Pro.
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => aoMudar(false)}>
+            Agora não
+          </Button>
+          <Button
+            type="button"
+            onClick={() => {
+              aoMudar(false)
+              aoConfigurar()
+            }}
+          >
+            Abrir Configurar salão
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
