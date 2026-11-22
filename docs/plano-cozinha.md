@@ -519,3 +519,9 @@ A fase sai em dois commits, com revisão entre eles: **5a** (praças, expediçã
 1. **Regra:** a leitura do item em cada segmento.
 2. **Tela:** o ticket da pizzaria com frações e borda, o combo aberto da adega, o peso e o Pesar do açougue, o número grande da lanchonete.
 3. **E2E e screenshots:** o ticket da pizzaria meio a meio e o do açougue com o Pesar.
+
+**Na implementação (9)**
+
+- A borda em destaque usa o tom de atenção; a borda "Tradicional" ou "Sem borda" fica nas opções.
+- No açougue, o "Pesar" aparece só no pedido a pagar depois da pesagem que ainda não foi pesado, acima do botão da etapa, e abre a mesma pesagem dos detalhes do pedido.
+- O modo TV mostra as opções como vieram; a leitura por segmento vale no ticket do quadro.

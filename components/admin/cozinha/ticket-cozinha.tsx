@@ -9,12 +9,21 @@ import {
   MoreHorizontalIcon,
   PrinterIcon,
   RotateCcwIcon,
+  ScaleIcon,
   Undo2Icon,
   ZapIcon,
 } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
@@ -26,6 +35,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
+import { useLoja } from "@/lib/admin/dados/consultas"
 import type {
   AvisoCozinha,
   ConfigLoja,
@@ -43,8 +53,12 @@ import {
   urgenciaNaCozinha,
 } from "@/lib/admin/regras/cozinha"
 import type { Urgencia } from "@/lib/admin/regras/fila"
+import { leituraDoItem } from "@/lib/admin/regras/leitura-do-item"
+import { faltaPesar } from "@/lib/admin/regras/pesagem"
 import { NOME_DO_MOTIVO } from "@/lib/admin/regras/refazer"
+import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { cn } from "@/lib/utils"
+import { PesagemPedido } from "../pedidos/pesagem-pedido"
 import { Traco } from "../traco"
 
 /** O atraso aparece no tempo (pílula colorida) e num anel fino no ticket, nunca numa borda grossa. */
@@ -95,12 +109,15 @@ function Itens({
   /** Com tempo de preparo: quantos minutos cada item ainda espera para começar. */
   espera?: Record<string, number> | null
 }) {
+  const segmento = useSegmentoAtual((estado) => estado.segmento)
   return (
     <ul aria-label="Para preparar" className="-mx-1.5 flex flex-col gap-0.5">
       {itens.map((item) => {
         const feito = Boolean(item.feitoEm)
         const tachado = feito || cancelado
         const descricao = [item.opcoes.join(" · "), item.observacao].filter(Boolean).join(". ")
+        // Cada cozinha lê o item do seu jeito: frações da pizza, combo aberto, peso do corte.
+        const leitura = leituraDoItem(item, segmento)
         return (
           <li key={item.id}>
             <label
@@ -123,14 +140,51 @@ function Itens({
                   tachado && "text-muted-foreground line-through decoration-foreground/40",
                 )}
               >
+                {leitura.tamanho && (
+                  <span className="text-sm font-semibold tracking-wide uppercase">
+                    {leitura.tamanho}
+                  </span>
+                )}
                 <span>
                   <span className="font-semibold tabular-nums">{item.quantidade}×</span> {item.nome}
                 </span>
-                {item.opcoes.length > 0 && (
-                  <span className="text-sm leading-normal text-muted-foreground">
-                    {item.opcoes.join(" · ")}
+                {leitura.fracoes.map((fracao) => (
+                  <span key={fracao} className="text-[15px] leading-snug font-medium">
+                    {fracao}
+                  </span>
+                ))}
+                {leitura.destaque && (
+                  <span
+                    data-destaque=""
+                    className="mt-0.5 block w-fit rounded-md bg-(--atencao)/12 px-1.5 py-0.5 text-sm font-semibold"
+                  >
+                    {leitura.destaque}
                   </span>
                 )}
+                {leitura.peso && (
+                  <span className="text-[15px] font-semibold tabular-nums">
+                    Peso: {leitura.peso}
+                  </span>
+                )}
+                {segmento === "adega"
+                  ? leitura.linhas.map((linha) => (
+                      <span key={linha} className="text-[15px] leading-snug">
+                        {linha}
+                      </span>
+                    ))
+                  : leitura.linhas.length > 0 && (
+                      <span
+                        className={cn(
+                          "leading-normal text-muted-foreground",
+                          // No açougue, o corte e o preparo são o que importa: letra maior.
+                          segmento === "acougue"
+                            ? "text-[15px] font-medium text-foreground"
+                            : "text-sm",
+                        )}
+                      >
+                        {leitura.linhas.join(" · ")}
+                      </span>
+                    )}
                 {espera && !feito && item.id in espera && (
                   <span className="text-sm leading-normal font-medium text-(--tom-preparo-texto)">
                     {espera[item.id] > 0 ? `Comece em ${espera[item.id]} min` : "Comece agora"}
@@ -154,6 +208,29 @@ function Itens({
 /** "Mesa 5 · #12", e a rodada quando não é a primeira: "Mesa 5 · #12 · 2ª rodada". */
 export const nomeDoTicket = ({ pedido, rodada, refazer }: Ticket) =>
   `${origem(pedido)} · #${pedido.numero}${rodada > 1 ? ` · ${rodada}ª rodada` : ""}${refazer ? " · refazer" : ""}`
+
+/** Açougue: o botão Pesar abre a pesagem do pedido numa janela, sem sair da cozinha. */
+function PesarNoTicket({ pedido }: { pedido: Pedido }) {
+  const [aberta, setAberta] = useState(false)
+  const { data: loja } = useLoja()
+  return (
+    <>
+      <Button type="button" variant="outline" className="w-full" onClick={() => setAberta(true)}>
+        <ScaleIcon data-icon="inline-start" />
+        Pesar
+      </Button>
+      <Dialog open={aberta} onOpenChange={setAberta}>
+        <DialogContent className="max-h-[92dvh] overflow-y-auto sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pesar #{pedido.numero}</DialogTitle>
+            <DialogDescription>O peso da balança de cada item vendido por quilo.</DialogDescription>
+          </DialogHeader>
+          <PesagemPedido pedido={pedido} loja={loja?.nome ?? ""} />
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
 
 /** Ticket da cozinha: uma rodada, com origem, cronômetro, o que preparar e a próxima etapa. */
 export function TicketCozinha({
@@ -211,6 +288,7 @@ export function TicketCozinha({
   disparo?: Record<string, number> | null
 }) {
   const semMovimento = useReducedMotion()
+  const segmento = useSegmentoAtual((estado) => estado.segmento)
   const { pedido, rodada, itens } = ticket
   const pronto = ticket.status === "pronto"
   // Pronto não corre mais contra o relógio: o ticket fica quieto.
@@ -288,7 +366,14 @@ export function TicketCozinha({
       {/* Coluna estreita (tablet com a lateral aberta): o tempo e o menu descem de linha. */}
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1">
         <span className="text-base font-semibold whitespace-nowrap">{origem(pedido)}</span>
-        <span className="text-sm text-muted-foreground tabular-nums">#{pedido.numero}</span>
+        {segmento === "lanchonete" ? (
+          // Na lanchonete o número (que recomeça no mês) é o que se chama no balcão.
+          <span data-numero-grande="" className="text-2xl leading-none font-bold tabular-nums">
+            #{pedido.numero}
+          </span>
+        ) : (
+          <span className="text-sm text-muted-foreground tabular-nums">#{pedido.numero}</span>
+        )}
         {rodada > 1 && (
           <span className="text-sm font-medium whitespace-nowrap text-muted-foreground">
             {rodada}ª rodada
@@ -456,6 +541,10 @@ export function TicketCozinha({
       )}
 
       <footer className="flex flex-col gap-2 border-t border-border/70 pt-3">
+        {segmento === "acougue" && faltaPesar(pedido) && !cancelado && (
+          // O açougueiro pesa no próprio ticket: a mesma pesagem dos detalhes do pedido.
+          <PesarNoTicket pedido={pedido} />
+        )}
         {!pronto && !cancelado && feitos > 0 && (
           <span className="text-[13px] font-medium text-muted-foreground tabular-nums">
             {feitos} de {itens.length}

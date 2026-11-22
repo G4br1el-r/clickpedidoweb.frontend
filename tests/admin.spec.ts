@@ -1061,3 +1061,31 @@ test("cozinha: ao iniciar o preparo, o ticket anda de uma coluna para a outra", 
   const noCaminho = posicoes.filter((x) => x > xAFazer + 24 && x < xPreparando - 24)
   expect(noCaminho.length).toBeGreaterThan(2)
 })
+
+test("segmentos na cozinha: a borda da pizza em destaque e o açougue pesa no ticket", async ({
+  page,
+}, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a cozinha usa abas")
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha")
+  const pizza = page.getByRole("article", { name: /^Mesa 2 · #1408/ })
+  await expect(pizza.getByText("Borda: Chocolate")).toBeVisible({ timeout: 15_000 })
+  await esperarAnimacoes(page)
+  await page.mouse.move(0, 0)
+  await expect(pizza).toHaveScreenshot("cozinha-ticket-pizzaria.png")
+
+  await noSegmento(page, "acougue")
+  await page.goto("/admin/cozinha")
+  const aPesar = page
+    .getByRole("article")
+    .filter({ has: page.getByRole("button", { name: "Pesar" }) })
+  await expect(aPesar.first()).toBeVisible({ timeout: 15_000 })
+  await expect(aPesar.first()).toContainText(/Peso: [\d,]+ (g|kg)/)
+  await esperarAnimacoes(page)
+  await page.mouse.move(0, 0)
+  await expect(aPesar.first()).toHaveScreenshot("cozinha-ticket-acougue.png")
+  await aPesar.first().getByRole("button", { name: "Pesar" }).click()
+  const janela = page.getByRole("dialog", { name: /^Pesar #/ })
+  await expect(janela.getByRole("button", { name: "Registrar pesagem" })).toBeVisible()
+  await verificarAcessibilidade(page)
+})
