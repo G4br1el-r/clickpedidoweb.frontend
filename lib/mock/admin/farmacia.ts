@@ -1275,6 +1275,7 @@ export const catalogoFarmacia: CatalogoLoja = {
     pedidoMinimo: 15,
     tempoEntrega: "30 a 50 min",
     tempoRetirada: "15 min",
+    prazos: { entrega: { min: 30, max: 50 }, retirada: { min: 15, max: 15 } },
     cidadesAtendidas: ["São José dos Campos"],
     pagamentoOnlineConectado: true,
     taxasPagamento: { pixOnline: 0.99, cartaoOnline: 3.99, maquininha: 1.89 },

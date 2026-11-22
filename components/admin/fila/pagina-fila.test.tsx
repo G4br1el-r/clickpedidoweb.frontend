@@ -39,12 +39,52 @@ function telaGrande() {
   }))
 }
 
-function renderizar(intervaloSimulacao = 60_000) {
+function renderizar(intervaloSimulacao = 60_000, intervalo?: number) {
   return render(
     <Provedores>
-      <PaginaFila intervaloSimulacao={intervaloSimulacao} />
+      <PaginaFila intervaloSimulacao={intervaloSimulacao} intervalo={intervalo} />
     </Provedores>,
   )
+}
+
+/** Retirada do balcão, mandada para a fila e a cozinha. */
+const retirada = (agendadoPara?: string) =>
+  servidorDo("pizzaria").pdv.finalizar({
+    itens: [{ avulso: { nome: "Batata", preco: 12 }, quantidade: 1 }],
+    pagamento: "pix",
+    desconto: { modo: "reais", valor: 0 },
+    concluida: false,
+    ...(agendadoPara ? { agendadoPara } : {}),
+  })
+
+/** Áudio: a fronteira com o navegador. Conta quantas vezes o alerta tocou. */
+function contarAlertas() {
+  const tocadas = vi.fn()
+  vi.stubGlobal(
+    "AudioContext",
+    class {
+      currentTime = 0
+      destination = {}
+      state = "running"
+      createOscillator() {
+        tocadas()
+        return {
+          type: "sine",
+          frequency: { setValueAtTime: () => {} },
+          connect: (no: unknown) => no,
+          start: () => {},
+          stop: () => {},
+        }
+      }
+      createGain() {
+        return {
+          gain: { setValueAtTime: () => {}, exponentialRampToValueAtTime: () => {} },
+          connect: (no: unknown) => no,
+        }
+      }
+    },
+  )
+  return tocadas
 }
 
 const coluna = async (nome: string) =>
@@ -130,8 +170,58 @@ describe("PaginaFila", () => {
     usePreferenciasFila.setState({ somLigado: true, simular: true })
     renderizar(300)
 
-    expect(await screen.findByText("Chegou agora", {}, { timeout: 8000 })).toBeInTheDocument()
+    // A simulação cria um pedido a cada 300 ms: com a máquina lenta, mais de um chega junto.
+    expect(await screen.findAllByText("Chegou agora", {}, { timeout: 8000 })).not.toHaveLength(0)
     expect(tocadas).toHaveBeenCalled()
+  })
+
+  test("o pedido agendado mostra para quando é", async () => {
+    telaGrande()
+    const pedido = await retirada(new Date(2026, 10, 13, 22, 0).toISOString())
+    renderizar()
+    const cartao = within(
+      await (await coluna("Novos")).findByRole("article", { name: `#${pedido.numero}` }),
+    )
+    expect(cartao.getByText("Para 22:00")).toBeInTheDocument()
+  })
+
+  test("mensagem da cozinha aparece no cartão, com Ok", async () => {
+    telaGrande()
+    const pedido = await retirada()
+    await servidorDo("pizzaria").cozinha.avisar(pedido.id, 1, "substituicao")
+    const usuario = userEvent.setup()
+    renderizar()
+
+    const cartao = within(
+      (await coluna("Novos")).getByRole("article", { name: `#${pedido.numero}` }),
+    )
+    const mensagem = within(cartao.getByRole("status", { name: "Mensagem da cozinha" }))
+    expect(mensagem.getByText("Acabou um item, ver substituição")).toBeInTheDocument()
+    await usuario.click(mensagem.getByRole("button", { name: "Ok" }))
+    await waitFor(() =>
+      expect(cartao.queryByRole("status", { name: "Mensagem da cozinha" })).toBeNull(),
+    )
+    const visto = await servidorDo("pizzaria").pedidos.buscar(pedido.id)
+    expect(visto?.mensagensCozinha?.[0].vistaEm).toBeDefined()
+  })
+
+  test("pedido que fica pronto na cozinha toca o alerta", async () => {
+    telaGrande()
+    const tocadas = contarAlertas()
+    const pedido = await retirada()
+    usePreferenciasFila.setState({ somLigado: true })
+    renderizar(60_000, 200)
+    await (await coluna("Novos")).findByRole("article", { name: `#${pedido.numero}` })
+    expect(tocadas).not.toHaveBeenCalled()
+
+    await servidorDo("pizzaria").cozinha.avancar(pedido.id, 1, "recebido")
+    await servidorDo("pizzaria").cozinha.avancar(pedido.id, 1, "em-preparo")
+    await (await coluna("Prontos")).findByRole(
+      "article",
+      { name: `#${pedido.numero}` },
+      { timeout: 4000 },
+    )
+    await waitFor(() => expect(tocadas).toHaveBeenCalled())
   })
 
   test("sair da fila com um destaque na tela desliga o relógio do destaque", async () => {
@@ -140,7 +230,7 @@ describe("PaginaFila", () => {
     const limpar = vi.spyOn(globalThis, "clearTimeout")
     usePreferenciasFila.setState({ simular: true })
     const { unmount } = renderizar(300)
-    await screen.findByText("Chegou agora", {}, { timeout: 8000 })
+    await screen.findAllByText("Chegou agora", {}, { timeout: 8000 })
 
     // O destaque "Chegou agora" dura 10 s.
     const destaques = criar.mock.calls.flatMap((chamada, indice) =>
@@ -189,7 +279,7 @@ describe("PaginaFila", () => {
     usePreferenciasFila.setState({ simular: true })
     renderizar(400)
 
-    await screen.findByText("Chegou agora", {}, { timeout: 8000 })
+    await screen.findAllByText("Chegou agora", {}, { timeout: 8000 })
     // Para de chegar pedido e espera todos os que chegaram saírem.
     usePreferenciasFila.setState({ simular: false })
     const chegaram = async () =>

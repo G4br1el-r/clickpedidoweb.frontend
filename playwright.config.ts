@@ -2,6 +2,13 @@ import { defineConfig } from "@playwright/test"
 
 const toque = { hasTouch: true, isMobile: true }
 
+/**
+ * Porta do servidor dos testes. Cada worktree pode subir o próprio (PORTA_E2E=3021):
+ * com o reaproveitamento ligado, outra cópia do projeto na mesma porta seria testada no lugar.
+ */
+const porta = process.env.PORTA_E2E ?? "3010"
+const endereco = `http://localhost:${porta}`
+
 /** Do menor celular ao monitor grande, incluindo celular deitado. */
 const telas = [
   { name: "celular-320", width: 320, height: 568, ...toque },
@@ -27,7 +34,7 @@ export default defineConfig({
   // O aviso de segurança do Next aparece no modo dev mesmo com `devIndicators: false`.
   expect: { toHaveScreenshot: { stylePath: "./tests/sem-avisos-do-next.css" } },
   use: {
-    baseURL: "http://localhost:3010",
+    baseURL: endereco,
     locale: "pt-BR",
     screenshot: "only-on-failure",
   },
@@ -36,8 +43,8 @@ export default defineConfig({
     use: { viewport: { width, height }, ...resto },
   })),
   webServer: {
-    command: "pnpm dev",
-    url: "http://localhost:3010",
+    command: `pnpm next dev --port ${porta}`,
+    url: endereco,
     reuseExistingServer: true,
     timeout: 120_000,
   },

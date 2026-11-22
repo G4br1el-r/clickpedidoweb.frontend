@@ -33,7 +33,7 @@ import { useLoja } from "@/lib/admin/dados/consultas"
 import { useConectarPagamento, useSalvarLoja } from "@/lib/admin/dados/consultas-entrega"
 import type { ConfigLoja, FormaPagamento, SomAlerta, TaxasPagamento } from "@/lib/admin/dados/tipos"
 import { esquemaLoja, type FormularioLoja } from "@/lib/admin/regras/esquema-loja"
-import { copiarParaTodos, textoDoHorario } from "@/lib/admin/regras/loja"
+import { copiarParaTodos, textoDoHorario, textoDoPrazo } from "@/lib/admin/regras/loja"
 import { rotuloTaxa } from "@/lib/admin/regras/rotulos"
 import { resumoDasAlteracoes, secoesAlteradas } from "@/lib/admin/regras/secoes-loja"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
@@ -245,6 +245,61 @@ function CampoDinheiro({
         )}
       />
       {erro && <FieldError>{erro.message}</FieldError>}
+    </Field>
+  )
+}
+
+/**
+ * Tempo de entrega ou de retirada em minutos, de… até…. O texto do site sai dos dois
+ * números, e a tela mostra como vai ficar.
+ */
+function CampoPrazo({
+  controle,
+  modo,
+  rotulo,
+  erro,
+}: {
+  controle: Controle
+  modo: "entrega" | "retirada"
+  rotulo: string
+  erro?: { min?: ErroDoCampo; max?: ErroDoCampo }
+}) {
+  const prazo = useWatch({ control: controle, name: `prazos.${modo}` })
+  const nome = modo === "entrega" ? "Entrega" : "Retirada"
+  const mensagem = erro?.min?.message ?? erro?.max?.message
+  const valido = prazo && Number.isFinite(prazo.min) && Number.isFinite(prazo.max)
+  return (
+    <Field data-invalid={Boolean(mensagem)}>
+      <span className="text-sm font-medium">{rotulo}</span>
+      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        {(["min", "max"] as const).map((ponta) => (
+          <Controller
+            key={ponta}
+            control={controle}
+            name={`prazos.${modo}.${ponta}`}
+            render={({ field }) => (
+              <>
+                <span>{ponta === "min" ? "de" : "até"}</span>
+                <Input
+                  type="number"
+                  inputMode="numeric"
+                  min={1}
+                  max={240}
+                  aria-label={`${nome}, ${ponta === "min" ? "de" : "até"}`}
+                  aria-invalid={Boolean(erro?.[ponta])}
+                  className="w-20 tabular-nums"
+                  value={Number.isFinite(field.value) ? field.value : ""}
+                  onChange={(evento) => field.onChange(evento.target.valueAsNumber)}
+                  onBlur={field.onBlur}
+                />
+              </>
+            )}
+          />
+        ))}
+        <span>min</span>
+      </div>
+      {valido && !mensagem && <FieldDescription>No site: {textoDoPrazo(prazo)}</FieldDescription>}
+      {mensagem && <FieldError>{mensagem}</FieldError>}
     </Field>
   )
 }
@@ -826,7 +881,23 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
             rotulo="Pedido mínimo"
             erro={erros.pedidoMinimo}
           />
-          {comEntrega && (
+          {comEntrega && loja.prazos && (
+            <CampoPrazo
+              controle={controle}
+              modo="entrega"
+              rotulo="Tempo de entrega"
+              erro={erros.prazos?.entrega}
+            />
+          )}
+          {loja.prazos && (
+            <CampoPrazo
+              controle={controle}
+              modo="retirada"
+              rotulo="Tempo de retirada"
+              erro={erros.prazos?.retirada}
+            />
+          )}
+          {comEntrega && !loja.prazos && (
             <CampoTexto
               controle={controle}
               nome="tempoEntrega"
@@ -836,14 +907,16 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
               erro={erros.tempoEntrega}
             />
           )}
-          <CampoTexto
-            controle={controle}
-            nome="tempoRetirada"
-            rotulo={salao ? "Texto do atendimento" : "Tempo de retirada"}
-            maximo={40}
-            placeholder="20 min"
-            erro={erros.tempoRetirada}
-          />
+          {!loja.prazos && (
+            <CampoTexto
+              controle={controle}
+              nome="tempoRetirada"
+              rotulo={salao ? "Texto do atendimento" : "Tempo de retirada"}
+              maximo={40}
+              placeholder="20 min"
+              erro={erros.tempoRetirada}
+            />
+          )}
           {salao && (
             <Controller
               control={controle}

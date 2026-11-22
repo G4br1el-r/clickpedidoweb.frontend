@@ -32,6 +32,7 @@ const SECAO_DO_CAMPO: Partial<Record<keyof ConfigLoja, SecaoLoja>> = {
   pedidoMinimo: "Entrega e retirada",
   tempoEntrega: "Entrega e retirada",
   tempoRetirada: "Entrega e retirada",
+  prazos: "Entrega e retirada",
   capacidadeAtendimentos: "Entrega e retirada",
   cidadesAtendidas: "Entrega e retirada",
   pagamentos: "Formas de pagamento",

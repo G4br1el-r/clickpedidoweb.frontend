@@ -38,6 +38,7 @@ import {
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useFinalizarVenda, useLoja, useUltimasVendas } from "@/lib/admin/dados/consultas"
 import type { Pedido, Produto } from "@/lib/admin/dados/tipos"
+import { agendadoParaHoje } from "@/lib/admin/regras/cozinha"
 import {
   adicionarItem,
   bloqueioDaVenda,
@@ -251,6 +252,13 @@ export function PaginaPdv() {
 
   const fechar = () => {
     if (bloqueioDaVenda(caixa) || finalizar.isPending) return
+    let agendadoPara: string | undefined
+    try {
+      agendadoPara = caixa.concluida ? undefined : agendadoParaHoje(caixa.para, new Date())
+    } catch (erro) {
+      toast.error((erro as Error).message)
+      return
+    }
     finalizar.mutate(
       {
         // Do cardápio vão só as escolhas: o preço é do servidor. O avulso leva o digitado.
@@ -269,6 +277,7 @@ export function PaginaPdv() {
         clienteNome: caixa.cliente,
         observacao: caixa.observacao,
         concluida: caixa.concluida,
+        ...(agendadoPara ? { agendadoPara } : {}),
       },
       {
         onSuccess: (pedido) => {

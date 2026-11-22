@@ -4,6 +4,7 @@ import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { type ReactNode, useState } from "react"
+import { toast } from "sonner"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
@@ -53,6 +54,8 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.useRealTimers()
+  // Os toasts do Sonner vivem fora da árvore: o Desfazer de um teste não pode sobrar no outro.
+  toast.dismiss()
 })
 
 describe("PaginaBairros", () => {

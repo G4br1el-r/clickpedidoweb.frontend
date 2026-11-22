@@ -10,6 +10,7 @@ import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
 import type { Produto } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
+import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { PaginaGarcom } from "./pagina-garcom"
 
@@ -158,6 +159,24 @@ describe("PaginaGarcom", () => {
     ])
   })
 
+  test("a rodada pode ir para a cozinha para mais tarde, com Para as", async () => {
+    const mesa = await api().mesas.criar({ numero: 74 })
+    const usuario = await abrir()
+    const { simples } = await produtos()
+    await escolherMesa(usuario, 74)
+    await usuario.click(botao(simples.nome))
+
+    await usuario.type(bandeja().getByRole("textbox", { name: "Para as" }), "2130")
+    await usuario.click(bandeja().getByRole("button", { name: "Enviar para a cozinha" }))
+    expect(await screen.findByText("Mesa 74: agendado para 21:30.")).toBeInTheDocument()
+    expect(bandeja().getByRole("textbox", { name: "Para as" })).toHaveValue("")
+
+    const comanda = await comandaDa(mesa.id)
+    expect(comanda?.itens.map((item) => item.agendadoPara)).toEqual([
+      new Date(2026, 10, 13, 21, 30).toISOString(),
+    ])
+  })
+
   test("produto com opções passa pela janela; lançar na mesa não vai para a cozinha", async () => {
     const mesa = await api().mesas.criar({ numero: 71 })
     const usuario = await abrir()
@@ -205,6 +224,29 @@ describe("PaginaGarcom", () => {
     const comanda = within(await screen.findByRole("dialog", { name: /^Mesa 72/ }))
     expect(comanda.getByRole("listitem", { name: "Água" })).toBeInTheDocument()
     expect(comanda.getByRole("listitem", { name: simples.nome })).toBeInTheDocument()
+  })
+
+  test("no topo, o que a cozinha deixou pronto, com Servido; e a chave do alerta sonoro", async () => {
+    usePreferenciasFila.setState(usePreferenciasFila.getInitialState(), true)
+    const mesa = await api().mesas.criar({ numero: 77 })
+    const comanda = await api().mesas.lancar({
+      mesaId: mesa.id,
+      enviarParaCozinha: true,
+      itens: [{ avulso: { nome: "Batata", preco: 12 }, quantidade: 1 }],
+    })
+    await api().cozinha.avancar(comanda.id, 1, "recebido")
+    await api().cozinha.avancar(comanda.id, 1, "em-preparo")
+    const usuario = await abrir()
+
+    const prontos = within(await screen.findByRole("region", { name: /^Prontos para servir/ }))
+    const rodada = within(await prontos.findByRole("listitem", { name: "Mesa 77" }))
+    await usuario.click(rodada.getByRole("button", { name: "Servido" }))
+    await waitFor(async () =>
+      expect((await api().pedidos.buscar(comanda.id))?.itens[0].servidoEm).toBeDefined(),
+    )
+
+    await usuario.click(screen.getByRole("switch", { name: "Alerta sonoro" }))
+    expect(usePreferenciasFila.getState().somLigado).toBe(true)
   })
 
   test("o nome do garçom fica guardado neste aparelho", async () => {

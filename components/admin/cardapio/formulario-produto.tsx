@@ -91,6 +91,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
+import { useLoja } from "@/lib/admin/dados/consultas"
 import {
   useCategorias,
   useProdutos,
@@ -102,7 +103,8 @@ import { prepararFoto } from "@/lib/admin/imagem"
 import { opcaoDoProduto } from "@/lib/admin/regras/cardapio"
 import { camposDoProduto, esquemaProduto } from "@/lib/admin/regras/esquema-produto"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
-import { temRecurso } from "@/lib/admin/segmentos-painel"
+import { temModulo, temRecurso } from "@/lib/admin/segmentos-painel"
+import { RecursoPro } from "../recurso-pro"
 import { Traco } from "../traco"
 import { useProdutoAberto } from "./pagina-cardapio"
 
@@ -155,6 +157,8 @@ type ValoresGrupo = {
 /** Valores do formulário; o esquema do segmento decide quais são validados e salvos. */
 type Valores = {
   categoriaId: string
+  /** "categoria": segue a praça da categoria. */
+  pracaId: string
   nome: string
   descricao: string
   preco: number
@@ -168,13 +172,17 @@ type Valores = {
   oferta: boolean
   unidade: "un" | "kg"
   duracaoMin?: number
+  preparoMin?: number
   videoUrl: string
   grupos: ValoresGrupo[]
 }
 
+const DA_CATEGORIA = "categoria"
+
 function valoresIniciais(produto: Produto | undefined): Valores {
   return {
     categoriaId: produto?.categoriaId ?? "",
+    pracaId: produto?.pracaId ?? DA_CATEGORIA,
     nome: produto?.nome ?? "",
     descricao: produto?.descricao ?? "",
     preco: produto?.preco as number,
@@ -188,6 +196,7 @@ function valoresIniciais(produto: Produto | undefined): Valores {
     oferta: produto?.oferta ?? false,
     unidade: produto?.unidade ?? "un",
     duracaoMin: produto?.duracaoMin,
+    preparoMin: produto?.preparoMin,
     videoUrl: produto?.videoUrl ?? "",
     grupos: (produto?.grupos ?? []).map(({ ordem, itens, ...grupo }) => ({
       ...grupo,
@@ -258,7 +267,7 @@ function CampoInteiro({
   erro,
 }: {
   control: Control<Valores>
-  nome: `grupos.${number}.${"minimo" | "maximo" | "gratisAte"}` | "duracaoMin"
+  nome: `grupos.${number}.${"minimo" | "maximo" | "gratisAte"}` | "duracaoMin" | "preparoMin"
   rotulo: string
   id: string
   erro?: string
@@ -570,6 +579,9 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
   const campos = camposDoProduto(segmento)
   const { data: categorias = [] } = useCategorias()
   const { data: produtos = [] } = useProdutos()
+  const { data: loja } = useLoja()
+  const pracas = loja?.pracas ?? []
+  const temCozinha = temModulo(segmento, "cozinha")
   const salvar = useSalvarProduto()
   const replicar = useReplicarOpcoes()
   const esquema = useMemo(() => esquemaProduto(segmento), [segmento])
@@ -587,6 +599,9 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
   const erros = formState.errors
   const imagem = watch("imagem")
   const oferta = watch("oferta")
+  const categoriaId = watch("categoriaId")
+  const pracaDaCategoria =
+    pracas.find((praca) => praca.categoriaIds.includes(categoriaId))?.nome ?? "Geral"
 
   const aoArrastar = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return
@@ -609,6 +624,7 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
     const salvo: Produto = {
       id: produto?.id ?? novoId("prod"),
       categoriaId: valores.categoriaId,
+      ...(valores.pracaId && valores.pracaId !== DA_CATEGORIA ? { pracaId: valores.pracaId } : {}),
       nome: valores.nome.trim(),
       descricao: valores.descricao.trim(),
       preco: valores.preco,
@@ -623,6 +639,7 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
       ordem,
       unidade: campos.unidade ? (valores.unidade ?? "un") : "un",
       ...(campos.duracao && valores.duracaoMin ? { duracaoMin: valores.duracaoMin } : {}),
+      ...(temCozinha && valores.preparoMin ? { preparoMin: valores.preparoMin } : {}),
       ...(campos.video && valores.videoUrl ? { videoUrl: valores.videoUrl } : {}),
       // O que este formulário não edita continua como estava.
       ...(produto?.medicamento ? { medicamento: produto.medicamento } : {}),
@@ -717,6 +734,35 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
                 )}
               />
             </div>
+            {pracas.length > 0 && (
+              <Controller
+                control={control}
+                name="pracaId"
+                render={({ field }) => (
+                  <Field>
+                    <FieldLabel htmlFor="produto-praca">Praça</FieldLabel>
+                    <Select value={field.value || DA_CATEGORIA} onValueChange={field.onChange}>
+                      <SelectTrigger id="produto-praca" aria-label="Praça" className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectGroup>
+                          <SelectItem value={DA_CATEGORIA}>
+                            Da categoria ({pracaDaCategoria})
+                          </SelectItem>
+                          {pracas.map((praca) => (
+                            <SelectItem key={praca.id} value={praca.id}>
+                              {praca.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                    <FieldDescription>Onde a cozinha prepara este produto.</FieldDescription>
+                  </Field>
+                )}
+              />
+            )}
             <Controller
               control={control}
               name="descricao"
@@ -797,6 +843,23 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
                 id="produto-duracao"
                 erro={erros.duracaoMin?.message}
               />
+            )}
+            {temCozinha && (
+              <div className="sm:col-span-2">
+                <RecursoPro
+                  chave="cozinha.tempoPreparo"
+                  compacto
+                  descricao="Quanto o produto leva na cozinha: cada item diz quando começar para tudo ficar pronto junto."
+                >
+                  <CampoInteiro
+                    control={control}
+                    nome="preparoMin"
+                    rotulo="Tempo de preparo (min)"
+                    id="produto-preparo"
+                    erro={erros.preparoMin?.message}
+                  />
+                </RecursoPro>
+              </div>
             )}
           </div>
         </Secao>

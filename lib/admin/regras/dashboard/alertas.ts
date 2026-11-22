@@ -1,7 +1,7 @@
 import { emReais, plural } from "../../../formato"
 import type { ConfigLoja, Lote, Pedido, Produto, Receita, StatusPedido } from "../../dados/tipos"
 import type { SegmentoPainelId } from "../../segmentos-painel"
-import { urgenciaNaCozinha } from "../cozinha"
+import { atrasadosNaCozinha, TEMPOS_PADRAO } from "../cozinha"
 import { situacaoEstoque } from "../estoque"
 import { urgencia } from "../fila"
 import { lojaAbertaAgora } from "../loja"
@@ -67,11 +67,17 @@ export function alertasDoPainel({
   const n = nomesDo(segmento)
   const alertas: Alerta[] = []
 
+  // Na cozinha, atrasa o pedido com alguma rodada atrasada no quadro, pelos tempos da loja.
+  const atrasadosNoQuadro = new Set(
+    [...atrasadosNaCozinha(pedidos, agora, loja.temposCozinha ?? TEMPOS_PADRAO)].map((ticket) =>
+      Number(ticket.split(":")[0]),
+    ),
+  )
   const atrasados = pedidos.filter(
     (pedido) =>
       EM_ANDAMENTO.includes(pedido.status) &&
       (urgencia(pedido, agora) === "atrasado" ||
-        (naCozinha(pedido) && urgenciaNaCozinha(pedido, agora) === "atrasado")),
+        (naCozinha(pedido) && atrasadosNoQuadro.has(pedido.id))),
   ).length
   if (atrasados > 0)
     alertas.push({

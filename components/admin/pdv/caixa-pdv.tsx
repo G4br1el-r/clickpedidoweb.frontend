@@ -4,7 +4,7 @@ import NumberFlow from "@number-flow/react"
 import { BanknoteIcon, CreditCardIcon, QrCodeIcon, Trash2Icon, XIcon } from "lucide-react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { useState } from "react"
-import { NumericFormat } from "react-number-format"
+import { NumericFormat, PatternFormat } from "react-number-format"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,6 +67,8 @@ export type EstadoCaixa = {
   cliente: string
   observacao: string
   concluida: boolean
+  /** Venda para a fila: "22:00" agenda para hoje; vazio, sai agora. */
+  para: string
 }
 
 export const CAIXA_VAZIA: EstadoCaixa = {
@@ -77,6 +79,7 @@ export const CAIXA_VAZIA: EstadoCaixa = {
   cliente: "",
   observacao: "",
   concluida: true,
+  para: "",
 }
 
 /** O último toque: que linha mudou e o que dizer. `vez` faz o realce voltar a cada toque. */
@@ -497,6 +500,24 @@ export function CaixaPdv({
             Venda concluída no balcão
           </FieldLabel>
         </Field>
+        {!estado.concluida && (
+          <Field orientation="horizontal">
+            <FieldLabel htmlFor="pdv-para" className="font-normal">
+              Para as
+            </FieldLabel>
+            <PatternFormat
+              id="pdv-para"
+              customInput={Input}
+              format="##:##"
+              mask="_"
+              inputMode="numeric"
+              placeholder="Agora"
+              className="w-20 text-center tabular-nums"
+              value={estado.para}
+              onValueChange={({ formattedValue }) => mudar({ para: formattedValue })}
+            />
+          </Field>
+        )}
         <Button
           type="button"
           size="lg"

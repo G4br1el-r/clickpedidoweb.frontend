@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises"
 import { expect, type Page, test } from "@playwright/test"
-import { esperarAnimacoes, verificarAcessibilidade } from "./apoio"
+import { caixa, esperarAnimacoes, verificarAcessibilidade } from "./apoio"
 
 /** Cada teste começa com as configurações de fábrica. */
 test.beforeEach(async ({ page }) => {
@@ -416,6 +416,258 @@ test("PDV: venda em dinheiro com troco, ticket e últimas vendas", async ({ page
   await expect(page.getByRole("row", { name: /2× Água/ })).toBeVisible()
 })
 
+test("cozinha: a venda agendada no PDV espera em Mais tarde", async ({ page }, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a caixa abre pela barra")
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/pdv")
+  await page.getByRole("button", { name: "Lançar item avulso" }).click({ timeout: 15_000 })
+  await page.getByLabel("Item avulso", { exact: true }).fill("Batata")
+  await page.getByLabel("Valor", { exact: true }).fill("12")
+  await page.getByRole("button", { name: "Incluir item avulso" }).click()
+  const venda = page.getByRole("region", { name: "Venda" })
+  await venda.getByText("Pix").click()
+  await venda.getByRole("switch", { name: "Venda concluída no balcão" }).click()
+  await venda.getByRole("textbox", { name: "Para as" }).fill("2200")
+  await venda.getByRole("button", { name: /Mandar para a fila/ }).click()
+  const ticket = page.getByRole("dialog", { name: /^Venda #\d+/ })
+  const numero = (await ticket.getByRole("heading").textContent())?.match(/#(\d+)/)?.[1]
+  await ticket.getByRole("button", { name: "Nova venda" }).click()
+
+  await page.goto("/admin/cozinha")
+  const maisTarde = page.getByRole("region", { name: /^Mais tarde, / })
+  const linha = maisTarde.getByRole("listitem", { name: `Retirada · #${numero}` })
+  await expect(linha).toContainText("22:00", { timeout: 15_000 })
+  await expect(linha).toContainText("começa 21:40")
+  await expect(page.getByRole("region", { name: /^A fazer, / })).not.toContainText(`#${numero}`)
+  await page.waitForLoadState("networkidle")
+  await esperarAnimacoes(page)
+  await expect(maisTarde).toHaveScreenshot("cozinha-mais-tarde.png")
+})
+
+test("cozinha: os tempos de alerta mudam nos Ajustes e valem no quadro", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha")
+  await expect(page.locator("article").first()).toBeVisible({ timeout: 15_000 })
+  // A demonstração abre com agendados: a faixa Mais tarde cabe na tela, sem rolagem lateral.
+  const maisTarde = page.getByRole("region", { name: /^Mais tarde, / })
+  await expect(maisTarde).toBeVisible()
+  const largura = page.viewportSize()?.width ?? 0
+  for (const cartao of await maisTarde.getByRole("listitem").all()) {
+    const { x, width } = await caixa(cartao)
+    expect(x + width).toBeLessThanOrEqual(largura)
+  }
+  // No celular, conteúdo largo demais faz o navegador alargar a página inteira.
+  expect(await page.evaluate(() => window.innerWidth)).toBe(largura)
+  await page.getByRole("tab", { name: "Ajustes" }).click()
+  await expect(page).toHaveURL(/aba=ajustes/)
+
+  // Antes de salvar: o toast de salvo ficaria por cima no celular.
+  const pracas = page.getByRole("region", { name: "Praças" })
+  await expect(pracas.getByRole("listitem")).toHaveCount(3)
+  await esperarAnimacoes(page)
+  await expect(pracas).toHaveScreenshot("cozinha-pracas.png")
+  const tempos = page.getByRole("region", { name: "Tempos da cozinha" })
+  await tempos.getByRole("spinbutton", { name: "Atenção a partir de" }).fill("1")
+  await tempos.getByRole("spinbutton", { name: "Atraso a partir de" }).fill("2")
+  await tempos.getByRole("button", { name: "Salvar tempos" }).click()
+  await expect(page.getByText("Tempos da cozinha salvos.")).toBeVisible()
+  await verificarAcessibilidade(page)
+  await page.waitForLoadState("networkidle")
+  await esperarAnimacoes(page)
+  // O mouse fica onde clicou (Salvar): sem tirar, a linha embaixo dele aparece em realce.
+  await page.mouse.move(0, 0)
+  await expect(page.getByRole("region", { name: "Sons deste aparelho" })).toHaveScreenshot(
+    "cozinha-sons.png",
+  )
+
+  await page.getByRole("tab", { name: "Quadro" }).click()
+  await expect(page.locator('article[data-urgencia="atrasado"]').first()).toBeVisible()
+})
+
+test("cozinha: o resumo de produção destaca os tickets e a Exibição muda o quadro", async ({
+  page,
+}, info) => {
+  const celular = (info.project.use.viewport?.width ?? 0) < 1024
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha")
+  await expect(page.locator("article").first()).toBeVisible({ timeout: 15_000 })
+
+  await page.getByRole("button", { name: /^Em produção/ }).click()
+  // No celular, a gaveta de baixo; no computador, o painel ao lado do quadro.
+  const resumo = celular
+    ? page.getByRole("dialog", { name: "Em produção" })
+    : page.getByRole("complementary", { name: "Resumo de produção" })
+  const primeiro = resumo.getByRole("button", { pressed: false }).first()
+  await expect(primeiro).toBeVisible()
+  await verificarAcessibilidade(page)
+  await esperarAnimacoes(page)
+  await expect(resumo).toHaveScreenshot("cozinha-resumo.png")
+
+  await primeiro.click()
+  await expect(page.locator("article[data-apagado]").first()).toBeAttached()
+  if (celular) return
+
+  // Exibição: compacto tira cliente e garçom; o A+ aumenta só o quadro.
+  await page.getByRole("button", { name: "Exibição" }).click()
+  await page.getByRole("switch", { name: "Compacto" }).click()
+  await page.getByRole("button", { name: "Aumentar o quadro" }).click()
+  await expect(page.locator("[data-tamanho]")).toHaveAttribute("data-tamanho", "2")
+  await page.keyboard.press("Escape")
+  // Tira o destaque: o ticket da foto fica aceso.
+  await resumo.getByRole("button", { pressed: true }).click()
+  await expect(page.locator("article[data-apagado]")).toHaveCount(0)
+  await esperarAnimacoes(page)
+  await page.mouse.move(0, 0)
+  await expect(
+    page
+      .getByRole("region", { name: /^A fazer/ })
+      .getByRole("article")
+      .first(),
+  ).toHaveScreenshot("cozinha-ticket-compacto.png")
+
+  // Teclado: a seta traz o foco, ? abre a lista dos atalhos.
+  await page.keyboard.press("ArrowDown")
+  await expect(page.locator("article[data-ticket]:focus")).toHaveCount(1)
+  await page.keyboard.press("?")
+  await expect(page.getByRole("dialog", { name: "Atalhos do teclado" })).toBeVisible()
+})
+
+test("cozinha: o Histórico acha o ticket, mostra a linha do tempo e refaz", async ({
+  page,
+}, info) => {
+  const celular = (info.project.use.viewport?.width ?? 0) < 1024
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha?aba=historico")
+  const historico = celular
+    ? page.getByRole("list", { name: "Histórico" })
+    : page.getByRole("table", { name: "Histórico" })
+  await expect(historico).toBeVisible({ timeout: 15_000 })
+  await verificarAcessibilidade(page)
+  await esperarAnimacoes(page)
+  // A tela visível: os filtros e o começo da lista (a lista inteira é maior que a tela).
+  await page.mouse.move(0, 0)
+  await expect(page).toHaveScreenshot("cozinha-historico.png")
+
+  // A retirada #1407 já ficou pronta: dá para refazer.
+  await page.getByRole("searchbox", { name: "Buscar no histórico" }).fill("1407")
+  await page.getByRole("button", { name: /Retirada · #1407/ }).click()
+  const detalhe = page.getByRole("dialog", { name: /^Retirada · #1407/ })
+  await expect(detalhe.getByRole("list", { name: "Linha do tempo" })).toContainText("Pronto")
+  await esperarAnimacoes(page)
+  await expect(detalhe).toHaveScreenshot("cozinha-historico-detalhe.png")
+
+  await detalhe.getByRole("button", { name: "Refazer…" }).click()
+  const janela = page.getByRole("dialog", { name: /^Refazer Retirada · #1407/ })
+  await janela.getByRole("radio", { name: "Caiu" }).click()
+  await esperarAnimacoes(page)
+  await expect(janela).toHaveScreenshot("cozinha-refazer.png")
+  await janela.getByRole("button", { name: "Refazer" }).click()
+  await expect(page.getByText("Retirada · #1407: refazer na cozinha.")).toBeVisible()
+
+  await page.getByRole("tab", { name: "Quadro" }).click()
+  const refeito = page.getByRole("article", { name: "Retirada · #1407 · refazer" })
+  await expect(refeito).toContainText("Refazer · Caiu")
+})
+
+test("cozinha: a faixa do turno no Quadro e a aba Desempenho do mês", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha")
+  const faixa = page.getByRole("region", { name: "Turno de hoje" })
+  await expect(faixa).toContainText("Tempo médio até pronto", { timeout: 15_000 })
+  await esperarAnimacoes(page)
+  await expect(faixa).toHaveScreenshot("cozinha-turno.png")
+
+  await page.getByRole("tab", { name: "Desempenho" }).click()
+  // O Desempenho é do plano Pro: o cadeado mostra o preço e o Contratar libera.
+  const contratar = page.getByRole("button", { name: /^Contratar o Desempenho da cozinha/ })
+  await esperarAnimacoes(page)
+  await expect(contratar.locator("..")).toHaveScreenshot("cozinha-desempenho-cadeado.png")
+  await contratar.click()
+  await page.getByRole("radio", { name: "30 dias" }).click()
+  await expect(page.getByRole("list", { name: "Por praça" })).toBeVisible()
+  await verificarAcessibilidade(page)
+  await page.waitForLoadState("networkidle")
+  await esperarAnimacoes(page)
+  await page.mouse.move(0, 0)
+  await expect(page).toHaveScreenshot("cozinha-desempenho.png", { fullPage: true })
+})
+
+test("Pro: o modo TV pagina o quadro e o painel de chamada mostra os números", async ({
+  page,
+}, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "TV e chamada são telas grandes")
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha/tv")
+  await page.getByRole("button", { name: /^Contratar o Modo TV/ }).click()
+  const tv = page.getByRole("main", { name: "Cozinha na TV" })
+  await expect(tv.getByRole("region", { name: /^A fazer/ })).toBeVisible({ timeout: 15_000 })
+  await expect(tv.getByRole("button")).toHaveCount(0)
+  await verificarAcessibilidade(page)
+  await esperarAnimacoes(page)
+  await expect(page).toHaveScreenshot("cozinha-tv.png")
+
+  await page.goto("/admin/cozinha/chamada")
+  await page.getByRole("button", { name: /^Contratar o Painel de chamada/ }).click()
+  const chamada = page.getByRole("main", { name: "Chamada de pedidos" })
+  await expect(chamada.getByRole("region", { name: "Pode retirar" })).toBeVisible()
+  await verificarAcessibilidade(page)
+  await esperarAnimacoes(page)
+  await expect(page).toHaveScreenshot("cozinha-chamada.png")
+})
+
+test("praças: o Forno e a Montagem fazem a sua parte, e a expedição vê pronto", async ({
+  page,
+}, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a cozinha usa abas")
+  test.setTimeout(90_000)
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/mesas")
+  await page.getByRole("button", { name: "Nova mesa" }).click()
+  await page.getByRole("spinbutton", { name: "Número" }).fill("91")
+  await page.getByRole("button", { name: "Criar mesa" }).click()
+
+  // Garçom: uma pizza (Forno) e uma massa (Montagem), sem opções.
+  await page.goto("/admin/garcom")
+  await page.getByRole("combobox", { name: "Mesa" }).click()
+  await page.getByRole("option", { name: "Mesa 91 · livre" }).click()
+  for (const categoria of [/^Calzones/, /^Massas/]) {
+    await page.getByRole("radio", { name: categoria }).click()
+    await page
+      .getByRole("button", { name: /^Adicionar .*\d$/ })
+      .first()
+      .click()
+  }
+  await page
+    .getByRole("region", { name: "Bandeja" })
+    .getByRole("button", { name: "Enviar para a cozinha" })
+    .click()
+  await expect(page.getByText("Mesa 91: enviado para a cozinha.")).toBeVisible()
+
+  await page.goto("/admin/cozinha")
+  const escolher = async (praca: string) => {
+    await page.getByRole("combobox", { name: "Praça" }).click()
+    await page.getByRole("option", { name: praca }).click()
+  }
+  const naColuna = (coluna: string) =>
+    page
+      .getByRole("region", { name: new RegExp(`^${coluna}`) })
+      .getByRole("article", { name: /^Mesa 91 ·/ })
+  await escolher("Forno")
+  await expect(naColuna("A fazer")).toContainText("Falta: Montagem 1", { timeout: 15_000 })
+  await verificarAcessibilidade(page)
+  await page.waitForLoadState("networkidle")
+  await esperarAnimacoes(page)
+  await expect(naColuna("A fazer")).toHaveScreenshot("praca-ticket-forno.png")
+  await naColuna("A fazer").getByRole("button", { name: "Iniciar preparo" }).click()
+  await naColuna("Preparando").getByRole("button", { name: "Marcar pronto · Forno" }).click()
+  await expect(naColuna("Prontos")).toContainText("Aguardando Montagem")
+
+  await escolher("Montagem")
+  await naColuna("Preparando").getByRole("button", { name: "Marcar pronto · Montagem" }).click()
+  await escolher("Todas")
+  await expect(naColuna("Prontos")).toContainText("Servir na mesa")
+})
+
 test("salão: o garçom lança, a cozinha prepara e a mesa fecha a conta", async ({ page }) => {
   test.setTimeout(90_000)
   await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
@@ -464,14 +716,30 @@ test("salão: o garçom lança, a cozinha prepara e a mesa fecha a conta", async
   if (await abaProntos.isVisible()) await abaProntos.click()
   await expect(naColuna("Prontos")).toContainText("Servir na mesa")
 
-  // Mesas: a comanda está aberta; fechar a conta no Pix libera a mesa.
+  // Garçom: a rodada pronta aparece no topo, para levar à mesa.
+  await page.goto("/admin/garcom")
+  const faixa = page.getByRole("region", { name: /^Prontos para servir/ })
+  const rodada = faixa.getByRole("listitem", { name: "Mesa 90", exact: true })
+  await expect(rodada).toBeVisible({ timeout: 15_000 })
+  await verificarAcessibilidade(page)
+  await expect(faixa).toHaveScreenshot("salao-faixa-pronto.png")
+
+  // Mesas: a mesa espera o garçom; Servido na comanda tira a rodada da cozinha.
   await page.goto("/admin/mesas")
   const mesa = page.getByRole("button", { name: "Mesa 90", exact: true })
   await expect(mesa).toContainText("Léo")
+  await expect(mesa).toContainText("Pronto para servir")
   await mesa.click()
   const comanda = page.getByRole("dialog", { name: "Mesa 90" })
   await expect(comanda.getByRole("list", { name: "Itens da comanda" })).toBeVisible()
   await verificarAcessibilidade(page)
+  const pronta = comanda.getByRole("listitem", { name: "1ª rodada pronta" })
+  await expect(pronta).toHaveScreenshot("salao-comanda-pronta.png")
+  await pronta.getByRole("button", { name: "Servido" }).click()
+  await expect(pronta).toHaveCount(0)
+  await expect(comanda).toContainText("Ocupada")
+
+  // Fechar a conta no Pix libera a mesa.
   await comanda.getByRole("button", { name: "Fechar conta" }).click()
   const fechar = page.getByRole("dialog", { name: "Fechar a conta da mesa 90" })
   await fechar.getByText("Pix").click()
@@ -999,4 +1267,32 @@ test("cozinha: ao iniciar o preparo, o ticket anda de uma coluna para a outra", 
   // Passou pelo meio do caminho: nem na coluna de origem, nem já parado na de destino.
   const noCaminho = posicoes.filter((x) => x > xAFazer + 24 && x < xPreparando - 24)
   expect(noCaminho.length).toBeGreaterThan(2)
+})
+
+test("segmentos na cozinha: a borda da pizza em destaque e o açougue pesa no ticket", async ({
+  page,
+}, info) => {
+  test.skip((info.project.use.viewport?.width ?? 0) < 1024, "No celular a cozinha usa abas")
+  await page.clock.setFixedTime(new Date("2026-11-13T20:30:00-03:00"))
+  await page.goto("/admin/cozinha")
+  const pizza = page.getByRole("article", { name: /^Mesa 2 · #1408/ })
+  await expect(pizza.getByText("Borda: Chocolate")).toBeVisible({ timeout: 15_000 })
+  await esperarAnimacoes(page)
+  await page.mouse.move(0, 0)
+  await expect(pizza).toHaveScreenshot("cozinha-ticket-pizzaria.png")
+
+  await noSegmento(page, "acougue")
+  await page.goto("/admin/cozinha")
+  const aPesar = page
+    .getByRole("article")
+    .filter({ has: page.getByRole("button", { name: "Pesar" }) })
+  await expect(aPesar.first()).toBeVisible({ timeout: 15_000 })
+  await expect(aPesar.first()).toContainText(/Peso: [\d,]+ (g|kg)/)
+  await esperarAnimacoes(page)
+  await page.mouse.move(0, 0)
+  await expect(aPesar.first()).toHaveScreenshot("cozinha-ticket-acougue.png")
+  await aPesar.first().getByRole("button", { name: "Pesar" }).click()
+  const janela = page.getByRole("dialog", { name: /^Pesar #/ })
+  await expect(janela.getByRole("button", { name: "Registrar pesagem" })).toBeVisible()
+  await verificarAcessibilidade(page)
 })

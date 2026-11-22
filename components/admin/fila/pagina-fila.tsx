@@ -30,6 +30,7 @@ import {
   useMotoboys,
   usePedidos,
   useSimularPedido,
+  useVerMensagem,
 } from "@/lib/admin/dados/consultas"
 import type { Pedido, SomAlerta } from "@/lib/admin/dados/tipos"
 import {
@@ -47,6 +48,7 @@ import { CabecalhoPagina } from "../cabecalho-pagina"
 import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
+import { useAlertaDeQuemServe } from "../salao/use-alerta-de-quem-serve"
 import { Traco } from "../traco"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
@@ -129,6 +131,7 @@ function Coluna({
   aoAvancar,
   aoAbrir,
   aoImprimir,
+  aoVerMensagem,
   comTitulo,
 }: {
   coluna: ColunaFila
@@ -139,6 +142,7 @@ function Coluna({
   aoAvancar: (pedido: Pedido) => void
   aoAbrir: (pedido: Pedido) => void
   aoImprimir: (pedido: Pedido) => void
+  aoVerMensagem: (pedido: Pedido, mensagemId: string) => void
   comTitulo: boolean
 }) {
   return (
@@ -173,6 +177,7 @@ function Coluna({
               aoAvancar={() => aoAvancar(pedido)}
               aoAbrir={() => aoAbrir(pedido)}
               aoImprimir={() => aoImprimir(pedido)}
+              aoVerMensagem={(mensagemId) => aoVerMensagem(pedido, mensagemId)}
             />
           ))}
         </AnimatePresence>
@@ -182,12 +187,27 @@ function Coluna({
 }
 
 /** Fila ao vivo: o quadro do que está em andamento, com as chaves da loja e o alerta. */
-export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao?: number }) {
+export function PaginaFila({
+  intervaloSimulacao = 60_000,
+  intervalo,
+}: {
+  intervaloSimulacao?: number
+  /** De quanto em quanto tempo a fila é conferida. */
+  intervalo?: number
+}) {
   usePreferenciasCarregadas()
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const agora = useAgora(30_000)
   const telaGrande = useTelaGrande()
-  const { data: fila } = useFila()
+  const { data: fila } = useFila(intervalo)
+  // Entrega e retirada prontas, e as mensagens da cozinha para o caixa, tocam o alerta.
+  useAlertaDeQuemServe(fila, "caixa")
+  const verMensagem = useVerMensagem()
+  const aoVerMensagem = (pedido: Pedido, mensagemId: string) =>
+    verMensagem.mutate(
+      { id: pedido.id, mensagemId },
+      { onError: (erro) => toast.error(erro.message) },
+    )
   const { data: loja } = useLoja()
   const { data: motoboys } = useMotoboys()
   // Início do dia, não a hora: a chave da consulta só muda na virada do dia.
@@ -363,6 +383,7 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
               aoAvancar={aoAvancar}
               aoAbrir={aoAbrir}
               aoImprimir={impressao.imprimir}
+              aoVerMensagem={aoVerMensagem}
               comTitulo
             />
           ))}
@@ -391,6 +412,7 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
                 aoAvancar={aoAvancar}
                 aoAbrir={aoAbrir}
                 aoImprimir={impressao.imprimir}
+                aoVerMensagem={aoVerMensagem}
                 comTitulo={false}
               />
             </TabsContent>

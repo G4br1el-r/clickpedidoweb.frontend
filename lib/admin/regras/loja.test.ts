@@ -7,6 +7,7 @@ import {
   lojaAbertaAgora,
   taxaDeEntrega,
   textoDoHorario,
+  textoDoPrazo,
 } from "./loja"
 import { PEDIDOS_DE_TESTE } from "./pedidos-de-teste"
 
@@ -143,5 +144,12 @@ describe("taxaDeEntrega", () => {
     expect(taxaDeEntrega(bairros, "b1", 10)).toBe(5)
     expect(taxaDeEntrega(bairros, "b2", 10)).toBe(10)
     expect(taxaDeEntrega(bairros, undefined, 10)).toBe(10)
+  })
+})
+
+describe("textoDoPrazo", () => {
+  test("de mínimo a máximo, ou um número só quando são iguais", () => {
+    expect(textoDoPrazo({ min: 35, max: 50 })).toBe("35–50 min")
+    expect(textoDoPrazo({ min: 15, max: 15 })).toBe("15 min")
   })
 })

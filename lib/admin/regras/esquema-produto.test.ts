@@ -138,3 +138,19 @@ describe("esquemaProduto: vídeo do salão", () => {
     })
   })
 })
+
+describe("tempo de preparo", () => {
+  test("opcional, em minutos inteiros de 1 a 120", () => {
+    expect(esquemaProduto("pizzaria").parse({ ...VALIDO, preparoMin: 20 }).preparoMin).toBe(20)
+    expect(esquemaProduto("pizzaria").parse(VALIDO).preparoMin).toBeUndefined()
+    expect(erros("pizzaria", { ...VALIDO, preparoMin: 0 })).toEqual({
+      preparoMin: "Use de 1 a 120 minutos.",
+    })
+    expect(erros("pizzaria", { ...VALIDO, preparoMin: 121 })).toEqual({
+      preparoMin: "Use de 1 a 120 minutos.",
+    })
+    expect(erros("pizzaria", { ...VALIDO, preparoMin: 2.5 })).toEqual({
+      preparoMin: "Use de 1 a 120 minutos.",
+    })
+  })
+})

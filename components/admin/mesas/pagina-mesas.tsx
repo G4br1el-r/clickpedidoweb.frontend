@@ -1,7 +1,7 @@
 "use client"
 
 import NumberFlow from "@number-flow/react"
-import { ArmchairIcon } from "lucide-react"
+import { ArmchairIcon, MessageSquareIcon } from "lucide-react"
 import { useState } from "react"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Skeleton } from "@/components/ui/skeleton"
@@ -9,10 +9,13 @@ import { useAgora } from "@/hooks/use-agora"
 import { useFila } from "@/lib/admin/dados/consultas"
 import { useMesas } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa, Pedido } from "@/lib/admin/dados/tipos"
+import { mensagensPendentes, TEXTO_DA_MENSAGEM } from "@/lib/admin/regras/cozinha"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { ChaveAlertaSonoro } from "../salao/chave-alerta-sonoro"
+import { ProntosParaServir } from "../salao/prontos-para-servir"
 import { Traco } from "../traco"
 import { ComandaMesa } from "./comanda-mesa"
 import { NovaMesa } from "./nova-mesa"
@@ -40,6 +43,7 @@ function CartaoMesa({
   const ocupada = mesa.status === "ocupada"
   const estado = estadoDaMesa(mesa, comanda)
   const itens = comanda?.itens.reduce((soma, item) => soma + item.quantidade, 0) ?? 0
+  const mensagens = comanda ? mensagensPendentes(comanda) : []
   return (
     <button
       type="button"
@@ -85,6 +89,16 @@ function CartaoMesa({
             {mesa.ocupadaEm && agora && comanda?.mesa?.garcom && <span aria-hidden="true">·</span>}
             {comanda?.mesa?.garcom && <span>Garçom {comanda.mesa.garcom}</span>}
           </span>
+          {mensagens.map((mensagem) => (
+            // O Ok fica na faixa de prontos: aqui o cartão inteiro já é um botão.
+            <span
+              key={mensagem.id}
+              className="flex items-center gap-1.5 text-xs font-medium text-(--atencao)"
+            >
+              <MessageSquareIcon className="size-3.5 shrink-0" aria-hidden="true" />
+              {TEXTO_DA_MENSAGEM[mensagem.tipo]}
+            </span>
+          ))}
           {comanda && (
             <span className="mt-auto flex items-baseline justify-between gap-2 border-t border-border/70 pt-2">
               <span className="text-xs text-muted-foreground">
@@ -139,8 +153,15 @@ export function PaginaMesas() {
                 .join(" · ")
             : "Carregando as mesas…"
         }
-        acoes={<NovaMesa />}
+        acoes={
+          <div className="flex flex-wrap items-center gap-3">
+            <ChaveAlertaSonoro />
+            <NovaMesa />
+          </div>
+        }
       />
+
+      <ProntosParaServir />
 
       {!mesas ? (
         <div

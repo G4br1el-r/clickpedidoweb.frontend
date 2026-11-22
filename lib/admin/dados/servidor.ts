@@ -8,7 +8,22 @@ import {
   sincronizarOpcoes,
   soltarOpcoesDe,
 } from "../regras/cardapio"
-import { esquemaLoja } from "../regras/esquema-loja"
+import {
+  alteracoesParaCozinha,
+  avancarRodada,
+  avisarSobreRodada,
+  conferirAgendado,
+  darCiente,
+  naMaoDaCozinha,
+  prontoNaPraca,
+  riscarItem,
+  type StatusTicket,
+  servirRodada,
+  ticketsDaCozinha,
+  verMensagem,
+  voltarRodada,
+} from "../regras/cozinha"
+import { esquemaLoja, esquemaPracas, esquemaTemposCozinha } from "../regras/esquema-loja"
 import { esquemaProduto } from "../regras/esquema-produto"
 import { consumoDoPedido, errosDoMovimento, saldoDepois } from "../regras/estoque"
 import { normalizar } from "../regras/filtro-pedidos"
@@ -25,7 +40,9 @@ import {
   totaisDaVenda,
 } from "../regras/pdv"
 import { calcularPesagem, faltaPesar } from "../regras/pesagem"
-import { proximoStatus } from "../regras/status"
+import { marcarVia } from "../regras/pracas"
+import { entregarRefazer, type PedidoDeRefazer, refazer } from "../regras/refazer"
+import { etapasDoCaminho, proximoStatus } from "../regras/status"
 import { type SegmentoPainelId, temRecurso } from "../segmentos-painel"
 import { semearCustos } from "./custos-demo"
 import { semearEstoque } from "./estoque-demo"
@@ -42,13 +59,16 @@ import type {
   Motoboy,
   MovimentoEstoque,
   Pedido,
+  Praca,
   Produto,
   StatusPedido,
+  TemposCozinha,
+  TipoMensagemCozinha,
   TipoMovimento,
 } from "./tipos"
 
 /** Sobe quando o formato guardado muda: a base antiga é descartada e gerada de novo. */
-const VERSAO = 4
+const VERSAO = 8
 const DIAS_DE_HISTORICO = 90
 
 type Guardado = { versao: number; geradoEm: string; base: BaseLoja }
@@ -64,6 +84,8 @@ export type VendaPdv = {
   observacao?: string
   /** Falso: a venda vai para a fila e a cozinha. */
   concluida: boolean
+  /** Só com a venda indo para a fila: para quando fica pronta (hoje, mais tarde). */
+  agendadoPara?: string
 }
 
 export type FiltroPedidos = {
@@ -73,6 +95,8 @@ export type FiltroPedidos = {
   status?: StatusPedido[]
   /** Só os concluídos neste dia, mesmo que criados antes (pelo `atualizadoEm`). */
   concluidosEm?: Date
+  /** Só o que está na mão da cozinha, mais o cancelado de que ela ainda não deu ciente. */
+  naCozinha?: boolean
 }
 
 /**
@@ -115,6 +139,8 @@ export type LancamentoMesa = {
   enviarParaCozinha: boolean
   garcom?: string
   clienteNome?: string
+  /** Só com a rodada indo para a cozinha: para quando fica pronta (hoje, mais tarde). */
+  agendadoPara?: string
 }
 
 export type OpcoesServidor = {
@@ -177,6 +203,41 @@ function recalcular(pedido: Pedido): Pedido {
 /** A ação partiu da etapa que a tela mostrava; se outra aba mudou o pedido, recusa. */
 function conferirEtapa(pedido: Pedido, de: StatusPedido) {
   if (pedido.status !== de) throw new Error("Este pedido já mudou de etapa. Atualize a tela.")
+}
+
+/**
+ * O pedido inteiro mudou de etapa (pela Fila): os itens da cozinha acompanham. Em preparo
+ * inicia todas as rodadas; pronto risca o que faltava. O que já tinha hora guarda a sua.
+ */
+function itensNaEtapa(pedido: Pedido, etapa: StatusPedido): ItemPedido[] {
+  if (etapa !== "em-preparo" && etapa !== "pronto") return pedido.itens
+  const daCozinha = new Set(
+    ticketsDaCozinha([pedido]).flatMap((ticket) => ticket.itens.map((item) => item.id)),
+  )
+  const agora = new Date().toISOString()
+  return pedido.itens.map((item) => {
+    if (!daCozinha.has(item.id)) return item
+    const iniciado = { ...item, iniciadoEm: item.iniciadoEm ?? agora }
+    return etapa === "pronto" ? { ...iniciado, feitoEm: item.feitoEm ?? agora } : iniciado
+  })
+}
+
+/**
+ * Guarda quando o pedido entrou na etapa nova. Voltar apaga as etapas que vinham depois
+ * (o pedido não está mais nelas); a etapa que ele já tinha passado mantém a primeira hora.
+ */
+function marcarEtapa(novo: Pedido, antes?: Pedido): Pedido {
+  if (antes?.status === novo.status) return novo
+  const caminho = etapasDoCaminho(novo.tipo)
+  const posicao = caminho.indexOf(novo.status)
+  const ficam = Object.entries(novo.etapas ?? {}).filter(
+    ([status]) => posicao < 0 || caminho.indexOf(status as StatusPedido) <= posicao,
+  )
+  const etapas: Partial<Record<StatusPedido, string>> = Object.fromEntries(ficam)
+  return {
+    ...novo,
+    etapas: { ...etapas, [novo.status]: etapas[novo.status] ?? new Date().toISOString() },
+  }
 }
 
 /** O que o pedido tira do estoque agora: nada se ainda não baixou ou foi cancelado. */
@@ -276,7 +337,13 @@ function aplicarEstoque(
 function encerrar(pedido: Pedido, momento: string): Pedido {
   if (pedido.status === "aguardando-pagamento") {
     return comEtapa(
-      { ...pedido, status: "cancelado", situacaoPagamento: "cancelado", atualizadoEm: momento },
+      {
+        ...pedido,
+        status: "cancelado",
+        situacaoPagamento: "cancelado",
+        atualizadoEm: momento,
+        etapas: { ...pedido.etapas, cancelado: momento },
+      },
       momento,
     )
   }
@@ -286,6 +353,7 @@ function encerrar(pedido: Pedido, momento: string): Pedido {
       ...pedido,
       status: "concluido",
       atualizadoEm: momento,
+      etapas: { ...pedido.etapas, concluido: momento },
       ...(pedido.situacaoPagamento === "na-entrega"
         ? { situacaoPagamento: "pago" as const, pagoEm: momento }
         : {}),
@@ -395,7 +463,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     const antes = base.pedidos[indice]
     const agora = new Date().toISOString()
     // Mudou de etapa: o histórico anota para onde foi e quando.
-    const novo = comEtapa({ ...mudar(antes, base), atualizadoEm: agora }, agora)
+    const novo = comEtapa(marcarEtapa({ ...mudar(antes, base), atualizadoEm: agora }, antes), agora)
     // O estoque acompanha o que o pedido passou a consumir (ou a devolver).
     const comEstoque = aplicarEstoque(base, antes, novo, estoque)
     const pedidos = comEstoque.pedidos.with(indice, novo)
@@ -415,11 +483,24 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
   function alterarComanda(id: number, mudar: (comanda: Pedido) => Pedido) {
     return alterar(
       id,
-      (pedido) => {
+      (pedido, base) => {
         if (pedido.tipo !== "mesa" || !EM_ANDAMENTO.includes(pedido.status)) {
           throw new Error("Só a comanda aberta de uma mesa pode mudar.")
         }
-        return recalcular(mudar(pedido))
+        const depois = recalcular(mudar(pedido))
+        // A cozinha fica sabendo do que saiu de um ticket que ela ainda tem na tela.
+        const avisos = alteracoesParaCozinha(
+          pedido,
+          depois,
+          new Date(),
+          base.loja.temposCozinha,
+        ).map((aviso) => ({
+          id: novoId("aviso")(),
+          ...aviso,
+        }))
+        return avisos.length > 0
+          ? { ...depois, avisosCozinha: [...(depois.avisosCozinha ?? []), ...avisos] }
+          : depois
       },
       // O garçom não lança mais do que há.
       { conferir: true },
@@ -636,7 +717,13 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
     },
 
     pedidos: {
-      async listar({ de, ate, status, concluidosEm }: FiltroPedidos = {}): Promise<Pedido[]> {
+      async listar({
+        de,
+        ate,
+        status,
+        concluidosEm,
+        naCozinha,
+      }: FiltroPedidos = {}): Promise<Pedido[]> {
         const inicio = de ? startOfDay(de).getTime() : -Infinity
         const fim = ate ? endOfDay(ate).getTime() : Infinity
         const { pedidos } = await carregar()
@@ -646,6 +733,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             criado >= inicio &&
             criado <= fim &&
             (!status || status.includes(pedido.status)) &&
+            (!naCozinha || naMaoDaCozinha(pedido) || ticketsDaCozinha([pedido]).length > 0) &&
             (!concluidosEm ||
               (pedido.status === "concluido" &&
                 isSameDay(new Date(pedido.atualizadoEm), concluidosEm)))
@@ -668,11 +756,27 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           const pagoAgora = proximo === "concluido" && pedido.situacaoPagamento === "na-entrega"
           return {
             ...pedido,
+            itens: itensNaEtapa(pedido, proximo),
             status: proximo,
             ...(pagoAgora
               ? { situacaoPagamento: "pago" as const, pagoEm: new Date().toISOString() }
               : {}),
           }
+        })
+      },
+
+      /** Alguém do salão ou do caixa leu a mensagem da cozinha. */
+      verMensagem(id: number, mensagemId: string) {
+        return alterar(id, (pedido) => verMensagem(pedido, mensagemId, new Date().toISOString()))
+      },
+
+      /** Prioridade: o pedido passa na frente na cozinha. Cozinha, caixa e garçom marcam. */
+      priorizar(id: number, prioridade: boolean) {
+        return alterar(id, (pedido) => {
+          if (!EM_ANDAMENTO.includes(pedido.status)) {
+            throw new Error("Só pedido em andamento tem prioridade.")
+          }
+          return { ...pedido, prioridade }
         })
       },
 
@@ -682,8 +786,22 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           conferirEtapa(pedido, de)
           if (pedido.status === "concluido")
             throw new Error("Pedido concluído não pode ser cancelado")
+          // Já estava na cozinha: ela precisa saber para parar o preparo.
+          const naCozinha = ticketsDaCozinha([pedido]).some((ticket) => ticket.itens.length > 0)
           return {
             ...pedido,
+            ...(naCozinha
+              ? {
+                  avisosCozinha: [
+                    ...(pedido.avisosCozinha ?? []),
+                    {
+                      id: novoId("aviso")(),
+                      tipo: "cancelado" as const,
+                      em: new Date().toISOString(),
+                    },
+                  ],
+                }
+              : {}),
             status: "cancelado",
             situacaoPagamento: pedido.situacaoPagamento === "pago" ? "pago" : "cancelado",
             // O que saiu do estoque volta (o alterar leva a diferença).
@@ -730,8 +848,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           token: crypto.randomUUID(),
         }
         // Recebido, o estoque sai na hora; aguardando pagamento online, só quando pagar.
-        const chegou: Pedido =
-          novo.status === "aguardando-pagamento" ? novo : { ...novo, estoqueBaixado: true }
+        const chegou: Pedido = marcarEtapa(
+          novo.status === "aguardando-pagamento" ? novo : { ...novo, estoqueBaixado: true },
+        )
         const comEstoque = aplicarEstoque(base, undefined, chegou)
         await substituir({ ...comEstoque, pedidos: [...comEstoque.pedidos, chegou] })
         return responder(chegou)
@@ -941,6 +1060,10 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           .map((item) => ({ ...item, quantidade: Math.round(item.quantidade) }))
           .filter((item) => Number.isFinite(item.quantidade) && item.quantidade >= 1)
         if (lancados.length === 0) throw new Error("Inclua pelo menos um item.")
+        const agendadoPara =
+          !venda.concluida && venda.agendadoPara
+            ? conferirAgendado(venda.agendadoPara, new Date())
+            : undefined
 
         const base = await carregar()
         const itens = lancados.map((lancado) => {
@@ -997,6 +1120,7 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
                 : {}),
               ...(item.observacao ? { observacao: item.observacao } : {}),
               total: reais(item.precoUnitario * item.quantidade),
+              ...(agendadoPara ? { agendadoPara } : {}),
             })),
             subtotal: totais.subtotal,
             desconto: totais.desconto,
@@ -1019,8 +1143,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           agora,
         )
         const comEstoque = aplicarEstoque(base, undefined, pedido, { conferir: true })
-        await substituir({ ...comEstoque, pedidos: [...comEstoque.pedidos, pedido] })
-        return responder(pedido)
+        const vendido = marcarEtapa(pedido)
+        await substituir({ ...comEstoque, pedidos: [...comEstoque.pedidos, vendido] })
+        return responder(vendido)
       },
 
       /** Vendas do PDV de hoje, da mais nova para a mais antiga. */
@@ -1112,8 +1237,9 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
           enviarParaCozinha: false,
           agendamento: { inicio: inicio.toISOString(), duracaoMin },
         }
-        await substituir({ ...base, pedidos: [...base.pedidos, pedido] })
-        return responder(pedido)
+        const marcado = marcarEtapa(pedido)
+        await substituir({ ...base, pedidos: [...base.pedidos, marcado] })
+        return responder(marcado)
       },
 
       /** Novo horário, com as mesmas regras; só antes de o atendimento começar. */
@@ -1129,6 +1255,82 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             agendamento: { ...pedido.agendamento, inicio: novoInicio.toISOString() },
           }
         })
+      },
+    },
+
+    /** Cada ticket da cozinha é uma rodada de um pedido; o pedido acompanha as rodadas. */
+    cozinha: {
+      /** `de`: a etapa que a tela mostrava no ticket. */
+      avancar(id: number, rodada: number, de: StatusTicket, refazer?: number) {
+        return alterar(id, (pedido) =>
+          avancarRodada(pedido, rodada, de, new Date().toISOString(), refazer),
+        )
+      },
+
+      /** Desfaz a última etapa do ticket: o pronto volta a preparar, o preparo volta a fazer. */
+      voltar(id: number, rodada: number, de: StatusTicket, refazer?: number) {
+        return alterar(id, (pedido) => voltarRodada(pedido, rodada, de, refazer))
+      },
+
+      /** Risca (ou desrisca) um item. Riscar num ticket de A fazer já começa a rodada. */
+      riscar(id: number, itemId: string, feito: boolean) {
+        return alterar(id, (pedido) => riscarItem(pedido, itemId, feito, new Date().toISOString()))
+      },
+
+      /** A cozinha viu o cancelamento ou a alteração. */
+      ciente(id: number, avisoId: string) {
+        return alterar(id, (pedido) => darCiente(pedido, avisoId, new Date().toISOString()))
+      },
+
+      /** O garçom levou a rodada pronta à mesa. */
+      servir(id: number, rodada: number, refazer?: number) {
+        return alterar(id, (pedido) =>
+          servirRodada(pedido, rodada, new Date().toISOString(), refazer),
+        )
+      },
+
+      /** Refaz parte de uma rodada: vira um ticket novo; a conta e o status não mudam. */
+      refazer(id: number, entrada: PedidoDeRefazer) {
+        return alterar(id, (pedido) => refazer(pedido, entrada, new Date()))
+      },
+
+      /** Entrega e retirada: a cozinha entregou o que refez. */
+      entregarRefazer(id: number, numero: number) {
+        return alterar(id, (pedido) => entregarRefazer(pedido, numero, new Date().toISOString()))
+      },
+
+      /** A praça terminou a parte dela na rodada. Com a última, a rodada fica pronta. */
+      prontoNaPraca(id: number, rodada: number, pracaId: string, refazer?: number) {
+        return alterar(id, (pedido, base) =>
+          prontoNaPraca(
+            pedido,
+            rodada,
+            { pracaId, produtos: base.produtos, pracas: base.loja.pracas ?? [] },
+            new Date().toISOString(),
+            refazer,
+          ),
+        )
+      },
+
+      /**
+       * Marca a via da cozinha ("rodada:praça") como impressa. `nova` diz se ainda não tinha
+       * saído: só o aparelho que a marcou primeiro imprime.
+       */
+      async marcarVia(id: number, via: string): Promise<{ pedido: Pedido; nova: boolean }> {
+        let nova = false
+        const pedido = await alterar(id, (antes) => {
+          const marcada = marcarVia(antes, via)
+          nova = marcada.nova
+          return marcada.pedido
+        })
+        return { pedido, nova }
+      },
+
+      /** Mensagem rápida da cozinha para o salão (mesa) ou o caixa (entrega e retirada). */
+      avisar(id: number, rodada: number, tipo: TipoMensagemCozinha) {
+        return alterar(id, (pedido) =>
+          avisarSobreRodada(pedido, rodada, tipo, novoId("msg")(), new Date().toISOString()),
+        )
       },
     },
 
@@ -1176,6 +1378,10 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
         const rodada = Math.max(0, ...(aberta?.itens.map((item) => item.rodada ?? 1) ?? [])) + 1
         const id = aberta?.id ?? (base.pedidos.at(-1)?.id ?? 0) + 1
         const vaiParaCozinha = lancamento.enviarParaCozinha
+        const agendadoPara =
+          vaiParaCozinha && lancamento.agendadoPara
+            ? conferirAgendado(lancamento.agendadoPara, new Date())
+            : undefined
         const novos: ItemPedido[] = lancamento.itens.map((lancado, indice) => {
           const { produtoId, nome, precoUnitario, custoUnitario, opcoes, produtosDasOpcoes } =
             precificar(base, lancado)
@@ -1197,46 +1403,50 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
             rodada,
             vaiParaCozinha,
             lancadoEm: agora,
+            ...(agendadoPara ? { agendadoPara } : {}),
           }
         })
 
         const garcom = lancamento.garcom?.trim().slice(0, 80)
         const cliente = lancamento.clienteNome?.trim().slice(0, 80)
         const comanda: Pedido = comEtapa(
-          recalcular(
-            aberta
-              ? {
-                  ...aberta,
-                  itens: [...aberta.itens, ...novos],
-                  status: vaiParaCozinha ? "recebido" : aberta.status,
-                  enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
-                  ...(cliente ? { cliente: { ...aberta.cliente, nome: cliente } } : {}),
-                  atualizadoEm: agora,
-                  estoqueBaixado: true,
-                }
-              : {
-                  id,
-                  numero: numeroNovo(base, id),
-                  token: crypto.randomUUID(),
-                  origem: "garcom",
-                  tipo: "mesa",
-                  status: vaiParaCozinha ? "recebido" : "pronto",
-                  cliente: { nome: cliente || mesa.nome, telefone: base.loja.telefone },
-                  mesa: { id: mesa.id, numero: mesa.numero, ...(garcom ? { garcom } : {}) },
-                  itens: novos,
-                  subtotal: 0,
-                  desconto: 0,
-                  taxaEntrega: 0,
-                  total: 0,
-                  pagamento: "dinheiro",
-                  situacaoPagamento: "na-entrega",
-                  criadoEm: agora,
-                  atualizadoEm: agora,
-                  historico: [],
-                  enviarParaCozinha: vaiParaCozinha,
-                  // Cada lançamento do garçom tira do estoque.
-                  estoqueBaixado: true,
-                },
+          marcarEtapa(
+            recalcular(
+              aberta
+                ? {
+                    ...aberta,
+                    itens: [...aberta.itens, ...novos],
+                    status: vaiParaCozinha ? "recebido" : aberta.status,
+                    enviarParaCozinha: aberta.enviarParaCozinha || vaiParaCozinha,
+                    ...(cliente ? { cliente: { ...aberta.cliente, nome: cliente } } : {}),
+                    atualizadoEm: agora,
+                    estoqueBaixado: true,
+                  }
+                : {
+                    id,
+                    numero: numeroNovo(base, id),
+                    token: crypto.randomUUID(),
+                    origem: "garcom",
+                    tipo: "mesa",
+                    status: vaiParaCozinha ? "recebido" : "pronto",
+                    cliente: { nome: cliente || mesa.nome, telefone: base.loja.telefone },
+                    mesa: { id: mesa.id, numero: mesa.numero, ...(garcom ? { garcom } : {}) },
+                    itens: novos,
+                    subtotal: 0,
+                    desconto: 0,
+                    taxaEntrega: 0,
+                    total: 0,
+                    pagamento: "dinheiro",
+                    situacaoPagamento: "na-entrega",
+                    criadoEm: agora,
+                    atualizadoEm: agora,
+                    historico: [],
+                    enviarParaCozinha: vaiParaCozinha,
+                    // Cada lançamento do garçom tira do estoque.
+                    estoqueBaixado: true,
+                  },
+            ),
+            aberta,
           ),
           agora,
         )
@@ -1525,6 +1735,25 @@ export function criarServidor({ segmento, carregarCatalogo, espera = 250 }: Opco
       })
       if (!resultado.success) throw new Error(resultado.error.issues[0].message)
       return mudarLoja(resultado.data)
+    },
+
+    /** Os tempos de alerta da cozinha, que valem para todos os aparelhos da loja. */
+    async salvarTemposCozinha(tempos: TemposCozinha): Promise<ConfigLoja> {
+      const resultado = esquemaTemposCozinha.safeParse(tempos)
+      if (!resultado.success) throw new Error(resultado.error.issues[0].message)
+      return mudarLoja({ temposCozinha: resultado.data })
+    },
+
+    /** As praças da cozinha, com as categorias de cada uma. */
+    async salvarPracas(pracas: Praca[]): Promise<ConfigLoja> {
+      const resultado = esquemaPracas.safeParse(pracas)
+      if (!resultado.success) throw new Error(resultado.error.issues[0].message)
+      return mudarLoja({ pracas: resultado.data })
+    },
+
+    /** Sem praças: se a cozinha imprime a via (uma só, Geral). */
+    async ligarViaDaCozinha(ligada: boolean): Promise<ConfigLoja> {
+      return mudarLoja({ viaDaCozinha: ligada })
     },
 
     /** Demonstração: conecta ou desconecta a conta online. Sem ela, Pix e cartão online desligam. */

@@ -1,12 +1,31 @@
 "use client"
 
 import { type QueryKey, useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
+import {
+  avancarRodada,
+  avisarSobreRodada,
+  darCiente,
+  prontoNaPraca,
+  riscarItem,
+  type StatusTicket,
+  servirRodada,
+  verMensagem,
+  voltarRodada,
+} from "../regras/cozinha"
+import type { VisaoDePraca } from "../regras/pracas"
+import { entregarRefazer, type PedidoDeRefazer, refazer } from "../regras/refazer"
 import { proximoStatus } from "../regras/status"
 import { useSegmentoAtual } from "../segmento-atual"
 import type { SegmentoPainelId } from "../segmentos-painel"
 import { carregarCatalogo } from "./catalogos"
 import { criarServidor, type FiltroPedidos, type Servidor, type VendaPdv } from "./servidor"
-import type { ConfigLoja, MotivoCancelamento, Pedido, StatusPedido } from "./tipos"
+import type {
+  ConfigLoja,
+  MotivoCancelamento,
+  Pedido,
+  StatusPedido,
+  TipoMensagemCozinha,
+} from "./tipos"
 
 /** Espera de rede simulada: dá para ver os estados de carregamento; zero nos testes. */
 const ESPERA = process.env.NODE_ENV === "test" ? 0 : 250
@@ -167,13 +186,131 @@ export const STATUS_DA_FILA: StatusPedido[] = [
 ]
 
 /** Fila ao vivo: o que está em aberto, de qualquer dia, conferido a cada 5 s. */
-export function useFila() {
-  return usePedidos({ status: STATUS_DA_FILA }, { atualizarACada: 5_000 })
+export function useFila(intervalo = 5_000) {
+  return usePedidos({ status: STATUS_DA_FILA }, { atualizarACada: intervalo })
 }
 
-/** O que a cozinha acompanha: novos, em preparo e prontos, conferido a cada 4 s. */
+/**
+ * O que a cozinha acompanha, conferido a cada 4 s: novos, em preparo, prontos e o
+ * cancelado de que ela ainda não deu ciente.
+ */
 export function useCozinha(intervalo = 4_000) {
-  return usePedidos({ status: ["recebido", "em-preparo", "pronto"] }, { atualizarACada: intervalo })
+  return usePedidos({ naCozinha: true }, { atualizarACada: intervalo })
+}
+
+/** A previsão usa a mesma regra do servidor; se ela recusar, a tela fica como está. */
+const ouIgual =
+  <A>(mudar: (pedido: Pedido, argumentos: A) => Pedido) =>
+  (pedido: Pedido, argumentos: A) => {
+    try {
+      return mudar(pedido, argumentos)
+    } catch {
+      return pedido
+    }
+  }
+
+/** `de`: a etapa que o ticket mostrava. Se outra tela já mudou, o servidor recusa. */
+type MudancaDeTicket = { id: number; rodada: number; de: StatusTicket; refazer?: number }
+
+export function useAvancarTicket() {
+  return useMutacaoDePedido<MudancaDeTicket>(
+    (servidor, { id, rodada, de, refazer }) => servidor.cozinha.avancar(id, rodada, de, refazer),
+    ouIgual((pedido, { rodada, de, refazer }) =>
+      avancarRodada(pedido, rodada, de, new Date().toISOString(), refazer),
+    ),
+  )
+}
+
+export function useVoltarTicket() {
+  return useMutacaoDePedido<MudancaDeTicket>(
+    (servidor, { id, rodada, de, refazer }) => servidor.cozinha.voltar(id, rodada, de, refazer),
+    ouIgual((pedido, { rodada, de, refazer }) => voltarRodada(pedido, rodada, de, refazer)),
+  )
+}
+
+export function useRiscarItem() {
+  return useMutacaoDePedido<{ id: number; itemId: string; feito: boolean }>(
+    (servidor, { id, itemId, feito }) => servidor.cozinha.riscar(id, itemId, feito),
+    ouIgual((pedido, { itemId, feito }) =>
+      riscarItem(pedido, itemId, feito, new Date().toISOString()),
+    ),
+  )
+}
+
+/** A praça terminou a parte dela na rodada; com a última, a rodada fica pronta. */
+export function useProntoNaPraca() {
+  return useMutacaoDePedido<{
+    id: number
+    rodada: number
+    visao: VisaoDePraca
+    refazer?: number
+  }>(
+    (servidor, { id, rodada, visao, refazer }) =>
+      servidor.cozinha.prontoNaPraca(id, rodada, visao.pracaId, refazer),
+    ouIgual((pedido, { rodada, visao, refazer }) =>
+      prontoNaPraca(pedido, rodada, visao, new Date().toISOString(), refazer),
+    ),
+  )
+}
+
+/** A cozinha viu o cancelamento ou a alteração: o aviso sai de todas as telas. */
+export function useDarCiente() {
+  return useMutacaoDePedido<{ id: number; avisoId: string }>(
+    (servidor, { id, avisoId }) => servidor.cozinha.ciente(id, avisoId),
+    ouIgual((pedido, { avisoId }) => darCiente(pedido, avisoId, new Date().toISOString())),
+  )
+}
+
+/** O garçom levou a rodada pronta à mesa: ela sai da cozinha e do salão. */
+export function useServirRodada() {
+  return useMutacaoDePedido<{ id: number; rodada: number; refazer?: number }>(
+    (servidor, { id, rodada, refazer }) => servidor.cozinha.servir(id, rodada, refazer),
+    ouIgual((pedido, { rodada, refazer }) =>
+      servirRodada(pedido, rodada, new Date().toISOString(), refazer),
+    ),
+  )
+}
+
+/** A cozinha refaz parte de uma rodada: vira um ticket novo em A fazer. */
+export function useRefazer() {
+  return useMutacaoDePedido<{ id: number; entrada: PedidoDeRefazer }>(
+    (servidor, { id, entrada }) => servidor.cozinha.refazer(id, entrada),
+    ouIgual((pedido, { entrada }) => refazer(pedido, entrada, new Date())),
+  )
+}
+
+/** Entrega e retirada: a cozinha entregou o que refez; o ticket sai do quadro. */
+export function useEntregarRefazer() {
+  return useMutacaoDePedido<{ id: number; numero: number }>(
+    (servidor, { id, numero }) => servidor.cozinha.entregarRefazer(id, numero),
+    ouIgual((pedido, { numero }) => entregarRefazer(pedido, numero, new Date().toISOString())),
+  )
+}
+
+/** Mensagem rápida da cozinha sobre a rodada, para o salão ou o caixa. */
+export function useAvisarSobreRodada() {
+  return useMutacaoDePedido<{ id: number; rodada: number; tipo: TipoMensagemCozinha }>(
+    (servidor, { id, rodada, tipo }) => servidor.cozinha.avisar(id, rodada, tipo),
+    // A previsão usa um id provisório; o do servidor chega quando a lista recarrega.
+    ouIgual((pedido, { rodada, tipo }) =>
+      avisarSobreRodada(pedido, rodada, tipo, "previsto", new Date().toISOString()),
+    ),
+  )
+}
+
+/** Ok na mensagem da cozinha: ela sai de todas as telas. */
+export function useVerMensagem() {
+  return useMutacaoDePedido<{ id: number; mensagemId: string }>(
+    (servidor, { id, mensagemId }) => servidor.pedidos.verMensagem(id, mensagemId),
+    ouIgual((pedido, { mensagemId }) => verMensagem(pedido, mensagemId, new Date().toISOString())),
+  )
+}
+
+export function usePriorizarPedido() {
+  return useMutacaoDePedido<{ id: number; prioridade: boolean }>(
+    (servidor, { id, prioridade }) => servidor.pedidos.priorizar(id, prioridade),
+    (pedido, { prioridade }) => ({ ...pedido, prioridade }),
+  )
 }
 
 function useMudancaNaLoja(acao: (servidor: Servidor, valor: boolean) => Promise<ConfigLoja>) {
@@ -192,6 +329,18 @@ export function useDefinirAberta() {
 
 export function useDefinirEntrega() {
   return useMudancaNaLoja((servidor, entrega) => servidor.definirEntrega(entrega))
+}
+
+/**
+ * Marca a via da cozinha como impressa. `nova` diz se este aparelho foi o primeiro: só
+ * ele imprime.
+ */
+export function useMarcarVia() {
+  const segmento = useSegmento()
+  return useMutation({
+    mutationFn: ({ id, via }: { id: number; via: string }) =>
+      servidorDo(segmento).cozinha.marcarVia(id, via),
+  })
 }
 
 /** Demonstração: um pedido novo chega agora. */

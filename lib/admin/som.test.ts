@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test, vi } from "vitest"
-import { tocarAlerta } from "./som"
+import { tocarAlerta, tocarSom } from "./som"
 
 /** AudioContext de mentira: anota as notas tocadas (frequência e forma da onda). */
 function simularAudio() {
@@ -80,5 +80,33 @@ describe("tocarAlerta", () => {
     )
     tocarAlerta("suave")
     expect(retomar).toHaveBeenCalled()
+  })
+})
+
+describe("tocarSom", () => {
+  test("cancelado ou alterado: dois tons alternados, duas vezes, de onda quadrada", () => {
+    const notas = simularAudio()
+    tocarSom("cancelado")
+    expect(notas).toEqual([
+      { frequencia: 659.25, onda: "square" },
+      { frequencia: 523.25, onda: "square" },
+      { frequencia: 659.25, onda: "square" },
+      { frequencia: 523.25, onda: "square" },
+    ])
+  })
+
+  test("chamada: dois tons subindo, de sino, para o cliente ouvir de longe", () => {
+    const notas = simularAudio()
+    tocarSom("chamada")
+    expect(notas).toEqual([
+      { frequencia: 783.99, onda: "sine" },
+      { frequencia: 1046.5, onda: "sine" },
+    ])
+  })
+
+  test("atrasado: um toque curto e grave", () => {
+    const notas = simularAudio()
+    tocarSom("atrasado")
+    expect(notas).toEqual([{ frequencia: 392, onda: "triangle" }])
   })
 })

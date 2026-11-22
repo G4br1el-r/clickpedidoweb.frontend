@@ -6,6 +6,7 @@ import {
   isSameDay,
   isSameMonth,
   startOfDay,
+  startOfHour,
 } from "date-fns"
 import { uniformInt } from "pure-rand/distribution/uniformInt"
 import { xoroshiro128plus } from "pure-rand/generator/xoroshiro128plus"
@@ -21,6 +22,7 @@ import type {
   ItemPedido,
   Mesa,
   MotivoCancelamento,
+  MotivoRefazer,
   OrigemPedido,
   Pedido,
   Produto,
@@ -91,9 +93,15 @@ const GARCONS = ["Lucas", "Paula", "Rafa", "Bia"]
 /**
  * Movimento de agora: a demonstração sempre abre com pedidos em todas as etapas
  * (aguardando pagamento, novo, em preparo, pronto, a caminho e mesa aberta).
- * `idade` em minutos antes de agora.
+ * `idade` em minutos antes de agora. `agendado`: o cliente pediu para mais tarde, tantos
+ * minutos depois de agora (na meia hora cheia).
  */
-const AO_VIVO: readonly { idade: number; tipo: TipoPedido; pagamento: FormaPagamento }[] = [
+const AO_VIVO: readonly {
+  idade: number
+  tipo: TipoPedido
+  pagamento: FormaPagamento
+  agendado?: number
+}[] = [
   { idade: 80, tipo: "mesa", pagamento: "dinheiro" },
   { idade: 64, tipo: "entrega", pagamento: "pix" },
   { idade: 52, tipo: "entrega", pagamento: "cartao-na-entrega" },
@@ -104,6 +112,9 @@ const AO_VIVO: readonly { idade: number; tipo: TipoPedido; pagamento: FormaPagam
   { idade: 7, tipo: "mesa", pagamento: "dinheiro" },
   { idade: 5, tipo: "retirada", pagamento: "dinheiro" },
   { idade: 2, tipo: "entrega", pagamento: "pix" },
+  // Por último: os agendados não mudam o sorteio dos pedidos de antes.
+  { idade: 1, tipo: "entrega", pagamento: "dinheiro", agendado: 90 },
+  { idade: 0.5, tipo: "retirada", pagamento: "dinheiro", agendado: 60 },
 ]
 const OBSERVACOES = [
   "Sem cebola, por favor",
@@ -566,7 +577,11 @@ export function gerarPedidos({
         else status = inicio <= agora ? "em-preparo" : "recebido"
       } else if (hoje) {
         const idade = (agora.getTime() - criado.getTime()) / 60_000
-        status = origem === "pdv" ? "concluido" : statusPorIdade(tipo, idade, online)
+        status = vivo?.agendado
+          ? "recebido"
+          : origem === "pdv"
+            ? "concluido"
+            : statusPorIdade(tipo, idade, online)
         if (status === "concluido" && !vivo && sorte.chance(8)) status = "cancelado"
       } else {
         status = sorte.chance(8) ? "cancelado" : "concluido"
@@ -677,10 +692,152 @@ export function gerarPedidos({
           },
         }
       }
-      pedidos.push(novo)
+      const agendadoPara = vivo?.agendado ? meiaHoraDepois(agora, vivo.agendado) : undefined
+      if (agendadoPara) {
+        novo = { ...novo, itens: novo.itens.map((item) => ({ ...item, agendadoPara })) }
+      }
+      pedidos.push(comHorarios(novo, atualizado, agora))
     }
   }
   return pedidos
+}
+
+const CAMINHO_DA_COZINHA: StatusPedido[] = [
+  "recebido",
+  "em-preparo",
+  "pronto",
+  "saiu-para-entrega",
+  "concluido",
+]
+
+/**
+ * A hora de cada etapa do pedido gerado. Não sorteia de novo, para não mudar os outros
+ * pedidos: o preparo começa 2 a 5 min depois da chegada, fica pronto 8 a 15 min depois e
+ * a entrega sai 3 a 8 min depois de pronta, tudo antes dos 25 min em que o status muda.
+ * Concluído e cancelado fecham na última atualização; a venda do balcão não passa pela
+ * cozinha. Na mesa, o garçom serve 3 a 6 min depois de pronto, se já deu tempo.
+ */
+/** A primeira meia hora cheia tantos minutos depois de agora, se ainda for hoje. */
+function meiaHoraDepois(agora: Date, minutos: number): string | undefined {
+  const depois = addMinutes(agora, minutos)
+  const para = addMinutes(startOfHour(depois), Math.ceil(depois.getMinutes() / 30) * 30)
+  return isSameDay(para, agora) ? para.toISOString() : undefined
+}
+
+function comHorarios(pedido: Pedido, atualizado: Date, agora: Date): Pedido {
+  const criado = new Date(pedido.criadoEm)
+  const hora = (data: Date) => data.toISOString()
+  if (pedido.status === "aguardando-pagamento") {
+    return { ...pedido, etapas: { "aguardando-pagamento": hora(criado) } }
+  }
+  const etapas: Partial<Record<StatusPedido, string>> = { recebido: hora(criado) }
+  if (pedido.status === "cancelado") return canceladoComHorarios(pedido, etapas, atualizado)
+
+  if (pedido.agendamento) {
+    const inicio = new Date(pedido.agendamento.inicio)
+    if (pedido.status !== "recebido") etapas["em-preparo"] = hora(inicio)
+    if (pedido.status === "concluido") {
+      etapas.concluido = hora(addMinutes(inicio, pedido.agendamento.duracaoMin))
+    }
+    return { ...pedido, etapas }
+  }
+  if (pedido.origem === "pdv")
+    return { ...pedido, etapas: { ...etapas, concluido: hora(atualizado) } }
+
+  const ate = CAMINHO_DA_COZINHA.indexOf(pedido.status)
+  const iniciou = addMinutes(criado, 2 + (pedido.id % 4))
+  const pronto = addMinutes(iniciou, 8 + (pedido.id % 8))
+  if (ate >= 1) etapas["em-preparo"] = hora(iniciou)
+  if (ate >= 2) etapas.pronto = hora(pronto)
+  if (ate >= 3 && pedido.tipo === "entrega") {
+    etapas["saiu-para-entrega"] = hora(addMinutes(pronto, 3 + (pedido.id % 6)))
+  }
+  if (ate === 4) etapas.concluido = hora(atualizado)
+
+  const servido = addMinutes(pronto, 3 + (pedido.id % 4))
+  const limite = ate === 4 ? atualizado : agora
+  const serviu = pedido.tipo === "mesa" && ate >= 2 && servido <= limite
+  const itens = pedido.itens.map((item) => {
+    if (ate < 1 || !(item.vaiParaCozinha ?? pedido.enviarParaCozinha)) return item
+    return {
+      ...item,
+      iniciadoEm: hora(iniciou),
+      ...(ate >= 2 ? { feitoEm: hora(pronto) } : {}),
+      ...(serviu ? { servidoEm: hora(servido) } : {}),
+    }
+  })
+  const comItens = { ...pedido, itens, etapas }
+  return ate >= 3 ? comRefazer(comItens, pronto, ate === 4 ? atualizado : agora) : comItens
+}
+
+const MOTIVOS_DA_DEMO: MotivoRefazer[] = ["errado", "caiu", "reclamacao", "outro"]
+
+/**
+ * Um em cada três cancelados da cozinha foi cancelado depois de começar: os itens já
+ * tinham sido iniciados (2 a 5 min depois da chegada), antes do cancelamento.
+ */
+function canceladoComHorarios(
+  pedido: Pedido,
+  etapas: Partial<Record<StatusPedido, string>>,
+  atualizado: Date,
+): Pedido {
+  const comCancelado = { ...pedido, etapas: { ...etapas, cancelado: atualizado.toISOString() } }
+  const iniciou = addMinutes(new Date(pedido.criadoEm), 2 + (pedido.id % 4))
+  if (pedido.origem === "pdv" || pedido.id % 3 !== 0 || iniciou >= atualizado) return comCancelado
+  return {
+    ...comCancelado,
+    etapas: { ...comCancelado.etapas, "em-preparo": iniciou.toISOString() },
+    itens: pedido.itens.map((item) =>
+      (item.vaiParaCozinha ?? pedido.enviarParaCozinha)
+        ? { ...item, iniciadoEm: iniciou.toISOString() }
+        : item,
+    ),
+  }
+}
+
+/**
+ * Um pedido em 23 que já saiu teve um item refeito: 4 a 8 min depois de pronto, com o
+ * preparo e a saída do refazer até o limite (o encerramento ou agora). Sem sortear.
+ */
+function comRefazer(pedido: Pedido, pronto: Date, limite: Date): Pedido {
+  const [primeiro] = pedido.itens.filter((item) => item.vaiParaCozinha ?? pedido.enviarParaCozinha)
+  if (!primeiro || pedido.id % 23 !== 0) return pedido
+  const em = addMinutes(pronto, 4 + (pedido.id % 5))
+  const iniciou = addMinutes(em, 2)
+  const feito = addMinutes(iniciou, 6 + (pedido.id % 4))
+  const saiu = addMinutes(feito, 3)
+  if (saiu > limite) return pedido
+  const {
+    lancadoEm: _lancado,
+    iniciadoEm: _iniciado,
+    feitoEm: _feito,
+    servidoEm: _servido,
+    ...dados
+  } = primeiro
+  const naMesa = pedido.tipo === "mesa"
+  return {
+    ...pedido,
+    refacoes: [
+      {
+        numero: 1,
+        rodada: primeiro.rodada ?? 1,
+        motivo: MOTIVOS_DA_DEMO[pedido.id % MOTIVOS_DA_DEMO.length],
+        em: em.toISOString(),
+        itens: [
+          {
+            ...dados,
+            id: `${primeiro.id}~r1`,
+            quantidade: 1,
+            total: primeiro.precoUnitario,
+            iniciadoEm: iniciou.toISOString(),
+            feitoEm: feito.toISOString(),
+            ...(naMesa ? { servidoEm: saiu.toISOString() } : {}),
+          },
+        ],
+        ...(naMesa ? {} : { entregueEm: saiu.toISOString() }),
+      },
+    ],
+  }
 }
 
 export type OpcoesPedidoAgora = Omit<OpcoesGeracao, "de"> & {

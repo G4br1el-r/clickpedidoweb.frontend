@@ -25,6 +25,7 @@ export function catalogoDeTeste(): CatalogoLoja {
       pedidoMinimo: 0,
       tempoEntrega: "40 min",
       tempoRetirada: "20 min",
+      prazos: { entrega: { min: 40, max: 40 }, retirada: { min: 20, max: 20 } },
       cidadesAtendidas: [],
       pagamentoOnlineConectado: true,
       pagamentos: {

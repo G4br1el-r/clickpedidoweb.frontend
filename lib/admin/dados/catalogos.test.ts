@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { esquemaLoja } from "../regras/esquema-loja"
+import { esquemaLoja, esquemaPracas } from "../regras/esquema-loja"
 import { SEGMENTOS_PAINEL } from "../segmentos-painel"
 import { carregarCatalogo } from "./catalogos"
 import { gerarPedidos } from "./gerar-pedidos"
@@ -61,5 +61,29 @@ describe("combos da adega", () => {
       // Sem produto no cardápio: continua uma opção solta.
       "Gelo Tradicional": null,
     })
+  })
+})
+
+/** As praças de cada loja com cozinha. Salão e farmácia não têm cozinha. */
+const PRACAS = {
+  pizzaria: ["Forno", "Montagem", "Bebidas"],
+  lanchonete: ["Chapa", "Fritura", "Bebidas"],
+  adega: ["Bar", "Balcão"],
+  acougue: ["Corte", "Balcão"],
+  salao: [],
+  farmacia: [],
+}
+
+describe.each(SEGMENTOS_PAINEL.map((segmento) => segmento.id))("praças de %s", (segmento) => {
+  test("vêm prontas, válidas, e cada categoria delas existe", async () => {
+    const { loja, categorias } = await carregarCatalogo(segmento)
+    const pracas = loja.pracas ?? []
+    expect(pracas.map((praca) => praca.nome)).toEqual(PRACAS[segmento])
+    expect(esquemaPracas.safeParse(pracas).success).toBe(true)
+    const ids = new Set(categorias.map((categoria) => categoria.id))
+    for (const praca of pracas) {
+      expect(praca.categoriaIds.length).toBeGreaterThan(0)
+      for (const id of praca.categoriaIds) expect(ids.has(id)).toBe(true)
+    }
   })
 })

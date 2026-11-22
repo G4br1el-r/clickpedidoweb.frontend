@@ -69,6 +69,62 @@ export type ItemPedido = {
   vaiParaCozinha?: boolean
   /** Comanda: quando o garçom lançou o item. */
   lancadoEm?: string
+  /** Agendado: para quando a rodada tem de ficar pronta. Até a hora de começar, espera. */
+  agendadoPara?: string
+  /** Cozinha: quando a rodada do item começou a ser preparada. */
+  iniciadoEm?: string
+  /** Cozinha: quando o item foi riscado como feito. */
+  feitoEm?: string
+  /** Mesa: quando o garçom levou o item à mesa. A rodada toda servida sai da cozinha. */
+  servidoEm?: string
+}
+
+/**
+ * Aviso para a cozinha: o pedido foi cancelado, ou a comanda perdeu itens, depois de
+ * chegar à cozinha. Fica no ticket até alguém dar ciente.
+ */
+export type AvisoCozinha = {
+  id: string
+  tipo: "cancelado" | "alterado"
+  em: string
+  cienteEm?: string
+  /** Alterado: a rodada que mudou, a etapa em que ela estava e o que saiu dela. */
+  rodada?: number
+  etapa?: "recebido" | "em-preparo" | "pronto"
+  itens?: { nome: string; quantidade: number }[]
+}
+
+/** Por que a cozinha refez. */
+export type MotivoRefazer = "errado" | "caiu" | "reclamacao" | "outro"
+
+/**
+ * Um refazer: as cópias dos itens escolhidos de uma rodada, com os próprios horários de
+ * preparo. Vira um ticket da cozinha; não entra nos itens, no total nem no status do pedido.
+ */
+export type Refacao = {
+  /** 1, 2, 3… dentro do pedido. */
+  numero: number
+  /** A rodada que foi refeita. */
+  rodada: number
+  motivo: MotivoRefazer
+  /** No motivo "outro", o que aconteceu. */
+  texto?: string
+  em: string
+  itens: ItemPedido[]
+  /** Entrega e retirada: a cozinha entregou o que refez. */
+  entregueEm?: string
+}
+
+/** As mensagens rápidas que a cozinha manda para o salão ou o caixa. */
+export type TipoMensagemCozinha = "atraso" | "substituicao" | "duvida"
+
+/** Mensagem da cozinha sobre uma rodada. Fica até alguém dar Ok. */
+export type MensagemCozinha = {
+  id: string
+  rodada: number
+  tipo: TipoMensagemCozinha
+  em: string
+  vistaEm?: string
 }
 
 export type EnderecoEntrega = {
@@ -106,6 +162,18 @@ export type Pedido = {
   observacao?: string
   criadoEm: string
   atualizadoEm: string
+  /** Passa na frente na cozinha. */
+  prioridade?: boolean
+  /** Cancelamentos e alterações que a cozinha precisa ver. */
+  avisosCozinha?: AvisoCozinha[]
+  /** Quando o pedido entrou em cada etapa por que passou. */
+  etapas?: Partial<Record<StatusPedido, string>>
+  /** O que a cozinha mandou dizer ao salão ou ao caixa. */
+  mensagensCozinha?: MensagemCozinha[]
+  /** Cozinha: o que foi refeito (errado, caiu, reclamação). Fica fora dos itens e da conta. */
+  refacoes?: Refacao[]
+  /** Vias da cozinha já impressas: "rodada:praça". Outro aparelho não imprime de novo. */
+  viasImpressas?: string[]
   /** Cada etapa por que o pedido passou, da primeira à atual. */
   historico: EtapaDoPedido[]
   impressoEm?: string
@@ -187,6 +255,10 @@ export type Produto = {
   custo?: number
   /** Controle de estoque do produto; sem o campo, não é controlado. */
   estoque?: ControleEstoque
+  /** Cozinha: a praça que prepara, no lugar da praça da categoria. */
+  pracaId?: string
+  /** Cozinha (Pro): quanto o produto leva para ficar pronto, em minutos. */
+  preparoMin?: number
 }
 
 /** Estoque de um produto, na unidade dele (peças ou kg). */
@@ -310,6 +382,28 @@ export type HorarioFuncionamento = { dia: number; aberto: boolean; abre: string;
 
 export type SomAlerta = "suave" | "alto" | "muito-alto"
 
+/** Tempo prometido ao cliente, em minutos. */
+export type Prazo = { min: number; max: number }
+
+/** As cores das praças: o traço que marca cada uma no painel. */
+export const CORES_DE_PRACA = ["ambar", "verde", "azul", "roxo", "rosa", "cinza"] as const
+export type CorDePraca = (typeof CORES_DE_PRACA)[number]
+
+/** Um ponto de preparo da cozinha (Forno, Chapa, Bebidas) e as categorias que são dele. */
+export type Praca = {
+  id: string
+  nome: string
+  cor: CorDePraca
+  categoriaIds: string[]
+  /** Imprime a via da cozinha desta praça. */
+  imprime: boolean
+  /** O aparelho desta praça toca o alerta de pedido novo. */
+  tocaSom: boolean
+}
+
+/** Quando o ticket pede atenção, quando atrasa e quanto o pronto fica na tela, em minutos. */
+export type TemposCozinha = { atencaoMin: number; atrasoMin: number; prontoFicaMin: number }
+
 /**
  * Taxa cobrada por forma de pagamento, em % do valor. Dinheiro e Pix no balcão não têm taxa;
  * forma sem taxa informada conta como 0%.
@@ -337,8 +431,17 @@ export type ConfigLoja = {
   aceitaRetirada: boolean
   taxaEntregaPadrao: number
   pedidoMinimo: number
+  /** Texto da vitrine. Com `prazos`, é gerado a partir deles ao salvar. */
   tempoEntrega: string
   tempoRetirada: string
+  /** Lojas com cozinha: os tempos em minutos. O salão não tem e usa o texto livre. */
+  prazos?: { entrega: Prazo; retirada: Prazo }
+  /** Tempos de alerta da cozinha. Sem o campo, 15, 25 e 15 min. */
+  temposCozinha?: TemposCozinha
+  /** Pontos de preparo da cozinha. Sem praças, tudo é da praça Geral. */
+  pracas?: Praca[]
+  /** Sem praças: se a cozinha imprime a via (uma só, Geral). */
+  viaDaCozinha?: boolean
   /** Vazio = qualquer cidade. */
   cidadesAtendidas: string[]
   pagamentos: Record<FormaPagamento, boolean>

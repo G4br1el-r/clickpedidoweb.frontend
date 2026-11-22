@@ -1,4 +1,6 @@
 import { z } from "zod"
+import { CORES_DE_PRACA } from "../dados/tipos"
+import { textoDoPrazo } from "./loja"
 import { esquemaLinkDeVideo } from "./video"
 
 const HORA = /^([01]\d|2[0-3]):[0-5]\d$/
@@ -53,6 +55,18 @@ const esquemaHorario = z
 
 const vitrine = z.object({ titulo: texto(40), ativo: z.boolean() })
 
+const minutos = z
+  .number({ error: "Informe os minutos." })
+  .int({ error: "Use minutos inteiros." })
+  .min(1, { error: "De 1 a 240 min." })
+  .max(240, { error: "De 1 a 240 min." })
+
+/** Mínimo e máximo, em minutos: o máximo não fica abaixo do mínimo. */
+const prazo = z.object({ min: minutos, max: minutos }).refine((valor) => valor.max >= valor.min, {
+  path: ["max"],
+  error: "O máximo precisa ser maior ou igual ao mínimo.",
+})
+
 /** Configuração da loja como o formulário salva: textos limpos e regras entre os campos. */
 export const esquemaLoja = z
   .object({
@@ -91,6 +105,7 @@ export const esquemaLoja = z
     som: z.enum(["suave", "alto", "muito-alto"]),
     vitrines: z.object({ destaques: vitrine, ofertas: vitrine }),
     videoBanner: esquemaLinkDeVideo.optional(),
+    prazos: z.object({ entrega: prazo, retirada: prazo }).optional(),
   })
   .superRefine((loja, contexto) => {
     if (!loja.aceitaEntrega && !loja.aceitaRetirada) {
@@ -123,5 +138,68 @@ export const esquemaLoja = z
       }
     }
   })
+  // Com os prazos em minutos, o texto da vitrine sai deles.
+  .transform((loja) =>
+    loja.prazos
+      ? {
+          ...loja,
+          tempoEntrega: textoDoPrazo(loja.prazos.entrega),
+          tempoRetirada: textoDoPrazo(loja.prazos.retirada),
+        }
+      : loja,
+  )
 
 export type FormularioLoja = z.input<typeof esquemaLoja>
+
+const ate = (maximo: number) =>
+  z
+    .number({ error: "Informe os minutos." })
+    .int({ error: "Use minutos inteiros." })
+    .min(1, { error: `De 1 a ${maximo} min.` })
+    .max(maximo, { error: `De 1 a ${maximo} min.` })
+
+const alertas = z.object({ atencaoMin: ate(120), atrasoMin: ate(120) })
+
+/** Tempos de alerta da cozinha: a atenção vem antes do atraso. */
+export const esquemaTemposCozinha = z
+  .object({ ...alertas.shape, prontoFicaMin: ate(60) })
+  .refine((tempos) => tempos.atrasoMin > tempos.atencaoMin, {
+    path: ["atrasoMin"],
+    error: "O atraso precisa vir depois da atenção.",
+    // Confere a ordem mesmo com o tempo do pronto errado.
+    when: ({ value }) => alertas.safeParse(value).success,
+  })
+
+const esquemaPraca = z.object({
+  id: z.string().min(1),
+  nome: texto(30).min(1, { error: "Informe o nome da praça." }),
+  cor: z.enum(CORES_DE_PRACA),
+  categoriaIds: z.array(z.string()),
+  imprime: z.boolean(),
+  tocaSom: z.boolean(),
+})
+
+/** As praças da cozinha: nome sem repetir, e cada categoria em uma praça só. */
+export const esquemaPracas = z.array(esquemaPraca).superRefine((pracas, contexto) => {
+  const nomes = new Set<string>()
+  const categorias = new Set<string>()
+  pracas.forEach((praca, indice) => {
+    const nome = praca.nome.toLocaleLowerCase("pt-BR")
+    if (nome && nomes.has(nome)) {
+      contexto.addIssue({
+        code: "custom",
+        path: [indice, "nome"],
+        message: "Já existe uma praça com este nome.",
+      })
+    }
+    nomes.add(nome)
+    if (praca.categoriaIds.some((id) => categorias.has(id))) {
+      contexto.addIssue({
+        code: "custom",
+        path: [indice, "categoriaIds"],
+        message: "Uma categoria fica em uma praça só.",
+      })
+    }
+    for (const id of praca.categoriaIds) categorias.add(id)
+  })
+})

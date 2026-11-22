@@ -11,6 +11,7 @@ import {
 } from "lucide-react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { useState } from "react"
+import { PatternFormat } from "react-number-format"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import { Field, FieldLabel } from "@/components/ui/field"
@@ -35,6 +36,7 @@ import { usePedido } from "@/lib/admin/dados/consultas"
 import { useLancarNaMesa, useMesas } from "@/lib/admin/dados/consultas-mesas"
 import type { Mesa, Produto } from "@/lib/admin/dados/tipos"
 import { useGarcom, useGarcomCarregado } from "@/lib/admin/garcom"
+import { agendadoParaHoje } from "@/lib/admin/regras/cozinha"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import {
   adicionarItem,
@@ -50,6 +52,8 @@ import { ComandaMesa } from "../mesas/comanda-mesa"
 import { type AvisoCaixa, linhaQueMudou } from "../pdv/caixa-pdv"
 import { CatalogoBalcao } from "../pdv/catalogo-balcao"
 import { JanelaOpcoes } from "../pdv/janela-opcoes"
+import { ChaveAlertaSonoro } from "../salao/chave-alerta-sonoro"
+import { ProntosParaServir } from "../salao/prontos-para-servir"
 import { Traco } from "../traco"
 
 /** Item da bandeja: o que a tela mostra e as escolhas que vão para o servidor. */
@@ -63,6 +67,8 @@ function Bandeja({
   mudarQuantidade,
   remover,
   aoLancar,
+  para,
+  mudarPara,
 }: {
   itens: (ItemBandeja & { chave: string })[]
   mesa: Mesa | null
@@ -71,6 +77,9 @@ function Bandeja({
   mudarQuantidade: (chave: string, quantidade: number) => void
   remover: (chave: string) => void
   aoLancar: (enviarParaCozinha: boolean) => void
+  /** "21:30": a rodada vai para a cozinha para mais tarde. Vazio, sai agora. */
+  para: string
+  mudarPara: (para: string) => void
 }) {
   const semMovimento = useReducedMotion()
   const { quantidade, total } = totaisDaVenda(itens, { modo: "reais", valor: 0 })
@@ -179,6 +188,22 @@ function Bandeja({
         />
       </div>
       {!mesa && <p className="-mt-2 text-sm text-muted-foreground">Escolha a mesa.</p>}
+      <Field orientation="horizontal">
+        <FieldLabel htmlFor="garcom-para" className="font-normal">
+          Para as
+        </FieldLabel>
+        <PatternFormat
+          id="garcom-para"
+          customInput={Input}
+          format="##:##"
+          mask="_"
+          inputMode="numeric"
+          placeholder="Agora"
+          className="w-20 text-center tabular-nums"
+          value={para}
+          onValueChange={({ formattedValue }) => mudarPara(formattedValue)}
+        />
+      </Field>
       {/* A ação mais comum por cima, inteira; a de bebida pronta logo abaixo. */}
       <div className="flex flex-col gap-2">
         <Button
@@ -251,6 +276,7 @@ export function PaginaGarcom() {
   const lancar = useLancarNaMesa()
   const [mesaId, setMesaId] = useState<string | null>(null)
   const [cliente, setCliente] = useState("")
+  const [para, setPara] = useState("")
   const [itens, setItens] = useState<(ItemBandeja & { chave: string })[]>([])
   const [aviso, setAviso] = useState<AvisoCaixa | null>(null)
   const [comOpcoes, setComOpcoes] = useState<Produto | null>(null)
@@ -289,10 +315,18 @@ export function PaginaGarcom() {
 
   const aoLancar = (enviarParaCozinha: boolean) => {
     if (!mesa) return
+    let agendadoPara: string | undefined
+    try {
+      agendadoPara = enviarParaCozinha ? agendadoParaHoje(para, new Date()) : undefined
+    } catch (erro) {
+      toast.error((erro as Error).message)
+      return
+    }
     lancar.mutate(
       {
         mesaId: mesa.id,
         enviarParaCozinha,
+        ...(agendadoPara ? { agendadoPara } : {}),
         ...(nome.trim() ? { garcom: nome } : {}),
         ...(mesa.status === "livre" && cliente.trim() ? { clienteNome: cliente } : {}),
         itens: itens.map((item) => ({
@@ -305,9 +339,16 @@ export function PaginaGarcom() {
       {
         onSuccess: () => {
           toast.success(
-            `Mesa ${mesa.numero}: ${enviarParaCozinha ? "enviado para a cozinha" : "lançado na comanda"}.`,
+            `Mesa ${mesa.numero}: ${
+              agendadoPara
+                ? `agendado para ${para}`
+                : enviarParaCozinha
+                  ? "enviado para a cozinha"
+                  : "lançado na comanda"
+            }.`,
           )
           setItens([])
+          setPara("")
           setAviso(null)
           setCliente("")
           setBandejaAberta(false)
@@ -322,6 +363,8 @@ export function PaginaGarcom() {
       itens={itens}
       mesa={mesa}
       enviando={lancar.isPending}
+      para={para}
+      mudarPara={setPara}
       aviso={aviso}
       mudarQuantidade={(chave, quantidade) =>
         setItens((atuais) =>
@@ -340,7 +383,10 @@ export function PaginaGarcom() {
       <CabecalhoPagina
         titulo="Garçom"
         resumo="Escolha a mesa, monte a rodada e lance na comanda."
+        acoes={<ChaveAlertaSonoro />}
       />
+
+      <ProntosParaServir />
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_23rem] lg:gap-0">
         <div className="flex min-w-0 flex-col gap-5 lg:pr-6">

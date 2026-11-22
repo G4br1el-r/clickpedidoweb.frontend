@@ -52,7 +52,7 @@ import {
 } from "@/components/ui/sheet"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
-import { useLoja, usePedido } from "@/lib/admin/dados/consultas"
+import { useLoja, usePedido, useServirRodada } from "@/lib/admin/dados/consultas"
 import {
   useAlterarQuantidade,
   useExcluirMesa,
@@ -63,7 +63,7 @@ import {
 } from "@/lib/admin/dados/consultas-mesas"
 import type { PagamentoMesa } from "@/lib/admin/dados/servidor"
 import type { ItemPedido, Mesa, Pedido } from "@/lib/admin/dados/tipos"
-import { cozinhaJaPreparou } from "@/lib/admin/regras/cozinha"
+import { cozinhaJaPreparou, prontosParaServir } from "@/lib/admin/regras/cozinha"
 import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import { emReais, formatoMoeda } from "@/lib/formato"
@@ -292,6 +292,8 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
     remover.mutate({ pedidoId: pedido.id, itemId: item.id }, { onError: aoErrar })
   const semMovimento = useReducedMotion()
   const estado = estadoDaMesa(mesa, pedido)
+  const servir = useServirRodada()
+  const prontas = prontosParaServir([pedido])
 
   return (
     <>
@@ -315,6 +317,39 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
       </SheetHeader>
 
       <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-4">
+        {prontas.length > 0 && (
+          <ul aria-label="Prontos para servir" className="flex flex-col gap-2">
+            {prontas.map((ticket) => (
+              <li
+                key={ticket.id}
+                aria-label={`${ticket.rodada}ª rodada pronta${ticket.refazer ? " · refazer" : ""}`}
+                className="flex items-center gap-3 rounded-lg bg-(--tom-pronto)/[0.08] py-2 pr-2 pl-3"
+              >
+                <Traco tom="pronto" />
+                <span className="flex min-w-0 flex-1 flex-col text-sm">
+                  <span className="font-semibold">
+                    {ticket.rodada}ª rodada pronta{ticket.refazer ? " · refazer" : ""}
+                  </span>
+                  <span className="truncate text-[13px] text-muted-foreground">
+                    {ticket.itens.map((item) => `${item.quantidade}× ${item.nome}`).join(", ")}
+                  </span>
+                </span>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={() =>
+                    servir.mutate(
+                      { id: pedido.id, rodada: ticket.rodada, refazer: ticket.refazer?.numero },
+                      { onError: aoErrar },
+                    )
+                  }
+                >
+                  Servido
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
         {vazia ? (
           <p className="rounded-xl border border-dashed border-border px-4 py-8 text-center text-sm text-balance text-muted-foreground">
             A comanda está vazia. Libere a mesa ou lance itens pelo Garçom.
