@@ -353,6 +353,24 @@ describe("QR: o pedido aguardando é da comanda da hora", () => {
     )
   })
 
+  test("excluir a mesa fecha o chamado aberto dela e recusa o pedido que aguardava", async () => {
+    const api = servidor()
+    await ligarQr(api)
+    const mesaId = await mesaNova(api)
+    const outra = await mesaNova(api, 31)
+    await api.qr.chamar(mesaId, "garcom")
+    const daOutra = await api.qr.chamar(outra, "garcom")
+    const { pedido } = await api.qr.pedir(mesaId, umXBurger)
+
+    await api.mesas.excluir(mesaId)
+
+    expect(await api.chamados.listar()).toEqual([daOutra])
+    expect(await api.pedidosQr.listar()).toEqual([])
+    await expect(api.pedidosQr.aceitar(pedido?.id as string, {})).rejects.toThrow(
+      "Esse pedido já foi resolvido.",
+    )
+  })
+
   test("na virada do dia, o pedido que aguardava de ontem vence", async () => {
     const api = servidor()
     await ligarQr(api)

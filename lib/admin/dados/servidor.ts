@@ -2760,7 +2760,13 @@ export function criarServidor({
         if (comandaDa(base, id)) throw new Error("Feche a conta antes de excluir a mesa.")
         const mesa = base.mesas.find((item) => item.id === id)
         if (mesa) conferirSemReserva(base, mesa)
-        await substituir({ ...base, mesas: base.mesas.filter((mesa) => mesa.id !== id) })
+        // O chamado aberto da mesa sai junto (ninguém vai atender); o pedido que aguardava vence
+        // em `substituir`.
+        await substituir({
+          ...base,
+          mesas: base.mesas.filter((mesa) => mesa.id !== id),
+          chamados: base.chamados.filter((chamado) => chamado.mesaId !== id || chamado.atendidoEm),
+        })
       },
 
       /**

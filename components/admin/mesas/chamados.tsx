@@ -121,11 +121,14 @@ export function ChamadosSalao({
   const aceitar = useAceitarPedidoQr()
   const recusar = useRecusarPedidoQr()
   const por = useGarcom((atual) => atual.nome).trim()
-  const abertos = chamadosAbertos(chamados ?? [])
-  const total = abertos.length + (pedidos?.length ?? 0)
+  // O que é de uma mesa que não existe mais (outra aba excluiu) fica de fora.
+  const existe = (mesaId: string) => mesas.some((mesa) => mesa.id === mesaId)
+  const abertos = chamadosAbertos(chamados ?? []).filter((chamado) => existe(chamado.mesaId))
+  const aguardando = pedidos?.filter((pedido) => existe(pedido.mesaId))
+  const total = abertos.length + (aguardando?.length ?? 0)
   useSomDosChamados(
     chamados && pedidos
-      ? [...abertos.map((chamado) => chamado.id), ...pedidos.map((pedido) => pedido.id)]
+      ? [...abertos.map((chamado) => chamado.id), ...(aguardando ?? []).map((pedido) => pedido.id)]
       : null,
   )
 
@@ -156,7 +159,11 @@ export function ChamadosSalao({
     (item) => item.ativo && normalizar(item.nome) === normalizar(por),
   )?.nome
   const fila = [
-    ...(pedidos ?? []).map((pedido) => ({ tipo: "pedido" as const, em: pedido.criadoEm, pedido })),
+    ...(aguardando ?? []).map((pedido) => ({
+      tipo: "pedido" as const,
+      em: pedido.criadoEm,
+      pedido,
+    })),
     ...abertos.map((chamado) => ({ tipo: "chamado" as const, em: chamado.criadoEm, chamado })),
   ].toSorted((a, b) => Date.parse(a.em) - Date.parse(b.em))
 

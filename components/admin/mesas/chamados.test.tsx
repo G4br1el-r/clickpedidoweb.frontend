@@ -2,13 +2,14 @@ import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
 import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { clear } from "idb-keyval"
+import { clear, get, set } from "idb-keyval"
 import { NuqsTestingAdapter } from "nuqs/adapters/testing"
 import { type ReactNode, useState } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { reiniciarServidores, servidorDo } from "@/lib/admin/dados/consultas"
+import type { BaseLoja } from "@/lib/admin/dados/tipos"
 import { useGarcom } from "@/lib/admin/garcom"
 import { usePreferenciasFila } from "@/lib/admin/preferencias-fila"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
@@ -145,6 +146,32 @@ describe("Chamados", () => {
     expect(mesa1).toHaveAccessibleDescription(/Chamou o garçom/)
     const mesa11 = screen.getByRole("button", { name: "Mesa 11" })
     expect(within(mesa11).getByText("Pedido pelo QR")).toBeInTheDocument()
+  })
+
+  test("o chamado de uma mesa que não existe mais não entra na lista nem no contador", async () => {
+    await api().chamados.listar()
+    // Outra aba excluiu a mesa sem passar por aqui: a base guardada tem o chamado órfão.
+    const chave = "clickpedido-admin-dados:pizzaria"
+    const guardado = (await get(chave)) as { base: BaseLoja }
+    guardado.base.chamados.push({
+      id: "chamado-orfao",
+      mesaId: "mesa-que-sumiu",
+      tipo: "garcom",
+      criadoEm: new Date(2026, 10, 13, 20, 29).toISOString(),
+    })
+    await set(chave, guardado)
+    reiniciarServidores()
+    const usuario = userEvent.setup()
+    renderizar()
+
+    await usuario.click(await screen.findByRole("button", { name: "Chamados, 1 esperando" }))
+    const lista = await screen.findByRole("dialog", { name: "Chamados" })
+    expect(
+      within(lista)
+        .getAllByRole("listitem")
+        .map((item) => item.getAttribute("aria-label")),
+    ).toEqual(["Mesa 1"])
+    expect(within(lista).queryByText(/undefined/)).not.toBeInTheDocument()
   })
 
   test("o som toca quando chega um chamado novo, e não com o som desligado", async () => {
