@@ -4,6 +4,7 @@ import { SearchXIcon } from "lucide-react"
 import { motion } from "motion/react"
 import { useRouter } from "next/navigation"
 import { Fragment, useEffect, useMemo, useRef, useState } from "react"
+import { EntradaAoRolar } from "@/components/entrada"
 import { ProdutoSheet } from "@/components/produto/produto-sheet"
 import { BarraSacola } from "@/components/sacola/barra-sacola"
 import { IlhaSacola } from "@/components/sacola/ilha-sacola"
@@ -244,31 +245,34 @@ export function Cardapio() {
                         aria-labelledby={`titulo-${categoria.id}`}
                         className="scroll-mt-[80px] px-4 md:px-6"
                       >
-                        <div className="flex items-baseline justify-between gap-4">
-                          <h2
-                            id={`titulo-${categoria.id}`}
-                            className="text-lg font-semibold tracking-[-0.015em] md:text-xl"
+                        {/* Abaixo da primeira tela, a categoria espera a rolagem e entra ao chegar. */}
+                        <EntradaAoRolar>
+                          <div className="flex items-baseline justify-between gap-4">
+                            <h2
+                              id={`titulo-${categoria.id}`}
+                              className="text-lg font-semibold tracking-[-0.015em] md:text-xl"
+                            >
+                              {categoria.nome}
+                            </h2>
+                            <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">
+                              {plural(categoria.produtos.length, "opção", "opções")}
+                            </span>
+                          </div>
+                          {/* Sem cartões: as linhas se separam por um fio; em duas colunas do tablet em diante. */}
+                          <ul
+                            className="mt-1 grid grid-cols-1 md:grid-cols-2 md:gap-x-10"
+                            data-testid="grade-produtos"
                           >
-                            {categoria.nome}
-                          </h2>
-                          <span className="shrink-0 text-[13px] text-muted-foreground tabular-nums">
-                            {plural(categoria.produtos.length, "opção", "opções")}
-                          </span>
-                        </div>
-                        {/* Sem cartões: as linhas se separam por um fio; em duas colunas do tablet em diante. */}
-                        <ul
-                          className="mt-1 grid grid-cols-1 md:grid-cols-2 md:gap-x-10"
-                          data-testid="grade-produtos"
-                        >
-                          {categoria.produtos.map((produto) => (
-                            <li key={produto.id} className="border-b border-border/70">
-                              <ProdutoLinha
-                                produto={produto}
-                                aoAbrir={() => abrirProduto(produto)}
-                              />
-                            </li>
-                          ))}
-                        </ul>
+                            {categoria.produtos.map((produto) => (
+                              <li key={produto.id} className="border-b border-border/70">
+                                <ProdutoLinha
+                                  produto={produto}
+                                  aoAbrir={() => abrirProduto(produto)}
+                                />
+                              </li>
+                            ))}
+                          </ul>
+                        </EntradaAoRolar>
                       </section>
                       {/* O cardápio abre a página; os banners e os mais pedidos vêm depois da primeira categoria. */}
                       {indice === 0 && !termoNormalizado && (

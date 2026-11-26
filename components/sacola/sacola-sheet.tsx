@@ -1,7 +1,7 @@
 "use client"
 
 import NumberFlow from "@number-flow/react"
-import { ArrowRightIcon, CheckIcon, ShoppingBagIcon } from "lucide-react"
+import { ArrowRightIcon, CheckIcon, ShoppingBagIcon, Trash2Icon } from "lucide-react"
 import { AnimatePresence, motion, useAnimationControls, useReducedMotion } from "motion/react"
 import { useState } from "react"
 import { toast } from "sonner"
@@ -136,6 +136,8 @@ export function ConteudoSacola({
 }) {
   const lojaEscolhida = useLoja()
   const itens = useSacola((estado) => estado.itens)
+  const esvaziar = useSacola((estado) => estado.esvaziar)
+  const restaurarItens = useSacola((estado) => estado.restaurarItens)
   const avisoMinimo = useAnimationControls()
   const reduzido = useReducedMotion()
   // Com um painel aberto, leitores de tela não alcançam o toast; o aviso é repetido aqui.
@@ -145,6 +147,14 @@ export function ConteudoSacola({
   const falta = faltaParaMinimo(subtotal, pedidoMinimo)
   // A entrega depende do bairro e entra no total no checkout; aqui, só os itens.
   const total = subtotal
+
+  function esvaziarComDesfazer() {
+    const anteriores = itens
+    esvaziar()
+    const aviso = "Sacola esvaziada"
+    setAvisoLeitor(aviso)
+    toast(aviso, { action: { label: "Desfazer", onClick: () => restaurarItens(anteriores) } })
+  }
 
   function continuar() {
     if (falta > 0) {
@@ -203,6 +213,22 @@ export function ConteudoSacola({
               </p>
             )}
           </motion.div>
+
+          {/* Com vários itens, esvazia de uma vez (com desfazer); com um só, ele já sai com um toque. */}
+          {itens.length > 1 && (
+            <div className="flex items-center justify-end border-t border-border/70 px-5">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="-mr-2.5 text-muted-foreground pointer-coarse:h-11"
+                onClick={esvaziarComDesfazer}
+              >
+                <Trash2Icon data-icon="inline-start" />
+                Esvaziar sacola
+              </Button>
+            </div>
+          )}
 
           <div className="min-h-0 flex-1 overflow-y-auto border-t border-border/70 px-5">
             <ul className="divide-y divide-border/70">

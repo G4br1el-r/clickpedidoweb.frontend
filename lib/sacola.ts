@@ -80,12 +80,16 @@ type EstadoSacola = {
   alterarQuantidade: (chave: string, quantidade: number) => void
   remover: (chave: string) => void
   restaurar: (item: ItemSacola, posicao: number) => void
+  /** Devolve vários itens de uma vez (o "desfazer" de esvaziar): voltam na ordem, e o que entrou depois fica no fim. */
+  restaurarItens: (anteriores: ItemSacola[]) => void
   /** Tira todos os itens (ao trocar de loja). Os pedidos feitos continuam no histórico. */
   esvaziar: () => void
   finalizar: (
     dados: DadosFinalizacao & Pick<Pedido, "receita" | "agendamento">,
     lembrar: DadosLembrados,
   ) => Pedido
+  /** Põe na sacola de novo todos os itens de um pedido anterior e devolve quantos itens eram (0 se o pedido não existe). */
+  repetirPedido: (numero: number) => number
   /** Põe um pedido do histórico na tela de acompanhamento. */
   verPedido: (numero: number) => void
 }
@@ -152,6 +156,17 @@ export const useSacola = create<EstadoSacola>()(
           return { itens: copia }
         })
       },
+      restaurarItens: (anteriores) => {
+        set(({ itens }) => {
+          const atuais = new Map(itens.map((item) => [item.chave, item]))
+          const devolvidos = anteriores.map((item) => {
+            const atual = atuais.get(item.chave)
+            atuais.delete(item.chave)
+            return atual ? { ...item, quantidade: item.quantidade + atual.quantidade } : item
+          })
+          return { itens: [...devolvidos, ...atuais.values()] }
+        })
+      },
       esvaziar: () => set({ itens: [] }),
       finalizar: (dados, lembrar) => {
         const { itens, pedidos, ultimoPedido } = get()
@@ -174,6 +189,15 @@ export const useSacola = create<EstadoSacola>()(
           dadosLembrados: lembrar,
         }))
         return pedido
+      },
+      repetirPedido: (numero) => {
+        const { pedidos, ultimoPedido, adicionar } = get()
+        const pedido = [...pedidos, ...(ultimoPedido ? [ultimoPedido] : [])].find(
+          (candidato) => candidato.numero === numero,
+        )
+        if (!pedido) return 0
+        for (const { chave: _chave, ...resto } of pedido.itens) adicionar(resto)
+        return pedido.itens.length
       },
       verPedido: (numero) => {
         const pedido = get().pedidos.find((item) => item.numero === numero)

@@ -84,7 +84,7 @@ export function EntradaAoRolar({ atraso = 0, className, style, ...props }: Entra
         {
           "--entrada": "entrada-baixo",
           "--entrada-atraso": `${estado === "entrando" ? 0 : esperaAbertura}s`,
-          "--entrada-duracao": "0.6s",
+          "--entrada-duracao": "0.4s",
           ...style,
         } as CSSProperties
       }

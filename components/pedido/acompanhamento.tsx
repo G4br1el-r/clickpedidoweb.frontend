@@ -1,8 +1,9 @@
 "use client"
 
-import { CheckIcon, CopyIcon, InfoIcon, MessageCircleIcon } from "lucide-react"
+import { CheckIcon, CopyIcon, InfoIcon, MessageCircleIcon, RepeatIcon } from "lucide-react"
 import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { QRCodeSVG } from "qrcode.react"
 import { type ReactNode, useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -402,6 +403,17 @@ function AvisoAprovado() {
 }
 
 function Conteudo({ pedido }: { pedido: Pedido }) {
+  const router = useRouter()
+  const repetirPedido = useSacola((estado) => estado.repetirPedido)
+
+  /** Os mesmos itens de volta na sacola, de uma vez: quem pede sempre a mesma coisa não escolhe de novo, item por item. */
+  function pedirDeNovo() {
+    const quantos = repetirPedido(pedido.numero)
+    if (quantos === 0) return
+    toast.success(`${plural(quantos, "item voltou", "itens voltaram")} para a sacola`)
+    router.push("/")
+  }
+
   const agora = useAgora()
   const reduzido = useReducedMotion()
   const { Carregador } = registroSegmentos[useLoja().segmento]
@@ -499,7 +511,7 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
           <Entrada
             atraso={0.14}
             duracao={0.5}
-            className="mt-8 flex flex-col gap-2.5 sm:flex-row md:mt-10"
+            className="mt-8 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap md:mt-10"
           >
             <Button asChild size="cta" className="sm:px-6">
               <Link href="/whatsapp">
@@ -508,8 +520,17 @@ function Conteudo({ pedido }: { pedido: Pedido }) {
               </Link>
             </Button>
             <Button
-              asChild
+              type="button"
               variant="outline"
+              className="h-12 rounded-full px-6 text-base font-semibold"
+              onClick={pedirDeNovo}
+            >
+              <RepeatIcon data-icon="inline-start" />
+              Pedir de novo
+            </Button>
+            <Button
+              asChild
+              variant="ghost"
               className="h-12 rounded-full px-6 text-base font-semibold"
             >
               <Link href="/">Fazer novo pedido</Link>

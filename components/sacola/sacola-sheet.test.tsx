@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { Toaster } from "sonner"
+import { Toaster, toast } from "sonner"
 import { beforeEach, describe, expect, test, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { type ItemSacola, useSacola } from "@/lib/sacola"
@@ -48,6 +48,31 @@ const linha = (nome: string) =>
 describe("ConteudoSacola", () => {
   beforeEach(() => {
     useSacola.setState(useSacola.getInitialState(), true)
+    // Os toasts são globais: um aviso com "Desfazer" de um teste não pode sobrar para o próximo.
+    toast.dismiss()
+  })
+
+  test("com mais de um item, dá para esvaziar a sacola de uma vez e desfazer", async () => {
+    const { usuario } = abrir([COLA, GUARANA])
+
+    await usuario.click(screen.getByRole("button", { name: "Esvaziar sacola" }))
+
+    expect(await screen.findByText("Sua sacola está vazia")).toBeInTheDocument()
+    expect(useSacola.getState().itens).toEqual([])
+    // O aviso aparece no toast e, para o leitor de tela, numa região viva dentro da sacola.
+    expect(await screen.findAllByText("Sacola esvaziada")).not.toHaveLength(0)
+
+    await usuario.click(await screen.findByRole("button", { name: "Desfazer" }))
+
+    expect(useSacola.getState().itens.map(({ chave }) => chave)).toEqual(["cola", "guarana"])
+    expect(await screen.findByText("Refrigerante de cola 2L")).toBeInTheDocument()
+    expect(screen.getByText("Refrigerante de guaraná 2L")).toBeInTheDocument()
+  })
+
+  test("com um item só, o botão de esvaziar não aparece: o item já sai com um toque", () => {
+    abrir([COLA])
+
+    expect(screen.queryByRole("button", { name: "Esvaziar sacola" })).not.toBeInTheDocument()
   })
 
   test("cada item é uma linha com nome, quantidade e o total da linha", () => {

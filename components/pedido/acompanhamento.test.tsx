@@ -6,8 +6,10 @@ import { useLojaAtual } from "@/lib/loja-atual"
 import { type Pedido, useSacola } from "@/lib/sacola"
 import { Acompanhamento } from "./acompanhamento"
 
+const { empurrar } = vi.hoisted(() => ({ empurrar: vi.fn() }))
+
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn() }),
+  useRouter: () => ({ push: empurrar, replace: vi.fn(), prefetch: vi.fn() }),
   usePathname: () => "/pedido",
 }))
 // A animação Lottie do entregador carrega WASM, que não existe no jsdom.
@@ -90,6 +92,19 @@ function abrirNaPizzaria(mudancas: Partial<Pedido>, segundosDepois: number) {
 describe("Acompanhamento", () => {
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  test("Pedir de novo devolve todos os itens do pedido à sacola e leva ao cardápio", async () => {
+    empurrar.mockClear()
+    abrirNaPizzaria({}, 10)
+    const usuario = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+
+    await usuario.click(screen.getByRole("button", { name: "Pedir de novo" }))
+
+    expect(useSacola.getState().itens.map(({ produtoId }) => produtoId)).toEqual([
+      "amoxicilina-500",
+    ])
+    expect(empurrar).toHaveBeenCalledWith("/")
   })
 
   test("a régua mostra a previsão em números, separada do rótulo", () => {

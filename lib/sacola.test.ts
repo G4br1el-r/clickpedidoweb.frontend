@@ -186,6 +186,88 @@ describe("remover e restaurar", () => {
   })
 })
 
+describe("restaurarItens", () => {
+  test("devolve os itens que saíram, na ordem em que estavam", () => {
+    sacola().adicionar(item({ produtoId: "calabresa" }))
+    sacola().adicionar(item({ produtoId: "mussarela" }))
+    sacola().adicionar(item({ produtoId: "portuguesa" }))
+    const antes = sacola().itens
+    sacola().esvaziar()
+    sacola().restaurarItens(antes)
+
+    expect(sacola().itens.map(({ produtoId }) => produtoId)).toEqual([
+      "calabresa",
+      "mussarela",
+      "portuguesa",
+    ])
+  })
+
+  test("o que foi adicionado depois fica no fim, e o mesmo item soma as quantidades", () => {
+    sacola().adicionar(item({ produtoId: "calabresa", quantidade: 2 }))
+    sacola().adicionar(item({ produtoId: "mussarela" }))
+    const antes = sacola().itens
+    sacola().esvaziar()
+    sacola().adicionar(item({ produtoId: "mussarela" }))
+    sacola().adicionar(item({ produtoId: "portuguesa" }))
+    sacola().restaurarItens(antes)
+
+    expect(sacola().itens.map(({ produtoId, quantidade }) => [produtoId, quantidade])).toEqual([
+      ["calabresa", 2],
+      ["mussarela", 2],
+      ["portuguesa", 1],
+    ])
+  })
+})
+
+describe("repetirPedido", () => {
+  function pedidoComItens(): Pedido {
+    return {
+      numero: 2100,
+      itens: [
+        { ...item({ produtoId: "calabresa", quantidade: 2 }), chave: "calabresa|" },
+        { ...item({ produtoId: "mussarela", nome: "Mussarela" }), chave: "mussarela|" },
+      ],
+      subtotal: 0,
+      taxaEntrega: 0,
+      total: 0,
+    }
+  }
+
+  test("põe na sacola todos os itens de um pedido anterior e diz quantos", () => {
+    useSacola.setState({ pedidos: [pedidoComItens()] })
+
+    expect(sacola().repetirPedido(2100)).toBe(2)
+
+    expect(sacola().itens.map(({ produtoId, quantidade }) => [produtoId, quantidade])).toEqual([
+      ["calabresa", 2],
+      ["mussarela", 1],
+    ])
+  })
+
+  test("o que já está na sacola soma as quantidades, sem duplicar a linha", () => {
+    useSacola.setState({ pedidos: [pedidoComItens()] })
+    sacola().adicionar(item({ produtoId: "calabresa", quantidade: 1 }))
+
+    sacola().repetirPedido(2100)
+
+    expect(sacola().itens.map(({ produtoId, quantidade }) => [produtoId, quantidade])).toEqual([
+      ["calabresa", 3],
+      ["mussarela", 1],
+    ])
+  })
+
+  test("acha o pedido também no último pedido, que vem de antes do histórico", () => {
+    useSacola.setState({ pedidos: [], ultimoPedido: pedidoComItens() })
+
+    expect(sacola().repetirPedido(2100)).toBe(2)
+  })
+
+  test("pedido que não existe não mexe na sacola", () => {
+    expect(sacola().repetirPedido(9999)).toBe(0)
+    expect(sacola().itens).toEqual([])
+  })
+})
+
 describe("finalizar", () => {
   // 1794182400000 é múltiplo de 9000; com 1234 ms a mais, o número do pedido fica 2234.
   const AGORA = new Date("2026-11-08T21:00:01.234-03:00")
