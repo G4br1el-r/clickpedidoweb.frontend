@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react"
+import { act, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { BaixarCsv, ProvedorDaAba } from "./exportar"
@@ -76,6 +76,43 @@ describe("BaixarCsv", () => {
     expect((clique.mock.contexts[0] as HTMLAnchorElement).download).toBe(
       "drogaria-farmacia-saldo-dos-controlados-2026-11-13-a-2026-11-13.csv",
     )
+    vi.unstubAllGlobals()
+  })
+})
+
+describe("BaixarCsv: confirmação", () => {
+  test("depois de baixar, o botão confirma por um instante e volta a ser CSV", () => {
+    vi.useFakeTimers()
+    vi.stubGlobal("URL", { ...URL, createObjectURL: () => "blob:csv", revokeObjectURL: vi.fn() })
+    vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {})
+    render(
+      <ProvedorDaAba
+        loja="Casa da Pizza"
+        aba="Entrega"
+        periodo={{ de: new Date(2026, 10, 7), ate: new Date(2026, 10, 13) }}
+      >
+        <BaixarCsv
+          tabela="Por bairro"
+          colunas={[{ titulo: "Bairro", valor: (linha: { bairro: string }) => linha.bairro }]}
+          linhas={[{ bairro: "Centro" }]}
+        />
+      </ProvedorDaAba>,
+    )
+    const botao = screen.getByRole("button", { name: "Baixar CSV: Por bairro" })
+    expect(botao).toHaveTextContent("CSV")
+
+    fireEvent.click(botao)
+
+    expect(botao).toHaveTextContent("Baixado")
+    expect(screen.getByRole("status")).toHaveTextContent("CSV baixado: Por bairro")
+
+    act(() => vi.advanceTimersByTime(2000))
+
+    expect(botao).toHaveTextContent("CSV")
+    expect(screen.queryByRole("status")).not.toBeInTheDocument()
+    vi.useRealTimers()
     vi.unstubAllGlobals()
   })
 })

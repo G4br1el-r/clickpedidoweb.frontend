@@ -4,10 +4,34 @@ import * as React from "react"
 import { cn } from "cn"
 
 function Table({ className, ...props }: React.ComponentProps<"table">) {
+  const [recipiente, ref] = React.useState<HTMLDivElement | null>(null)
+  const [rola, setRola] = React.useState(false)
+
+  // Tabela mais larga que a tela rola de lado; quem usa o teclado só alcança o que rola se o
+  // recipiente for focável. Só nesse caso ele vira um grupo com o nome da tabela (não uma região: a seção que envolve a tabela já tem o mesmo nome).
+  React.useEffect(() => {
+    if (!recipiente) return
+    const medir = () => setRola(recipiente.scrollWidth > recipiente.clientWidth)
+    medir()
+    const observador = new ResizeObserver(medir)
+    observador.observe(recipiente)
+    return () => observador.disconnect()
+  }, [recipiente])
+
   return (
     <div
+      ref={ref}
       data-slot="table-container"
-      className="relative w-full overflow-x-auto"
+      className="relative w-full overflow-x-auto focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none focus-visible:ring-inset"
+      {...(rola
+        ? {
+            tabIndex: 0,
+            role: "group",
+            "aria-label": props["aria-label"]
+              ? `${props["aria-label"]}, rolagem lateral`
+              : undefined,
+          }
+        : {})}
     >
       <table
         data-slot="table"

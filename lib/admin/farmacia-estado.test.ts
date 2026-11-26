@@ -35,6 +35,38 @@ describe("useFarmacia", () => {
     })
   })
 
+  test("separa vários lotes de uma vez para descarte ou devolução", () => {
+    useFarmacia.getState().separarLotes(["lote-1", "lote-2"], "descarte")
+    useFarmacia.getState().separarLotes(["lote-3"], "devolucao")
+    expect(useFarmacia.getState().lotes).toEqual({
+      "lote-1": "descarte",
+      "lote-2": "descarte",
+      "lote-3": "devolucao",
+    })
+  })
+
+  test("desfaz a separação só dos lotes pedidos", () => {
+    useFarmacia.getState().separarLotes(["lote-1", "lote-2", "lote-3"], "descarte")
+    useFarmacia.getState().desfazerLotes(["lote-1", "lote-3"])
+    expect(useFarmacia.getState().lotes).toEqual({ "lote-2": "descarte" })
+  })
+
+  test("a separação dos lotes fica salva neste navegador", () => {
+    useFarmacia.getState().separarLotes(["lote-9"], "devolucao")
+    expect(JSON.parse(localStorage.getItem("clickpedido-admin-farmacia") ?? "{}")).toMatchObject({
+      state: { lotes: { "lote-9": "devolucao" } },
+    })
+  })
+
+  test("um salvo antigo, sem lotes, abre com a lista vazia", async () => {
+    localStorage.setItem(
+      "clickpedido-admin-farmacia",
+      JSON.stringify({ state: { decisoes: {} }, version: 1 }),
+    )
+    await useFarmacia.persist.rehydrate()
+    expect(useFarmacia.getState().lotes).toEqual({})
+  })
+
   test("abre com as decisões guardadas", async () => {
     localStorage.setItem(
       "clickpedido-admin-farmacia",

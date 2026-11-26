@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { NuqsTestingAdapter } from "nuqs/adapters/testing"
@@ -226,5 +226,154 @@ describe("PaginaAgendamentos", () => {
     await usuario.click(await screen.findByRole("option", { name: "Concluídos" }))
     expect(screen.queryByRole("row", { name: /Zuleica Prado/ })).not.toBeInTheDocument()
     expect(screen.getByText("Nenhum atendimento encontrado.")).toBeInTheDocument()
+  })
+})
+
+describe("PaginaAgendamentos: carregamento e feedback", () => {
+  test("enquanto carrega, o esqueleto tem a forma da linha do tempo", async () => {
+    telaGrande()
+    render(
+      <Provedores endereco="?dia=2026-12-01">
+        <PaginaAgendamentos />
+      </Provedores>,
+    )
+    expect(screen.getByRole("status", { name: "Carregando a agenda" })).toBeInTheDocument()
+    expect(screen.getAllByTestId("esqueleto-atendimento").length).toBeGreaterThan(0)
+    await screen.findByRole("region", { name: "Agenda do dia" }, { timeout: 8000 })
+    expect(screen.queryByRole("status", { name: "Carregando a agenda" })).not.toBeInTheDocument()
+  })
+
+  test("os horários carregando aparecem como a grade de horários", async () => {
+    const horarios = vi
+      .spyOn(api().agendamentos, "horarios")
+      .mockImplementation(() => new Promise(() => {}))
+    const usuario = await abrir()
+    await usuario.click(screen.getByRole("button", { name: "Novo agendamento" }))
+    const janela = within(screen.getByRole("dialog", { name: "Novo agendamento" }))
+    const [servico] = (await api().produtos.listar()).filter(
+      (produto) => produto.disponivel && produto.duracaoMin === 60,
+    )
+    await usuario.click(janela.getByRole("checkbox", { name: new RegExp(`^${servico.nome}`) }))
+    await usuario.click(janela.getByRole("button", { name: /^terça-feira, 1 de dezembro/ }))
+
+    expect(
+      await janela.findByRole("status", { name: "Carregando os horários" }),
+    ).toBeInTheDocument()
+    expect(janela.getAllByTestId("esqueleto-horario")).toHaveLength(10)
+    horarios.mockRestore()
+  })
+
+  test("remarcar mostra o botão ocupado até o servidor responder", async () => {
+    const pedido = await marcar("Bruna Alves", terca(10))
+    let terminar: () => void = () => {}
+    const remarcar = vi.spyOn(api().agendamentos, "remarcar").mockImplementation(
+      () =>
+        new Promise((resolver) => {
+          terminar = () => resolver(pedido)
+        }),
+    )
+    const usuario = await abrir()
+    await usuario.click(await dia().findByRole("button", { name: /^10:00 · Bruna Alves/ }))
+    const detalhes = within(
+      await screen.findByRole("dialog", { name: new RegExp(`#${pedido.numero}`) }),
+    )
+    await usuario.click(detalhes.getByRole("button", { name: "Remarcar" }))
+    const janela = within(
+      screen.getByRole("dialog", { name: `Remarcar o agendamento #${pedido.numero}` }),
+    )
+    await usuario.click(janela.getByRole("button", { name: /^terça-feira, 1 de dezembro/ }))
+    const horarios = within(await janela.findByRole("radiogroup", { name: "Horário" }))
+    await usuario.click(await horarios.findByRole("radio", { name: "15:00" }))
+    await usuario.click(janela.getByRole("button", { name: "Remarcar" }))
+
+    expect(await janela.findByRole("status", { name: "Remarcando" })).toBeInTheDocument()
+    terminar()
+    remarcar.mockRestore()
+  }, 15_000)
+
+  test("imprimir o comprovante mostra o papel saindo", async () => {
+    const pedido = await marcar("Bruna Alves", terca(10))
+    const usuario = await abrir()
+    await usuario.click(await dia().findByRole("button", { name: /^10:00 · Bruna Alves/ }))
+    const detalhes = within(
+      await screen.findByRole("dialog", { name: new RegExp(`#${pedido.numero}`) }),
+    )
+    await usuario.click(detalhes.getByRole("button", { name: "Imprimir comprovante" }))
+    expect(detalhes.getByRole("status", { name: "Imprimindo o comprovante" })).toBeInTheDocument()
+  })
+})
+
+describe("PaginaAgendamentos: ações em lote na lista", () => {
+  async function abrirLista() {
+    const usuario = await abrir()
+    await usuario.click(screen.getByRole("tab", { name: "Lista" }))
+    return usuario
+  }
+  const statusNoServidor = async (id: number) => (await api().pedidos.buscar(id))?.status
+
+  test("marcar vários agendamentos mostra a barra com a contagem", async () => {
+    await marcar("Bruna Alves", terca(10))
+    await marcar("Carla Dias", terca(15))
+    const usuario = await abrirLista()
+    await usuario.click(await screen.findByRole("checkbox", { name: "Selecionar Bruna Alves" }))
+    await usuario.click(screen.getByRole("checkbox", { name: "Selecionar Carla Dias" }))
+    expect(screen.getByRole("region", { name: "Ações em lote" })).toHaveTextContent(
+      "2 atendimentos selecionados",
+    )
+  })
+
+  test("iniciar os atendimentos marcados avança todos de uma vez", async () => {
+    const bruna = await marcar("Bruna Alves", terca(10))
+    const carla = await marcar("Carla Dias", terca(15))
+    const usuario = await abrirLista()
+    await usuario.click(await screen.findByRole("checkbox", { name: "Selecionar Bruna Alves" }))
+    await usuario.click(screen.getByRole("checkbox", { name: "Selecionar Carla Dias" }))
+    await usuario.click(screen.getByRole("button", { name: "Iniciar 2 atendimentos" }))
+
+    expect(await screen.findByText("2 atendimentos avançaram.")).toBeInTheDocument()
+    expect(await statusNoServidor(bruna.id)).toBe("em-preparo")
+    expect(await statusNoServidor(carla.id)).toBe("em-preparo")
+    // Depois de aplicar, a seleção limpa e a barra sai com um fade curto.
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Ações em lote" })).not.toBeInTheDocument(),
+    )
+  })
+
+  test("cancelar vários pede confirmação e cancela todos", async () => {
+    const bruna = await marcar("Bruna Alves", terca(10))
+    const carla = await marcar("Carla Dias", terca(15))
+    const usuario = await abrirLista()
+    await usuario.click(await screen.findByRole("checkbox", { name: "Selecionar Bruna Alves" }))
+    await usuario.click(screen.getByRole("checkbox", { name: "Selecionar Carla Dias" }))
+    await usuario.click(screen.getByRole("button", { name: "Cancelar 2 atendimentos" }))
+
+    const pergunta = within(screen.getByRole("alertdialog", { name: "Cancelar 2 atendimentos?" }))
+    // Voltar não cancela nada.
+    await usuario.click(pergunta.getByRole("button", { name: "Voltar" }))
+    expect(await statusNoServidor(bruna.id)).toBe("recebido")
+
+    await usuario.click(screen.getByRole("button", { name: "Cancelar 2 atendimentos" }))
+    await usuario.click(
+      within(screen.getByRole("alertdialog")).getByRole("button", {
+        name: "Cancelar atendimentos",
+      }),
+    )
+    expect(await screen.findByText("2 atendimentos cancelados.")).toBeInTheDocument()
+    expect(await statusNoServidor(bruna.id)).toBe("cancelado")
+    expect(await statusNoServidor(carla.id)).toBe("cancelado")
+  }, 15_000)
+
+  test("quem já terminou fica de fora e é contado à parte", async () => {
+    const bruna = await marcar("Bruna Alves", terca(10))
+    const carla = await marcar("Carla Dias", terca(15))
+    await api().pedidos.avancar(carla.id, "recebido")
+    await api().pedidos.avancar(carla.id, "em-preparo")
+    const usuario = await abrirLista()
+    await usuario.click(await screen.findByRole("checkbox", { name: "Selecionar Bruna Alves" }))
+    await usuario.click(screen.getByRole("checkbox", { name: "Selecionar Carla Dias" }))
+    const barra = within(screen.getByRole("region", { name: "Ações em lote" }))
+    expect(barra.getByText("1 já terminou")).toBeInTheDocument()
+    expect(barra.getByRole("button", { name: "Iniciar 1 atendimento" })).toBeInTheDocument()
+    expect(await statusNoServidor(bruna.id)).toBe("recebido")
   })
 })

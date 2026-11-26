@@ -1,8 +1,9 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
+import { MotionGlobalConfig } from "motion/react"
 import { type ReactNode, useState } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
 import { Toaster } from "@/components/ui/sonner"
@@ -44,6 +45,8 @@ async function abrir() {
 const secao = (nome: string) => within(screen.getByRole("region", { name: nome }))
 
 beforeEach(async () => {
+  // O relógio de teste fica atrás do real: sem isto, as animações do Motion nunca terminam.
+  MotionGlobalConfig.skipAnimations = true
   vi.useFakeTimers({ toFake: ["Date"] })
   vi.setSystemTime(new Date(2026, 10, 13, 20, 30))
   await clear()
@@ -53,6 +56,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  MotionGlobalConfig.skipAnimations = false
   vi.useRealTimers()
 })
 
@@ -218,6 +222,79 @@ describe("PaginaLoja: recursos de cada loja", () => {
       expect((await servidorDo("salao").loja()).videoBanner).toBe(
         "https://www.youtube.com/shorts/abc123",
       ),
+    )
+  })
+})
+
+describe("PaginaLoja: carregamento e toque", () => {
+  /** Uma chamada ao servidor que só termina quando o teste manda. */
+  function lenta<T>(metodo: "salvarLoja" | "conectarPagamentoOnline") {
+    let terminar: (valor: T) => void = () => {}
+    const original = api()[metodo].bind(api()) as (...args: unknown[]) => Promise<T>
+    vi.spyOn(api(), metodo).mockImplementation((async (...args: unknown[]) => {
+      const valor = await original(...args)
+      return new Promise<T>((resolver) => {
+        terminar = () => resolver(valor)
+      })
+    }) as never)
+    return { terminar: () => terminar(undefined as T) }
+  }
+
+  test("mostra o esqueleto das seções enquanto a loja chega", () => {
+    render(
+      <Provedores>
+        <PaginaLoja />
+      </Provedores>,
+    )
+    expect(screen.getByRole("status", { name: "Carregando as configurações" })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    )
+  })
+
+  test("enquanto salva, o botão mostra o carregamento e não aceita outro clique", async () => {
+    const usuario = await abrir()
+    const servidor = lenta("salvarLoja")
+    await usuario.type(screen.getByRole("textbox", { name: "Nome da loja" }), " Nova")
+    const salvar = within(
+      await screen.findByRole("region", { name: "Alterações não salvas" }),
+    ).getByRole("button", { name: "Salvar alterações" })
+
+    await usuario.click(salvar)
+
+    await waitFor(() => expect(salvar).toHaveAttribute("aria-busy", "true"))
+    expect(salvar).toBeDisabled()
+    expect(within(salvar).getByTestId("carregador-pontos")).toBeInTheDocument()
+
+    act(() => servidor.terminar())
+
+    expect(await screen.findByText("Configurações salvas.")).toBeInTheDocument()
+  })
+
+  test("conectar a conta online também mostra o carregamento", async () => {
+    const usuario = await abrir()
+    const servidor = lenta("conectarPagamentoOnline")
+    const botao = secao("Pagamento online").getByRole("button", { name: "Desconectar" })
+
+    await usuario.click(botao)
+
+    await waitFor(() => expect(botao).toHaveAttribute("aria-busy", "true"))
+    expect(botao).toBeDisabled()
+
+    act(() => servidor.terminar())
+
+    expect(await screen.findByText("Conta desconectada.")).toBeInTheDocument()
+  })
+
+  test("no celular, campos e botões têm 44 px de altura", async () => {
+    await abrir()
+    expect(screen.getByRole("textbox", { name: "Nome da loja" })).toHaveClass("max-md:h-11")
+    expect(screen.getByRole("textbox", { name: "Telefone" })).toHaveClass("max-md:h-11")
+    expect(secao("Pagamento online").getByRole("button", { name: "Desconectar" })).toHaveClass(
+      "max-md:min-h-11",
+    )
+    expect(secao("Impressão").getByRole("button", { name: "Imprimir cupom de teste" })).toHaveClass(
+      "max-md:min-h-11",
     )
   })
 })

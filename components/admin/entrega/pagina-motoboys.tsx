@@ -57,9 +57,13 @@ import { formatarTelefone, linkWhatsApp } from "@/lib/admin/regras/mensagens"
 import { plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { EsqueletoLista } from "../esqueletos"
+import { BotaoCarregando } from "../movimento/botao-carregando"
+import { BlocoEntrando } from "../movimento/entrada-admin"
 import { Traco } from "../traco"
+import { BarraAtualizando } from "./atualizando"
 import { AvisoSemEntrega } from "./aviso-sem-entrega"
-import { ALVO_DE_TOQUE, EsqueletoLinhas, LinhaAnimada } from "./linha-animada"
+import { ALVO_DA_CHAVE, ALVO_DE_TOQUE, LinhaAnimada } from "./linha-animada"
 
 function JanelaMotoboy({
   motoboy,
@@ -126,9 +130,13 @@ function JanelaMotoboy({
             <Button type="button" variant="ghost" onClick={aoFechar}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={salvar.isPending}>
+            <BotaoCarregando
+              type="submit"
+              carregando={salvar.isPending}
+              rotuloCarregando="Salvando o motoboy"
+            >
               Salvar
-            </Button>
+            </BotaoCarregando>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -171,7 +179,7 @@ function Excluir({ motoboy, aoExcluir }: { motoboy: Motoboy; aoExcluir: () => vo
 /** Motoboys da loja: quem está ativo, quantas entregas fez hoje e o atalho do WhatsApp. */
 export function PaginaMotoboys() {
   const agora = useAgora(60_000)
-  const { data: motoboys } = useMotoboys()
+  const { data: motoboys, isFetching } = useMotoboys()
   const { data: deHoje = [] } = usePedidos(agora ? { de: agora, ate: agora } : undefined, {
     ativo: Boolean(agora),
   })
@@ -220,7 +228,7 @@ export function PaginaMotoboys() {
       <AvisoSemEntrega />
 
       {!motoboys ? (
-        <EsqueletoLinhas rotulo="Carregando os motoboys" linhas={4} />
+        <EsqueletoLista rotulo="Carregando os motoboys" linhas={4} />
       ) : motoboys.length === 0 ? (
         <Empty className="border border-border/70">
           <EmptyHeader>
@@ -241,86 +249,94 @@ export function PaginaMotoboys() {
           </EmptyContent>
         </Empty>
       ) : (
-        <Table aria-label="Motoboys">
-          <TableHeader>
-            <TableRow className="hover:bg-transparent">
-              <TableHead className="pl-0">Motoboy</TableHead>
-              <TableHead className="text-right">
-                <span className="sm:hidden">Hoje</span>
-                <span className="hidden sm:inline">Entregas hoje</span>
-              </TableHead>
-              <TableHead className="w-16">Ativo</TableHead>
-              <TableHead className="w-28 text-right">
-                <span className="sr-only">Ações</span>
-              </TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            <AnimatePresence initial={false}>
-              {motoboys.map((motoboy) => (
-                <LinhaAnimada key={motoboy.id}>
-                  <TableCell className="py-2.5 pl-0">
-                    <div className="flex min-w-0 flex-col gap-0.5">
-                      <span
-                        className={cn(
-                          "flex min-w-0 items-center gap-2 font-medium transition-colors duration-200",
-                          !motoboy.ativo && "text-muted-foreground",
-                        )}
-                      >
-                        <span className="truncate">{motoboy.nome}</span>
-                        {/* Inativo: a haste curta da Etiqueta e o estado escrito, alinhados ao nome. */}
-                        {!motoboy.ativo && (
-                          <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-normal">
-                            <Traco tom="fim" className="h-3" />
-                            Inativo
-                          </span>
-                        )}
-                      </span>
-                      <span className="text-[13px] text-muted-foreground tabular-nums">
-                        {formatarTelefone(motoboy.telefone)}
-                      </span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {entregas.get(motoboy.id) ?? 0}
-                  </TableCell>
-                  <TableCell>
-                    <Switch
-                      checked={motoboy.ativo}
-                      aria-label={`${motoboy.nome} ativo`}
-                      onCheckedChange={() => alternar.mutate(motoboy.id, { onError: aoErrar })}
-                    />
-                  </TableCell>
-                  <TableCell className="pr-0">
-                    <div className="flex justify-end gap-2 sm:gap-1">
-                      <Button asChild variant="ghost" size="icon-sm" className={ALVO_DE_TOQUE}>
-                        <a
-                          href={linkWhatsApp(motoboy.telefone, "")}
-                          target="_blank"
-                          rel="noreferrer"
-                          aria-label={`Chamar ${motoboy.nome} no WhatsApp`}
+        <BlocoEntrando className="flex flex-col">
+          <BarraAtualizando
+            ativa={isFetching || alternar.isPending || salvar.isPending || excluir.isPending}
+            rotulo="Atualizando os motoboys"
+            className="mb-1"
+          />
+          <Table aria-label="Motoboys">
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="pl-0">Motoboy</TableHead>
+                <TableHead className="text-right">
+                  <span className="sm:hidden">Hoje</span>
+                  <span className="hidden sm:inline">Entregas hoje</span>
+                </TableHead>
+                <TableHead className="w-16">Ativo</TableHead>
+                <TableHead className="w-28 text-right">
+                  <span className="sr-only">Ações</span>
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <AnimatePresence initial={false}>
+                {motoboys.map((motoboy) => (
+                  <LinhaAnimada key={motoboy.id}>
+                    <TableCell className="py-2.5 pl-0">
+                      <div className="flex min-w-0 flex-col gap-0.5">
+                        <span
+                          className={cn(
+                            "flex min-w-0 items-center gap-2 font-medium transition-colors duration-200",
+                            !motoboy.ativo && "text-muted-foreground",
+                          )}
                         >
-                          <MessageCircleIcon />
-                        </a>
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        className={ALVO_DE_TOQUE}
-                        aria-label={`Editar ${motoboy.nome}`}
-                        onClick={() => setEditando(motoboy)}
-                      >
-                        <PencilIcon />
-                      </Button>
-                      <Excluir motoboy={motoboy} aoExcluir={() => excluirComDesfazer(motoboy)} />
-                    </div>
-                  </TableCell>
-                </LinhaAnimada>
-              ))}
-            </AnimatePresence>
-          </TableBody>
-        </Table>
+                          <span className="truncate">{motoboy.nome}</span>
+                          {/* Inativo: a haste curta da Etiqueta e o estado escrito, alinhados ao nome. */}
+                          {!motoboy.ativo && (
+                            <span className="inline-flex shrink-0 items-center gap-1.5 text-[13px] font-normal">
+                              <Traco tom="fim" className="h-3" />
+                              Inativo
+                            </span>
+                          )}
+                        </span>
+                        <span className="text-[13px] text-muted-foreground tabular-nums">
+                          {formatarTelefone(motoboy.telefone)}
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
+                      {entregas.get(motoboy.id) ?? 0}
+                    </TableCell>
+                    <TableCell>
+                      <Switch
+                        className={ALVO_DA_CHAVE}
+                        checked={motoboy.ativo}
+                        aria-label={`${motoboy.nome} ativo`}
+                        onCheckedChange={() => alternar.mutate(motoboy.id, { onError: aoErrar })}
+                      />
+                    </TableCell>
+                    <TableCell className="pr-0">
+                      <div className="flex justify-end gap-2 sm:gap-1">
+                        <Button asChild variant="ghost" size="icon-sm" className={ALVO_DE_TOQUE}>
+                          <a
+                            href={linkWhatsApp(motoboy.telefone, "")}
+                            target="_blank"
+                            rel="noreferrer"
+                            aria-label={`Chamar ${motoboy.nome} no WhatsApp`}
+                          >
+                            <MessageCircleIcon />
+                          </a>
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon-sm"
+                          className={ALVO_DE_TOQUE}
+                          aria-label={`Editar ${motoboy.nome}`}
+                          onClick={() => setEditando(motoboy)}
+                        >
+                          <PencilIcon />
+                        </Button>
+                        <Excluir motoboy={motoboy} aoExcluir={() => excluirComDesfazer(motoboy)} />
+                      </div>
+                    </TableCell>
+                  </LinhaAnimada>
+                ))}
+              </AnimatePresence>
+            </TableBody>
+          </Table>
+        </BlocoEntrando>
       )}
 
       {editando && (

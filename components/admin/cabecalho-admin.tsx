@@ -43,7 +43,9 @@ export function CabecalhoAdmin({ trilha, acoes }: { trilha: Trilha; acoes?: Reac
                     <BreadcrumbPage className="truncate">{item.titulo}</BreadcrumbPage>
                   ) : (
                     <BreadcrumbLink asChild>
-                      <Link href={item.href}>{item.titulo}</Link>
+                      <Link href={item.href} className="alvo-toque relative">
+                        {item.titulo}
+                      </Link>
                     </BreadcrumbLink>
                   )}
                 </BreadcrumbItem>

@@ -3,7 +3,7 @@
 import { addDays, differenceInMinutes, format, isSameDay, startOfDay } from "date-fns"
 import { ptBR } from "date-fns/locale"
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon, MoonIcon } from "lucide-react"
-import { motion, useReducedMotion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { useState } from "react"
 // O locale do calendário traz também os rótulos de navegação em português.
 import { ptBR as calendarioPtBR } from "react-day-picker/locale"
@@ -12,6 +12,13 @@ import { Calendar } from "@/components/ui/calendar"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import type { HorarioFuncionamento, Pedido } from "@/lib/admin/dados/tipos"
+import {
+  CURVA_SAIDA,
+  DURACAO,
+  estiloDeEntrada,
+  semRelogioDoNavegador,
+  variantesDoItem,
+} from "@/lib/admin/movimento"
 import { expediente, faixasDoDia } from "@/lib/admin/regras/agenda"
 import { rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { plural } from "@/lib/formato"
@@ -21,7 +28,6 @@ import { Traco } from "../traco"
 /** Altura de uma hora na linha do tempo. */
 const PX_POR_HORA = 64
 const px = (minutos: number) => `${Math.round((minutos * PX_POR_HORA) / 60)}px`
-const CURVA = [0.23, 1, 0.32, 1] as const
 
 export const tituloDoDia = (dia: Date) => format(dia, "EEEE, d 'de' MMMM", { locale: ptBR })
 
@@ -36,29 +42,40 @@ function Bloco({
   pedido,
   abre,
   posicao,
+  indice,
   aoAbrir,
 }: {
   pedido: Pedido
   abre: Date
   posicao: { faixa: number; faixas: number }
+  indice: number
   aoAbrir: () => void
 }) {
+  const reduzido = useReducedMotion() ?? false
   const inicio = new Date(pedido.agendamento?.inicio ?? pedido.criadoEm)
   const duracao = pedido.agendamento?.duracaoMin ?? 60
   const servicos = pedido.itens.map((item) => item.nome).join(", ")
   const encerrado = pedido.status === "concluido"
   return (
-    <button
+    <motion.button
       type="button"
       onClick={aoAbrir}
+      // Entra em sequência na primeira vez; atendimento cancelado ou remarcado sai com o fade.
+      variants={variantesDoItem(reduzido)}
+      custom={indice}
+      initial="entrar"
+      animate="parado"
+      onUpdate={semRelogioDoNavegador}
+      exit="sair"
       style={{
+        ...estiloDeEntrada(indice),
         top: px(differenceInMinutes(inicio, abre)),
         height: px(duracao),
         left: `${(posicao.faixa / posicao.faixas) * 100}%`,
         width: `${100 / posicao.faixas}%`,
       }}
       // A folga de 2 px em volta separa blocos vizinhos sem desenhar borda.
-      className="group absolute p-px pr-0.5 pb-0.5 text-left outline-none focus-visible:z-10"
+      className="alvo-toque entra-item group absolute p-px pr-0.5 pb-0.5 text-left outline-none focus-visible:z-10"
     >
       <span
         className={cn(
@@ -81,7 +98,7 @@ function Bloco({
         )}
         <span className="sr-only">, {rotuloStatus(pedido.tipo, pedido.status).toLowerCase()}</span>
       </span>
-    </button>
+    </motion.button>
   )
 }
 
@@ -101,7 +118,7 @@ export function AgendaDoDia({
   mudarDia: (dia: Date) => void
   aoAbrir: (pedido: Pedido) => void
 }) {
-  const semMovimento = useReducedMotion()
+  const semMovimento = useReducedMotion() ?? false
   const [calendarioAberto, setCalendarioAberto] = useState(false)
   // Para onde o dia andou: a grade entra do lado certo. Na primeira vez, não anima.
   const [diaAnterior, setDiaAnterior] = useState(dia.getTime())
@@ -149,7 +166,7 @@ export function AgendaDoDia({
               variant="ghost"
               size="icon-sm"
               aria-label="Dia anterior"
-              className="active:scale-[0.97]"
+              className="max-sm:size-11"
               onClick={() => mudarDia(addDays(dia, -1))}
             >
               <ChevronLeftIcon />
@@ -158,7 +175,7 @@ export function AgendaDoDia({
               type="button"
               variant="ghost"
               size="sm"
-              className={cn("active:scale-[0.97]", ehHoje && "bg-background shadow-sm")}
+              className={cn("max-sm:h-11", ehHoje && "bg-background shadow-sm")}
               onClick={() => mudarDia(startOfDay(agora))}
             >
               Hoje
@@ -168,7 +185,7 @@ export function AgendaDoDia({
               variant="ghost"
               size="icon-sm"
               aria-label="Próximo dia"
-              className="active:scale-[0.97]"
+              className="max-sm:size-11"
               onClick={() => mudarDia(addDays(dia, 1))}
             >
               <ChevronRightIcon />
@@ -176,7 +193,7 @@ export function AgendaDoDia({
           </div>
           <Popover open={calendarioAberto} onOpenChange={setCalendarioAberto}>
             <PopoverTrigger asChild>
-              <Button type="button" variant="outline" size="sm">
+              <Button type="button" variant="outline" size="sm" className="max-sm:h-11">
                 <CalendarIcon data-icon="inline-start" />
                 Escolher dia
               </Button>
@@ -204,7 +221,7 @@ export function AgendaDoDia({
         key={dia.getTime()}
         initial={direcao === 0 ? false : { opacity: 0, x: semMovimento ? 0 : direcao * 12 }}
         animate={{ opacity: 1, x: 0 }}
-        transition={{ duration: 0.2, ease: CURVA }}
+        transition={{ duration: DURACAO.entrada, ease: CURVA_SAIDA }}
         className="flex flex-col gap-2"
       >
         {!dele ? (
@@ -254,15 +271,19 @@ export function AgendaDoDia({
                     />
                   </div>
                 ))}
-                {doDia.map((pedido) => (
-                  <Bloco
-                    key={pedido.id}
-                    pedido={pedido}
-                    abre={dele.abre}
-                    posicao={faixas.get(pedido.id) ?? { faixa: 0, faixas: 1 }}
-                    aoAbrir={() => aoAbrir(pedido)}
-                  />
-                ))}
+                {/* Ao trocar de dia, a grade inteira já desliza: os blocos só animam na primeira vez. */}
+                <AnimatePresence initial={direcao === 0}>
+                  {doDia.map((pedido, indice) => (
+                    <Bloco
+                      key={pedido.id}
+                      pedido={pedido}
+                      abre={dele.abre}
+                      posicao={faixas.get(pedido.id) ?? { faixa: 0, faixas: 1 }}
+                      indice={indice}
+                      aoAbrir={() => aoAbrir(pedido)}
+                    />
+                  ))}
+                </AnimatePresence>
                 {minutoAgora >= 0 && minutoAgora <= horas * 60 && (
                   <div
                     aria-hidden="true"

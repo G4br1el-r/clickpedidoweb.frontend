@@ -25,6 +25,7 @@ import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
 import type { NovoAgendamento as Novo } from "@/lib/admin/dados/servidor"
 import type { HorarioFuncionamento } from "@/lib/admin/dados/tipos"
 import { emReais } from "@/lib/formato"
+import { BotaoCarregando } from "../movimento/botao-carregando"
 import { EscolhaHorario, textoDoHorario, textoDuracao } from "./escolha-horario"
 
 const PAGAMENTOS: { valor: Novo["pagamento"]; rotulo: string; icone: typeof BanknoteIcon }[] = [
@@ -121,7 +122,7 @@ function Formulario({
               <li key={produto.id}>
                 <Label
                   htmlFor={id}
-                  className="flex min-h-10 cursor-pointer items-center gap-3 rounded-md px-2 py-1.5 font-normal transition-colors duration-150 hover:bg-foreground/[0.04]"
+                  className="flex min-h-10 cursor-pointer max-sm:min-h-11 items-center gap-3 rounded-md px-2 py-1.5 font-normal transition-colors duration-150 hover:bg-foreground/[0.04]"
                 >
                   <Checkbox
                     id={id}
@@ -193,9 +194,14 @@ function Formulario({
       </Field>
 
       <DialogFooter>
-        <Button type="submit" disabled={!pronto}>
+        <BotaoCarregando
+          type="submit"
+          disabled={!pronto}
+          carregando={criar.isPending}
+          rotuloCarregando="Marcando o agendamento"
+        >
           Marcar
-        </Button>
+        </BotaoCarregando>
       </DialogFooter>
     </form>
   )
@@ -217,7 +223,7 @@ export function NovoAgendamento({
   return (
     <Dialog open={aberta} onOpenChange={setAberta}>
       <DialogTrigger asChild>
-        <Button type="button" size="sm">
+        <Button type="button" size="sm" className="max-sm:h-11">
           <PlusIcon data-icon="inline-start" />
           Novo agendamento
         </Button>

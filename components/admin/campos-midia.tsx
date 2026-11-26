@@ -19,6 +19,7 @@ import { useConfig, useOpcaoPro } from "@/lib/admin/config"
 import { textoSobre } from "@/lib/tema"
 import { cn } from "@/lib/utils"
 import { avisarSacola, SeloPro } from "./campos"
+import { BotaoCarregando } from "./movimento/botao-carregando"
 import { Traco } from "./traco"
 
 /** Reduz a imagem antes de guardar: o navegador só aceita alguns megabytes salvos. */
@@ -59,6 +60,7 @@ export function CampoImagem({
   const entrada = useRef<HTMLInputElement>(null)
   const id = useId()
   const [arrastando, setArrastando] = useState(false)
+  const [enviando, setEnviando] = useState(false)
   const imagem = valor ?? atual
 
   async function receber(arquivo: File | undefined) {
@@ -67,12 +69,15 @@ export function CampoImagem({
       toast.error("Envie um arquivo de imagem", { description: "JPG, PNG ou WebP." })
       return
     }
+    setEnviando(true)
     try {
       atualizar("identidade", { [campo]: await reduzirImagem(arquivo, ladoMaximo) })
       if (bloqueada) avisarSacola(titulo)
       else toast.success(`${titulo} atualizado`)
     } catch {
       toast.error("Não deu para ler essa imagem", { description: "Tente outro arquivo." })
+    } finally {
+      setEnviando(false)
     }
   }
 
@@ -114,20 +119,24 @@ export function CampoImagem({
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button
+          <BotaoCarregando
+            carregando={enviando}
+            rotuloCarregando="Preparando a imagem"
             type="button"
             variant="outline"
             size="sm"
+            className="max-md:min-h-11"
             onClick={() => entrada.current?.click()}
           >
             <ImageUpIcon data-icon="inline-start" />
             {valor ? "Trocar" : "Enviar imagem"}
-          </Button>
+          </BotaoCarregando>
           {valor && (
             <Button
               type="button"
               variant="ghost"
               size="sm"
+              className="max-md:min-h-11"
               onClick={() => atualizar("identidade", { [campo]: null })}
             >
               <Trash2Icon data-icon="inline-start" />

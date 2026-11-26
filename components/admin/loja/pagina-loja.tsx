@@ -43,6 +43,8 @@ import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
 import { semRelogioDoNavegador } from "../entrega/linha-animada"
 import { Cupom, pedidoDeTeste, useImpressora } from "../impressao/cupom"
+import { BotaoCarregando } from "../movimento/botao-carregando"
+import { Etapa, Sequencia } from "../secoes/sequencia"
 import { Traco } from "../traco"
 
 type Controle = Control<FormularioLoja, unknown, ConfigLoja>
@@ -84,7 +86,8 @@ function Secao({
 }) {
   const id = useId()
   return (
-    <section
+    <Etapa
+      como="section"
       aria-labelledby={id}
       className="grid min-w-0 gap-4 border-t border-border/70 pt-5 pb-3 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-10 lg:pt-6"
     >
@@ -95,7 +98,7 @@ function Secao({
         {descricao && <p className="text-[13px] text-pretty text-muted-foreground">{descricao}</p>}
       </div>
       <div className="flex min-w-0 flex-col gap-5">{children}</div>
-    </section>
+    </Etapa>
   )
 }
 
@@ -162,6 +165,7 @@ function CampoTexto({
             />
           ) : (
             <Input
+              className="max-md:h-11"
               id={id}
               maxLength={maximo}
               aria-invalid={Boolean(erro)}
@@ -201,7 +205,7 @@ function CampoTelefone({
             customInput={Input}
             format={field.value.length > 10 ? "(##) #####-####" : "(##) ####-#####"}
             inputMode="tel"
-            className="tabular-nums"
+            className="tabular-nums max-md:h-11"
             aria-invalid={Boolean(erro)}
             value={field.value}
             onValueChange={({ value }) => field.onChange(value)}
@@ -236,7 +240,7 @@ function CampoDinheiro({
           <NumericFormat
             {...dinheiro}
             id={id}
-            className="tabular-nums"
+            className="tabular-nums max-md:h-11"
             aria-invalid={Boolean(erro)}
             value={field.value}
             onValueChange={({ floatValue }) => field.onChange(floatValue ?? 0)}
@@ -281,7 +285,7 @@ function CampoTaxa({
             decimalScale={2}
             allowNegative={false}
             id={id}
-            className="tabular-nums"
+            className="tabular-nums max-md:h-11"
             aria-invalid={Boolean(erro)}
             value={field.value ?? ""}
             onValueChange={({ floatValue }) => field.onChange(floatValue)}
@@ -362,7 +366,7 @@ function CampoHora({
       mask="_"
       inputMode="numeric"
       placeholder="18:00"
-      className="w-[4.25rem] px-2 text-center tabular-nums sm:w-[4.75rem]"
+      className="w-[4.25rem] px-2 text-center tabular-nums max-md:h-11 sm:w-[4.75rem]"
       aria-label={rotulo}
       aria-invalid={invalido}
       value={valor}
@@ -506,7 +510,7 @@ function Cidades({ controle }: { controle: Controle }) {
                       <button
                         type="button"
                         aria-label={`Tirar ${cidade}`}
-                        className="rounded-sm p-0.5 outline-none hover:bg-background/60 focus-visible:ring-2 focus-visible:ring-ring/50"
+                        className="alvo-toque relative rounded-sm p-0.5 outline-none hover:bg-background/60 focus-visible:ring-2 focus-visible:ring-ring/50"
                         onClick={() =>
                           field.onChange(field.value.filter((item) => item !== cidade))
                         }
@@ -533,7 +537,12 @@ function Cidades({ controle }: { controle: Controle }) {
                   }
                 }}
               />
-              <Button type="button" variant="outline" onClick={adicionar}>
+              <Button
+                type="button"
+                variant="outline"
+                className="max-md:min-h-11"
+                onClick={adicionar}
+              >
                 Adicionar
               </Button>
             </div>
@@ -595,13 +604,18 @@ function BarraSalvar({
         </div>
       </div>
       <div className="flex flex-1 justify-end gap-2 sm:flex-none">
-        <Button type="button" variant="ghost" onClick={aoDescartar}>
+        <Button type="button" variant="ghost" className="max-md:min-h-11" onClick={aoDescartar}>
           <Undo2Icon data-icon="inline-start" />
           Descartar
         </Button>
-        <Button type="submit" disabled={salvando}>
+        <BotaoCarregando
+          type="submit"
+          carregando={salvando}
+          rotuloCarregando="Salvando as alterações"
+          className="max-md:min-h-11"
+        >
           Salvar alterações
-        </Button>
+        </BotaoCarregando>
       </div>
     </motion.section>
   )
@@ -656,381 +670,403 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
 
   return (
     <form onSubmit={enviar} noValidate className="flex flex-col gap-3">
-      <Secao titulo="Loja" descricao="Como a loja aparece no site e no cupom.">
-        <Grade>
-          <CampoTexto
-            controle={controle}
-            nome="nome"
-            rotulo="Nome da loja"
-            maximo={60}
-            erro={erros.nome}
-          />
-          <CampoTexto
-            controle={controle}
-            nome="slogan"
-            rotulo="Slogan"
-            maximo={80}
-            erro={erros.slogan}
-          />
-          <CampoTelefone
-            controle={controle}
-            nome="telefone"
-            rotulo="Telefone"
-            erro={erros.telefone}
-          />
-          <CampoTelefone
-            controle={controle}
-            nome="whatsapp"
-            rotulo="WhatsApp"
-            erro={erros.whatsapp}
-          />
-          <CampoTexto
-            controle={controle}
-            nome="endereco"
-            rotulo="Endereço"
-            maximo={140}
-            erro={erros.endereco}
-            className="sm:col-span-2"
-          />
-          <CampoTexto
-            controle={controle}
-            nome="textoHorario"
-            rotulo="Texto do horário"
-            maximo={140}
-            placeholder={textoDoHorario(horarios)}
-            descricao={
-              !textoHorario?.trim() ? `Vazio, aparece: ${textoDoHorario(horarios)}` : undefined
-            }
-            erro={erros.textoHorario}
-            className="sm:col-span-2"
-          />
-          {temRecurso(segmento, "video") && (
+      <Sequencia className="flex flex-col gap-3">
+        <Secao titulo="Loja" descricao="Como a loja aparece no site e no cupom.">
+          <Grade>
             <CampoTexto
               controle={controle}
-              nome="videoBanner"
-              rotulo="Vídeo do banner"
-              maximo={200}
-              placeholder="https://www.youtube.com/shorts/…"
-              descricao="Link do YouTube, Shorts ou Reels. Envio de arquivo fica para quando houver servidor."
-              erro={erros.videoBanner}
+              nome="nome"
+              rotulo="Nome da loja"
+              maximo={60}
+              erro={erros.nome}
+            />
+            <CampoTexto
+              controle={controle}
+              nome="slogan"
+              rotulo="Slogan"
+              maximo={80}
+              erro={erros.slogan}
+            />
+            <CampoTelefone
+              controle={controle}
+              nome="telefone"
+              rotulo="Telefone"
+              erro={erros.telefone}
+            />
+            <CampoTelefone
+              controle={controle}
+              nome="whatsapp"
+              rotulo="WhatsApp"
+              erro={erros.whatsapp}
+            />
+            <CampoTexto
+              controle={controle}
+              nome="endereco"
+              rotulo="Endereço"
+              maximo={140}
+              erro={erros.endereco}
               className="sm:col-span-2"
             />
-          )}
-        </Grade>
-      </Secao>
+            <CampoTexto
+              controle={controle}
+              nome="textoHorario"
+              rotulo="Texto do horário"
+              maximo={140}
+              placeholder={textoDoHorario(horarios)}
+              descricao={
+                !textoHorario?.trim() ? `Vazio, aparece: ${textoDoHorario(horarios)}` : undefined
+              }
+              erro={erros.textoHorario}
+              className="sm:col-span-2"
+            />
+            {temRecurso(segmento, "video") && (
+              <CampoTexto
+                controle={controle}
+                nome="videoBanner"
+                rotulo="Vídeo do banner"
+                maximo={200}
+                placeholder="https://www.youtube.com/shorts/…"
+                descricao="Link do YouTube, Shorts ou Reels. Envio de arquivo fica para quando houver servidor."
+                erro={erros.videoBanner}
+                className="sm:col-span-2"
+              />
+            )}
+          </Grade>
+        </Secao>
 
-      {temRecurso(segmento, "vitrines") && (
+        {temRecurso(segmento, "vitrines") && (
+          <Secao
+            titulo="Vitrines"
+            descricao="As faixas de produtos em destaque e em oferta do cardápio."
+          >
+            <Grade>
+              {(
+                [
+                  ["destaques", "Destaques"],
+                  ["ofertas", "Ofertas"],
+                ] as const
+              ).map(([chave, nome]) => (
+                <div key={chave} className="flex flex-col gap-3">
+                  <Controller
+                    control={controle}
+                    name={`vitrines.${chave}.titulo`}
+                    render={({ field }) => (
+                      <Field data-invalid={Boolean(erros.vitrines?.[chave]?.titulo)}>
+                        <FieldLabel htmlFor={`vitrine-${chave}`}>Título de {nome}</FieldLabel>
+                        <Input
+                          id={`vitrine-${chave}`}
+                          maxLength={40}
+                          className="max-md:h-11"
+                          {...field}
+                        />
+                        {erros.vitrines?.[chave]?.titulo && (
+                          <FieldError>{erros.vitrines[chave]?.titulo?.message}</FieldError>
+                        )}
+                      </Field>
+                    )}
+                  />
+                  <Controller
+                    control={controle}
+                    name={`vitrines.${chave}.ativo`}
+                    render={({ field }) => (
+                      <div className="flex items-center gap-2.5">
+                        <Switch
+                          id={`vitrine-${chave}-ativo`}
+                          checked={field.value}
+                          onCheckedChange={field.onChange}
+                        />
+                        <label htmlFor={`vitrine-${chave}-ativo`} className="text-sm">
+                          Mostrar {nome}
+                        </label>
+                      </div>
+                    )}
+                  />
+                </div>
+              ))}
+            </Grade>
+          </Secao>
+        )}
+
         <Secao
-          titulo="Vitrines"
-          descricao="As faixas de produtos em destaque e em oferta do cardápio."
+          titulo="Horários"
+          descricao="Fechamento antes da abertura passa da meia-noite (18h às 2h)."
+        >
+          <Horarios
+            controle={controle}
+            erros={erros.horarios}
+            copiar={(dia) =>
+              setValue("horarios", copiarParaTodos(getValues("horarios"), dia), {
+                shouldDirty: true,
+              })
+            }
+          />
+          <Linhas>
+            <Chave
+              controle={controle}
+              nome="controleAutomatico"
+              rotulo="Abrir e fechar sozinha pelo horário"
+              descricao="Desligado, a loja abre e fecha só pela chave da Fila."
+            />
+          </Linhas>
+          <CampoTexto
+            controle={controle}
+            nome="mensagemFechada"
+            rotulo="Mensagem de loja fechada"
+            maximo={200}
+            multilinha
+            erro={erros.mensagemFechada}
+          />
+        </Secao>
+
+        <Secao
+          titulo="Entrega e retirada"
+          descricao={
+            salao ? "Como o salão recebe as clientes." : "Como o pedido chega a quem comprou."
+          }
+        >
+          <Linhas>
+            {comEntrega && (
+              <Chave controle={controle} nome="aceitaEntrega" rotulo="Aceita entrega" />
+            )}
+            <Chave
+              controle={controle}
+              nome="aceitaRetirada"
+              rotulo={salao ? "Atendimento no salão" : "Aceita retirada"}
+              erro={erros.aceitaRetirada?.message}
+            />
+          </Linhas>
+          <Grade>
+            {comEntrega && (
+              <CampoDinheiro
+                controle={controle}
+                nome="taxaEntregaPadrao"
+                rotulo="Taxa de entrega padrão"
+                erro={erros.taxaEntregaPadrao}
+              />
+            )}
+            <CampoDinheiro
+              controle={controle}
+              nome="pedidoMinimo"
+              rotulo="Pedido mínimo"
+              erro={erros.pedidoMinimo}
+            />
+            {comEntrega && (
+              <CampoTexto
+                controle={controle}
+                nome="tempoEntrega"
+                rotulo="Tempo de entrega"
+                maximo={40}
+                placeholder="40 a 60 min"
+                erro={erros.tempoEntrega}
+              />
+            )}
+            <CampoTexto
+              controle={controle}
+              nome="tempoRetirada"
+              rotulo={salao ? "Texto do atendimento" : "Tempo de retirada"}
+              maximo={40}
+              placeholder="20 min"
+              erro={erros.tempoRetirada}
+            />
+            {salao && (
+              <Controller
+                control={controle}
+                name="capacidadeAtendimentos"
+                render={({ field }) => (
+                  <Field>
+                    <FieldLabel htmlFor="loja-capacidade">Atendimentos ao mesmo tempo</FieldLabel>
+                    <Input
+                      id="loja-capacidade"
+                      type="number"
+                      min={1}
+                      max={20}
+                      className="tabular-nums max-md:h-11"
+                      value={field.value ?? 1}
+                      onChange={(evento) => field.onChange(Number(evento.target.value) || 1)}
+                    />
+                    <FieldDescription>
+                      A agenda não marca mais que isso no mesmo horário.
+                    </FieldDescription>
+                  </Field>
+                )}
+              />
+            )}
+          </Grade>
+          {comEntrega && <Cidades controle={controle} />}
+        </Secao>
+
+        <Secao
+          titulo="Formas de pagamento"
+          descricao="O que a loja aceita no site. Pix e cartão online dependem da conta online."
+        >
+          <Linhas>
+            {PAGAMENTOS.filter(
+              ({ forma }) =>
+                forma !== "pagar-apos-pesagem" || temRecurso(segmento, "pagarAposPesagem"),
+            ).map(({ forma, rotulo, online }) => (
+              <Controller
+                key={forma}
+                control={controle}
+                name={`pagamentos.${forma}`}
+                render={({ field }) => (
+                  <div className="flex min-h-14 items-center justify-between gap-4 py-3">
+                    <span className="flex min-w-0 flex-col gap-0.5">
+                      <span
+                        className={cn(
+                          "text-sm font-medium",
+                          online && !conectado && "text-muted-foreground",
+                        )}
+                        id={`pagamento-${forma}`}
+                      >
+                        {rotulo}
+                      </span>
+                      {online && !conectado && (
+                        <span className="text-[13px] text-muted-foreground">
+                          Precisa da conta online conectada.
+                        </span>
+                      )}
+                      {erros.pagamentos?.[forma] && (
+                        <FieldError>{erros.pagamentos[forma]?.message}</FieldError>
+                      )}
+                    </span>
+                    <Switch
+                      aria-labelledby={`pagamento-${forma}`}
+                      checked={field.value}
+                      disabled={online && !conectado}
+                      onCheckedChange={field.onChange}
+                    />
+                  </div>
+                )}
+              />
+            ))}
+          </Linhas>
+          {erros.pagamentos?.root?.message || erros.pagamentos?.message ? (
+            <FieldError>{erros.pagamentos.root?.message ?? erros.pagamentos.message}</FieldError>
+          ) : null}
+        </Secao>
+
+        <Secao
+          titulo="Pagamento online"
+          descricao="No protótipo, a conexão é de demonstração: nenhuma chave ou token é digitado nem guardado aqui."
+        >
+          <Linhas>
+            <div className="flex min-h-14 flex-wrap items-center gap-x-4 gap-y-2 py-3">
+              <div className="flex min-w-0 flex-col gap-1">
+                <span className="text-sm font-medium">Mercado Pago</span>
+                <span className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
+                  <Traco tom={conectado ? "pronto" : "fim"} />
+                  {conectado ? "Conectada" : "Não conectada"}
+                </span>
+              </div>
+              <BotaoCarregando
+                variant="outline"
+                type="button"
+                className="ml-auto max-md:min-h-11"
+                carregando={conectar.isPending}
+                rotuloCarregando={conectado ? "Desconectando" : "Conectando"}
+                onClick={() =>
+                  conectar.mutate(!conectado, {
+                    onSuccess: (atualizada) => {
+                      // Já está salvo no servidor: o formulário passa a partir daí, sem contar como alteração.
+                      resetField("pagamentoOnlineConectado", {
+                        defaultValue: atualizada.pagamentoOnlineConectado,
+                      })
+                      resetField("pagamentos", { defaultValue: atualizada.pagamentos })
+                      toast.success(
+                        atualizada.pagamentoOnlineConectado
+                          ? "Conta conectada."
+                          : "Conta desconectada.",
+                      )
+                    },
+                    onError: (erro) => toast.error(erro.message),
+                  })
+                }
+              >
+                {conectado ? "Desconectar" : "Conectar"}
+              </BotaoCarregando>
+            </div>
+          </Linhas>
+        </Secao>
+
+        <Secao
+          titulo="Taxas de pagamento"
+          descricao="Quanto cada forma cobra, para o Financeiro estimar o que sobra das vendas. Em branco, conta como 0%. Dinheiro e Pix no balcão não têm taxa."
         >
           <Grade>
-            {(
-              [
-                ["destaques", "Destaques"],
-                ["ofertas", "Ofertas"],
-              ] as const
-            ).map(([chave, nome]) => (
-              <div key={chave} className="flex flex-col gap-3">
-                <Controller
-                  control={controle}
-                  name={`vitrines.${chave}.titulo`}
-                  render={({ field }) => (
-                    <Field data-invalid={Boolean(erros.vitrines?.[chave]?.titulo)}>
-                      <FieldLabel htmlFor={`vitrine-${chave}`}>Título de {nome}</FieldLabel>
-                      <Input id={`vitrine-${chave}`} maxLength={40} {...field} />
-                      {erros.vitrines?.[chave]?.titulo && (
-                        <FieldError>{erros.vitrines[chave]?.titulo?.message}</FieldError>
-                      )}
-                    </Field>
-                  )}
-                />
-                <Controller
-                  control={controle}
-                  name={`vitrines.${chave}.ativo`}
-                  render={({ field }) => (
-                    <div className="flex items-center gap-2.5">
-                      <Switch
-                        id={`vitrine-${chave}-ativo`}
-                        checked={field.value}
-                        onCheckedChange={field.onChange}
-                      />
-                      <label htmlFor={`vitrine-${chave}-ativo`} className="text-sm">
-                        Mostrar {nome}
-                      </label>
-                    </div>
-                  )}
-                />
-              </div>
+            {TAXAS.map(({ forma, rotulo }) => (
+              <CampoTaxa
+                key={forma}
+                controle={controle}
+                forma={forma}
+                rotulo={rotulo}
+                erro={erros.taxasPagamento?.[forma]}
+              />
             ))}
           </Grade>
         </Secao>
-      )}
 
-      <Secao
-        titulo="Horários"
-        descricao="Fechamento antes da abertura passa da meia-noite (18h às 2h)."
-      >
-        <Horarios
-          controle={controle}
-          erros={erros.horarios}
-          copiar={(dia) =>
-            setValue("horarios", copiarParaTodos(getValues("horarios"), dia), { shouldDirty: true })
-          }
-        />
-        <Linhas>
-          <Chave
-            controle={controle}
-            nome="controleAutomatico"
-            rotulo="Abrir e fechar sozinha pelo horário"
-            descricao="Desligado, a loja abre e fecha só pela chave da Fila."
-          />
-        </Linhas>
-        <CampoTexto
-          controle={controle}
-          nome="mensagemFechada"
-          rotulo="Mensagem de loja fechada"
-          maximo={200}
-          multilinha
-          erro={erros.mensagemFechada}
-        />
-      </Secao>
+        <Secao
+          titulo="Impressão"
+          descricao="O cupom sai pela impressora configurada neste computador."
+        >
+          <Linhas>
+            <Chave
+              controle={controle}
+              nome="impressaoAutomatica"
+              rotulo="Imprimir os pedidos novos sozinho"
+              descricao="Na Fila, cada pedido novo sai uma vez só."
+            />
+            <Chave controle={controle} nome="cortarPapel" rotulo="Cortar o papel no fim do cupom" />
+          </Linhas>
+          <Button
+            type="button"
+            variant="outline"
+            className="self-start max-md:min-h-11"
+            onClick={() => imprimir()}
+          >
+            <PrinterIcon data-icon="inline-start" />
+            Imprimir cupom de teste
+          </Button>
+          {agora && <Cupom pedido={pedidoDeTeste(agora)} loja={loja.nome} area={area} />}
+        </Secao>
 
-      <Secao
-        titulo="Entrega e retirada"
-        descricao={
-          salao ? "Como o salão recebe as clientes." : "Como o pedido chega a quem comprou."
-        }
-      >
-        <Linhas>
-          {comEntrega && <Chave controle={controle} nome="aceitaEntrega" rotulo="Aceita entrega" />}
-          <Chave
-            controle={controle}
-            nome="aceitaRetirada"
-            rotulo={salao ? "Atendimento no salão" : "Aceita retirada"}
-            erro={erros.aceitaRetirada?.message}
-          />
-        </Linhas>
-        <Grade>
-          {comEntrega && (
-            <CampoDinheiro
-              controle={controle}
-              nome="taxaEntregaPadrao"
-              rotulo="Taxa de entrega padrão"
-              erro={erros.taxaEntregaPadrao}
-            />
-          )}
-          <CampoDinheiro
-            controle={controle}
-            nome="pedidoMinimo"
-            rotulo="Pedido mínimo"
-            erro={erros.pedidoMinimo}
-          />
-          {comEntrega && (
-            <CampoTexto
-              controle={controle}
-              nome="tempoEntrega"
-              rotulo="Tempo de entrega"
-              maximo={40}
-              placeholder="40 a 60 min"
-              erro={erros.tempoEntrega}
-            />
-          )}
-          <CampoTexto
-            controle={controle}
-            nome="tempoRetirada"
-            rotulo={salao ? "Texto do atendimento" : "Tempo de retirada"}
-            maximo={40}
-            placeholder="20 min"
-            erro={erros.tempoRetirada}
-          />
-          {salao && (
+        <Secao
+          titulo="Alerta sonoro"
+          descricao="O som padrão da loja. Cada aparelho (Fila, Cozinha) pode escolher outro."
+        >
+          <div className="flex flex-wrap items-center gap-2">
             <Controller
               control={controle}
-              name="capacidadeAtendimentos"
+              name="som"
               render={({ field }) => (
-                <Field>
-                  <FieldLabel htmlFor="loja-capacidade">Atendimentos ao mesmo tempo</FieldLabel>
-                  <Input
-                    id="loja-capacidade"
-                    type="number"
-                    min={1}
-                    max={20}
-                    className="tabular-nums"
-                    value={field.value ?? 1}
-                    onChange={(evento) => field.onChange(Number(evento.target.value) || 1)}
-                  />
-                  <FieldDescription>
-                    A agenda não marca mais que isso no mesmo horário.
-                  </FieldDescription>
-                </Field>
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger aria-label="Som da loja" className="w-40 max-md:h-11">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectGroup>
+                      {SONS.map(({ valor, rotulo }) => (
+                        <SelectItem key={valor} value={valor}>
+                          {rotulo}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               )}
             />
-          )}
-        </Grade>
-        {comEntrega && <Cidades controle={controle} />}
-      </Secao>
-
-      <Secao
-        titulo="Formas de pagamento"
-        descricao="O que a loja aceita no site. Pix e cartão online dependem da conta online."
-      >
-        <Linhas>
-          {PAGAMENTOS.filter(
-            ({ forma }) =>
-              forma !== "pagar-apos-pesagem" || temRecurso(segmento, "pagarAposPesagem"),
-          ).map(({ forma, rotulo, online }) => (
-            <Controller
-              key={forma}
-              control={controle}
-              name={`pagamentos.${forma}`}
-              render={({ field }) => (
-                <div className="flex min-h-14 items-center justify-between gap-4 py-3">
-                  <span className="flex min-w-0 flex-col gap-0.5">
-                    <span
-                      className={cn(
-                        "text-sm font-medium",
-                        online && !conectado && "text-muted-foreground",
-                      )}
-                      id={`pagamento-${forma}`}
-                    >
-                      {rotulo}
-                    </span>
-                    {online && !conectado && (
-                      <span className="text-[13px] text-muted-foreground">
-                        Precisa da conta online conectada.
-                      </span>
-                    )}
-                    {erros.pagamentos?.[forma] && (
-                      <FieldError>{erros.pagamentos[forma]?.message}</FieldError>
-                    )}
-                  </span>
-                  <Switch
-                    aria-labelledby={`pagamento-${forma}`}
-                    checked={field.value}
-                    disabled={online && !conectado}
-                    onCheckedChange={field.onChange}
-                  />
-                </div>
-              )}
-            />
-          ))}
-        </Linhas>
-        {erros.pagamentos?.root?.message || erros.pagamentos?.message ? (
-          <FieldError>{erros.pagamentos.root?.message ?? erros.pagamentos.message}</FieldError>
-        ) : null}
-      </Secao>
-
-      <Secao
-        titulo="Pagamento online"
-        descricao="No protótipo, a conexão é de demonstração: nenhuma chave ou token é digitado nem guardado aqui."
-      >
-        <Linhas>
-          <div className="flex min-h-14 flex-wrap items-center gap-x-4 gap-y-2 py-3">
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="text-sm font-medium">Mercado Pago</span>
-              <span className="inline-flex items-center gap-2 text-[13px] text-muted-foreground">
-                <Traco tom={conectado ? "pronto" : "fim"} />
-                {conectado ? "Conectada" : "Não conectada"}
-              </span>
-            </div>
             <Button
               type="button"
               variant="outline"
-              className="ml-auto"
-              disabled={conectar.isPending}
-              onClick={() =>
-                conectar.mutate(!conectado, {
-                  onSuccess: (atualizada) => {
-                    // Já está salvo no servidor: o formulário passa a partir daí, sem contar como alteração.
-                    resetField("pagamentoOnlineConectado", {
-                      defaultValue: atualizada.pagamentoOnlineConectado,
-                    })
-                    resetField("pagamentos", { defaultValue: atualizada.pagamentos })
-                    toast.success(
-                      atualizada.pagamentoOnlineConectado
-                        ? "Conta conectada."
-                        : "Conta desconectada.",
-                    )
-                  },
-                  onError: (erro) => toast.error(erro.message),
-                })
-              }
+              className="max-md:min-h-11"
+              onClick={() => tocarAlerta(som)}
             >
-              {conectado ? "Desconectar" : "Conectar"}
+              <Volume2Icon data-icon="inline-start" />
+              Ouvir
             </Button>
           </div>
-        </Linhas>
-      </Secao>
-
-      <Secao
-        titulo="Taxas de pagamento"
-        descricao="Quanto cada forma cobra, para o Financeiro estimar o que sobra das vendas. Em branco, conta como 0%. Dinheiro e Pix no balcão não têm taxa."
-      >
-        <Grade>
-          {TAXAS.map(({ forma, rotulo }) => (
-            <CampoTaxa
-              key={forma}
-              controle={controle}
-              forma={forma}
-              rotulo={rotulo}
-              erro={erros.taxasPagamento?.[forma]}
-            />
-          ))}
-        </Grade>
-      </Secao>
-
-      <Secao
-        titulo="Impressão"
-        descricao="O cupom sai pela impressora configurada neste computador."
-      >
-        <Linhas>
-          <Chave
-            controle={controle}
-            nome="impressaoAutomatica"
-            rotulo="Imprimir os pedidos novos sozinho"
-            descricao="Na Fila, cada pedido novo sai uma vez só."
-          />
-          <Chave controle={controle} nome="cortarPapel" rotulo="Cortar o papel no fim do cupom" />
-        </Linhas>
-        <Button type="button" variant="outline" className="self-start" onClick={() => imprimir()}>
-          <PrinterIcon data-icon="inline-start" />
-          Imprimir cupom de teste
-        </Button>
-        {agora && <Cupom pedido={pedidoDeTeste(agora)} loja={loja.nome} area={area} />}
-      </Secao>
-
-      <Secao
-        titulo="Alerta sonoro"
-        descricao="O som padrão da loja. Cada aparelho (Fila, Cozinha) pode escolher outro."
-      >
-        <div className="flex flex-wrap items-center gap-2">
-          <Controller
-            control={controle}
-            name="som"
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger aria-label="Som da loja" className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectGroup>
-                    {SONS.map(({ valor, rotulo }) => (
-                      <SelectItem key={valor} value={valor}>
-                        {rotulo}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            )}
-          />
-          <Button type="button" variant="outline" onClick={() => tocarAlerta(som)}>
-            <Volume2Icon data-icon="inline-start" />
-            Ouvir
-          </Button>
-        </div>
-      </Secao>
+        </Secao>
+      </Sequencia>
 
       <AnimatePresence>
         {formState.isDirty && (
@@ -1049,11 +1085,17 @@ function Formulario({ loja }: { loja: ConfigLoja }) {
 /** Esqueleto no formato da página: seções com fio, o título à esquerda e os campos. */
 function EsqueletoFormulario() {
   return (
-    <div role="status" aria-label="Carregando as configurações" className="flex flex-col gap-3">
-      {[4, 7, 3].map((campos) => (
+    <div
+      role="status"
+      aria-label="Carregando as configurações"
+      aria-busy="true"
+      className="flex flex-col gap-3"
+    >
+      {[4, 7, 3].map((campos, posicao) => (
         <div
           key={campos}
-          className="grid gap-4 border-t border-border/70 pt-6 pb-3 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-10"
+          className="esqueleto-entra grid gap-4 border-t border-border/70 pt-6 pb-3 lg:grid-cols-[14rem_minmax(0,1fr)] lg:gap-10"
+          style={{ animationDelay: `${posicao * 0.06}s` }}
         >
           <div className="flex flex-col gap-2">
             <Skeleton className="h-4 w-24" />

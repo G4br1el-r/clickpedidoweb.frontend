@@ -2,10 +2,10 @@
 
 import { format } from "date-fns"
 import { HistoryIcon } from "lucide-react"
+import { AnimatePresence } from "motion/react"
 import { type FormEvent, type ReactNode, useId, useState } from "react"
 import { NumericFormat } from "react-number-format"
 import { toast } from "sonner"
-import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -34,7 +34,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import {
@@ -51,7 +50,16 @@ import {
   numeroComSinal,
   saldoDepois,
 } from "@/lib/admin/regras/estoque"
-import { emReais } from "@/lib/formato"
+import {
+  ajusteDoMinimo,
+  erroDoMinimoEmLote,
+  planoDoMinimo,
+  textoDoPlanoDoMinimo,
+} from "@/lib/admin/regras/lote-estoque"
+import { emReais, plural } from "@/lib/formato"
+import { EsqueletoLista } from "../esqueletos"
+import { BotaoCarregando } from "../movimento/botao-carregando"
+import { ItemEntrando } from "../movimento/entrada-admin"
 
 export type AcaoEstoque = "entrada" | "saida" | "contagem" | "historico" | "configurar"
 
@@ -76,6 +84,7 @@ function JanelaMovimento({
   titulo,
   descricao,
   botao,
+  rotuloEnviando,
   podeEnviar,
   enviando,
   aoEnviar,
@@ -85,6 +94,8 @@ function JanelaMovimento({
   titulo: string
   descricao: string
   botao: string
+  /** O que o leitor de tela diz enquanto o botão trabalha: "Registrando entrada". */
+  rotuloEnviando: string
   podeEnviar: boolean
   enviando: boolean
   aoEnviar: () => void
@@ -107,9 +118,15 @@ function JanelaMovimento({
           </DialogHeader>
           <FieldGroup>{children}</FieldGroup>
           <DialogFooter>
-            <Button type="submit" disabled={!podeEnviar || enviando}>
+            <BotaoCarregando
+              type="submit"
+              className="max-md:h-11"
+              disabled={!podeEnviar}
+              carregando={enviando}
+              rotuloCarregando={rotuloEnviando}
+            >
               {botao}
-            </Button>
+            </BotaoCarregando>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -233,6 +250,7 @@ export function JanelaEntrada({ produto, aoFechar }: { produto: Produto; aoFecha
       titulo={`Entrada de ${produto.nome}`}
       descricao={`Compra ou reposição. ${saldoAtual(produto)}`}
       botao="Registrar entrada"
+      rotuloEnviando="Registrando a entrada"
       podeEnviar={numero !== null && !erro}
       enviando={entrada.isPending}
       aoFechar={aoFechar}
@@ -295,6 +313,7 @@ export function JanelaSaida({ produto, aoFechar }: { produto: Produto; aoFechar:
       titulo={`Saída de ${produto.nome}`}
       descricao={`Perda ou uso que não é venda. ${saldoAtual(produto)}`}
       botao="Registrar saída"
+      rotuloEnviando="Registrando a saída"
       podeEnviar={numero !== null && !erro && motivo !== ""}
       enviando={saida.isPending}
       aoFechar={aoFechar}
@@ -355,6 +374,7 @@ export function JanelaContagem({ produto, aoFechar }: { produto: Produto; aoFech
       titulo={`Contagem de ${produto.nome}`}
       descricao={`Conte o que tem na prateleira; o saldo passa a ser o contado. ${saldoAtual(produto)}`}
       botao="Registrar contagem"
+      rotuloEnviando="Registrando a contagem"
       podeEnviar={numero !== null && !erro}
       enviando={contagem.isPending}
       aoFechar={aoFechar}
@@ -410,6 +430,7 @@ export function JanelaConfigurar({
       titulo={`Estoque de ${produto.nome}`}
       descricao="Com o controle ligado, as vendas baixam o saldo sozinhas."
       botao="Salvar"
+      rotuloEnviando="Salvando o estoque"
       podeEnviar={!erro}
       enviando={configurar.isPending}
       aoFechar={aoFechar}
@@ -474,10 +495,18 @@ export function JanelaConfigurar({
   )
 }
 
-function LinhaMovimento({ movimento, produto }: { movimento: MovimentoEstoque; produto: Produto }) {
+function LinhaMovimento({
+  movimento,
+  produto,
+  indice,
+}: {
+  movimento: MovimentoEstoque
+  produto: Produto
+  indice: number
+}) {
   const detalhe = [movimento.motivo, movimento.observacao].filter(Boolean).join(" · ")
   return (
-    <li className="flex items-start justify-between gap-3 py-3">
+    <ItemEntrando como="li" indice={indice} className="flex items-start justify-between gap-3 py-3">
       <div className="flex min-w-0 flex-col gap-0.5">
         <span className="flex items-baseline gap-2 text-sm font-medium">
           {ROTULO_MOVIMENTO[movimento.tipo]}
@@ -501,7 +530,7 @@ function LinhaMovimento({ movimento, produto }: { movimento: MovimentoEstoque; p
           saldo {emQuantidade(movimento.saldo, produto.unidade)}
         </span>
       </div>
-    </li>
+    </ItemEntrando>
   )
 }
 
@@ -522,10 +551,7 @@ export function HistoricoEstoque({
         </SheetHeader>
         <div className="flex-1 overflow-y-auto px-4 pb-4">
           {!movimentos ? (
-            <div className="flex flex-col gap-3">
-              <Skeleton className="h-14" />
-              <Skeleton className="h-14" />
-            </div>
+            <EsqueletoLista linhas={4} rotulo="Carregando o histórico" />
           ) : movimentos.length === 0 ? (
             <Empty>
               <EmptyHeader>
@@ -538,13 +564,103 @@ export function HistoricoEstoque({
             </Empty>
           ) : (
             <ul className="divide-y divide-border/70">
-              {movimentos.map((movimento) => (
-                <LinhaMovimento key={movimento.id} movimento={movimento} produto={produto} />
-              ))}
+              <AnimatePresence initial>
+                {movimentos.map((movimento, indice) => (
+                  <LinhaMovimento
+                    key={movimento.id}
+                    indice={indice}
+                    movimento={movimento}
+                    produto={produto}
+                  />
+                ))}
+              </AnimatePresence>
             </ul>
           )}
         </div>
       </SheetContent>
     </Sheet>
+  )
+}
+
+/**
+ * Mínimo de vários produtos de uma vez. Só os controlados mudam; o resto fica como está e a
+ * frase de conferência diz quantos são. Aplica um por vez: cada um confere o servidor antes do
+ * seguinte, e quem falhar é contado no fim em vez de parar o lote.
+ */
+export function JanelaMinimoEmLote({
+  produtos,
+  aoFechar,
+  aoConcluir,
+}: {
+  produtos: Produto[]
+  aoFechar: () => void
+  /** Chamada depois de aplicar (com ou sem falhas): limpa a seleção. */
+  aoConcluir: () => void
+}) {
+  const [minimo, setMinimo] = useState("")
+  const [aplicando, setAplicando] = useState(false)
+  const configurar = useConfigurarEstoque()
+  const id = useId()
+  const numero = lerNumero(minimo)
+  const erro = numero === null ? null : erroDoMinimoEmLote(numero, produtos)
+  const valido = numero !== null && !erro
+  const plano = planoDoMinimo(produtos, valido ? numero : Number.NaN)
+  const soQuilo = produtos
+    .filter((produto) => produto.estoque?.controlar)
+    .every((produto) => produto.unidade === "kg")
+
+  async function aplicar() {
+    if (!valido) return
+    setAplicando(true)
+    let feitos = 0
+    let falhas = 0
+    for (const produto of plano.alterar) {
+      try {
+        await configurar.mutateAsync(ajusteDoMinimo(produto, numero))
+        feitos += 1
+      } catch {
+        falhas += 1
+      }
+    }
+    setAplicando(false)
+    if (feitos > 0) {
+      toast.success(`Mínimo de ${plural(feitos, "produto", "produtos")} atualizado.`)
+    }
+    if (falhas > 0) {
+      toast.error(`${plural(falhas, "produto não mudou", "produtos não mudaram")}. Tente de novo.`)
+    }
+    aoConcluir()
+    aoFechar()
+  }
+
+  return (
+    <JanelaMovimento
+      titulo={`Definir mínimo de ${plural(produtos.length, "produto", "produtos")}`}
+      descricao="O mesmo estoque mínimo para todos os controlados marcados."
+      botao="Aplicar mínimo"
+      rotuloEnviando="Aplicando o mínimo"
+      podeEnviar={valido && plano.alterar.length > 0}
+      enviando={aplicando}
+      aoFechar={aoFechar}
+      aoEnviar={aplicar}
+    >
+      <Field data-invalid={Boolean(erro) || undefined}>
+        <FieldLabel htmlFor={id}>Estoque mínimo</FieldLabel>
+        <Input
+          id={id}
+          type="number"
+          inputMode="decimal"
+          min={0}
+          step={soQuilo ? 0.001 : 1}
+          aria-invalid={Boolean(erro) || undefined}
+          value={minimo}
+          onChange={(evento) => setMinimo(evento.target.value)}
+        />
+        {valido && (
+          <FieldDescription aria-live="polite">{textoDoPlanoDoMinimo(plano)}</FieldDescription>
+        )}
+        {erro && <FieldError>{erro}</FieldError>}
+      </Field>
+    </JanelaMovimento>
   )
 }

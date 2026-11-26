@@ -87,7 +87,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Textarea } from "@/components/ui/textarea"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
@@ -103,7 +102,9 @@ import { opcaoDoProduto } from "@/lib/admin/regras/cardapio"
 import { camposDoProduto, esquemaProduto } from "@/lib/admin/regras/esquema-produto"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temRecurso } from "@/lib/admin/segmentos-painel"
+import { BotaoCarregando } from "../movimento/botao-carregando"
 import { Traco } from "../traco"
+import { EsqueletoFormularioProduto } from "./esqueletos-cardapio"
 import { useProdutoAberto } from "./pagina-cardapio"
 
 const novoId = (prefixo: string) => `${prefixo}-${crypto.randomUUID().slice(0, 8)}`
@@ -1030,13 +1031,14 @@ function Formulario({ produto, aoFechar }: { produto: Produto | undefined; aoFec
           <Button type="button" variant="outline" className="flex-1 max-md:h-11" onClick={aoFechar}>
             Cancelar
           </Button>
-          <Button
+          <BotaoCarregando
             type="submit"
-            className="flex-1 active:scale-[0.97] max-md:h-11"
-            disabled={salvar.isPending}
+            className="flex-1 max-md:h-11"
+            carregando={salvar.isPending}
+            rotuloCarregando="Salvando produto"
           >
             Salvar produto
-          </Button>
+          </BotaoCarregando>
         </div>
       </SheetFooter>
     </form>
@@ -1071,11 +1073,7 @@ export function FormularioProduto() {
         {pronto && !isPending ? (
           <Formulario key={aberto ?? ""} produto={produto} aoFechar={fechar} />
         ) : (
-          <div role="status" aria-label="Carregando o produto" className="flex flex-col gap-3 p-4">
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-9 w-full" />
-            <Skeleton className="h-24 w-full" />
-          </div>
+          <EsqueletoFormularioProduto />
         )}
       </SheetContent>
     </Sheet>

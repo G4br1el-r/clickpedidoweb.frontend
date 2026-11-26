@@ -1,7 +1,7 @@
 "use client"
 
-import { DownloadIcon } from "lucide-react"
-import { createContext, type ReactNode, useContext } from "react"
+import { CheckIcon, DownloadIcon } from "lucide-react"
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { type ColunaCsv, gerarCsv, nomeDoCsv } from "@/lib/admin/regras/dashboard/csv"
 import type { Periodo } from "@/lib/admin/regras/periodo"
@@ -9,6 +9,9 @@ import type { Periodo } from "@/lib/admin/regras/periodo"
 type Aba = { loja: string; aba: string; periodo: Periodo; imprimindo: boolean }
 
 const ContextoDaAba = createContext<Aba | null>(null)
+
+/** Quanto tempo o botão confirma "Baixado" antes de voltar a ser "CSV". */
+const CONFIRMACAO_MS = 1600
 
 /** A aba aberta: dá nome aos arquivos e diz se está sendo impressa. */
 export function ProvedorDaAba({
@@ -52,28 +55,49 @@ export function BaixarCsv<T>({
   comNomeDaTabela?: boolean
 }) {
   const aba = useContext(ContextoDaAba)
+  const [baixado, setBaixado] = useState(false)
+
+  // A confirmação some sozinha: o botão volta a ser "CSV" para baixar de novo.
+  useEffect(() => {
+    if (!baixado) return
+    const espera = setTimeout(() => setBaixado(false), CONFIRMACAO_MS)
+    return () => clearTimeout(espera)
+  }, [baixado])
+
   if (!aba) return null
   return (
-    <Button
-      type="button"
-      variant="ghost"
-      size="sm"
-      className="print:hidden"
-      aria-label={`Baixar CSV: ${tabela}`}
-      onClick={() =>
-        baixar(
-          nomeDoCsv({
-            loja: aba.loja,
-            aba: aba.aba,
-            ...(comNomeDaTabela ? { tabela } : {}),
-            periodo: aba.periodo,
-          }),
-          gerarCsv(colunas, linhas),
-        )
-      }
-    >
-      <DownloadIcon data-icon="inline-start" />
-      CSV
-    </Button>
+    <>
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        className="min-h-11 print:hidden md:min-h-0"
+        aria-label={`Baixar CSV: ${tabela}`}
+        onClick={() => {
+          baixar(
+            nomeDoCsv({
+              loja: aba.loja,
+              aba: aba.aba,
+              ...(comNomeDaTabela ? { tabela } : {}),
+              periodo: aba.periodo,
+            }),
+            gerarCsv(colunas, linhas),
+          )
+          setBaixado(true)
+        }}
+      >
+        {baixado ? (
+          <CheckIcon data-icon="inline-start" className="text-(--tom-pronto)" />
+        ) : (
+          <DownloadIcon data-icon="inline-start" />
+        )}
+        {baixado ? "Baixado" : "CSV"}
+      </Button>
+      {baixado && (
+        <span role="status" className="sr-only">
+          CSV baixado: {tabela}
+        </span>
+      )}
+    </>
   )
 }

@@ -6,6 +6,8 @@ import { type ReactNode, useId } from "react"
 import { Progress } from "@/components/ui/progress"
 import { emReais, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
+import { ItemEntrando } from "../movimento/entrada-admin"
+import { Etapa } from "../secoes/sequencia"
 
 const porcentagem = new Intl.NumberFormat("pt-BR", {
   style: "percent",
@@ -28,7 +30,7 @@ export function Secao({
 }) {
   const id = useId()
   return (
-    <section aria-labelledby={id} className="flex flex-col gap-3">
+    <Etapa como="section" aria-labelledby={id} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3">
         <h2 id={id} className="text-[15px] font-semibold tracking-[-0.01em]">
           {titulo}
@@ -41,7 +43,7 @@ export function Secao({
         )}
       </div>
       {children}
-    </section>
+    </Etapa>
   )
 }
 
@@ -67,8 +69,8 @@ export function ListaDeFatias({
   if (itens.length === 0) return <p className="text-sm text-muted-foreground">{vazio}</p>
   return (
     <ul className="barras-do-grafico flex flex-col gap-3">
-      {itens.map((item) => (
-        <li key={item.chave} className="flex flex-col gap-1.5">
+      {itens.map((item, posicao) => (
+        <ItemEntrando como="li" indice={posicao} key={item.chave} className="flex flex-col gap-1.5">
           <div className="flex items-start gap-3 text-sm">
             {/* No celular, a contagem desce para baixo do nome. */}
             <span className="flex min-w-0 flex-1 flex-col gap-x-2 sm:flex-row sm:items-baseline">
@@ -96,7 +98,7 @@ export function ListaDeFatias({
             value={item.barra ?? item.percentual}
             aria-label={`${item.nome}: ${Math.round(item.percentual)}%`}
           />
-        </li>
+        </ItemEntrando>
       ))}
     </ul>
   )

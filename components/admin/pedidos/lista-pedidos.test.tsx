@@ -1,4 +1,4 @@
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { NuqsTestingAdapter, type OnUrlUpdateFunction } from "nuqs/adapters/testing"
 import type { ReactNode } from "react"
@@ -185,5 +185,67 @@ describe("ListaPedidos", () => {
     expect(
       screen.getByRole("button", { name: "Tirar o filtro Motoboy: Sem motoboy" }),
     ).toBeInTheDocument()
+  })
+})
+
+describe("ListaPedidos em lote", () => {
+  function renderizarEmLote(aoAvancarLote: (pedidos: Pedido[]) => void) {
+    return render(
+      <Provedores>
+        <ListaPedidos pedidos={PEDIDOS_DE_TESTE} aoAvancarLote={aoAvancarLote} />
+      </Provedores>,
+    )
+  }
+
+  test("sem a ação de lote, a lista não mostra caixas de seleção", () => {
+    renderizar(PEDIDOS_DE_TESTE)
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument()
+  })
+
+  test("marcar um pedido abre a barra de lote com a contagem", async () => {
+    const usuario = userEvent.setup()
+    renderizarEmLote(vi.fn())
+    await usuario.click(screen.getByRole("checkbox", { name: "Selecionar o pedido #5" }))
+    expect(screen.getByRole("region", { name: "Ações em lote" })).toHaveTextContent(
+      "1 pedido selecionado",
+    )
+  })
+
+  test("avançar o lote manda só os pedidos que têm próxima etapa e limpa a seleção", async () => {
+    const usuario = userEvent.setup()
+    const aoAvancarLote = vi.fn()
+    renderizarEmLote(aoAvancarLote)
+    await usuario.click(screen.getByRole("checkbox", { name: "Selecionar o pedido #5" }))
+    await usuario.click(screen.getByRole("checkbox", { name: "Selecionar o pedido #6" }))
+    expect(screen.getByText("1 sem próxima etapa")).toBeInTheDocument()
+    await usuario.click(screen.getByRole("button", { name: "Avançar 1 pedido" }))
+    expect(aoAvancarLote).toHaveBeenCalledOnce()
+    expect(aoAvancarLote.mock.calls[0][0]).toHaveLength(1)
+    expect(aoAvancarLote.mock.calls[0][0][0]).toMatchObject({ numero: 5 })
+    // A barra sai com uma animação curta: some do documento quando ela termina.
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Ações em lote" })).not.toBeInTheDocument(),
+    )
+  })
+
+  test("a caixa do cabeçalho marca todos os pedidos da página", async () => {
+    const usuario = userEvent.setup()
+    renderizarEmLote(vi.fn())
+    await usuario.click(screen.getByRole("checkbox", { name: "Selecionar todos desta página" }))
+    expect(screen.getByRole("region", { name: "Ações em lote" })).toHaveTextContent(
+      "8 pedidos selecionados",
+    )
+    await usuario.click(screen.getByRole("checkbox", { name: "Selecionar todos desta página" }))
+    // A barra sai com uma animação curta: some do documento quando ela termina.
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Ações em lote" })).not.toBeInTheDocument(),
+    )
+  })
+
+  test("clicar na caixa não abre os detalhes do pedido", async () => {
+    const usuario = userEvent.setup()
+    renderizarEmLote(vi.fn())
+    await usuario.click(screen.getByRole("checkbox", { name: "Selecionar o pedido #5" }))
+    expect(screen.getByRole("checkbox", { name: "Selecionar o pedido #5" })).toBeChecked()
   })
 })

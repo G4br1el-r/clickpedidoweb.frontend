@@ -28,6 +28,11 @@ beforeEach(() => {
 })
 
 describe("ShellAdmin", () => {
+  test("a casca leva a marca do painel, que dá aos esqueletos o brilho do admin", () => {
+    const { container } = renderizar()
+    expect(container.querySelector(".painel-admin")).toBeInTheDocument()
+  })
+
   test("a barra lateral com os módulos fica ao lado do conteúdo da página", async () => {
     renderizar()
     expect(screen.getByRole("heading", { level: 1, name: "Fila de pedidos" })).toBeInTheDocument()

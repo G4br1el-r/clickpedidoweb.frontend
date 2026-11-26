@@ -1,8 +1,9 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, waitFor, within } from "@testing-library/react"
+import { act, render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
+import { MotionGlobalConfig } from "motion/react"
 import { NuqsTestingAdapter, type OnUrlUpdateFunction } from "nuqs/adapters/testing"
 import type { ComponentProps, ReactNode } from "react"
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest"
@@ -68,6 +69,8 @@ function renderizarResumo(mudancas: Partial<ComponentProps<typeof AbaResumo>> = 
 }
 
 beforeEach(async () => {
+  // O relógio de teste volta para 13/11, atrás do real: sem isto, as animações do Motion nunca terminam.
+  MotionGlobalConfig.skipAnimations = true
   vi.useFakeTimers({ toFake: ["Date"] })
   vi.setSystemTime(AGORA_DE_TESTE)
   await clear()
@@ -77,6 +80,7 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  MotionGlobalConfig.skipAnimations = false
   vi.useRealTimers()
 })
 
@@ -112,6 +116,16 @@ describe("abas do painel", () => {
     expect(hoje.getByText("Ticket médio hoje").closest("[data-indicador]")).toHaveTextContent(
       "-25% vs sexta passada",
     )
+  })
+
+  test("o selo Ao vivo só vira radar enquanto os pedidos estão sendo conferidos", () => {
+    const { rerender } = renderizarResumo()
+    expect(screen.queryByRole("status", { name: "Atualizando ao vivo" })).not.toBeInTheDocument()
+    rerender(
+      <AbaResumo resumo={RESUMO} periodo={PERIODO_DE_TESTE} segmento="pizzaria" sincronizando />,
+    )
+    expect(regiao("Hoje").getByRole("status", { name: "Atualizando ao vivo" })).toBeInTheDocument()
+    expect(regiao("Hoje").getByText("Ao vivo, desde a abertura")).toBeInTheDocument()
   })
 
   test("a faixa de atenção lista cada alerta com o caminho para resolver", () => {
@@ -445,5 +459,57 @@ describe("VisaoGeral: imprimir", () => {
     expect(cabecalho).toHaveTextContent("Casa da Pizza · Vendas")
     expect(cabecalho).toHaveTextContent("Período: 07/11/2026 a 13/11/2026")
     expect(cabecalho).toHaveTextContent("Impresso em 13/11/2026 às 20:30")
+  })
+
+  test("enquanto a folha é preparada, o botão mostra o papel saindo e não aceita outro clique", async () => {
+    const usuario = userEvent.setup()
+    render(
+      <Provedores endereco="?aba=vendas">
+        <VisaoGeral />
+      </Provedores>,
+    )
+    await screen.findByRole("region", { name: "Canais de venda" }, { timeout: 8000 })
+    const botao = screen.getByRole("button", { name: "Imprimir" })
+    expect(within(botao).queryByTestId("carregador-papel")).not.toBeInTheDocument()
+
+    await usuario.click(botao)
+
+    expect(within(botao).getByTestId("carregador-papel")).toBeInTheDocument()
+    expect(botao).toHaveAttribute("aria-busy", "true")
+    expect(botao).toBeDisabled()
+
+    act(() => impressao.opcoes?.onAfterPrint?.())
+
+    await waitFor(() =>
+      expect(within(botao).queryByTestId("carregador-papel")).not.toBeInTheDocument(),
+    )
+    expect(botao).toBeEnabled()
+  })
+})
+
+describe("VisaoGeral: toque no celular", () => {
+  test("abas, atalhos de período e ações do cabeçalho têm 44 px de altura no celular", async () => {
+    render(<VisaoGeral />, { wrapper: Provedores })
+    await screen.findByRole("region", { name: "Hoje" }, { timeout: 8000 })
+    for (const aba of screen.getAllByRole("tab", { name: /^(Resumo|Vendas|Financeiro)$/ })) {
+      expect(aba).toHaveClass("max-md:min-h-11")
+    }
+    const periodo = screen.getByRole("radiogroup", { name: "Período" })
+    for (const atalho of within(periodo).getAllByRole("radio")) {
+      expect(atalho).toHaveClass("max-md:min-h-11")
+    }
+    expect(screen.getAllByRole("link", { name: "Pedidos" })[0]).toHaveClass("max-md:min-h-11")
+    expect(screen.getAllByRole("link", { name: "Abrir a fila" })[0]).toHaveClass("max-md:min-h-11")
+  })
+
+  test("o gráfico e os mais vendidos têm as trocas com 44 px no celular", async () => {
+    renderizarResumo()
+    const medida = screen.getByRole("radiogroup", { name: "O que mostrar no gráfico" })
+    for (const opcao of within(medida).getAllByRole("radio")) {
+      expect(opcao).toHaveClass("max-md:min-h-11")
+    }
+    expect(screen.getByRole("tab", { name: "No período" })).toHaveClass("max-md:min-h-11")
+    expect(screen.getByRole("tab", { name: "Hoje" })).toHaveClass("max-md:min-h-11")
+    expect(screen.getByRole("link", { name: "Ver todos" })).toHaveClass("alvo-toque")
   })
 })

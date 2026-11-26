@@ -2,9 +2,9 @@
 
 import NumberFlow from "@number-flow/react"
 import { ArmchairIcon } from "lucide-react"
+import { AnimatePresence, useReducedMotion } from "motion/react"
 import { useState } from "react"
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty"
-import { Skeleton } from "@/components/ui/skeleton"
 import { useAgora } from "@/hooks/use-agora"
 import { useFila } from "@/lib/admin/dados/consultas"
 import { useMesas } from "@/lib/admin/dados/consultas-mesas"
@@ -13,8 +13,11 @@ import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { RadarAoVivo } from "../entrega/atualizando"
+import { BlocoEntrando, ItemEntrando } from "../movimento/entrada-admin"
 import { Traco } from "../traco"
 import { ComandaMesa } from "./comanda-mesa"
+import { EsqueletoMesas, GRADE_DE_MESAS } from "./esqueleto-mesas"
 import { NovaMesa } from "./nova-mesa"
 
 /** "25 min" ou "1 h 05". */
@@ -108,8 +111,9 @@ function CartaoMesa({
 
 /** Mesas do salão: grade de livres e ocupadas e a comanda de cada uma. */
 export function PaginaMesas() {
-  const { data: mesas } = useMesas()
-  const { data: fila } = useFila()
+  const { data: mesas, isFetching: sincronizandoMesas } = useMesas()
+  const { data: fila, isFetching: sincronizandoFila } = useFila()
+  const semMovimento = useReducedMotion() ?? false
   const agora = useAgora(30_000)
   const [abertaId, setAbertaId] = useState<string | null>(null)
 
@@ -139,47 +143,54 @@ export function PaginaMesas() {
                 .join(" · ")
             : "Carregando as mesas…"
         }
-        acoes={<NovaMesa />}
+        acoes={
+          <>
+            {/* Ao vivo: as mesas e as comandas conferem com o servidor de tempos em tempos. */}
+            <RadarAoVivo
+              ativo={Boolean(mesas) && (sincronizandoMesas || sincronizandoFila)}
+              rotulo="Sincronizando as mesas"
+            />
+            <NovaMesa />
+          </>
+        }
       />
 
       {!mesas ? (
-        <div
-          role="status"
-          aria-label="Carregando as mesas"
-          className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-        >
-          {Array.from({ length: 10 }, (_, indice) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: esqueleto fixo
-            <Skeleton key={indice} className="h-32 rounded-xl" />
-          ))}
-        </div>
+        <EsqueletoMesas />
       ) : mesas.length === 0 ? (
-        <Empty className="border border-dashed">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <ArmchairIcon />
-            </EmptyMedia>
-            <EmptyTitle>Nenhuma mesa cadastrada</EmptyTitle>
-            <EmptyDescription>
-              Crie as mesas do salão em Nova mesa para o garçom lançar os pedidos.
-            </EmptyDescription>
-          </EmptyHeader>
-        </Empty>
+        <BlocoEntrando>
+          <Empty className="border border-dashed">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <ArmchairIcon />
+              </EmptyMedia>
+              <EmptyTitle>Nenhuma mesa cadastrada</EmptyTitle>
+              <EmptyDescription>
+                Crie as mesas do salão em Nova mesa para o garçom lançar os pedidos.
+              </EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        </BlocoEntrando>
       ) : (
-        <ul
-          aria-label="Mesas"
-          className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
-        >
-          {mesas.map((mesa) => (
-            <li key={mesa.id}>
-              <CartaoMesa
-                mesa={mesa}
-                comanda={comandaDa(mesa)}
-                agora={agora}
-                aoAbrir={() => setAbertaId(mesa.id)}
-              />
-            </li>
-          ))}
+        <ul aria-label="Mesas" className={GRADE_DE_MESAS}>
+          {/* As mesas entram em sequência na primeira vez; mesa criada ou excluída entra e sai. */}
+          <AnimatePresence>
+            {mesas.map((mesa, indice) => (
+              <ItemEntrando
+                key={mesa.id}
+                como="li"
+                indice={indice}
+                layout={semMovimento ? false : "position"}
+              >
+                <CartaoMesa
+                  mesa={mesa}
+                  comanda={comandaDa(mesa)}
+                  agora={agora}
+                  aoAbrir={() => setAbertaId(mesa.id)}
+                />
+              </ItemEntrando>
+            ))}
+          </AnimatePresence>
         </ul>
       )}
 

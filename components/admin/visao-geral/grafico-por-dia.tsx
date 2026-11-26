@@ -12,6 +12,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 import type { DiaDaSerie } from "@/lib/admin/regras/dashboard/resumo"
+import { animacaoDoGrafico } from "@/lib/admin/regras/grafico-animacao"
 import { emReais, emReaisCurto } from "@/lib/formato"
 
 export type MedidaDoGrafico = "faturamento" | "pedidos"
@@ -71,7 +72,7 @@ export default function GraficoPorDia({
           fill={`var(--color-${medida})`}
           radius={[4, 4, 0, 0]}
           maxBarSize={24}
-          isAnimationActive={!semMovimento}
+          {...animacaoDoGrafico(semMovimento)}
           className="cursor-pointer"
           onClick={(dia: { payload?: DiaDaSerie }) => {
             if (dia.payload)

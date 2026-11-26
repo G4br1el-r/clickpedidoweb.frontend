@@ -1,10 +1,12 @@
 "use client"
 
 import { PlusIcon, SearchIcon, SearchXIcon, TagsIcon } from "lucide-react"
+import { AnimatePresence, useIsPresent } from "motion/react"
 import Link from "next/link"
 import { parseAsString, parseAsStringLiteral, useQueryState, useQueryStates } from "nuqs"
 import { useMemo } from "react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Empty,
   EmptyContent,
@@ -22,16 +24,23 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useCategorias, useProdutos } from "@/lib/admin/dados/consultas-cardapio"
+import type { Categoria, Produto } from "@/lib/admin/dados/tipos"
 import { contarSituacoes, filtrarProdutos, type Situacao } from "@/lib/admin/regras/cardapio"
+import { estadoDaMarcaGeral, marcadosVisiveis } from "@/lib/admin/regras/lote-cardapio"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temRecurso, tituloDoModulo } from "@/lib/admin/segmentos-painel"
 import { plural } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { FaixaRolavel } from "../faixa-rolavel"
+import { BlocoEntrando } from "../movimento/entrada-admin"
+import { AtualizandoLista } from "./atualizando-lista"
+import { BarraDeLoteCardapio } from "./barra-de-lote-cardapio"
+import { EsqueletoCardapio } from "./esqueletos-cardapio"
 import { FormularioProduto } from "./formulario-produto"
 import { LinhaProduto } from "./linha-produto"
+import { useLoteCardapio } from "./use-lote-cardapio"
 
 const SITUACOES: { id: Situacao; rotulo: string }[] = [
   { id: "todos", rotulo: "Todos" },
@@ -53,37 +62,65 @@ export function useProdutoAberto() {
   return useQueryState("produto", parseAsString.withOptions({ history: "push" }))
 }
 
-/** Esqueleto no formato da lista: cabeçalho da categoria e linhas finas. */
-function EsqueletoCardapio() {
+/**
+ * Uma categoria da lista. Direta no `AnimatePresence`: quando o filtro esvazia a categoria,
+ * ela some com um fade e, nesse meio tempo, já não conta para o leitor de tela.
+ */
+function SecaoDaCategoria({
+  categoria,
+  produtos,
+  mostrarBalcao,
+  marcados,
+  aoMarcar,
+  aoEditar,
+}: {
+  categoria: Categoria
+  produtos: Produto[]
+  mostrarBalcao: boolean
+  marcados: ReadonlySet<string>
+  aoMarcar: (id: string) => void
+  aoEditar: (id: string) => void
+}) {
+  const presente = useIsPresent()
   return (
-    <div role="status" aria-label="Carregando o cardápio" className="flex flex-col gap-8">
-      {[5, 3].map((linhas) => (
-        <div key={linhas} className="flex flex-col">
-          <Skeleton className="mb-3 h-5 w-40" />
-          <div className="flex flex-col divide-y divide-border/70 border-y border-border/70">
-            {Array.from({ length: linhas }, (_, linha) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: esqueleto fixo, sem reordenar.
-              <div key={linha} className="flex items-center gap-3 py-2.5">
-                <Skeleton className="size-10 rounded-md" />
-                <div className="flex flex-1 flex-col gap-1.5">
-                  <Skeleton className="h-4 w-48" />
-                  <Skeleton className="h-3 w-72 max-w-full" />
-                </div>
-                <Skeleton className="hidden h-8 w-28 sm:block" />
-                <Skeleton className="hidden h-5 w-44 md:block" />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-    </div>
+    // Listas longas (a adega tem 255 produtos): o navegador só desenha o que aparece.
+    <BlocoEntrando
+      como="section"
+      aria-label={`${categoria.nome}, ${plural(produtos.length, "produto", "produtos")}`}
+      aria-hidden={presente ? undefined : true}
+      className="flex flex-col [contain-intrinsic-size:auto_480px] [content-visibility:auto]"
+    >
+      <div className="flex items-baseline gap-2.5 border-b border-border/70 pb-2.5">
+        <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{categoria.nome}</h2>
+        <span className="text-[13px] text-muted-foreground tabular-nums">{produtos.length}</span>
+        {!categoria.ativa && (
+          <span className="text-[13px] text-muted-foreground">· Categoria oculta no cardápio</span>
+        )}
+      </div>
+      {/* A linha decide o layout pelo espaço da lista, não pela janela: com a lateral aberta, o tablet tem pouco espaço. */}
+      <ul className="@container flex flex-col divide-y divide-border/70">
+        <AnimatePresence>
+          {produtos.map((produto, indice) => (
+            <LinhaProduto
+              key={produto.id}
+              produto={produto}
+              indice={indice}
+              mostrarBalcao={mostrarBalcao}
+              marcado={marcados.has(produto.id)}
+              aoMarcar={() => aoMarcar(produto.id)}
+              aoEditar={() => aoEditar(produto.id)}
+            />
+          ))}
+        </AnimatePresence>
+      </ul>
+    </BlocoEntrando>
   )
 }
 
 /** Cardápio da loja: produtos por categoria, com busca, filtros e ações na própria linha. */
 export function PaginaCardapio() {
   const segmento = useSegmentoAtual((estado) => estado.segmento)
-  const { data: produtos } = useProdutos()
+  const { data: produtos, isFetching } = useProdutos()
   const { data: categorias } = useCategorias()
   const [filtros, setFiltros] = useQueryStates(PARAMETROS)
   const [, abrirProduto] = useProdutoAberto()
@@ -102,12 +139,18 @@ export function PaginaCardapio() {
   )
   const contagem = useMemo(() => contarSituacoes(produtos ?? []), [produtos])
   const limpar = () => setFiltros({ busca: null, categoria: null, situacao: null })
+  const lote = useLoteCardapio()
+  const marcadosNaLista = useMemo(
+    () => marcadosVisiveis(lote.marcados, filtrados),
+    [lote.marcados, filtrados],
+  )
+  const idsVisiveis = useMemo(() => filtrados.map((produto) => produto.id), [filtrados])
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
       <CabecalhoPagina
         titulo={tituloDoModulo("cardapio", segmento)}
-        resumo="Edite o preço direto na linha. Enter salva, Esc desfaz."
+        resumo="Edite o preço direto na linha: Enter salva, Esc desfaz. Marque vários produtos para mudar de uma vez."
         acoes={
           <>
             <Button asChild variant="outline" size="sm" className="max-md:h-11">
@@ -163,7 +206,7 @@ export function PaginaCardapio() {
           </Select>
         </div>
         {/* No celular o controle rola de lado dentro da própria faixa; a página não. */}
-        <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0">
+        <FaixaRolavel className="-mx-4 px-4 md:mx-0 md:px-0">
           <ToggleGroup
             type="single"
             variant="segmento"
@@ -183,67 +226,81 @@ export function PaginaCardapio() {
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-        </div>
+        </FaixaRolavel>
       </div>
 
       {!produtos || !categorias ? (
         <EsqueletoCardapio />
       ) : filtrados.length === 0 ? (
-        <Empty className="border-t border-border/70">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <SearchXIcon />
-            </EmptyMedia>
-            <EmptyTitle>Nenhum produto com esses filtros</EmptyTitle>
-            <EmptyDescription>
-              A busca olha o nome e a descrição. Mude a busca, a categoria ou a situação.
-            </EmptyDescription>
-          </EmptyHeader>
-          <EmptyContent>
-            <Button type="button" size="sm" onClick={limpar}>
-              Limpar filtros
-            </Button>
-          </EmptyContent>
-        </Empty>
+        <BlocoEntrando>
+          <Empty className="border-t border-border/70">
+            <EmptyHeader>
+              <EmptyMedia variant="icon">
+                <SearchXIcon />
+              </EmptyMedia>
+              <EmptyTitle>Nenhum produto com esses filtros</EmptyTitle>
+              <EmptyDescription>
+                A busca olha o nome e a descrição. Mude a busca, a categoria ou a situação.
+              </EmptyDescription>
+            </EmptyHeader>
+            <EmptyContent>
+              <Button type="button" size="sm" onClick={limpar}>
+                Limpar filtros
+              </Button>
+            </EmptyContent>
+          </Empty>
+        </BlocoEntrando>
       ) : (
-        <div className="flex flex-col gap-8">
-          {categorias.map((categoria) => {
-            const daCategoria = filtrados.filter((produto) => produto.categoriaId === categoria.id)
-            if (daCategoria.length === 0) return null
-            return (
-              // Listas longas (a adega tem 255 produtos): o navegador só desenha o que aparece.
-              <section
-                key={categoria.id}
-                aria-label={`${categoria.nome}, ${plural(daCategoria.length, "produto", "produtos")}`}
-                className="flex flex-col [contain-intrinsic-size:auto_480px] [content-visibility:auto]"
-              >
-                <div className="flex items-baseline gap-2.5 border-b border-border/70 pb-2.5">
-                  <h2 className="text-[15px] font-semibold tracking-[-0.01em]">{categoria.nome}</h2>
-                  <span className="text-[13px] text-muted-foreground tabular-nums">
-                    {daCategoria.length}
-                  </span>
-                  {!categoria.ativa && (
-                    <span className="text-[13px] text-muted-foreground">
-                      · Categoria oculta no cardápio
-                    </span>
-                  )}
-                </div>
-                {/* A linha decide o layout pelo espaço da lista, não pela janela: com a lateral aberta, o tablet tem pouco espaço. */}
-                <ul className="@container flex flex-col divide-y divide-border/70">
-                  {daCategoria.map((produto) => (
-                    <LinhaProduto
-                      key={produto.id}
-                      produto={produto}
-                      mostrarBalcao={mostrarBalcao}
-                      aoEditar={() => abrirProduto(produto.id)}
-                    />
-                  ))}
-                </ul>
-              </section>
-            )
-          })}
+        <div className="relative flex flex-col gap-4">
+          <AtualizandoLista atualizando={isFetching} rotulo="Atualizando o cardápio" />
+          <div className="flex items-center justify-between gap-3">
+            <label
+              htmlFor="marcar-todos-cardapio"
+              className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm md:min-h-8"
+            >
+              <Checkbox
+                id="marcar-todos-cardapio"
+                aria-label="Marcar todos os visíveis"
+                checked={estadoDaMarcaGeral(lote.marcados, idsVisiveis)}
+                onCheckedChange={(marcar) => lote.marcarTodos(idsVisiveis, marcar === true)}
+                className="max-md:size-5"
+              />
+              Marcar todos os visíveis
+            </label>
+            <span className="text-[13px] text-muted-foreground tabular-nums">
+              {plural(filtrados.length, "produto", "produtos")}
+            </span>
+          </div>
+          <div className="flex flex-col gap-8">
+            <AnimatePresence>
+              {categorias.map((categoria) => {
+                const daCategoria = filtrados.filter(
+                  (produto) => produto.categoriaId === categoria.id,
+                )
+                if (daCategoria.length === 0) return null
+                return (
+                  <SecaoDaCategoria
+                    key={categoria.id}
+                    categoria={categoria}
+                    produtos={daCategoria}
+                    mostrarBalcao={mostrarBalcao}
+                    marcados={lote.marcados}
+                    aoMarcar={lote.marcar}
+                    aoEditar={abrirProduto}
+                  />
+                )
+              })}
+            </AnimatePresence>
+          </div>
         </div>
       )}
+
+      <BarraDeLoteCardapio
+        selecionados={marcadosNaLista}
+        aoAplicar={lote.aplicar}
+        aoLimpar={lote.limpar}
+        aplicando={lote.aplicando}
+      />
 
       <FormularioProduto />
     </div>

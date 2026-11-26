@@ -1,46 +1,61 @@
 "use client"
 
-import { Skeleton } from "@/components/ui/skeleton"
-import { useMotoboys, usePedidos } from "@/lib/admin/dados/consultas"
+import { toast } from "sonner"
+import { useAvancarPedido, useMotoboys, usePedidos } from "@/lib/admin/dados/consultas"
+import type { Pedido } from "@/lib/admin/dados/tipos"
+import { plural } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { EsqueletoLista } from "../esqueletos"
 import { FiltroPeriodo, usePeriodo } from "../visao-geral/filtro-periodo"
 import { DetalhesPedido } from "./detalhes-pedido"
 import { ListaPedidos } from "./lista-pedidos"
 
-function EsqueletoLista() {
-  return (
-    <div role="status" aria-label="Carregando pedidos" className="flex flex-col gap-3">
-      <div className="flex gap-2">
-        <Skeleton className="h-8 w-72" />
-        <Skeleton className="h-8 w-24" />
-        <Skeleton className="h-8 w-24" />
-      </div>
-      <Skeleton className="h-4 w-56" />
-      <div className="flex flex-col border-t border-border/70">
-        {["a", "b", "c", "d", "e", "f", "g", "h"].map((linha) => (
-          <Skeleton key={linha} className="my-3 h-8 w-full rounded-md" />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-/** Pedidos do período, com busca, filtros e os detalhes abrindo por cima da lista. */
+/** Pedidos do período, com busca, filtros, avanço em lote e os detalhes abrindo por cima da lista. */
 export function PaginaPedidos() {
   const { periodo } = usePeriodo()
   const { data: pedidos } = usePedidos(periodo ? { de: periodo.de, ate: periodo.ate } : undefined, {
     ativo: Boolean(periodo),
   })
   const { data: motoboys } = useMotoboys()
+  const avancar = useAvancarPedido()
+
+  /** Um de cada vez, na ordem da lista: se um falhar, os outros seguem e o aviso conta quantos. */
+  const avancarLote = async (lote: Pedido[]) => {
+    let avancados = 0
+    let falhas = 0
+    for (const pedido of lote) {
+      try {
+        await avancar.mutateAsync({ id: pedido.id, de: pedido.status })
+        avancados += 1
+      } catch {
+        falhas += 1
+      }
+    }
+    if (avancados > 0) toast.success(`${plural(avancados, "pedido avançou", "pedidos avançaram")}.`)
+    if (falhas > 0) {
+      toast.error(
+        `${plural(falhas, "pedido não avançou", "pedidos não avançaram")}. Confira e tente de novo.`,
+      )
+    }
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
       <CabecalhoPagina
         titulo="Pedidos"
-        resumo="Toque num pedido para ver os detalhes, avançar ou chamar o motoboy."
+        resumo="Toque num pedido para ver os detalhes, avançar ou chamar o motoboy. Marque vários para avançar de uma vez."
       />
       <FiltroPeriodo />
-      {pedidos ? <ListaPedidos pedidos={pedidos} motoboys={motoboys} /> : <EsqueletoLista />}
+      {pedidos ? (
+        <ListaPedidos
+          pedidos={pedidos}
+          motoboys={motoboys}
+          aoAvancarLote={avancarLote}
+          avancandoLote={avancar.isPending}
+        />
+      ) : (
+        <EsqueletoLista rotulo="Carregando pedidos" linhas={8} />
+      )}
       <DetalhesPedido />
     </div>
   )

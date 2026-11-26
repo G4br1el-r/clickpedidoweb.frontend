@@ -91,11 +91,10 @@ describe("PaginaEstoque", { timeout: 15_000 }, () => {
     expect(within(situacao).getByRole("radio", { name: "OK 103" })).toBeInTheDocument()
     expect(within(situacao).getByRole("radio", { name: "Zerado 5" })).toBeInTheDocument()
     await usuario.click(within(situacao).getByRole("radio", { name: "Baixo 12" }))
-    const linhas = within(screen.getByRole("table", { name: "Estoque" }))
-      .getAllByRole("row")
-      .slice(1)
-    expect(linhas).toHaveLength(12)
-    for (const item of linhas) expect(item).toHaveTextContent("Baixo")
+    // Os produtos filtrados saem com um fade curto: a tabela fecha em 12 linhas logo depois.
+    const tabela = within(screen.getByRole("table", { name: "Estoque" }))
+    await waitFor(() => expect(tabela.getAllByRole("row").slice(1)).toHaveLength(12))
+    for (const item of tabela.getAllByRole("row").slice(1)) expect(item).toHaveTextContent("Baixo")
   })
 
   test("entrada com custo atualiza o saldo", async () => {
@@ -182,6 +181,82 @@ describe("PaginaEstoque", { timeout: 15_000 }, () => {
     await usuario.click(outra.getByRole("button", { name: "Salvar" }))
     await waitFor(() =>
       expect(screen.queryByRole("row", { name: produto.nome })).not.toBeInTheDocument(),
+    )
+  })
+})
+
+describe("PaginaEstoque: carregamento e lote", { timeout: 15_000 }, () => {
+  test("enquanto carrega, mostra o esqueleto com a forma da página", async () => {
+    render(
+      <Provedores>
+        <PaginaEstoque />
+      </Provedores>,
+    )
+    const aviso = screen.getByRole("status", { name: "Carregando o estoque" })
+    expect(aviso).toHaveAttribute("aria-busy", "true")
+    expect(within(aviso).getAllByTestId("esqueleto-indicador")).toHaveLength(4)
+    expect(within(aviso).getAllByTestId("esqueleto-linha").length).toBeGreaterThan(0)
+    await screen.findByRole("table", { name: "Estoque" }, { timeout: 8000 })
+    expect(screen.queryByRole("status", { name: "Carregando o estoque" })).not.toBeInTheDocument()
+  })
+
+  test("marcar produtos mostra a barra de lote, e limpar a esconde", async () => {
+    const usuario = await abrir()
+    expect(screen.queryByRole("region", { name: "Ações em lote" })).not.toBeInTheDocument()
+    const caixas = screen.getAllByRole("checkbox", { name: /^Selecionar o produto / })
+    await usuario.click(caixas[0])
+    await usuario.click(caixas[1])
+    const barra = await screen.findByRole("region", { name: "Ações em lote" })
+    expect(barra).toHaveTextContent("2 produtos selecionados")
+    await usuario.click(within(barra).getByRole("button", { name: "Limpar seleção" }))
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Ações em lote" })).not.toBeInTheDocument(),
+    )
+  })
+
+  test("o marcador do cabeçalho seleciona todos os produtos da lista filtrada", async () => {
+    const usuario = await abrir()
+    await usuario.click(
+      within(screen.getByRole("radiogroup", { name: "Situação" })).getByRole("radio", {
+        name: "Baixo 12",
+      }),
+    )
+    await waitFor(() => expect(screen.getAllByRole("row")).toHaveLength(13))
+    await usuario.click(
+      screen.getByRole("checkbox", { name: "Selecionar todos os produtos da lista" }),
+    )
+    expect(await screen.findByRole("region", { name: "Ações em lote" })).toHaveTextContent(
+      "12 produtos selecionados",
+    )
+  })
+
+  test("define o mesmo mínimo em vários produtos de uma vez", async () => {
+    const usuario = await abrir()
+    const caixas = screen.getAllByRole("checkbox", { name: /^Selecionar o produto / })
+    const nomes = caixas
+      .slice(0, 2)
+      .map((caixa) => (caixa.getAttribute("aria-label") ?? "").replace("Selecionar o produto ", ""))
+    await usuario.click(caixas[0])
+    await usuario.click(caixas[1])
+    const barra = await screen.findByRole("region", { name: "Ações em lote" })
+    await usuario.click(within(barra).getByRole("button", { name: "Definir mínimo" }))
+
+    const janela = within(
+      await screen.findByRole("dialog", { name: "Definir mínimo de 2 produtos" }),
+    )
+    const aplicar = janela.getByRole("button", { name: "Aplicar mínimo" })
+    expect(aplicar).toBeDisabled()
+    await usuario.type(janela.getByRole("spinbutton", { name: "Estoque mínimo" }), "37")
+    expect(janela.getByText("Muda o mínimo de 2 produtos.")).toBeInTheDocument()
+    await usuario.click(aplicar)
+
+    expect(await screen.findByText("Mínimo de 2 produtos atualizado.")).toBeInTheDocument()
+    const produtos = await api().produtos.listar()
+    for (const nome of nomes) {
+      expect(produtos.find((produto) => produto.nome === nome)?.estoque?.minimo).toBe(37)
+    }
+    await waitFor(() =>
+      expect(screen.queryByRole("region", { name: "Ações em lote" })).not.toBeInTheDocument(),
     )
   })
 })

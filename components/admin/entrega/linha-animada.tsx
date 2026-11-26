@@ -2,56 +2,44 @@
 
 import { motion, useReducedMotion } from "motion/react"
 import type { ComponentProps } from "react"
-import { Skeleton } from "@/components/ui/skeleton"
 import { TableRow } from "@/components/ui/table"
+import { CURVA_SAIDA, DURACAO, semRelogioDoNavegador, variantesDoItem } from "@/lib/admin/movimento"
+
+// Mantido aqui para quem já importava deste arquivo; a definição é a de lib/admin/movimento.
+export { semRelogioDoNavegador }
+
+import { cn } from "@/lib/utils"
 
 const MotionRow = motion.create(TableRow)
 
 /** Alvo de toque de 44 px no celular, sem aumentar o botão desenhado. */
 export const ALVO_DE_TOQUE = "relative after:absolute after:-inset-2 sm:after:hidden"
-const CURVA = [0.23, 1, 0.32, 1] as const
+/** O mesmo para a caixa de marcar (16 px): o toque de 44 px cobre só o espaço vazio em volta. */
+export const ALVO_DA_CAIXA = "relative after:absolute after:-inset-3.5 sm:after:hidden"
+/** E para a chave liga/desliga, que é larga e baixa. */
+export const ALVO_DA_CHAVE =
+  "relative after:absolute after:-inset-x-1.5 after:-inset-y-3.5 sm:after:hidden"
 
 /**
- * Linha de cadastro que entra e sai da lista (dentro de um `AnimatePresence`): entra subindo
- * 4 px em 200 ms e sai em 150 ms. Com movimento reduzido, só a opacidade muda.
+ * Linha de cadastro que entra e sai da lista (dentro de um `AnimatePresence`): as mesmas
+ * variantes de item das outras listas do painel (sobe 6 px e aparece, sai só com o fade) e,
+ * ao redor, as linhas vizinhas deslizam para ocupar o lugar. Com movimento reduzido, só a
+ * opacidade muda e nada desliza.
  */
-export function LinhaAnimada(props: ComponentProps<typeof TableRow>) {
-  const semMovimento = useReducedMotion()
+export function LinhaAnimada({ className, ...props }: ComponentProps<typeof TableRow>) {
+  const reduzido = useReducedMotion() ?? false
   return (
     <MotionRow
-      layout={semMovimento ? false : "position"}
-      initial={{ opacity: 0, y: semMovimento ? 0 : 4 }}
-      animate={{ opacity: 1, y: 0, transition: { duration: 0.2, ease: CURVA } }}
-      exit={{ opacity: 0, transition: { duration: 0.15, ease: CURVA } }}
-      transition={{ layout: { duration: 0.25, ease: CURVA } }}
+      className={cn("entra-item", className)}
+      layout={reduzido ? false : "position"}
+      variants={variantesDoItem(reduzido)}
+      custom={0}
+      initial="entrar"
+      animate="parado"
+      exit="sair"
+      transition={{ layout: { duration: DURACAO.entrada, ease: CURVA_SAIDA } }}
       onUpdate={semRelogioDoNavegador}
       {...(props as ComponentProps<typeof MotionRow>)}
     />
   )
 }
-
-/** Esqueleto com o formato da lista: o cabeçalho e algumas linhas entre fios. */
-export function EsqueletoLinhas({ rotulo, linhas = 5 }: { rotulo: string; linhas?: number }) {
-  return (
-    <div role="status" aria-label={rotulo} className="flex flex-col">
-      <div className="h-10 border-b border-border/70" />
-      {Array.from({ length: linhas }, (_, indice) => (
-        <div
-          // biome-ignore lint/suspicious/noArrayIndexKey: linhas fixas do esqueleto.
-          key={indice}
-          className="flex h-14 items-center gap-4 border-b border-border/70 px-2"
-        >
-          <Skeleton className="h-4 w-40" />
-          <Skeleton className="ml-auto h-4 w-12" />
-          <Skeleton className="h-5 w-9 rounded-full" />
-        </div>
-      ))}
-    </div>
-  )
-}
-
-/**
- * Passado como `onUpdate` de um `motion.*`, tira a animação do WAAPI. A saída das barras
- * flutuantes começava no futuro quando o relógio da página está parado e não terminava.
- */
-export function semRelogioDoNavegador() {}

@@ -1,7 +1,7 @@
 "use client"
 
 import { CheckIcon, CopyIcon, MoreHorizontalIcon, PencilIcon, Trash2Icon } from "lucide-react"
-import { AnimatePresence, motion, useReducedMotion } from "motion/react"
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react"
 import Image from "next/image"
 import { useEffect, useRef, useState } from "react"
 import { NumericFormat } from "react-number-format"
@@ -17,6 +17,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -35,10 +36,12 @@ import {
   useExcluirProduto,
 } from "@/lib/admin/dados/consultas-cardapio"
 import type { Produto } from "@/lib/admin/dados/tipos"
+import { semRelogioDoNavegador } from "@/lib/admin/movimento"
 import { percentualOferta } from "@/lib/admin/regras/cardapio"
 import { emReais, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { SeloLista, SeloTarja } from "../farmacia/selos"
+import { ItemEntrando } from "../movimento/entrada-admin"
 import { Traco } from "../traco"
 
 const TIPO_MEDICAMENTO = { referencia: "Referência", generico: "Genérico", similar: "Similar" }
@@ -93,6 +96,7 @@ function PrecoNaLinha({ produto }: { produto: Produto }) {
               className="inline-flex items-center gap-1"
               initial={semMovimento ? { opacity: 0 } : { opacity: 0, x: 4 }}
               animate={{ opacity: 1, x: 0 }}
+              onUpdate={semRelogioDoNavegador}
               exit={{ opacity: 0, transition: { duration: 0.15 } }}
               transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
             >
@@ -187,13 +191,24 @@ function Chave({
 /** Uma linha do cardápio: foto, nome e situação, preço na linha, chaves e ações. */
 export function LinhaProduto({
   produto,
+  indice,
   mostrarBalcao,
+  marcado,
+  aoMarcar,
   aoEditar,
 }: {
   produto: Produto
+  /** Posição na lista da categoria: a entrada em sequência para no oitavo. */
+  indice: number
   mostrarBalcao: boolean
+  /** Marcado para a ação em lote. */
+  marcado: boolean
+  aoMarcar: () => void
   aoEditar: () => void
 }) {
+  // Na saída (produto excluído ou fora do filtro) a linha ainda some por 160 ms: já não conta
+  // para o leitor de tela nem para o toque.
+  const presente = useIsPresent()
   const alternar = useAlternarProduto()
   const copiar = useCopiarProduto()
   const excluir = useExcluirProduto()
@@ -209,9 +224,16 @@ export function LinhaProduto({
       .join(" · ") || "Sem descrição"
 
   return (
-    <li
+    <ItemEntrando
+      como="li"
+      indice={indice}
       aria-label={produto.nome}
-      className="flex flex-wrap items-center gap-x-5 gap-y-1 py-2.5 transition-colors duration-150 hover:bg-foreground/[0.02] @3xl:-mx-2 @3xl:flex-nowrap @3xl:px-2"
+      aria-hidden={presente ? undefined : true}
+      className={cn(
+        "flex flex-wrap items-center gap-x-5 gap-y-1 py-2.5 transition-colors duration-150 hover:bg-foreground/[0.02] @3xl:-mx-2 @3xl:flex-nowrap @3xl:px-2",
+        marcado && "bg-foreground/[0.035] hover:bg-foreground/[0.045]",
+        !presente && "pointer-events-none",
+      )}
     >
       <div
         className={cn(
@@ -219,6 +241,19 @@ export function LinhaProduto({
           !produto.ativo && "opacity-55",
         )}
       >
+        {/* O rótulo inteiro é o alvo: 44 px no celular, 32 px no computador. */}
+        <label
+          htmlFor={`${produto.id}-marca`}
+          className="-ml-3 flex size-11 shrink-0 cursor-pointer items-center justify-center md:ml-0 md:size-8"
+        >
+          <Checkbox
+            id={`${produto.id}-marca`}
+            aria-label={`Selecionar ${produto.nome}`}
+            checked={marcado}
+            onCheckedChange={aoMarcar}
+            className="max-md:size-5"
+          />
+        </label>
         <Foto produto={produto} />
         <div className="flex min-w-0 flex-col gap-0.5">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2.5 gap-y-0.5">
@@ -253,7 +288,7 @@ export function LinhaProduto({
         </div>
       </div>
 
-      <div className="flex flex-col items-end gap-0.5 @max-3xl:items-start @max-3xl:pl-[52px]">
+      <div className="flex flex-col items-end gap-0.5 @max-3xl:items-start">
         <PrecoNaLinha produto={produto} />
         {mostrarBalcao && produto.precoBalcao ? (
           <span className="text-xs text-muted-foreground tabular-nums">
@@ -262,22 +297,7 @@ export function LinhaProduto({
         ) : null}
       </div>
 
-      <div className="flex items-center gap-4">
-        <Chave
-          id={`${produto.id}-disponivel`}
-          rotulo="Disponível"
-          ligada={produto.disponivel}
-          aoMudar={() => alternar.mutate({ id: produto.id, campo: "disponivel" })}
-        />
-        <Chave
-          id={`${produto.id}-ativo`}
-          rotulo="Visível"
-          ligada={produto.ativo}
-          aoMudar={() => alternar.mutate({ id: produto.id, campo: "ativo" })}
-        />
-      </div>
-
-      <div className="ml-auto flex items-center @3xl:ml-0">
+      <div className="ml-auto flex items-center @3xl:order-2 @3xl:ml-0">
         <Button
           type="button"
           variant="ghost"
@@ -322,6 +342,21 @@ export function LinhaProduto({
         </DropdownMenu>
       </div>
 
+      <div className="flex basis-full items-center gap-4 @3xl:basis-auto">
+        <Chave
+          id={`${produto.id}-disponivel`}
+          rotulo="Disponível"
+          ligada={produto.disponivel}
+          aoMudar={() => alternar.mutate({ id: produto.id, campo: "disponivel" })}
+        />
+        <Chave
+          id={`${produto.id}-ativo`}
+          rotulo="Visível"
+          ligada={produto.ativo}
+          aoMudar={() => alternar.mutate({ id: produto.id, campo: "ativo" })}
+        />
+      </div>
+
       <AlertDialog open={confirmando} onOpenChange={setConfirmando}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -348,6 +383,6 @@ export function LinhaProduto({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </li>
+    </ItemEntrando>
   )
 }

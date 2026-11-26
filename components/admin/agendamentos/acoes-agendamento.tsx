@@ -3,7 +3,6 @@
 import { format } from "date-fns"
 import { CalendarClockIcon, PrinterIcon } from "lucide-react"
 import { useRef, useState } from "react"
-import { useReactToPrint } from "react-to-print"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,6 +19,9 @@ import { useRemarcar } from "@/lib/admin/dados/consultas-agenda"
 import type { Pedido } from "@/lib/admin/dados/tipos"
 import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import { emReais } from "@/lib/formato"
+import { useImpressao } from "../mesas/use-impressao"
+import { BotaoCarregando } from "../movimento/botao-carregando"
+import { Carregador } from "../movimento/carregador"
 import { EscolhaHorario, textoDoHorario, textoDuracao } from "./escolha-horario"
 
 function Remarcar({ pedido, aoFechar }: { pedido: Pedido; aoFechar: () => void }) {
@@ -51,9 +53,11 @@ function Remarcar({ pedido, aoFechar }: { pedido: Pedido; aoFechar: () => void }
           />
         )}
         <DialogFooter>
-          <Button
+          <BotaoCarregando
             type="button"
-            disabled={!inicio || remarcar.isPending}
+            disabled={!inicio}
+            carregando={remarcar.isPending}
+            rotuloCarregando="Remarcando"
             onClick={() =>
               inicio &&
               remarcar.mutate(
@@ -72,7 +76,7 @@ function Remarcar({ pedido, aoFechar }: { pedido: Pedido; aoFechar: () => void }
             }
           >
             Remarcar
-          </Button>
+          </BotaoCarregando>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -124,23 +128,37 @@ export function AcoesAgendamento({ pedido }: { pedido: Pedido }) {
   const { data: loja } = useLoja()
   const [remarcando, setRemarcando] = useState(false)
   const area = useRef<HTMLDivElement>(null)
-  const imprimir = useReactToPrint({
-    contentRef: area,
-    documentTitle: `Agendamento ${pedido.numero}`,
-    pageStyle:
-      "@page { size: 80mm auto; margin: 4mm } body { font-family: monospace; font-size: 12px }",
+  const { imprimir, imprimindo } = useImpressao({
+    conteudo: area,
+    titulo: `Agendamento ${pedido.numero}`,
   })
 
   return (
     <div className="flex flex-wrap gap-2">
       {pedido.status === "recebido" && (
-        <Button type="button" variant="outline" size="sm" onClick={() => setRemarcando(true)}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="max-sm:h-11"
+          onClick={() => setRemarcando(true)}
+        >
           <CalendarClockIcon data-icon="inline-start" />
           Remarcar
         </Button>
       )}
-      <Button type="button" variant="outline" size="sm" onClick={() => imprimir()}>
-        <PrinterIcon data-icon="inline-start" />
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className="max-sm:h-11"
+        onClick={() => imprimir()}
+      >
+        {imprimindo ? (
+          <Carregador variante="papel" rotulo="Imprimindo o comprovante" className="mr-1" />
+        ) : (
+          <PrinterIcon data-icon="inline-start" />
+        )}
         Imprimir comprovante
       </Button>
       <Comprovante pedido={pedido} loja={loja?.nome} ref={area} />

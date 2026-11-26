@@ -662,7 +662,17 @@ O painel só se mexe para mostrar que algo mudou de estado.
 - **Realce que esmaece:** o pedido que chegou ganha um véu laranja a 10% que some sozinho em 2,4 s. É a única transição longa, e é uma saída.
 - **Troca de dia na agenda:** desliza 12 px na direção do dia em 200 ms.
 - **Pro:** ao liberar, o contorno de ouro dá uma volta (1,6 s), um brilho varre a opção uma vez (1,3 s) e o selo brilha uma vez. Uma vez só.
-- **Sem laço:** nenhum ponto pulsando, nenhum brilho repetindo, nenhuma animação contínua no painel. Com movimento reduzido, os cartões não deslizam (sem `layoutId`), o realce e o brilho não rodam.
+- **Entrada da página:** a cada troca de módulo o conteúdo sobe 6 px e aparece em 280 ms (CSS puro, `.pagina-admin-entra`, já na primeira pintura). Listas e blocos entram em sequência (`ItemEntrando` e `BlocoEntrando`, `atrasoEscalonado`: 40 ms por item, para de crescer no oitavo) e saem só com fade (160 ms), sem deslocamento. A entrada é do CSS; o Motion cuida da saída. Com a hora do navegador fixa (testes), `semRelogioDoNavegador` obriga a animação a rodar em JS.
+- **Esperas e laços só enquanto carrega:** o painel não se mexe sozinho, mas quem está esperando vê que a espera é de verdade. Esqueletos com a forma da tela (`EsqueletoLista`, `EsqueletoCartoes`, `EsqueletoRegua`, `EsqueletoPagina`) entram em sequência e têm um brilho que atravessa o bloco. Cada espera tem o seu carregador (`Carregador`): pontos para o botão que salva, barra para a lista que atualiza, papel para o que imprime, radar para o que sincroniza ao vivo, anel para a página que carrega. `BotaoCarregando` abre os pontos à esquerda do texto sem trocar a largura nem o nome do botão.
+- **Ação em lote:** a barra que sobe de baixo ao marcar linhas (`BarraEmLote`) e o fio fino no topo da lista enquanto ela se atualiza. Os pedidos em lote andam um de cada vez, com um aviso por pedido.
+- **Sem laço fora da espera:** nenhum ponto pulsando, nenhum brilho repetindo, nenhuma animação contínua quando nada está carregando. Com movimento reduzido, os cartões não deslizam (sem `layoutId`), o realce, o brilho e os carregadores ficam parados e legíveis.
+
+### Painel: Toque e larguras
+- **Barra lateral:** fica aberta a partir de 1024 px. Abaixo disso é gaveta (`hooks/use-mobile.ts`): com ela aberta num tablet em pé, o conteúdo ficava com ~480 px.
+- **Largura do conteúdo, não da janela:** quadros, grades e tabelas decidem o layout pelo espaço que têm (`useLarguraDoElemento`, `auto-fill`, container queries). A Fila vira abas quando cada coluna teria menos de 170 px, e o botão principal do cartão ocupa a linha inteira quando o cartão é estreito.
+- **Toque:** com o dedo (`pointer: coarse`), todo controle alcança 44 px por um `::after` transparente, sem mudar o desenho (`admin.css`). Aba e link pequeno usam a classe `alvo-toque` (com `relative` ou `absolute`). Campo de texto largo basta com 32 px.
+- **Tabela que rola de lado:** o recipiente vira um grupo focável, para o teclado alcançar.
+- **Guarda automática:** `tests/admin-responsivo.spec.ts` e `tests/vitrine-responsivo.spec.ts` conferem rolagem lateral, texto de botão cortado e toque nos 11 tamanhos.
 
 ## Do's and Don'ts
 
@@ -693,5 +703,5 @@ O painel só se mexe para mostrar que algo mudou de estado.
 - **Don't** use borda colorida com mais de 1 px nem faixa lateral grossa para marcar estado ou urgência.
 - **Don't** use pílula cinza (ou de qualquer cor) para status; o status é traço + texto.
 - **Don't** ponha rótulo em caixa-alta e espaçado acima de título (eyebrow) nem número grande dentro de cartão de métrica.
-- **Don't** use animação contínua no painel: ponto pulsando, brilho em laço, esqueleto que respira fora do carregamento.
+- **Don't** use animação contínua no painel fora da espera: ponto pulsando, brilho em laço, esqueleto que respira quando nada carrega. Um "giro de sempre" para toda espera também não: cada situação tem o seu carregador.
 - **Don't** use laranja em botão, título ou status no painel.

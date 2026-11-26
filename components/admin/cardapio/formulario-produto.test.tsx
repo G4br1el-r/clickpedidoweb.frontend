@@ -282,3 +282,28 @@ describe("FormularioProduto: combos da adega", () => {
     ).not.toBeInTheDocument()
   })
 })
+
+describe("FormularioProduto: carregamento", () => {
+  test("enquanto o painel abre, o esqueleto tem a forma dos campos", async () => {
+    abrir("lanchonete", "novo")
+    expect(await screen.findAllByTestId("esqueleto-campo")).not.toHaveLength(0)
+    await formulario()
+    expect(screen.queryByRole("status", { name: "Carregando o produto" })).not.toBeInTheDocument()
+  })
+
+  test("Salvar produto mostra o carregamento enquanto grava", async () => {
+    const usuario = userEvent.setup()
+    abrir("lanchonete", "novo")
+    const campos = await formulario()
+    await usuario.type(campos.getByLabelText("Nome"), "Pastel de teste")
+    await usuario.click(campos.getByRole("combobox", { name: "Categoria" }))
+    await usuario.click((await screen.findAllByRole("option"))[0])
+    await usuario.type(campos.getByLabelText("Preço"), "7")
+
+    const clique = usuario.click(campos.getByRole("button", { name: "Salvar produto" }))
+    // O carregamento dura só o tempo da gravação: basta vê-lo aparecer.
+    await screen.findByRole("status", { name: "Salvando produto" })
+    await clique
+    expect(await screen.findByText("Produto salvo.")).toBeInTheDocument()
+  })
+})

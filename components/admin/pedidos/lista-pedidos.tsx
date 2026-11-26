@@ -25,8 +25,9 @@ import {
   SearchXIcon,
   XIcon,
 } from "lucide-react"
-import { useMemo } from "react"
+import { useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Empty,
   EmptyContent,
@@ -51,6 +52,7 @@ import {
   SEM_MOTOBOY,
   totaisDaLista,
 } from "@/lib/admin/regras/filtro-pedidos"
+import { alternarSelecao } from "@/lib/admin/regras/lote-pedidos"
 import { formatarTelefone } from "@/lib/admin/regras/mensagens"
 import {
   rotuloCanal,
@@ -61,6 +63,7 @@ import {
 import { rotuloStatusComum } from "@/lib/admin/regras/status"
 import { emReais, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
+import { BarraDeLote } from "./barra-de-lote"
 import { type ColunaOrdenavel, useEstadoLista, usePedidoAberto } from "./estado-lista"
 import { FiltroFacetado, type OpcaoFacetada } from "./filtro-facetado"
 import { rotuloSituacao, SeloStatus } from "./selos"
@@ -181,13 +184,19 @@ function opcoesDe<K extends "status" | "tipo" | "pagamento">(
 export function ListaPedidos({
   pedidos,
   motoboys = [],
+  aoAvancarLote,
+  avancandoLote = false,
 }: {
   pedidos: Pedido[]
   /** Para dar nome ao motoboy na etiqueta do filtro. */
   motoboys?: Motoboy[]
+  /** Com esta ação, a lista ganha caixas de seleção e a barra para avançar vários de uma vez. */
+  aoAvancarLote?: (pedidos: Pedido[]) => unknown
+  avancandoLote?: boolean
 }) {
   const [estado, setEstado] = useEstadoLista()
   const [, abrirPedido] = usePedidoAberto()
+  const [selecionados, setSelecionados] = useState<ReadonlySet<number>>(new Set())
 
   const filtrados = useMemo(
     () =>
@@ -288,6 +297,26 @@ export function ListaPedidos({
       void setEstado({ pagina: nova.pageIndex + 1 })
     },
   })
+
+  const paginaAtual = tabela.getRowModel().rows.map((linha) => linha.original)
+  const marcadosNaPagina = paginaAtual.filter((pedido) => selecionados.has(pedido.id)).length
+  // Só conta quem ainda aparece na lista: um filtro novo não deixa pedido escondido marcado.
+  const marcados = filtrados.filter((pedido) => selecionados.has(pedido.id))
+  const marcarPagina = (marcar: boolean) =>
+    setSelecionados((atual) => {
+      const novo = new Set(atual)
+      for (const pedido of paginaAtual) {
+        if (marcar) novo.add(pedido.id)
+        else novo.delete(pedido.id)
+      }
+      return novo
+    })
+  const avancarLote = (lote: Pedido[]) => {
+    const resultado = aoAvancarLote?.(lote)
+    const limparSelecao = () => setSelecionados(new Set())
+    if (resultado instanceof Promise) void resultado.then(limparSelecao)
+    else limparSelecao()
+  }
 
   const limpar = () =>
     setEstado({
@@ -405,7 +434,14 @@ export function ListaPedidos({
                     return (
                       <TableHead
                         key={cabecalho.id}
-                        className={meta?.classe}
+                        className={cn(
+                          meta?.classe,
+                          "max-sm:px-1",
+                          // Com a caixa de seleção, o título "Nº" divide a coluna com ela e não quebra.
+                          cabecalho.column.id === "numero" &&
+                            aoAvancarLote &&
+                            "whitespace-nowrap sm:w-24",
+                        )}
                         aria-sort={
                           ordem === "asc"
                             ? "ascending"
@@ -414,6 +450,20 @@ export function ListaPedidos({
                               : undefined
                         }
                       >
+                        {cabecalho.column.id === "numero" && aoAvancarLote && (
+                          <Checkbox
+                            aria-label="Selecionar todos desta página"
+                            className="mr-2 align-middle"
+                            checked={
+                              marcadosNaPagina === 0
+                                ? false
+                                : marcadosNaPagina === paginaAtual.length
+                                  ? true
+                                  : "indeterminate"
+                            }
+                            onCheckedChange={(marcar) => marcarPagina(marcar === true)}
+                          />
+                        )}
                         {cabecalho.column.getCanSort() ? (
                           <Button
                             type="button"
@@ -451,20 +501,34 @@ export function ListaPedidos({
                   {linha.getAllCells().map((celula) => {
                     const meta = celula.column.columnDef.meta as Meta | undefined
                     return (
-                      <TableCell key={celula.id} className={meta?.classe}>
+                      <TableCell key={celula.id} className={cn(meta?.classe, "max-sm:px-1")}>
                         {celula.column.id === "numero" ? (
-                          <Button
-                            type="button"
-                            variant="link"
-                            className="h-auto p-0 font-semibold text-foreground tabular-nums"
-                            aria-label={`Abrir o pedido #${linha.original.numero}`}
-                            onClick={(evento) => {
-                              evento.stopPropagation()
-                              abrirPedido(linha.original.id)
-                            }}
-                          >
-                            #{linha.original.numero}
-                          </Button>
+                          <span className="inline-flex flex-col items-start gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+                            {aoAvancarLote && (
+                              <Checkbox
+                                aria-label={`Selecionar o pedido #${linha.original.numero}`}
+                                checked={selecionados.has(linha.original.id)}
+                                onClick={(evento) => evento.stopPropagation()}
+                                onCheckedChange={() =>
+                                  setSelecionados((atual) =>
+                                    alternarSelecao(atual, linha.original.id),
+                                  )
+                                }
+                              />
+                            )}
+                            <Button
+                              type="button"
+                              variant="link"
+                              className="h-auto p-0 font-semibold text-foreground tabular-nums"
+                              aria-label={`Abrir o pedido #${linha.original.numero}`}
+                              onClick={(evento) => {
+                                evento.stopPropagation()
+                                abrirPedido(linha.original.id)
+                              }}
+                            >
+                              #{linha.original.numero}
+                            </Button>
+                          </span>
                         ) : (
                           <FlexRender cell={celula} />
                         )}
@@ -476,6 +540,15 @@ export function ListaPedidos({
             </TableBody>
           </Table>
         </div>
+      )}
+
+      {aoAvancarLote && (
+        <BarraDeLote
+          selecionados={marcados}
+          aoAvancar={avancarLote}
+          aoLimpar={() => setSelecionados(new Set())}
+          avancando={avancandoLote}
+        />
       )}
 
       {paginas > 1 && (

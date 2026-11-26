@@ -22,6 +22,7 @@ import { itensParaPesar } from "@/lib/admin/regras/pesagem"
 import { rotuloCanal } from "@/lib/admin/regras/rotulos"
 import { rotuloAcao, tomDoStatus } from "@/lib/admin/regras/status"
 import { cn } from "@/lib/utils"
+import { BotaoCarregando } from "../movimento/botao-carregando"
 import { Traco } from "../traco"
 
 const CANAL_CURTO = { entrega: "Entrega", retirada: "Retirada", atendimento: "Salão" } as const
@@ -112,7 +113,7 @@ export function CartaoFila({
     >
       <Card
         className={cn(
-          "gap-3 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 transition-[box-shadow] duration-200",
+          "@container/cartao gap-3 py-3 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 transition-[box-shadow] duration-200",
           ANEL_URGENCIA[urgencia(pedido, agora)],
           novo && "ring-2 ring-(--atencao)/55",
         )}
@@ -210,24 +211,27 @@ export function CartaoFila({
           )}
         </CardContent>
 
-        <CardFooter className="gap-2 border-border/70 bg-transparent px-3 pt-3">
+        <CardFooter className="flex-wrap gap-2 border-border/70 bg-transparent px-3 pt-3">
           {acao ? (
-            <Button
+            <BotaoCarregando
               type="button"
               size="sm"
-              className="min-w-0 flex-1"
-              disabled={ocupado}
+              // Cartão estreito: o botão principal tem a linha só para ele, sem cortar o que diz.
+              className="min-w-0 basis-full @min-[15rem]/cartao:basis-0 @min-[15rem]/cartao:flex-1"
+              carregando={ocupado}
+              rotuloCarregando="Avançando o pedido"
               onClick={aoAvancar}
             >
               {acao}
-            </Button>
+            </BotaoCarregando>
           ) : (
-            <span className="flex-1 text-xs text-muted-foreground">Fecha em Mesas</span>
+            <span className="min-w-0 flex-1 text-xs text-muted-foreground">Fecha em Mesas</span>
           )}
           <Button
             type="button"
             size="icon-sm"
             variant="outline"
+            className="ml-auto @min-[15rem]/cartao:ml-0"
             aria-label={`${pedido.impressoEm ? "Reimprimir" : "Imprimir"} cupom de #${pedido.numero}`}
             onClick={aoImprimir}
           >

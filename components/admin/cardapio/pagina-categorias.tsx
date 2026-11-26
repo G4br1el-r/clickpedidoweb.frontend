@@ -24,7 +24,7 @@ import {
   PlusIcon,
   Trash2Icon,
 } from "lucide-react"
-import { motion, useReducedMotion } from "motion/react"
+import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react"
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { toast } from "sonner"
@@ -42,7 +42,6 @@ import {
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
@@ -54,9 +53,13 @@ import {
   useSalvarCategoria,
 } from "@/lib/admin/dados/consultas-cardapio"
 import type { Categoria } from "@/lib/admin/dados/tipos"
+import { estiloDeEntrada, semRelogioDoNavegador, variantesDoItem } from "@/lib/admin/movimento"
 import { plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { BotaoCarregando } from "../movimento/botao-carregando"
+import { AtualizandoLista } from "./atualizando-lista"
+import { EsqueletoCategorias } from "./esqueletos-cardapio"
 
 /** Botão de ícone da linha: 32 px no computador, 44 px no celular. */
 const BOTAO_ICONE = "max-md:size-11"
@@ -64,6 +67,7 @@ const BOTAO_ICONE = "max-md:size-11"
 function LinhaCategoria({
   categoria,
   posicao,
+  indice,
   produtos,
   anterior,
   proxima,
@@ -73,6 +77,8 @@ function LinhaCategoria({
   categoria: Categoria
   /** Posição na ordem das abas, a partir de 1. */
   posicao: number
+  /** Posição na lista, a partir de 0: a entrada em sequência para no oitavo. */
+  indice: number
   produtos: number
   anterior?: Categoria
   proxima?: Categoria
@@ -81,6 +87,9 @@ function LinhaCategoria({
   aoMover: (para: Categoria, direcao: "subiu" | "desceu") => void
 }) {
   const ordenavel = useSortable({ id: categoria.id })
+  const semMovimento = useReducedMotion() ?? false
+  // Na saída a linha ainda some por 160 ms: já não conta para o leitor de tela nem para o toque.
+  const presente = useIsPresent()
   const salvar = useSalvarCategoria()
   const excluir = useExcluirCategoria()
   const [nome, setNome] = useState(categoria.nome)
@@ -104,8 +113,16 @@ function LinhaCategoria({
     <motion.li
       layout={animarLugar ? "position" : false}
       transition={{ layout: { duration: 0.25, ease: [0.23, 1, 0.32, 1] } }}
+      variants={variantesDoItem(semMovimento)}
+      custom={indice}
+      initial="entrar"
+      animate="parado"
+      onUpdate={semRelogioDoNavegador}
+      exit="sair"
       aria-label={categoria.nome}
-      className="relative bg-card"
+      aria-hidden={presente ? undefined : true}
+      style={estiloDeEntrada(indice)}
+      className={cn("entra-item relative bg-card", !presente && "pointer-events-none")}
     >
       {/* O arrasto move o conteúdo; a troca pelos botões move a linha inteira (acima). */}
       <div
@@ -252,28 +269,9 @@ function LinhaCategoria({
   )
 }
 
-function EsqueletoCategorias() {
-  return (
-    <div
-      role="status"
-      aria-label="Carregando as categorias"
-      className="flex flex-col divide-y divide-border/70 border-y border-border/70"
-    >
-      {["a", "b", "c", "d", "e", "f"].map((chave) => (
-        <div key={chave} className="flex items-center gap-3 py-3">
-          <Skeleton className="size-5" />
-          <Skeleton className="h-4 w-48" />
-          <Skeleton className="ml-auto h-4 w-20" />
-          <Skeleton className="hidden h-5 w-24 sm:block" />
-        </div>
-      ))}
-    </div>
-  )
-}
-
 /** Categorias do cardápio: a ordem aqui é a ordem das abas que o cliente vê. */
 export function PaginaCategorias() {
-  const { data: categorias } = useCategorias()
+  const { data: categorias, isFetching } = useCategorias()
   const { data: produtos = [] } = useProdutos()
   const criar = useCriarCategoria()
   const reordenar = useReordenarCategorias()
@@ -334,14 +332,15 @@ export function PaginaCategorias() {
             className="max-md:h-11"
             onChange={(evento) => setNova(evento.target.value)}
           />
-          <Button
+          <BotaoCarregando
             type="submit"
-            disabled={criar.isPending}
-            className="active:scale-[0.97] max-md:h-11"
+            carregando={criar.isPending}
+            rotuloCarregando="Adicionando a categoria"
+            className="max-md:h-11"
           >
             <PlusIcon data-icon="inline-start" />
             Adicionar
-          </Button>
+          </BotaoCarregando>
         </div>
       </form>
 
@@ -358,27 +357,35 @@ export function PaginaCategorias() {
             items={categorias.map((categoria) => categoria.id)}
             strategy={verticalListSortingStrategy}
           >
-            <ul className="flex flex-col divide-y divide-border/70 border-y border-border/70">
-              {categorias.map((categoria, indice) => (
-                <LinhaCategoria
-                  key={categoria.id}
-                  categoria={categoria}
-                  posicao={indice + 1}
-                  produtos={
-                    produtos.filter((produto) => produto.categoriaId === categoria.id).length
-                  }
-                  anterior={categorias[indice - 1]}
-                  proxima={categorias[indice + 1]}
-                  animarLugar={modo === "botao" && !semMovimento}
-                  aoMover={(para, direcao) => {
-                    setModo("botao")
-                    reordenar.mutate({ de: categoria.id, para: para.id })
-                    const destino = direcao === "subiu" ? indice : indice + 2
-                    setAviso(`${categoria.nome} ${direcao} para a posição ${destino} de ${total}.`)
-                  }}
-                />
-              ))}
-            </ul>
+            <div className="relative">
+              <AtualizandoLista atualizando={isFetching} rotulo="Atualizando as categorias" />
+              <ul className="flex flex-col divide-y divide-border/70 border-y border-border/70">
+                <AnimatePresence>
+                  {categorias.map((categoria, indice) => (
+                    <LinhaCategoria
+                      key={categoria.id}
+                      categoria={categoria}
+                      posicao={indice + 1}
+                      indice={indice}
+                      produtos={
+                        produtos.filter((produto) => produto.categoriaId === categoria.id).length
+                      }
+                      anterior={categorias[indice - 1]}
+                      proxima={categorias[indice + 1]}
+                      animarLugar={modo === "botao" && !semMovimento}
+                      aoMover={(para, direcao) => {
+                        setModo("botao")
+                        reordenar.mutate({ de: categoria.id, para: para.id })
+                        const destino = direcao === "subiu" ? indice : indice + 2
+                        setAviso(
+                          `${categoria.nome} ${direcao} para a posição ${destino} de ${total}.`,
+                        )
+                      }}
+                    />
+                  ))}
+                </AnimatePresence>
+              </ul>
+            </div>
           </SortableContext>
         </DndContext>
       )}

@@ -100,7 +100,7 @@ export function SeloPro({
   className?: string
 }) {
   // Mesmo tamanho nos três estados: a troca de um para o outro não mexe a linha.
-  const base = "h-5 shrink-0 gap-1 px-1.5 text-[11px] font-semibold"
+  const base = "h-5 shrink-0 gap-1 px-1.5 text-xs font-semibold"
   if (naSacola) {
     return (
       <Badge
@@ -155,6 +155,7 @@ type BlocoConfigProps = {
  */
 export function BlocoConfig({ titulo, descricao, restaurar, children }: BlocoConfigProps) {
   const restaurarSecao = useConfig((estado) => estado.restaurarSecao)
+  const atualizar = useConfig((estado) => estado.atualizar)
   return (
     <BlocoSecao
       titulo={titulo}
@@ -165,10 +166,17 @@ export function BlocoConfig({ titulo, descricao, restaurar, children }: BlocoCon
             type="button"
             variant="ghost"
             size="sm"
-            className="-my-1 text-muted-foreground"
+            className="-my-1 text-muted-foreground max-md:min-h-11"
             onClick={() => {
+              // Guarda o que havia antes: o aviso deixa voltar atrás, sem pedir confirmação.
+              const anterior = useConfig.getState().config[restaurar]
               restaurarSecao(restaurar)
-              toast("Seção restaurada para o padrão")
+              toast("Seção restaurada para o padrão", {
+                action: {
+                  label: "Desfazer",
+                  onClick: () => atualizar(restaurar, anterior),
+                },
+              })
             }}
           >
             <RotateCcwIcon data-icon="inline-start" />
@@ -439,7 +447,7 @@ export function CampoSegmentado<S extends SecaoConfig, V extends string | number
             key={String(opcao.valor)}
             value={String(opcao.valor)}
             aria-label={opcao.nome}
-            className="min-w-10 px-3"
+            className="min-w-10 px-3 max-md:min-h-11"
           >
             {opcao.rotulo}
           </ToggleGroupItem>
@@ -539,6 +547,7 @@ export function CampoTexto<S extends SecaoConfig>({
         id={id}
         value={texto}
         maxLength={limite}
+        className="max-md:h-11"
         placeholder={placeholder}
         onChange={(evento) => definir(evento.target.value as Config[S][typeof campo])}
       />

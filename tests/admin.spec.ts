@@ -33,7 +33,7 @@ async function previa(page: Page) {
 
 test("o seletor do topo troca o segmento e o menu acompanha", async ({ page }, info) => {
   test.skip(
-    (info.project.use.viewport?.width ?? 0) < 768,
+    (info.project.use.viewport?.width ?? 0) < 1024,
     "No celular a barra lateral fica recolhida",
   )
   await page.goto("/admin")
@@ -563,9 +563,17 @@ test("entrega: motoboy novo na Fila, bairro novo e a loja que fecha pelo horári
   await page.getByRole("switch", { name: "Aberto na sexta" }).click()
   await page.getByRole("button", { name: "Salvar alterações" }).click()
   await expect(page.getByText("Configurações salvas.")).toBeVisible()
+  // Com a página rolada até a sexta, as linhas de baixo passam sob o cabeçalho fixo e o axe as vê pela metade.
+  await page.getByRole("heading", { level: 1 }).scrollIntoViewIfNeeded()
   await verificarAcessibilidade(page)
 
   await page.goto("/admin/fila")
+  // No celular, os ajustes da fila ficam recolhidos atrás de um botão que resume o estado.
+  if ((page.viewportSize()?.width ?? 0) < 768) {
+    const ajustes = page.getByRole("button", { name: /Ajustes da fila/ })
+    await expect(ajustes).toContainText("Loja fechada", { timeout: 15_000 })
+    await ajustes.click()
+  }
   await expect(page.getByRole("switch", { name: "Loja aberta" })).not.toBeChecked({
     timeout: 15_000,
   })
@@ -786,7 +794,7 @@ test("aplicar sem Pro na sacola publica direto, e dá para voltar ao original", 
 
 test("liberar todos desbloqueia tudo e as opções brilham", async ({ page }, info) => {
   test.skip(
-    (info.project.use.viewport?.width ?? 0) < 768,
+    (info.project.use.viewport?.width ?? 0) < 1024,
     "No celular a barra lateral fica recolhida",
   )
   await abrirSecao(page, "cards")
@@ -798,7 +806,7 @@ test("liberar todos desbloqueia tudo e as opções brilham", async ({ page }, in
 
 test("grupos da barra lateral abrem e fecham com animação", async ({ page }, info) => {
   test.skip(
-    (info.project.use.viewport?.width ?? 0) < 768,
+    (info.project.use.viewport?.width ?? 0) < 1024,
     "No celular a barra lateral fica recolhida",
   )
   await abrirSecao(page, "cards")

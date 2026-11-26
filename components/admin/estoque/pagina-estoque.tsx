@@ -24,7 +24,9 @@ import {
   SearchIcon,
   SearchXIcon,
   Settings2Icon,
+  SlidersHorizontalIcon,
 } from "lucide-react"
+import { AnimatePresence } from "motion/react"
 import { useDeferredValue, useMemo, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -45,7 +47,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -63,20 +64,30 @@ import {
   type SituacaoEstoque,
   situacaoEstoque,
 } from "@/lib/admin/regras/estoque"
+import { planoDoMinimo, textoDosProdutos } from "@/lib/admin/regras/lote-estoque"
+import { alternarMarca, marcarVarios } from "@/lib/admin/regras/selecao"
 import type { TomStatus } from "@/lib/admin/regras/status"
 import { emReais, plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { EsqueletoPagina } from "../esqueletos"
+import { FaixaRolavel } from "../faixa-rolavel"
+import { BlocoEntrando } from "../movimento/entrada-admin"
 import { Indicador, Regua } from "../regua"
 import { Traco } from "../traco"
+import { BarraEmLote } from "./barra-em-lote"
+import { FioDeAtualizacao } from "./fio-de-atualizacao"
 import {
   type AcaoEstoque,
   HistoricoEstoque,
   JanelaConfigurar,
   JanelaContagem,
   JanelaEntrada,
+  JanelaMinimoEmLote,
   JanelaSaida,
 } from "./janelas-estoque"
+import { LinhaAnimada } from "./linha-animada"
+import { MarcadorDaLinha } from "./marcador-de-linha"
 
 type Situacao = SituacaoEstoque | "sem-controle"
 type FiltroSituacao = "controlados" | Situacao
@@ -198,45 +209,12 @@ function NumeroComTom({ valor, tom }: { valor: number; tom: TomStatus }) {
   )
 }
 
-function EsqueletoEstoque() {
-  return (
-    <div
-      role="status"
-      aria-label="Carregando o estoque"
-      className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8"
-    >
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-7 w-32" />
-        <Skeleton className="h-4 w-96 max-w-full" />
-      </div>
-      <div className="grid grid-cols-2 border-y border-border/70 lg:grid-cols-4">
-        {["a", "b", "c", "d"].map((chave) => (
-          <div key={chave} className="flex flex-col gap-2 py-4 pr-4">
-            <Skeleton className="h-3.5 w-24" />
-            <Skeleton className="h-7 w-16" />
-          </div>
-        ))}
-      </div>
-      <Skeleton className="h-8 w-80 max-w-full" />
-      <div className="flex flex-col divide-y divide-border/70 border-t border-border/70">
-        {["a", "b", "c", "d", "e", "f", "g"].map((chave) => (
-          <div key={chave} className="flex items-center gap-4 py-3.5">
-            <Skeleton className="h-4 w-56" />
-            <Skeleton className="ml-auto h-4 w-14" />
-            <Skeleton className="hidden h-4 w-20 sm:block" />
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 /**
  * Estoque da loja: a régua do que importa, a lista dos produtos com saldo e situação,
  * e as ações de cada um (entrada, saída, contagem, histórico e configuração).
  */
 export function PaginaEstoque() {
-  const { data: produtos } = useProdutos()
+  const { data: produtos, isFetching } = useProdutos()
   const { data: categorias = [] } = useCategorias()
   const [busca, setBusca] = useState("")
   const buscaAdiada = useDeferredValue(busca)
@@ -244,6 +222,8 @@ export function PaginaEstoque() {
   const [categoria, setCategoria] = useState("todas")
   const [ordenacao, setOrdenacao] = useState<SortingState>([])
   const [aberto, setAberto] = useState<{ acao: AcaoEstoque; id: string } | null>(null)
+  const [selecionados, setSelecionados] = useState<ReadonlySet<string>>(new Set())
+  const [definindoMinimo, setDefinindoMinimo] = useState(false)
 
   /** Quantos produtos há em cada situação: a contagem que aparece no filtro. */
   const contagem = useMemo(() => {
@@ -289,6 +269,14 @@ export function PaginaEstoque() {
 
   const colunas = useMemo<ColumnDef<typeof recursos, Linha>[]>(
     () => [
+      {
+        id: "selecionar",
+        header: () => <span className="sr-only">Selecionar</span>,
+        enableSorting: false,
+        // O marcador é desenhado na tabela, que conhece a seleção; a coluna só reserva o lugar.
+        cell: () => null,
+        meta: { classe: "w-11 pr-0 md:w-10" } satisfies Meta,
+      },
       {
         id: "produto",
         header: "Produto",
@@ -385,8 +373,16 @@ export function PaginaEstoque() {
     onSortingChange: setOrdenacao,
   })
 
-  if (!produtos) return <EsqueletoEstoque />
+  if (!produtos) {
+    return <EsqueletoPagina rotulo="Carregando o estoque" className="flex-1 lg:px-8" />
+  }
 
+  // Só conta o que está na lista: quem saiu por um filtro não entra na ação em lote.
+  const marcados = linhas.filter((linha) => selecionados.has(linha.produto.id))
+  const marcadosNaLista = marcados.length
+  const produtosMarcados = marcados.map((linha) => linha.produto)
+  const semControleMarcados = planoDoMinimo(produtosMarcados, Number.NaN).semControle.length
+  const idsDaLista = linhas.map((linha) => linha.produto.id)
   const resumo = resumoDoEstoque(produtos)
   const negativos = produtos.filter((produto) => situacaoDe(produto) === "negativo")
   // O produto aberto vem da lista mais nova: o saldo da janela acompanha o servidor.
@@ -400,7 +396,24 @@ export function PaginaEstoque() {
         resumo="As vendas baixam o saldo sozinhas; aqui entram as compras, as perdas e a contagem."
       />
 
-      <section aria-label="Resumo do estoque">
+      <AnimatePresence>
+        {negativos.length > 0 && (
+          <BlocoEntrando key="negativos" role="alert" className="flex gap-3 text-sm">
+            <Traco tom="cancelado" className="mt-0.5 h-auto self-stretch" />
+            <div className="flex flex-col gap-0.5">
+              <p className="font-medium">
+                {plural(negativos.length, "produto", "produtos")} com saldo negativo
+              </p>
+              <p className="text-muted-foreground">
+                Pedidos do site entraram sem saldo ({negativos.map((item) => item.nome).join(", ")}
+                ). Faça a contagem para acertar.
+              </p>
+            </div>
+          </BlocoEntrando>
+        )}
+      </AnimatePresence>
+
+      <BlocoEntrando como="section" aria-label="Resumo do estoque">
         <Regua>
           <Indicador rotulo="Controlados" detalhe="Com o saldo acompanhado">
             <NumberFlow value={resumo.controlados} locales="pt-BR" />
@@ -422,22 +435,7 @@ export function PaginaEstoque() {
             </span>
           </Indicador>
         </Regua>
-      </section>
-
-      {negativos.length > 0 && (
-        <div role="alert" className="flex gap-3 text-sm">
-          <Traco tom="cancelado" className="mt-0.5 h-auto self-stretch" />
-          <div className="flex flex-col gap-0.5">
-            <p className="font-medium">
-              {plural(negativos.length, "produto", "produtos")} com saldo negativo
-            </p>
-            <p className="text-muted-foreground">
-              Pedidos do site entraram sem saldo ({negativos.map((item) => item.nome).join(", ")}
-              ). Faça a contagem para acertar.
-            </p>
-          </div>
-        </div>
-      )}
+      </BlocoEntrando>
 
       <div className="flex flex-col gap-3">
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
@@ -470,7 +468,7 @@ export function PaginaEstoque() {
           </Select>
         </div>
         {/* No celular o controle rola de lado dentro da própria faixa; a página não. */}
-        <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0">
+        <FaixaRolavel className="-mx-4 px-4 md:mx-0 md:px-0">
           <ToggleGroup
             type="single"
             variant="segmento"
@@ -483,7 +481,7 @@ export function PaginaEstoque() {
               <ToggleGroupItem
                 key={valor}
                 value={valor}
-                className="cursor-pointer gap-1.5 px-2.5 max-md:h-10"
+                className="cursor-pointer gap-1.5 px-2.5 max-md:h-11"
               >
                 {rotulo}{" "}
                 <span className="text-xs text-muted-foreground tabular-nums">
@@ -492,8 +490,10 @@ export function PaginaEstoque() {
               </ToggleGroupItem>
             ))}
           </ToggleGroup>
-        </div>
+        </FaixaRolavel>
       </div>
+
+      <FioDeAtualizacao ativo={isFetching} rotulo="Atualizando o estoque" />
 
       {linhas.length === 0 ? (
         <Empty className="border-t border-border/70">
@@ -524,6 +524,25 @@ export function PaginaEstoque() {
                         : ordem === "desc"
                           ? ArrowDownIcon
                           : ChevronsUpDownIcon
+                    if (cabecalho.column.id === "selecionar") {
+                      return (
+                        <TableHead key={cabecalho.id} className={meta?.classe}>
+                          <MarcadorDaLinha
+                            rotulo="Selecionar todos os produtos da lista"
+                            checked={
+                              marcadosNaLista === 0
+                                ? false
+                                : marcadosNaLista === linhas.length
+                                  ? true
+                                  : "indeterminate"
+                            }
+                            aoMudar={(marcar) =>
+                              setSelecionados((atual) => marcarVarios(atual, idsDaLista, marcar))
+                            }
+                          />
+                        </TableHead>
+                      )
+                    }
                     return (
                       <TableHead
                         key={cabecalho.id}
@@ -542,7 +561,7 @@ export function PaginaEstoque() {
                             variant="ghost"
                             size="sm"
                             className={cn(
-                              "-mx-2 h-8",
+                              "-mx-2 h-8 max-md:h-11",
                               meta?.classe?.includes("text-right") && "ml-auto flex",
                             )}
                             aria-label={`Ordenar por ${meta?.rotuloOrdem}`}
@@ -564,18 +583,39 @@ export function PaginaEstoque() {
               ))}
             </TableHeader>
             <TableBody>
-              {tabela.getRowModel().rows.map((linha) => (
-                <TableRow key={linha.id} aria-label={linha.original.produto.nome}>
-                  {linha.getAllCells().map((celula) => {
-                    const meta = celula.column.columnDef.meta as Meta | undefined
-                    return (
-                      <TableCell key={celula.id} className={meta?.classe}>
-                        <FlexRender cell={celula} />
-                      </TableCell>
-                    )
-                  })}
-                </TableRow>
-              ))}
+              <AnimatePresence>
+                {tabela.getRowModel().rows.map((linha, indice) => (
+                  <LinhaAnimada
+                    key={linha.id}
+                    indice={indice}
+                    aria-label={linha.original.produto.nome}
+                    data-state={
+                      selecionados.has(linha.original.produto.id) ? "selected" : undefined
+                    }
+                  >
+                    {linha.getAllCells().map((celula) => {
+                      const meta = celula.column.columnDef.meta as Meta | undefined
+                      return (
+                        <TableCell key={celula.id} className={meta?.classe}>
+                          {celula.column.id === "selecionar" ? (
+                            <MarcadorDaLinha
+                              rotulo={`Selecionar o produto ${linha.original.produto.nome}`}
+                              checked={selecionados.has(linha.original.produto.id)}
+                              aoMudar={() =>
+                                setSelecionados((atual) =>
+                                  alternarMarca(atual, linha.original.produto.id),
+                                )
+                              }
+                            />
+                          ) : (
+                            <FlexRender cell={celula} />
+                          )}
+                        </TableCell>
+                      )
+                    })}
+                  </LinhaAnimada>
+                ))}
+              </AnimatePresence>
             </TableBody>
           </Table>
         </div>
@@ -583,6 +623,36 @@ export function PaginaEstoque() {
       <p className="text-[13px] text-muted-foreground tabular-nums" aria-live="polite">
         {plural(linhas.length, "produto", "produtos")}
       </p>
+
+      <BarraEmLote
+        aberta={marcadosNaLista > 0}
+        texto={textoDosProdutos(marcadosNaLista)}
+        nota={
+          semControleMarcados > 0
+            ? `${semControleMarcados} sem controle: o mínimo não vale para eles`
+            : undefined
+        }
+        aoLimpar={() => setSelecionados(new Set())}
+      >
+        <Button
+          type="button"
+          size="sm"
+          className="max-md:h-11"
+          disabled={semControleMarcados === marcadosNaLista}
+          onClick={() => setDefinindoMinimo(true)}
+        >
+          <SlidersHorizontalIcon data-icon="inline-start" />
+          Definir mínimo
+        </Button>
+      </BarraEmLote>
+
+      {definindoMinimo && (
+        <JanelaMinimoEmLote
+          produtos={produtosMarcados}
+          aoFechar={() => setDefinindoMinimo(false)}
+          aoConcluir={() => setSelecionados(new Set())}
+        />
+      )}
 
       {produtoAberto && aberto?.acao === "entrada" && (
         <JanelaEntrada produto={produtoAberto} aoFechar={fechar} />

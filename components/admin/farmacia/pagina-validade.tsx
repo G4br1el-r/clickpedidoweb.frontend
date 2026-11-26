@@ -1,9 +1,11 @@
 "use client"
 
 import { format, parseISO } from "date-fns"
-import { SnowflakeIcon } from "lucide-react"
+import { ArrowLeftRightIcon, SnowflakeIcon, Trash2Icon } from "lucide-react"
+import { AnimatePresence } from "motion/react"
 import { useState } from "react"
-import { Skeleton } from "@/components/ui/skeleton"
+import { toast } from "sonner"
+import { Button } from "@/components/ui/button"
 import {
   Table,
   TableBody,
@@ -15,12 +17,27 @@ import {
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group"
 import { useAgora } from "@/hooks/use-agora"
 import { useProdutos } from "@/lib/admin/dados/consultas-cardapio"
+import { useFarmacia } from "@/lib/admin/farmacia-estado"
 import { situacaoDoLote, type ValidadeLote } from "@/lib/admin/regras/farmacia"
+import {
+  type DestinoDoLote,
+  divisaoDosLotes,
+  notaDosLotes,
+  textoDoDestino,
+  textoDosLotes,
+} from "@/lib/admin/regras/lote-farmacia"
+import { alternarMarca, marcarVarios } from "@/lib/admin/regras/selecao"
 import type { TomStatus } from "@/lib/admin/regras/status"
 import { plural } from "@/lib/formato"
 import { lotesDemo } from "@/lib/mock/admin/farmacia"
 import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { EsqueletoLista } from "../esqueletos"
+import { BarraEmLote } from "../estoque/barra-em-lote"
+import { FioDeAtualizacao } from "../estoque/fio-de-atualizacao"
+import { LinhaAnimada } from "../estoque/linha-animada"
+import { MarcadorDaLinha } from "../estoque/marcador-de-linha"
+import { FaixaRolavel } from "../faixa-rolavel"
 import { Traco } from "../traco"
 import { SeloTarja } from "./selos"
 
@@ -48,40 +65,33 @@ const TOM: Record<ValidadeLote, TomStatus> = {
 const RESUMO =
   "Cada lote com a validade dele. Vencidos saem da prateleira e vão para descarte; o que vence em 30 dias pede promoção ou devolução ao distribuidor."
 
+const ROTULO_DESTINO: Record<DestinoDoLote, string> = {
+  descarte: "Separado para descarte",
+  devolucao: "Separado para devolução",
+}
+
 function textoValidade(dias: number) {
   if (dias < 0) return `Vencido há ${plural(-dias, "dia", "dias")}`
   if (dias === 0) return "Vence hoje"
   return dias <= 90 ? `Vence em ${plural(dias, "dia", "dias")}` : "Em dia"
 }
 
-function EsqueletoValidade() {
-  return (
-    <div role="status" aria-label="Carregando os lotes" className="flex flex-col gap-4">
-      <Skeleton className="h-8 w-[28rem] max-w-full" />
-      <div className="flex flex-col divide-y divide-border/70 border-t border-border/70">
-        {["a", "b", "c", "d", "e", "f"].map((chave) => (
-          <div key={chave} className="flex items-center gap-4 py-3.5">
-            <Skeleton className="h-4 w-52" />
-            <Skeleton className="hidden h-4 w-20 sm:block" />
-            <Skeleton className="ml-auto h-4 w-28" />
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
-
 /** Farmácia: lotes e validades, do que vence primeiro ao que vence por último. A quantidade geral do produto fica no módulo Estoque. */
 export function PaginaValidade() {
   const agora = useAgora()
-  const { data: produtos } = useProdutos()
+  const { data: produtos, isFetching } = useProdutos()
   const [filtro, setFiltro] = useState<Filtro>("todos")
+  const [selecionados, setSelecionados] = useState<ReadonlySet<string>>(new Set())
+  /** O que já foi separado: o lote fica na lista, marcado, até desfazer. Fica salvo neste navegador. */
+  const tratados = useFarmacia((estado) => estado.lotes)
+  const separarLotes = useFarmacia((estado) => estado.separarLotes)
+  const desfazerLotes = useFarmacia((estado) => estado.desfazerLotes)
 
   if (!agora || !produtos) {
     return (
       <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
         <CabecalhoPagina titulo="Lotes e validade" resumo={RESUMO} />
-        <EsqueletoValidade />
+        <EsqueletoLista linhas={6} rotulo="Carregando os lotes" />
       </div>
     )
   }
@@ -98,12 +108,29 @@ export function PaginaValidade() {
     (filtroAtual === "baixo" ? item.situacao.estoqueBaixo : item.situacao.validade === filtroAtual)
   const visiveis = lotes.filter((item) => passa(filtro, item))
 
+  // Só entra na ação quem está na lista e ainda não foi separado.
+  const pendentesVisiveis = visiveis.filter(({ lote }) => !tratados[lote.id])
+  const marcados = pendentesVisiveis
+    .filter(({ lote }) => selecionados.has(lote.id))
+    .map(({ lote }) => lote)
+  const divisao = divisaoDosLotes(marcados, agora)
+  const idsDaLista = pendentesVisiveis.map(({ lote }) => lote.id)
+
+  function separar(destino: DestinoDoLote, escolhidos: { id: string }[]) {
+    const ids = escolhidos.map((lote) => lote.id)
+    separarLotes(ids, destino)
+    setSelecionados(new Set())
+    toast.success(textoDoDestino(destino, ids.length), {
+      action: { label: "Desfazer", onClick: () => desfazerLotes(ids) },
+    })
+  }
+
   return (
     <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
       <CabecalhoPagina titulo="Lotes e validade" resumo={RESUMO} />
 
       {/* No celular o controle rola de lado dentro da própria faixa; a página não. */}
-      <div className="-mx-4 overflow-x-auto px-4 [scrollbar-width:none] md:mx-0 md:px-0">
+      <FaixaRolavel className="-mx-4 px-4 md:mx-0 md:px-0">
         <ToggleGroup
           type="single"
           variant="segmento"
@@ -118,7 +145,7 @@ export function PaginaValidade() {
               <ToggleGroupItem
                 key={id}
                 value={id}
-                className="cursor-pointer gap-1.5 px-2.5 max-md:h-10"
+                className="cursor-pointer gap-1.5 px-2.5 max-md:h-11"
               >
                 {rotulo}{" "}
                 <span
@@ -136,13 +163,33 @@ export function PaginaValidade() {
             )
           })}
         </ToggleGroup>
-      </div>
+      </FaixaRolavel>
+
+      <FioDeAtualizacao ativo={isFetching} rotulo="Atualizando os lotes" />
 
       <div className="border-t border-border/70">
         <Table aria-label="Lotes">
           <TableHeader>
             <TableRow>
-              <TableHead>Produto</TableHead>
+              <TableHead>
+                <span className="flex items-center gap-2">
+                  <MarcadorDaLinha
+                    rotulo="Selecionar todos os lotes da lista"
+                    disabled={idsDaLista.length === 0}
+                    checked={
+                      marcados.length === 0
+                        ? false
+                        : marcados.length === idsDaLista.length
+                          ? true
+                          : "indeterminate"
+                    }
+                    aoMudar={(marcar) =>
+                      setSelecionados((atual) => marcarVarios(atual, idsDaLista, marcar))
+                    }
+                  />
+                  Produto
+                </span>
+              </TableHead>
               <TableHead className="hidden sm:table-cell">Lote</TableHead>
               <TableHead className="hidden sm:table-cell">Validade</TableHead>
               <TableHead className="text-right">Qtd.</TableHead>
@@ -150,76 +197,129 @@ export function PaginaValidade() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {visiveis.map(({ lote, situacao, produto }) => {
-              const tom = TOM[situacao.validade]
-              return (
-                <TableRow key={lote.id}>
-                  <TableCell className="max-w-56">
-                    <span className="flex items-center gap-1.5 font-medium whitespace-normal">
-                      {produto?.nome ?? "Produto removido"}
-                      {produto?.medicamento?.refrigerado && (
-                        <SnowflakeIcon
-                          role="img"
-                          aria-label="Guardar na geladeira"
-                          className="size-4 shrink-0 text-sky-600 dark:text-sky-300"
+            <AnimatePresence>
+              {visiveis.map(({ lote, situacao, produto }, indice) => {
+                const tom = TOM[situacao.validade]
+                const destino = tratados[lote.id]
+                return (
+                  <LinhaAnimada
+                    key={lote.id}
+                    indice={indice}
+                    data-state={selecionados.has(lote.id) && !destino ? "selected" : undefined}
+                  >
+                    <TableCell className="max-w-64">
+                      <span className="flex items-start gap-2">
+                        <MarcadorDaLinha
+                          rotulo={`Selecionar o lote ${lote.codigo}`}
+                          checked={selecionados.has(lote.id) && !destino}
+                          disabled={Boolean(destino)}
+                          aoMudar={() => setSelecionados((atual) => alternarMarca(atual, lote.id))}
                         />
-                      )}
-                    </span>
-                    {produto?.medicamento && (
-                      <SeloTarja tarja={produto.medicamento.tarja} className="mt-1.5" />
-                    )}
-                    {/* No celular, o lote vem aqui, no lugar da coluna que some. */}
-                    <span className="mt-1 block font-mono text-xs text-muted-foreground sm:hidden">
-                      Lote {lote.codigo}
-                    </span>
-                  </TableCell>
-                  <TableCell className="hidden font-mono text-xs sm:table-cell">
-                    {lote.codigo}
-                  </TableCell>
-                  <TableCell className="hidden tabular-nums sm:table-cell">
-                    {format(parseISO(lote.validade), "dd/MM/yyyy")}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">
-                    <span
-                      className={cn(
-                        "font-medium",
-                        situacao.estoqueBaixo && "text-(--tom-preparo-texto)",
-                      )}
-                    >
-                      {lote.quantidade}
-                    </span>
-                    <span className="block text-xs text-muted-foreground">mín. {lote.minimo}</span>
-                  </TableCell>
-                  <TableCell className="whitespace-normal">
-                    <span className="flex flex-col gap-1.5">
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-1.5 font-medium whitespace-normal">
+                            {produto?.nome ?? "Produto removido"}
+                            {produto?.medicamento?.refrigerado && (
+                              <SnowflakeIcon
+                                role="img"
+                                aria-label="Guardar na geladeira"
+                                className="size-4 shrink-0 text-sky-600 dark:text-sky-300"
+                              />
+                            )}
+                          </span>
+                          {produto?.medicamento && (
+                            <SeloTarja tarja={produto.medicamento.tarja} className="mt-1.5" />
+                          )}
+                          {/* No celular, o lote vem aqui, no lugar da coluna que some. */}
+                          <span className="mt-1 block font-mono text-xs text-muted-foreground sm:hidden">
+                            Lote {lote.codigo}
+                          </span>
+                        </span>
+                      </span>
+                    </TableCell>
+                    <TableCell className="hidden font-mono text-xs sm:table-cell">
+                      {lote.codigo}
+                    </TableCell>
+                    <TableCell className="hidden tabular-nums sm:table-cell">
+                      {format(parseISO(lote.validade), "dd/MM/yyyy")}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
                       <span
                         className={cn(
-                          "inline-flex items-center gap-2 text-[13px] leading-tight font-medium sm:whitespace-nowrap",
-                          situacao.validade === "em-dia"
-                            ? "text-muted-foreground"
-                            : "text-foreground",
+                          "font-medium",
+                          situacao.estoqueBaixo && "text-(--tom-preparo-texto)",
                         )}
                       >
-                        <Traco tom={tom} />
-                        {textoValidade(situacao.dias)}
+                        {lote.quantidade}
                       </span>
-                      {/* No celular, a data vem aqui, no lugar da coluna que some. */}
-                      <span className="text-xs text-muted-foreground tabular-nums sm:hidden">
-                        {format(parseISO(lote.validade), "dd/MM/yyyy")}
+                      <span className="block text-xs text-muted-foreground">
+                        mín. {lote.minimo}
                       </span>
-                      {situacao.estoqueBaixo && (
-                        <span className="pl-[11px] text-xs text-muted-foreground">
-                          Estoque baixo
+                    </TableCell>
+                    <TableCell className="whitespace-normal">
+                      <span className="flex flex-col gap-1.5">
+                        <span
+                          className={cn(
+                            "inline-flex items-center gap-2 text-[13px] leading-tight font-medium sm:whitespace-nowrap",
+                            situacao.validade === "em-dia"
+                              ? "text-muted-foreground"
+                              : "text-foreground",
+                          )}
+                        >
+                          <Traco tom={tom} />
+                          {textoValidade(situacao.dias)}
                         </span>
-                      )}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              )
-            })}
+                        {/* No celular, a data vem aqui, no lugar da coluna que some. */}
+                        <span className="text-xs text-muted-foreground tabular-nums sm:hidden">
+                          {format(parseISO(lote.validade), "dd/MM/yyyy")}
+                        </span>
+                        {situacao.estoqueBaixo && (
+                          <span className="pl-[11px] text-xs text-muted-foreground">
+                            Estoque baixo
+                          </span>
+                        )}
+                        {destino && (
+                          <span className="pl-[11px] text-xs font-medium">
+                            {ROTULO_DESTINO[destino]}
+                          </span>
+                        )}
+                      </span>
+                    </TableCell>
+                  </LinhaAnimada>
+                )
+              })}
+            </AnimatePresence>
           </TableBody>
         </Table>
       </div>
+
+      <BarraEmLote
+        aberta={marcados.length > 0}
+        texto={textoDosLotes(marcados.length)}
+        nota={notaDosLotes(divisao.semDestino.length)}
+        aoLimpar={() => setSelecionados(new Set())}
+      >
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="max-md:h-11"
+          disabled={divisao.devolver.length === 0}
+          onClick={() => separar("devolucao", divisao.devolver)}
+        >
+          <ArrowLeftRightIcon data-icon="inline-start" />
+          Devolver {plural(divisao.devolver.length, "lote", "lotes")}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="max-md:h-11"
+          disabled={divisao.descartar.length === 0}
+          onClick={() => separar("descarte", divisao.descartar)}
+        >
+          <Trash2Icon data-icon="inline-start" />
+          Descartar {plural(divisao.descartar.length, "vencido", "vencidos")}
+        </Button>
+      </BarraEmLote>
     </div>
   )
 }

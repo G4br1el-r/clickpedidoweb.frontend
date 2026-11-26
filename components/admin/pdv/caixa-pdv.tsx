@@ -34,6 +34,7 @@ import {
 } from "@/lib/admin/regras/pdv"
 import { emReais, formatoMoeda } from "@/lib/formato"
 import { cn } from "@/lib/utils"
+import { BotaoCarregando } from "../movimento/botao-carregando"
 
 export type Pagamento = VendaPdv["pagamento"]
 
@@ -497,16 +498,18 @@ export function CaixaPdv({
             Venda concluída no balcão
           </FieldLabel>
         </Field>
-        <Button
+        <BotaoCarregando
           type="button"
           size="lg"
           className="h-11 text-[15px]"
-          disabled={Boolean(bloqueio) || finalizando}
+          carregando={finalizando}
+          rotuloCarregando="Finalizando a venda"
+          disabled={Boolean(bloqueio)}
           onClick={aoFinalizar}
         >
           {estado.concluida ? "Finalizar venda" : "Mandar para a fila"}
           <Tecla className="ml-1.5 text-primary-foreground/80">F9</Tecla>
-        </Button>
+        </BotaoCarregando>
         {bloqueio && estado.itens.length > 0 && (
           <p className="-mt-1 text-center text-xs text-muted-foreground">{bloqueio}</p>
         )}

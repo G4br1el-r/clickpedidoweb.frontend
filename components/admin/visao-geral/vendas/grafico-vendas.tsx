@@ -12,6 +12,7 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart"
 import type { PontoDeVendas } from "@/lib/admin/regras/dashboard/vendas"
+import { animacaoDoGrafico } from "@/lib/admin/regras/grafico-animacao"
 import { emReais, emReaisCurto } from "@/lib/formato"
 import type { MedidaDoGrafico } from "../grafico-por-dia"
 
@@ -94,7 +95,7 @@ export default function GraficoDeVendas({
           fill="var(--color-anterior)"
           radius={[4, 4, 0, 0]}
           maxBarSize={24}
-          isAnimationActive={!semMovimento}
+          {...animacaoDoGrafico(semMovimento)}
         />
         <Bar
           dataKey="atual"
@@ -102,7 +103,7 @@ export default function GraficoDeVendas({
           fill="var(--color-atual)"
           radius={[4, 4, 0, 0]}
           maxBarSize={14}
-          isAnimationActive={!semMovimento}
+          {...animacaoDoGrafico(semMovimento)}
           onClick={(barra: { payload?: { ponto: PontoDeVendas } }) => {
             if (barra.payload) roteador.push(pedidosDo(barra.payload.ponto))
           }}

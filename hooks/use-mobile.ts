@@ -1,6 +1,11 @@
 import * as React from "react"
 
-const MOBILE_BREAKPOINT = 768
+/**
+ * Abaixo disto a barra lateral do painel vira gaveta. Com 768 px (tablet em pé) a lateral aberta
+ * deixava ~480 px para o conteúdo, que ainda usa os layouts de 768: tabelas cortadas e colunas
+ * espremidas. A gaveta devolve a largura toda.
+ */
+const MOBILE_BREAKPOINT = 1024
 
 export function useIsMobile() {
   const [isMobile, setIsMobile] = React.useState<boolean | undefined>(undefined)

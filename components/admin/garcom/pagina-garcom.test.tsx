@@ -220,3 +220,46 @@ describe("PaginaGarcom", () => {
     expect(useGarcom.getState().nome).toBe("Rafa")
   })
 })
+
+describe("PaginaGarcom: ordem e feedback", () => {
+  test("a mesa vem antes do nome: é o que o garçom escolhe a cada rodada", async () => {
+    await abrir()
+    const mesa = screen.getByRole("combobox", { name: "Mesa" })
+    const nome = screen.getByRole("textbox", { name: "Seu nome" })
+    expect(mesa.compareDocumentPosition(nome) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
+  test("enviar para a cozinha mostra o botão ocupado até o servidor responder", async () => {
+    await api().mesas.criar({ numero: 71 })
+    let terminar: () => void = () => {}
+    const lancar = vi.spyOn(api().mesas, "lancar").mockImplementation(
+      () =>
+        new Promise((resolver) => {
+          terminar = () => resolver({} as never)
+        }),
+    )
+    const usuario = await abrir()
+    const { simples } = await produtos()
+    await escolherMesa(usuario, 71)
+    await usuario.click(botao(simples.nome))
+    await usuario.click(bandeja().getByRole("button", { name: "Enviar para a cozinha" }))
+
+    expect(await bandeja().findByRole("status", { name: "Enviando a rodada" })).toBeInTheDocument()
+    expect(bandeja().getByRole("button", { name: /Enviar para a cozinha/ })).toHaveAttribute(
+      "aria-busy",
+      "true",
+    )
+    terminar()
+    lancar.mockRestore()
+  })
+
+  test("a conferência lenta das mesas mostra o radar ao vivo", async () => {
+    await abrir()
+    const listar = vi.spyOn(api().mesas, "listar").mockImplementation(() => new Promise(() => {}))
+    window.dispatchEvent(new Event("visibilitychange"))
+    expect(
+      await screen.findByRole("status", { name: "Sincronizando as mesas" }),
+    ).toBeInTheDocument()
+    listar.mockRestore()
+  })
+})

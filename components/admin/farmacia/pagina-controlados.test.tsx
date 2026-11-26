@@ -93,3 +93,30 @@ describe("PaginaControlados", () => {
     expect(await screen.findByText(/Arquivo do SNGPC gerado/)).toBeInTheDocument()
   })
 })
+
+describe("PaginaControlados: carregamento", () => {
+  test("enquanto carrega, mostra o esqueleto da escrituração", async () => {
+    render(
+      <Provedores>
+        <PaginaControlados />
+      </Provedores>,
+    )
+    const aviso = screen.getByRole("status", { name: "Carregando a escrituração" })
+    expect(within(aviso).getAllByTestId("esqueleto-linha").length).toBeGreaterThan(0)
+    await screen.findByRole("table", { name: "Saldo por medicamento" }, { timeout: 8000 })
+    expect(
+      screen.queryByRole("status", { name: "Carregando a escrituração" }),
+    ).not.toBeInTheDocument()
+  })
+
+  test("gerar o arquivo do SNGPC mostra o radar até terminar", async () => {
+    const usuario = await abrir()
+    const botao = screen.getByRole("button", { name: "Exportar para o SNGPC" })
+    await usuario.click(botao)
+    expect(botao).toHaveAttribute("aria-busy", "true")
+    expect(botao).toBeDisabled()
+    expect(screen.getByRole("status", { name: "Gerando o arquivo do SNGPC" })).toBeInTheDocument()
+    expect(await screen.findByText(/Arquivo do SNGPC gerado/)).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Exportar para o SNGPC" })).toBeEnabled()
+  })
+})

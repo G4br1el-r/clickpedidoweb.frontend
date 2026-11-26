@@ -16,6 +16,7 @@ import {
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { useCriarMesa } from "@/lib/admin/dados/consultas-mesas"
+import { BotaoCarregando } from "../movimento/botao-carregando"
 
 /** Botão e janela de mesa nova: número único e, se quiser, um nome. */
 export function NovaMesa() {
@@ -36,7 +37,7 @@ export function NovaMesa() {
       }}
     >
       <DialogTrigger asChild>
-        <Button type="button" size="sm">
+        <Button type="button" size="sm" className="max-sm:h-11">
           <PlusIcon data-icon="inline-start" />
           Nova mesa
         </Button>
@@ -90,9 +91,13 @@ export function NovaMesa() {
             </Field>
           </FieldGroup>
           <DialogFooter>
-            <Button type="submit" disabled={criar.isPending}>
+            <BotaoCarregando
+              type="submit"
+              carregando={criar.isPending}
+              rotuloCarregando="Criando a mesa"
+            >
               Criar mesa
-            </Button>
+            </BotaoCarregando>
           </DialogFooter>
         </form>
       </DialogContent>

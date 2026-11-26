@@ -13,7 +13,7 @@ export function ShellAdmin({ className, children }: { className?: string; childr
   useSegmentoCarregado()
 
   return (
-    <SidebarProvider className={cn("bg-sidebar", className)}>
+    <SidebarProvider className={cn("painel-admin bg-sidebar", className)}>
       <BarraLateralAdmin />
       {/* A área de trabalho é uma folha sobre o fundo: plana, com fio, sem sombra. */}
       <SidebarInset className="min-w-0 bg-card md:peer-data-[variant=inset]:rounded-2xl md:peer-data-[variant=inset]:shadow-none md:peer-data-[variant=inset]:ring-1 md:peer-data-[variant=inset]:ring-border/70">

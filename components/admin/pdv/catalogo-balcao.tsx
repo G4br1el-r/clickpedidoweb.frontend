@@ -18,7 +18,12 @@ import { emReais } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { Traco } from "../traco"
 
-const GRADE = "grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6"
+/**
+ * Tantas colunas quanto cabem, cada uma com pelo menos 7,5 rem. O número de colunas por janela não
+ * serve aqui: o catálogo divide a tela com a comanda e a barra lateral, e num notebook de 1024 px
+ * sobravam 70 px por produto.
+ */
+const GRADE = "grid grid-cols-[repeat(auto-fill,minmax(7.5rem,1fr))] gap-2"
 
 /** Categoria do trilho: texto, e a escolhida ganha o traço embaixo. */
 const ITEM_TRILHO = cn(

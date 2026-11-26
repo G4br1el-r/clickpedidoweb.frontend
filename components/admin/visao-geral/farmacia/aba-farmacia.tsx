@@ -122,28 +122,34 @@ export function AbaFarmacia({
           {canais.length === 0 ? (
             <p className="text-sm text-muted-foreground">Nenhuma receita recebida no período.</p>
           ) : (
-            <Table aria-label="Receitas por canal">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Canal</TableHead>
-                  <TableHead className="text-right">Recebidas</TableHead>
-                  <TableHead className="text-right">Aprovadas</TableHead>
-                  <TableHead className="text-right">Recusadas</TableHead>
-                  <TableHead className="text-right">A conferir</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {canais.map((canal) => (
-                  <TableRow key={canal.canal}>
-                    <TableCell className="font-medium">{CANAL[canal.canal]}</TableCell>
-                    <TableCell className="text-right tabular-nums">{canal.recebidas}</TableCell>
-                    <TableCell className="text-right tabular-nums">{canal.aprovadas}</TableCell>
-                    <TableCell className="text-right tabular-nums">{canal.recusadas}</TableCell>
-                    <TableCell className="text-right tabular-nums">{canal.aguardando}</TableCell>
+            <div className="@container">
+              {/* Num bloco estreito (notebook, celular de 320 px), a tabela encolhe o cabeçalho e o respiro para caber sem rolar. */}
+              <Table
+                aria-label="Receitas por canal"
+                className="@max-[30rem]:[&_td]:px-1 @max-[30rem]:[&_th]:px-1 @max-[30rem]:[&_th]:text-[11px]"
+              >
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Canal</TableHead>
+                    <TableHead className="text-right">Recebidas</TableHead>
+                    <TableHead className="text-right">Aprovadas</TableHead>
+                    <TableHead className="text-right">Recusadas</TableHead>
+                    <TableHead className="text-right">A conferir</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {canais.map((canal) => (
+                    <TableRow key={canal.canal}>
+                      <TableCell className="font-medium">{CANAL[canal.canal]}</TableCell>
+                      <TableCell className="text-right tabular-nums">{canal.recebidas}</TableCell>
+                      <TableCell className="text-right tabular-nums">{canal.aprovadas}</TableCell>
+                      <TableCell className="text-right tabular-nums">{canal.recusadas}</TableCell>
+                      <TableCell className="text-right tabular-nums">{canal.aguardando}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
         </Secao>
 

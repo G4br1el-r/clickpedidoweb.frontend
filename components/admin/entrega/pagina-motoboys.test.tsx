@@ -157,3 +157,38 @@ describe("PaginaMotoboys", () => {
     expect(screen.getByText("A loja não está aceitando entregas agora.")).toBeInTheDocument()
   })
 })
+
+describe("PaginaMotoboys: carregamento", () => {
+  test("enquanto carrega, mostra o esqueleto com a forma da lista", async () => {
+    render(
+      <Provedores>
+        <PaginaMotoboys />
+      </Provedores>,
+    )
+    expect(screen.getByRole("status", { name: "Carregando os motoboys" })).toBeInTheDocument()
+    expect(screen.getAllByTestId("esqueleto-linha")).toHaveLength(4)
+    await screen.findByRole("row", { name: /Diego Ramos/ }, { timeout: 8000 })
+    expect(screen.queryByRole("status", { name: "Carregando os motoboys" })).not.toBeInTheDocument()
+  })
+
+  test("salvar um motoboy mostra o botão ocupado até o servidor responder", async () => {
+    let terminar: () => void = () => {}
+    const salvar = vi.spyOn(api().motoboys, "salvar").mockImplementation(
+      () =>
+        new Promise((resolver) => {
+          terminar = () =>
+            resolver({ id: "novo", nome: "Caio Lima", telefone: "12991110000", ativo: true })
+        }),
+    )
+    const usuario = await abrir()
+    await usuario.click(screen.getByRole("button", { name: "Novo motoboy" }))
+    const janela = within(screen.getByRole("dialog", { name: "Novo motoboy" }))
+    await usuario.type(janela.getByRole("textbox", { name: "Nome" }), "Caio Lima")
+    await usuario.click(janela.getByRole("button", { name: "Salvar" }))
+
+    expect(await janela.findByRole("status", { name: "Salvando o motoboy" })).toBeInTheDocument()
+    expect(janela.getByRole("button", { name: /Salvar/ })).toHaveAttribute("aria-busy", "true")
+    terminar()
+    salvar.mockRestore()
+  })
+})

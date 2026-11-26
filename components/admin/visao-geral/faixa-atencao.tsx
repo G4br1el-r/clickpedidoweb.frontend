@@ -36,7 +36,7 @@ export function FaixaAtencao({ alertas }: { alertas: Alerta[] }) {
             <span className="min-w-0 flex-1">{alerta.texto}</span>
             <Link
               href={alerta.acao.href}
-              className="shrink-0 font-medium underline-offset-4 hover:underline"
+              className="alvo-toque relative shrink-0 font-medium underline-offset-4 hover:underline"
             >
               {alerta.acao.rotulo}
             </Link>

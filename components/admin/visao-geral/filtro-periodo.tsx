@@ -23,6 +23,7 @@ import {
   type Periodo,
   periodoDoAtalho,
 } from "@/lib/admin/regras/periodo"
+import { FaixaRolavel } from "../faixa-rolavel"
 
 /**
  * O período fica no endereço: `?de=2026-11-01&ate=2026-11-13`. `?data=` (um dia só) é o
@@ -65,24 +66,26 @@ export function FiltroPeriodo() {
 
   return (
     <div className="flex flex-col items-start gap-2 sm:flex-row sm:flex-wrap sm:items-center">
-      <ToggleGroup
-        type="single"
-        variant="segmento"
-        size="sm"
-        aria-label="Período"
-        value={periodo?.atalho ?? ""}
-        onValueChange={(valor) => {
-          if (agora && valor) escolher(periodoDoAtalho(valor as Atalho, agora))
-        }}
-        // Uma linha só: no celular estreito, o trilho rola de lado em vez de quebrar.
-        className="sem-barra max-w-full flex-nowrap overflow-x-auto"
-      >
-        {ATALHOS.map(({ id, rotulo }) => (
-          <ToggleGroupItem key={id} value={id} className="cursor-pointer">
-            {rotulo}
-          </ToggleGroupItem>
-        ))}
-      </ToggleGroup>
+      {/* Uma linha só: no celular estreito, o trilho rola de lado em vez de quebrar. */}
+      <FaixaRolavel className="max-w-full">
+        <ToggleGroup
+          type="single"
+          variant="segmento"
+          size="sm"
+          aria-label="Período"
+          value={periodo?.atalho ?? ""}
+          onValueChange={(valor) => {
+            if (agora && valor) escolher(periodoDoAtalho(valor as Atalho, agora))
+          }}
+          className="w-max flex-nowrap"
+        >
+          {ATALHOS.map(({ id, rotulo }) => (
+            <ToggleGroupItem key={id} value={id} className="cursor-pointer max-md:min-h-11">
+              {rotulo}
+            </ToggleGroupItem>
+          ))}
+        </ToggleGroup>
+      </FaixaRolavel>
 
       <Popover
         open={aberto}
@@ -92,7 +95,12 @@ export function FiltroPeriodo() {
         }}
       >
         <PopoverTrigger asChild>
-          <Button type="button" variant="outline" size="sm" className="justify-start tabular-nums">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="justify-start tabular-nums max-md:min-h-11"
+          >
             <CalendarRangeIcon data-icon="inline-start" />
             {periodo ? textoDoPeriodo(periodo) : "Escolher datas"}
           </Button>

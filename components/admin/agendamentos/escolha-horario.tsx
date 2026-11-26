@@ -9,10 +9,10 @@ import { Calendar } from "@/components/ui/calendar"
 import { FieldLegend, FieldSet } from "@/components/ui/field"
 import { Label } from "@/components/ui/label"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Skeleton } from "@/components/ui/skeleton"
 import { useHorariosLivres } from "@/lib/admin/dados/consultas-agenda"
 import type { HorarioFuncionamento } from "@/lib/admin/dados/tipos"
 import { expediente } from "@/lib/admin/regras/agenda"
+import { EsqueletoHorarios } from "./esqueletos-agenda"
 
 /** "1 h", "1 h 30" ou "30 min". */
 export function textoDuracao(minutos: number) {
@@ -59,7 +59,7 @@ export function EscolhaHorario({
   } else if (!dia) {
     horariosDoDia = <p className="text-sm text-muted-foreground">Escolha o dia.</p>
   } else if (!livres) {
-    horariosDoDia = <Skeleton className="h-24 w-full" />
+    horariosDoDia = <EsqueletoHorarios />
   } else if (livres.length === 0) {
     horariosDoDia = <p className="text-sm text-muted-foreground">Nenhum horário livre neste dia.</p>
   } else {
@@ -78,7 +78,7 @@ export function EscolhaHorario({
             <Label
               key={livre}
               htmlFor={id}
-              className="flex min-h-9 cursor-pointer items-center justify-center rounded-md bg-background text-sm font-medium tabular-nums ring-1 ring-border/80 transition-[background-color,color,box-shadow] duration-150 hover:ring-foreground/30 active:scale-[0.97] has-focus-visible:ring-3 has-focus-visible:ring-ring/50 has-[[data-state=checked]]:bg-primary has-[[data-state=checked]]:text-primary-foreground has-[[data-state=checked]]:ring-primary"
+              className="flex min-h-9 cursor-pointer max-sm:min-h-11 items-center justify-center rounded-md bg-background text-sm font-medium tabular-nums ring-1 ring-border/80 transition-[background-color,color,box-shadow] duration-150 hover:ring-foreground/30 active:scale-[0.97] has-focus-visible:ring-3 has-focus-visible:ring-ring/50 has-[[data-state=checked]]:bg-primary has-[[data-state=checked]]:text-primary-foreground has-[[data-state=checked]]:ring-primary"
             >
               <RadioGroupItem id={id} value={livre} className="sr-only" />
               {hora}

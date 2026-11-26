@@ -223,3 +223,194 @@
   --tom-preparo-texto: #f0b43a;
   --dourado: #f5b700;
 }
+
+/*
+ * Movimento do painel. A página entra a cada troca de módulo (o template remonta), os
+ * esqueletos entram em sequência e brilham de leve, e com movimento reduzido tudo fica quieto.
+ */
+@keyframes pagina-admin-entra {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes esqueleto-entra {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes esqueleto-brilho {
+  0% {
+    background-position: 130% 0;
+  }
+  100% {
+    background-position: -30% 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .pagina-admin-entra {
+    animation: pagina-admin-entra 0.28s var(--ease-saida) both;
+  }
+
+  /* Página que já entra em sequência (Configurações): o fade da página somaria ao dos blocos. */
+  .pagina-admin-entra:has(.sequencia-admin) {
+    animation: none;
+  }
+
+  .esqueleto-entra {
+    animation: esqueleto-entra 0.24s var(--ease-saida) both;
+  }
+
+  /* O pulso do componente base dá lugar a um brilho que atravessa o bloco. */
+  .painel-admin [data-slot="skeleton"] {
+    background-image: linear-gradient(
+      100deg,
+      transparent 30%,
+      color-mix(in oklab, var(--foreground) 7%, transparent) 50%,
+      transparent 70%
+    );
+    background-size: 250% 100%;
+    animation: esqueleto-brilho 1.6s ease-in-out infinite;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .painel-admin [data-slot="skeleton"] {
+    animation: none;
+  }
+}
+
+/*
+ * Entrada em CSS dos blocos e dos itens de lista: roda na primeira pintura, sem esperar o
+ * JavaScript. O Motion cuida só da saída. `--atraso` é a espera do item na lista (teto de 8).
+ */
+@keyframes entra-bloco {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes entra-item {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes entra-opacidade {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .entra-bloco {
+    animation: entra-bloco 0.28s var(--ease-saida) var(--atraso, 0s) both;
+  }
+
+  .entra-item {
+    animation: entra-item 0.24s var(--ease-saida) var(--atraso, 0s) both;
+  }
+
+  /* Etapas de uma sequência (seções de uma aba, blocos de campos): uma depois da outra. */
+  .sequencia-admin > .entra-bloco:nth-child(2) {
+    animation-delay: 0.05s;
+  }
+  .sequencia-admin > .entra-bloco:nth-child(3) {
+    animation-delay: 0.1s;
+  }
+  .sequencia-admin > .entra-bloco:nth-child(4) {
+    animation-delay: 0.15s;
+  }
+  .sequencia-admin > .entra-bloco:nth-child(5) {
+    animation-delay: 0.2s;
+  }
+  .sequencia-admin > .entra-bloco:nth-child(6) {
+    animation-delay: 0.25s;
+  }
+  .sequencia-admin > .entra-bloco:nth-child(n + 7) {
+    animation-delay: 0.3s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .entra-bloco,
+  .entra-item {
+    animation: entra-opacidade 0.2s linear var(--atraso, 0s) both;
+  }
+}
+
+/*
+ * Toque no celular. Com o dedo (`pointer: coarse`), todo controle do painel alcança 44 px sem
+ * mudar de tamanho na tela: um `::after` transparente, centrado no controle, amplia a área.
+ * Vale também para as janelas, que saem do painel (portal). O desenho fica igual; só o toque cresce.
+ * Campos de texto não entram: são largos e o dedo cai em qualquer ponto deles.
+ */
+@media (pointer: coarse) {
+  :is(.painel-admin, [data-slot$="-content"])
+    :is(
+      [class~="group/button"],
+      [class~="group/toggle"],
+      [data-slot="switch"],
+      [data-slot="checkbox"],
+      [data-slot="radio-group-item"]
+    )::after {
+    content: "";
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    bottom: auto;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+    background: transparent;
+    opacity: 1;
+  }
+}
+
+/*
+ * O mesmo alcance de 44 px para o que não é botão do sistema: as abas (a linha de baixo da aba
+ * usa o `::after`, então a ampliação vai no `::before`) e qualquer link ou botão pequeno com a
+ * classe `alvo-toque`. Só no celular; no computador o desenho e o clique são os de sempre.
+ */
+@media (pointer: coarse) {
+  :is(.painel-admin, [data-slot$="-content"]) :is([data-slot="tabs-trigger"], .alvo-toque)::before {
+    content: "";
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+  }
+}
+
+/*
+ * Em tela de toque, a lista da barra lateral e os seletores crescem de verdade (são largos, então
+ * ganham altura sem estranhar), e o trilho de arrastar, que só serve ao mouse, some.
+ */
+@media (pointer: coarse) {
+  .painel-admin
+    :is(
+      [data-sidebar="menu-button"],
+      [data-sidebar="menu-sub-button"],
+      [data-sidebar="group-label"]
+    ) {
+    min-height: 44px;
+  }
+
+  .painel-admin [data-slot="sidebar-rail"] {
+    display: none;
+  }
+
+  .painel-admin [data-slot="select-trigger"] {
+    min-height: 36px;
+  }
+}

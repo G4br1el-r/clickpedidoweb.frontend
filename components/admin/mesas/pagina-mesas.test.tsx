@@ -244,6 +244,84 @@ describe("PaginaMesas", () => {
       }),
     )
     expect(await screen.findByText("Mesa 60 excluída.")).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: /^Mesa 60\b/ })).not.toBeInTheDocument()
+    // A mesa sai da grade com um fade curto: some do documento logo em seguida.
+    await waitFor(() =>
+      expect(screen.queryByRole("button", { name: /^Mesa 60\b/ })).not.toBeInTheDocument(),
+    )
+  })
+})
+
+describe("PaginaMesas: carregamento e feedback", () => {
+  test("enquanto carrega, o esqueleto tem a forma da grade de mesas", async () => {
+    telaGrande()
+    render(
+      <Provedores>
+        <PaginaMesas />
+      </Provedores>,
+    )
+    expect(screen.getByRole("status", { name: "Carregando as mesas" })).toBeInTheDocument()
+    expect(screen.getAllByTestId("esqueleto-mesa")).toHaveLength(10)
+    await screen.findByRole("list", { name: "Mesas" }, { timeout: 8000 })
+    expect(screen.queryByRole("status", { name: "Carregando as mesas" })).not.toBeInTheDocument()
+  })
+
+  test("criar a mesa mostra o botão ocupado até o servidor responder", async () => {
+    let terminar: () => void = () => {}
+    const criar = vi.spyOn(api().mesas, "criar").mockImplementation(
+      () =>
+        new Promise((resolver) => {
+          terminar = () =>
+            resolver({ id: "m-70", numero: 70, nome: "Mesa 70", status: "livre" } as never)
+        }),
+    )
+    const usuario = await abrir()
+    await usuario.click(screen.getByRole("button", { name: "Nova mesa" }))
+    const janela = within(screen.getByRole("dialog", { name: "Nova mesa" }))
+    await usuario.type(janela.getByRole("spinbutton", { name: "Número" }), "70")
+    await usuario.click(janela.getByRole("button", { name: "Criar mesa" }))
+
+    expect(await janela.findByRole("status", { name: "Criando a mesa" })).toBeInTheDocument()
+    expect(janela.getByRole("button", { name: /Criar mesa/ })).toHaveAttribute("aria-busy", "true")
+    terminar()
+    criar.mockRestore()
+  })
+
+  test("fechar a conta mostra o botão ocupado até o servidor responder", async () => {
+    await mesaOcupada()
+    let terminar: () => void = () => {}
+    const fechar = vi.spyOn(api().mesas, "fecharConta").mockImplementation(
+      () =>
+        new Promise((resolver) => {
+          terminar = () => resolver({} as never)
+        }),
+    )
+    const usuario = await abrir()
+    await usuario.click(await cartao(60))
+    await usuario.click(comanda().getByRole("button", { name: "Fechar conta" }))
+    const janela = within(screen.getByRole("dialog", { name: "Fechar a conta da mesa 60" }))
+    await usuario.click(janela.getByRole("radio", { name: "Pix" }))
+    await usuario.click(janela.getByRole("button", { name: "Receber R$ 13,50" }))
+
+    expect(await janela.findByRole("status", { name: "Fechando a conta" })).toBeInTheDocument()
+    terminar()
+    fechar.mockRestore()
+  })
+
+  test("imprimir a conta mostra o papel saindo enquanto a impressora trabalha", async () => {
+    await mesaOcupada()
+    const usuario = await abrir()
+    await usuario.click(await cartao(60))
+    await usuario.click(comanda().getByRole("button", { name: "Imprimir conta" }))
+    expect(comanda().getByRole("status", { name: "Imprimindo a conta" })).toBeInTheDocument()
+  })
+
+  test("a conferência lenta com o servidor mostra o radar ao vivo", async () => {
+    await abrir()
+    const listar = vi.spyOn(api().mesas, "listar").mockImplementation(() => new Promise(() => {}))
+    window.dispatchEvent(new Event("visibilitychange"))
+    expect(
+      await screen.findByRole("status", { name: "Sincronizando as mesas" }),
+    ).toBeInTheDocument()
+    listar.mockRestore()
   })
 })

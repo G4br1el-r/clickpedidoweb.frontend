@@ -1,7 +1,7 @@
 "use client"
 
 import { RabbitIcon, TurtleIcon } from "lucide-react"
-import { AnimatePresence, motion } from "motion/react"
+import { AnimatePresence, motion, useReducedMotion } from "motion/react"
 import { useEffect, useRef } from "react"
 import { toast } from "sonner"
 import { Dica } from "@/components/dica"
@@ -16,6 +16,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
 import { Slider } from "@/components/ui/slider"
 import { ehPro, useConfig, useOpcaoPro } from "@/lib/admin/config"
 import { FONTES_TEXTO, FONTES_TITULO } from "@/lib/admin/fontes"
+import { movimentoDoBicho } from "@/lib/admin/regras/bicho-velocidade"
 import type { TelaPrevia } from "@/lib/admin/secoes"
 import { clienteAtual } from "@/lib/cliente"
 import { cn } from "@/lib/utils"
@@ -540,6 +541,7 @@ const PASSO_VELOCIDADE = 0.1
  * a tartaruga anda devagar, o coelho dá pulinhos.
  */
 function CampoVelocidade() {
+  const reduzido = useReducedMotion() ?? false
   const velocidade = useConfig((estado) => estado.config.animacoes.velocidade)
   const atualizar = useConfig((estado) => estado.atualizar)
   // O slide vai da tartaruga (esquerda) ao coelho (direita): o contrário da duração.
@@ -589,16 +591,7 @@ function CampoVelocidade() {
           >
             <motion.span
               className="block"
-              animate={
-                calma
-                  ? { x: [0, 2.5, 0, -1, 0], rotate: [0, -5, 0, 3, 0], scale: 1.2 }
-                  : { x: 0, rotate: 0, scale: 1 - fracao * 0.15 }
-              }
-              transition={
-                calma
-                  ? { duration: 2.2, repeat: Number.POSITIVE_INFINITY, ease: "easeInOut" }
-                  : { duration: 0.3 }
-              }
+              {...movimentoDoBicho({ bicho: "tartaruga", ativo: calma, fracao, reduzido })}
             >
               <TurtleIcon className="size-6" />
             </motion.span>
@@ -623,21 +616,7 @@ function CampoVelocidade() {
           >
             <motion.span
               className="block"
-              animate={
-                rapida
-                  ? { y: [0, -7, 0, -3, 0], rotate: [0, -8, 0, -4, 0], scale: 1.2 }
-                  : { y: 0, rotate: 0, scale: 0.85 + fracao * 0.15 }
-              }
-              transition={
-                rapida
-                  ? {
-                      duration: 0.55,
-                      repeat: Number.POSITIVE_INFINITY,
-                      repeatDelay: 0.35,
-                      ease: "easeOut",
-                    }
-                  : { duration: 0.3 }
-              }
+              {...movimentoDoBicho({ bicho: "coelho", ativo: rapida, fracao, reduzido })}
             >
               <RabbitIcon className="size-6" />
             </motion.span>

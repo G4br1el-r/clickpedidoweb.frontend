@@ -2,14 +2,13 @@
 
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
-import { PrinterIcon, ReceiptTextIcon, SquareKanbanIcon } from "lucide-react"
+import { ReceiptTextIcon, SquareKanbanIcon } from "lucide-react"
 import Link from "next/link"
 import { parseAsString, useQueryState } from "nuqs"
-import { useMemo, useRef, useState } from "react"
+import { type ReactNode, useMemo, useRef, useState } from "react"
 import { flushSync } from "react-dom"
 import { useReactToPrint } from "react-to-print"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useLoja, useMotoboys, usePedidos } from "@/lib/admin/dados/consultas"
 import { useCategorias, useProdutos } from "@/lib/admin/dados/consultas-cardapio"
@@ -29,9 +28,12 @@ import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
 import { lotesDemo, movimentosDemo, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { FaixaRolavel } from "../faixa-rolavel"
 import { AbaAgenda } from "./agenda/aba-agenda"
+import { BotaoImprimir } from "./botao-imprimir"
 import { AbaClientes } from "./clientes/aba-clientes"
 import { AbaEntrega } from "./entrega/aba-entrega"
+import { EsqueletoVisaoGeral } from "./esqueletos-visao-geral"
 import { ProvedorDaAba } from "./exportar"
 import { AbaFarmacia } from "./farmacia/aba-farmacia"
 import { FiltroPeriodo, usePeriodo } from "./filtro-periodo"
@@ -40,32 +42,11 @@ import { AbaOperacao } from "./operacao/aba-operacao"
 import { AbaResumo } from "./painel-visao-geral"
 import { AbaPesagem } from "./pesagem/aba-pesagem"
 import { AbaProdutos } from "./produtos/aba-produtos"
+import { TrocaDeAba } from "./troca-de-aba"
 import { AbaVendas } from "./vendas/aba-vendas"
 
 /** De quanto em quanto tempo o Resumo confere os pedidos. */
 const ATUALIZAR_RESUMO_A_CADA = 30_000
-
-/** Esqueleto no formato final da tela: blocos de hoje, do período, gráfico e listas. */
-function EsqueletoVisaoGeral() {
-  return (
-    <div role="status" aria-label="Carregando a visão geral" className="flex flex-col gap-10">
-      {[0, 1].map((secao) => (
-        <div key={secao} className="flex flex-col gap-3">
-          <Skeleton className="h-5 w-40" />
-          <div className="grid grid-cols-2 gap-x-8 border-y border-border/70 py-4 lg:grid-cols-4">
-            {[0, 1, 2, 3].map((fato) => (
-              <div key={fato} className="flex flex-col gap-2 py-2">
-                <Skeleton className="h-3.5 w-24" />
-                <Skeleton className="h-7 w-32" />
-              </div>
-            ))}
-          </div>
-        </div>
-      ))}
-      <Skeleton className="h-72 rounded-xl" />
-    </div>
-  )
-}
 
 /** Visão geral do painel: hoje ao vivo e o desempenho do período escolhido. */
 export function VisaoGeral() {
@@ -78,7 +59,7 @@ export function VisaoGeral() {
   // Uma busca só cobre o período, o anterior (para comparar) e hoje.
   const filtro = agora && periodo ? periodoDaBusca(periodo, agora) : undefined
   // No Resumo, hoje e os alertas se atualizam sozinhos; as abas de análise, não.
-  const { data: pedidos } = usePedidos(filtro, {
+  const { data: pedidos, isFetching: sincronizando } = usePedidos(filtro, {
     ativo: Boolean(filtro),
     atualizarACada: aba === "resumo" ? ATUALIZAR_RESUMO_A_CADA : undefined,
   })
@@ -172,6 +153,82 @@ export function VisaoGeral() {
     onAfterPrint: () => setImpressoEm(null),
   })
 
+  /** O conteúdo da aba aberta, ou `null` enquanto o que ela precisa ainda não chegou. */
+  const corpo = ((): ReactNode => {
+    if (!resumo || !periodo) return null
+    switch (aba) {
+      case "vendas":
+        return <AbaVendas pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
+      case "clientes":
+        return pedidosDeClientes && loja && agora ? (
+          <AbaClientes
+            pedidos={pedidosDeClientes}
+            agora={agora}
+            segmento={segmento}
+            loja={loja}
+            linkDaLoja={typeof window === "undefined" ? "/" : `${window.location.origin}/`}
+          />
+        ) : null
+      case "operacao":
+        return <AbaOperacao pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
+      case "produtos":
+        // Sem o cardápio, "o que não vendeu" estaria errado: espera os dois chegarem.
+        return produtos && categorias ? (
+          <AbaProdutos
+            pedidos={pedidos ?? []}
+            periodo={periodo}
+            segmento={segmento}
+            produtos={produtos}
+            categorias={categorias}
+          />
+        ) : null
+      case "entrega":
+        return <AbaEntrega pedidos={pedidos ?? []} periodo={periodo} motoboys={motoboys ?? []} />
+      case "agenda":
+        return agenda && loja && agora ? (
+          <AbaAgenda
+            pedidos={agenda}
+            periodo={periodo}
+            agora={agora}
+            horarios={loja.horarios}
+            capacidade={loja.capacidadeAtendimentos ?? 1}
+          />
+        ) : null
+      case "farmacia":
+        return produtos && agora ? (
+          <AbaFarmacia
+            pedidos={pedidos ?? []}
+            periodo={periodo}
+            agora={agora}
+            produtos={produtos}
+            receitas={farmacia.receitas}
+            decisoes={decisoes}
+            lotes={farmacia.lotes}
+            movimentos={movimentos}
+          />
+        ) : null
+      case "pesagem":
+        return <AbaPesagem pedidos={pedidos ?? []} periodo={periodo} />
+      case "financeiro":
+        return (
+          <AbaFinanceiro pedidos={pedidos ?? []} periodo={periodo} taxas={loja?.taxasPagamento} />
+        )
+      default:
+        return (
+          <AbaResumo
+            resumo={resumo}
+            periodo={periodo}
+            segmento={segmento}
+            comparacao={comparacao}
+            alertas={alertas}
+            meta={meta}
+            destaques={destaques}
+            sincronizando={sincronizando}
+          />
+        )
+    }
+  })()
+
   return (
     <div className="flex flex-1 flex-col gap-6 p-4 md:p-6 lg:px-8">
       <CabecalhoPagina
@@ -184,23 +241,18 @@ export function VisaoGeral() {
         }
         acoes={
           <>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={!resumo}
-              onClick={() => imprimir()}
-            >
-              <PrinterIcon data-icon="inline-start" />
-              Imprimir
-            </Button>
-            <Button asChild variant="outline" size="sm">
+            <BotaoImprimir
+              imprimindo={impressoEm !== null}
+              desabilitado={!resumo}
+              aoClicar={() => imprimir()}
+            />
+            <Button asChild variant="outline" size="sm" className="max-md:min-h-11">
               <Link href="/admin/pedidos">
                 <ReceiptTextIcon data-icon="inline-start" />
                 Pedidos
               </Link>
             </Button>
-            <Button asChild size="sm">
+            <Button asChild size="sm" className="max-md:min-h-11">
               <Link href="/admin/fila">
                 <SquareKanbanIcon data-icon="inline-start" />
                 Abrir a fila
@@ -221,17 +273,23 @@ export function VisaoGeral() {
           direita esmaecida quando há mais abas. No notebook em diante, as abas cabem inteiras.
         */}
         <div className="max-md:sticky max-md:top-14 max-md:z-20 max-md:-mx-4 max-md:border-b max-md:border-border/70 max-md:bg-card max-md:px-4">
-          <TabsList
-            variant="line"
-            aria-label="Abas da visão geral"
-            className="max-md:w-full max-md:justify-start max-md:overflow-x-auto max-md:[mask-image:linear-gradient(to_right,black_85%,transparent)] max-md:[scrollbar-width:none]"
-          >
-            {abasDo(segmento).map((item) => (
-              <TabsTrigger key={item.id} value={item.id} className="flex-none cursor-pointer">
-                {item.titulo}
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <FaixaRolavel>
+            <TabsList
+              variant="line"
+              aria-label="Abas da visão geral"
+              className="w-max min-w-full justify-start"
+            >
+              {abasDo(segmento).map((item) => (
+                <TabsTrigger
+                  key={item.id}
+                  value={item.id}
+                  className="flex-none cursor-pointer max-md:min-h-11"
+                >
+                  {item.titulo}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </FaixaRolavel>
         </div>
 
         {aba === "clientes" ? (
@@ -264,89 +322,10 @@ export function VisaoGeral() {
               periodo={periodoDaAba ?? { de: new Date(0), ate: new Date(0) }}
               imprimindo={impressoEm !== null}
             >
-              {resumo && periodo ? (
-                aba === "vendas" ? (
-                  <AbaVendas pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
-                ) : aba === "clientes" ? (
-                  pedidosDeClientes && loja && agora ? (
-                    <AbaClientes
-                      pedidos={pedidosDeClientes}
-                      agora={agora}
-                      segmento={segmento}
-                      loja={loja}
-                      linkDaLoja={
-                        typeof window === "undefined" ? "/" : `${window.location.origin}/`
-                      }
-                    />
-                  ) : (
-                    <EsqueletoVisaoGeral />
-                  )
-                ) : aba === "operacao" ? (
-                  <AbaOperacao pedidos={pedidos ?? []} periodo={periodo} segmento={segmento} />
-                ) : aba === "produtos" ? (
-                  // Sem o cardápio, "o que não vendeu" estaria errado: espera os dois chegarem.
-                  produtos && categorias ? (
-                    <AbaProdutos
-                      pedidos={pedidos ?? []}
-                      periodo={periodo}
-                      segmento={segmento}
-                      produtos={produtos}
-                      categorias={categorias}
-                    />
-                  ) : (
-                    <EsqueletoVisaoGeral />
-                  )
-                ) : aba === "entrega" ? (
-                  <AbaEntrega pedidos={pedidos ?? []} periodo={periodo} motoboys={motoboys ?? []} />
-                ) : aba === "agenda" ? (
-                  agenda && loja && agora ? (
-                    <AbaAgenda
-                      pedidos={agenda}
-                      periodo={periodo}
-                      agora={agora}
-                      horarios={loja.horarios}
-                      capacidade={loja.capacidadeAtendimentos ?? 1}
-                    />
-                  ) : (
-                    <EsqueletoVisaoGeral />
-                  )
-                ) : aba === "farmacia" ? (
-                  produtos && agora ? (
-                    <AbaFarmacia
-                      pedidos={pedidos ?? []}
-                      periodo={periodo}
-                      agora={agora}
-                      produtos={produtos}
-                      receitas={farmacia.receitas}
-                      decisoes={decisoes}
-                      lotes={farmacia.lotes}
-                      movimentos={movimentos}
-                    />
-                  ) : (
-                    <EsqueletoVisaoGeral />
-                  )
-                ) : aba === "pesagem" ? (
-                  <AbaPesagem pedidos={pedidos ?? []} periodo={periodo} />
-                ) : aba === "financeiro" ? (
-                  <AbaFinanceiro
-                    pedidos={pedidos ?? []}
-                    periodo={periodo}
-                    taxas={loja?.taxasPagamento}
-                  />
-                ) : (
-                  <AbaResumo
-                    resumo={resumo}
-                    periodo={periodo}
-                    segmento={segmento}
-                    comparacao={comparacao}
-                    alertas={alertas}
-                    meta={meta}
-                    destaques={destaques}
-                  />
-                )
-              ) : (
-                <EsqueletoVisaoGeral />
-              )}
+              {/* Esqueleto e conteúdo trocam com fade; o esqueleto tem a forma da aba aberta. */}
+              <TrocaDeAba chave={`${aba}:${corpo ? "pronto" : "carregando"}`}>
+                {corpo ?? <EsqueletoVisaoGeral aba={aba} />}
+              </TrocaDeAba>
             </ProvedorDaAba>
           </div>
         </TabsContent>

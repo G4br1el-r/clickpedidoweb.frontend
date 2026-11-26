@@ -17,11 +17,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useAgora } from "@/hooks/use-agora"
-import { useTelaGrande } from "@/hooks/use-tela-grande"
+import { useLarguraDoElemento } from "@/hooks/use-largura-do-elemento"
 import {
   useAvancarPedido,
   useDefinirEntrega,
@@ -37,17 +36,22 @@ import {
   usePreferenciasFila,
   useSomDoAparelho,
 } from "@/lib/admin/preferencias-fila"
+import { resumoDosAjustes } from "@/lib/admin/regras/ajustes-fila"
 import { type ColunaFila, colunasDaFila, novosPedidos, resumoDaFila } from "@/lib/admin/regras/fila"
+import { lojaAbertaAgora } from "@/lib/admin/regras/loja"
 import { rotuloStatus, tomDoStatus } from "@/lib/admin/regras/status"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { temModulo } from "@/lib/admin/segmentos-painel"
 import { tocarAlerta } from "@/lib/admin/som"
 import { plural } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { EsqueletoCartoes } from "../esqueletos"
+import { FaixaRolavel } from "../faixa-rolavel"
 import { useImpressaoDePedidos } from "../impressao/impressao-de-pedidos"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
 import { Traco } from "../traco"
+import { AjustesDaFila } from "./ajustes-da-fila"
 import { CartaoFila } from "./cartao-fila"
 import { ChaveDaLoja } from "./chave-da-loja"
 
@@ -181,12 +185,19 @@ function Coluna({
   )
 }
 
+/**
+ * Largura mínima de uma coluna do quadro. Abaixo disso o cartão não leva o botão principal e as
+ * ações de impressão lado a lado: o quadro vira abas, que dão o cartão inteiro a cada coluna.
+ * Conta a largura do conteúdo (com a barra lateral aberta, um tablet de 768 px sobra pouco), não a da janela.
+ */
+const LARGURA_MINIMA_DA_COLUNA = 170
+
 /** Fila ao vivo: o quadro do que está em andamento, com as chaves da loja e o alerta. */
 export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao?: number }) {
   usePreferenciasCarregadas()
   const segmento = useSegmentoAtual((estado) => estado.segmento)
   const agora = useAgora(30_000)
-  const telaGrande = useTelaGrande()
+  const { ref: raiz, largura } = useLarguraDoElemento()
   const { data: fila } = useFila()
   const { data: loja } = useLoja()
   const { data: motoboys } = useMotoboys()
@@ -239,7 +250,7 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
   const temEntrega = temModulo(segmento, "motoboys")
 
   return (
-    <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
+    <div ref={raiz} className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
       <CabecalhoPagina
         titulo="Fila de pedidos"
         vivo
@@ -258,7 +269,15 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
         }
       />
 
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-y border-border/70 py-3">
+      <AjustesDaFila
+        resumo={resumoDosAjustes({
+          aberta: loja ? (agora ? lojaAbertaAgora(loja, agora) : loja.aberta) : false,
+          temEntrega,
+          aceitaEntrega: loja?.aceitaEntrega ?? false,
+          somLigado: preferencias.somLigado,
+          simular: preferencias.simular,
+        })}
+      >
         <ChaveDaLoja loja={loja} agora={agora} />
         {temEntrega && (
           <Chave
@@ -329,14 +348,10 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
             aoMudar={preferencias.ligarSimulacao}
           />
         </div>
-      </div>
+      </AjustesDaFila>
 
       {!colunas || !agora ? (
-        <div role="status" aria-label="Carregando a fila" className="grid gap-3 lg:grid-cols-4">
-          {[0, 1, 2, 3].map((indice) => (
-            <Skeleton key={indice} className="h-96 rounded-xl" />
-          ))}
-        </div>
+        <EsqueletoCartoes quantidade={4} rotulo="Carregando a fila" />
       ) : colunas.every((coluna) => coluna.pedidos.length === 0) ? (
         <Empty className="border">
           <EmptyHeader>
@@ -347,7 +362,7 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
             <EmptyDescription>Os pedidos novos aparecem aqui sozinhos.</EmptyDescription>
           </EmptyHeader>
         </Empty>
-      ) : telaGrande ? (
+      ) : largura !== null && largura >= colunas.length * LARGURA_MINIMA_DA_COLUNA ? (
         <div
           className="grid items-stretch divide-x divide-border/70"
           style={{ gridTemplateColumns: `repeat(${colunas.length}, minmax(0, 1fr))` }}
@@ -369,17 +384,19 @@ export function PaginaFila({ intervaloSimulacao = 60_000 }: { intervaloSimulacao
         </div>
       ) : (
         <Tabs defaultValue={colunas[0].id}>
-          <TabsList className="sem-barra w-full justify-start overflow-x-auto">
-            {colunas.map((coluna) => (
-              <TabsTrigger key={coluna.id} value={coluna.id} className="gap-1.5">
-                <Traco tom={tomDoStatus(coluna.status)} className="h-3" />
-                {coluna.titulo}
-                <span className="text-xs tabular-nums text-muted-foreground">
-                  {coluna.pedidos.length}
-                </span>
-              </TabsTrigger>
-            ))}
-          </TabsList>
+          <FaixaRolavel>
+            <TabsList className="w-max min-w-full justify-start">
+              {colunas.map((coluna) => (
+                <TabsTrigger key={coluna.id} value={coluna.id} className="gap-1.5">
+                  <Traco tom={tomDoStatus(coluna.status)} className="h-3" />
+                  {coluna.titulo}
+                  <span className="text-xs tabular-nums text-muted-foreground">
+                    {coluna.pedidos.length}
+                  </span>
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </FaixaRolavel>
           {colunas.map((coluna) => (
             <TabsContent key={coluna.id} value={coluna.id}>
               <Coluna

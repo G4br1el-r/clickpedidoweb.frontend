@@ -10,10 +10,12 @@ import { useAgenda } from "@/lib/admin/dados/consultas-agenda"
 import { resumoDaAgenda } from "@/lib/admin/regras/agenda"
 import { emReais } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { BarraAtualizando } from "../entrega/atualizando"
 import { DetalhesPedido } from "../pedidos/detalhes-pedido"
 import { usePedidoAberto } from "../pedidos/estado-lista"
 import { Indicador } from "../regua"
 import { AgendaDoDia } from "./agenda-do-dia"
+import { EsqueletoAgenda } from "./esqueletos-agenda"
 import { ListaAgenda } from "./lista-agenda"
 import { NovoAgendamento } from "./novo-agendamento"
 
@@ -29,22 +31,10 @@ function useDiaDaAgenda(agora: Date | null) {
 const REGUA =
   "grid grid-cols-3 border-y border-border/70 *:border-border/70 *:px-3 sm:*:px-4 [&>*:first-child]:pl-0 [&>*:not(:first-child)]:border-l"
 
-function EsqueletoAgenda() {
-  return (
-    <div role="status" aria-label="Carregando a agenda" className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <Skeleton className="h-5 w-56" />
-        <Skeleton className="h-3.5 w-40" />
-      </div>
-      <Skeleton className="h-[40rem] rounded-2xl" />
-    </div>
-  )
-}
-
 /** Agenda do salão: resumo, o dia em linha do tempo e a lista com busca. */
 export function PaginaAgendamentos() {
   const agora = useAgora(60_000)
-  const { data: pedidos } = useAgenda()
+  const { data: pedidos, isFetching } = useAgenda()
   const { data: loja } = useLoja()
   const [dia, mudarDia] = useDiaDaAgenda(agora)
   const [, abrirPedido] = usePedidoAberto()
@@ -100,7 +90,7 @@ export function PaginaAgendamentos() {
       ) : (
         <Tabs defaultValue="dia" className="gap-4">
           {/* Texto da aba inativa mais forte: o padrão não passa no contraste sobre o fundo cinza. */}
-          <TabsList>
+          <TabsList className="group-data-horizontal/tabs:max-sm:h-11">
             <TabsTrigger value="dia" className="text-foreground/80 dark:text-foreground/80">
               Dia
             </TabsTrigger>
@@ -108,6 +98,7 @@ export function PaginaAgendamentos() {
               Lista
             </TabsTrigger>
           </TabsList>
+          <BarraAtualizando ativa={isFetching} rotulo="Atualizando a agenda" className="-my-2" />
           <TabsContent value="dia">
             <AgendaDoDia
               dia={dia}

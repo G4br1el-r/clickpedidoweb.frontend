@@ -12,11 +12,10 @@ import {
   ReceiptIcon,
   Trash2Icon,
 } from "lucide-react"
-import { AnimatePresence, motion, useReducedMotion } from "motion/react"
+import { AnimatePresence, useReducedMotion } from "motion/react"
 import Link from "next/link"
 import { useRef, useState } from "react"
 import { NumericFormat } from "react-number-format"
-import { useReactToPrint } from "react-to-print"
 import { toast } from "sonner"
 import {
   AlertDialog,
@@ -50,7 +49,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet"
-import { Skeleton } from "@/components/ui/skeleton"
 import { useTelaGrande } from "@/hooks/use-tela-grande"
 import { useLoja, usePedido } from "@/lib/admin/dados/consultas"
 import {
@@ -68,7 +66,12 @@ import { estadoDaMesa } from "@/lib/admin/regras/mesas"
 import { rotuloPagamento } from "@/lib/admin/regras/rotulos"
 import { emReais, formatoMoeda } from "@/lib/formato"
 import { cn } from "@/lib/utils"
+import { EsqueletoLista } from "../esqueletos"
+import { BotaoCarregando } from "../movimento/botao-carregando"
+import { Carregador } from "../movimento/carregador"
+import { ItemEntrando } from "../movimento/entrada-admin"
 import { Traco } from "../traco"
+import { useImpressao } from "./use-impressao"
 
 const PAGAMENTOS: { valor: PagamentoMesa; rotulo: string; icone: typeof BanknoteIcon }[] = [
   { valor: "dinheiro", rotulo: "Dinheiro", icone: BanknoteIcon },
@@ -173,14 +176,16 @@ function ItemAvulso({ mesaId }: { mesaId: string }) {
           onValueChange={({ floatValue }) => setValor(floatValue)}
         />
       </Field>
-      <Button
+      <BotaoCarregando
         type="submit"
         variant="outline"
         aria-label="Incluir item avulso"
-        disabled={lancar.isPending}
+        className="max-md:size-11"
+        carregando={lancar.isPending}
+        rotuloCarregando="Incluindo o item"
       >
         <PlusIcon />
-      </Button>
+      </BotaoCarregando>
     </form>
   )
 }
@@ -234,10 +239,12 @@ function FecharConta({
           ))}
         </RadioGroup>
         <DialogFooter>
-          <Button
+          <BotaoCarregando
             type="button"
-            className="w-full"
-            disabled={!pagamento || fechar.isPending}
+            className="h-11 w-full"
+            carregando={fechar.isPending}
+            rotuloCarregando="Fechando a conta"
+            disabled={!pagamento}
             onClick={() =>
               pagamento &&
               fechar.mutate(
@@ -255,7 +262,7 @@ function FecharConta({
             }
           >
             Receber {emReais(pedido.total)}
-          </Button>
+          </BotaoCarregando>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -269,11 +276,9 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
   const liberar = useLiberarMesa()
   const [fechando, setFechando] = useState(false)
   const conta = useRef<HTMLDivElement>(null)
-  const imprimir = useReactToPrint({
-    contentRef: conta,
-    documentTitle: `Conta mesa ${mesa.numero}`,
-    pageStyle:
-      "@page { size: 80mm auto; margin: 4mm } body { font-family: monospace; font-size: 12px }",
+  const { imprimir, imprimindo } = useImpressao({
+    conteudo: conta,
+    titulo: `Conta mesa ${mesa.numero}`,
   })
   const vazia = pedido.itens.length === 0
   const aoErrar = (erro: Error) => toast.error(erro.message)
@@ -290,7 +295,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
     )
   const tirar = (item: ItemPedido) =>
     remover.mutate({ pedidoId: pedido.id, itemId: item.id }, { onError: aoErrar })
-  const semMovimento = useReducedMotion()
+  const semMovimento = useReducedMotion() ?? false
   const estado = estadoDaMesa(mesa, pedido)
 
   return (
@@ -326,14 +331,13 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
           >
             <AnimatePresence initial={false}>
               {pedido.itens.map((item) => (
-                <motion.li
+                // Item que entra ou sai da comanda: sempre a posição 0, sem esperar os outros.
+                <ItemEntrando
                   key={item.id}
+                  como="li"
+                  indice={0}
                   aria-label={item.nome}
                   layout={semMovimento ? false : "position"}
-                  initial={semMovimento ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                  transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
                   className="flex items-start gap-3 py-3"
                 >
                   <div className="flex min-w-0 flex-1 flex-col text-sm">
@@ -352,7 +356,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                     <Button
                       type="button"
                       size="icon-sm"
-                      className="max-md:size-10"
+                      className="max-md:size-11"
                       variant="outline"
                       aria-label="Menos um"
                       disabled={item.quantidade <= 1}
@@ -366,7 +370,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                     <Button
                       type="button"
                       size="icon-sm"
-                      className="max-md:size-10"
+                      className="max-md:size-11"
                       variant="outline"
                       aria-label="Mais um"
                       disabled={item.quantidade >= 999}
@@ -382,7 +386,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                     <Button
                       type="button"
                       size="icon-sm"
-                      className="max-md:size-10"
+                      className="max-md:size-11"
                       variant="ghost"
                       aria-label="Remover"
                       onClick={() => comConfirmacao(item, () => tirar(item))}
@@ -390,7 +394,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
                       <Trash2Icon />
                     </Button>
                   </div>
-                </motion.li>
+                </ItemEntrando>
               ))}
             </AnimatePresence>
           </ul>
@@ -411,12 +415,13 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           {vazia ? (
-            <Button
+            <BotaoCarregando
               type="button"
               variant="outline"
               size="lg"
               className="h-11 flex-1"
-              disabled={liberar.isPending}
+              carregando={liberar.isPending}
+              rotuloCarregando="Liberando a mesa"
               onClick={() =>
                 liberar.mutate(mesa.id, {
                   onSuccess: () => {
@@ -428,7 +433,7 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
               }
             >
               Liberar mesa
-            </Button>
+            </BotaoCarregando>
           ) : (
             <Button
               type="button"
@@ -437,7 +442,11 @@ function Comanda({ mesa, pedido, aoFechar }: { mesa: Mesa; pedido: Pedido; aoFec
               className="h-11 flex-1"
               onClick={() => imprimir()}
             >
-              <PrinterIcon data-icon="inline-start" />
+              {imprimindo ? (
+                <Carregador variante="papel" rotulo="Imprimindo a conta" className="mr-1.5" />
+              ) : (
+                <PrinterIcon data-icon="inline-start" />
+              )}
               Imprimir conta
             </Button>
           )}
@@ -556,7 +565,7 @@ function ConteudoComanda({ mesa, aoFechar }: { mesa: Mesa; aoFechar: () => void 
       <SheetHeader>
         <SheetTitle>Mesa {mesa.numero}</SheetTitle>
         <SheetDescription className="sr-only">Carregando a comanda</SheetDescription>
-        <Skeleton className="h-64 w-full" />
+        <EsqueletoLista linhas={3} rotulo="Carregando a comanda" className="mt-3" />
       </SheetHeader>
     )
   }

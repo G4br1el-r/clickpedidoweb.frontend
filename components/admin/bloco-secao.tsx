@@ -1,6 +1,10 @@
 import { type ReactNode, useId } from "react"
+import { Etapa } from "./secoes/sequencia"
 
-/** Bloco plano com título, que também é uma região nomeada: um fio no topo, sem cartão. */
+/**
+ * Bloco plano com título, que também é uma região nomeada: um fio no topo, sem cartão.
+ * Dentro de uma `Sequencia` (página, aba), entra na sua vez; fora dela, já aparece inteiro.
+ */
 export function BlocoSecao({
   titulo,
   descricao,
@@ -14,7 +18,8 @@ export function BlocoSecao({
 }) {
   const id = useId()
   return (
-    <section
+    <Etapa
+      como="section"
       aria-labelledby={id}
       className="flex min-w-0 flex-col gap-4 border-t border-border/70 pt-5"
     >
@@ -28,6 +33,6 @@ export function BlocoSecao({
         {acao && <div className="shrink-0">{acao}</div>}
       </div>
       {children}
-    </section>
+    </Etapa>
   )
 }

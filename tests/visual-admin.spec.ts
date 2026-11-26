@@ -353,7 +353,7 @@ for (const tema of ["light", "dark"] as const) {
   })
 
   test(`painel: busca de configurações na barra lateral (${tema})`, async ({ page, viewport }) => {
-    test.skip((viewport?.width ?? 0) < 768, "no celular a barra lateral fica num painel à parte")
+    test.skip((viewport?.width ?? 0) < 1024, "no celular a barra lateral fica num painel à parte")
     await page.emulateMedia({ colorScheme: tema, reducedMotion: "reduce" })
     await page.goto("/admin/configuracoes")
     const busca = page.getByRole("textbox", { name: "Buscar configuração" })

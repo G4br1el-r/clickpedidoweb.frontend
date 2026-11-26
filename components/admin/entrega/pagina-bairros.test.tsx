@@ -185,3 +185,63 @@ describe("PaginaBairros", () => {
     expect(screen.getByRole("dialog", { name: "Novo bairro" })).toBeInTheDocument()
   })
 })
+
+describe("PaginaBairros: carregamento e lote", () => {
+  test("enquanto carrega, mostra o esqueleto com a forma da lista", async () => {
+    render(
+      <Provedores>
+        <PaginaBairros />
+      </Provedores>,
+    )
+    expect(screen.getByRole("status", { name: "Carregando os bairros" })).toBeInTheDocument()
+    expect(screen.getAllByTestId("esqueleto-linha")).toHaveLength(8)
+    await screen.findByRole("table", { name: "Bairros" }, { timeout: 8000 })
+    expect(screen.queryByRole("status", { name: "Carregando os bairros" })).not.toBeInTheDocument()
+  })
+
+  test("Ativar só vale quando há bairro desativado entre os marcados", async () => {
+    const [primeiro, segundo] = await api().bairros.listar()
+    await api().bairros.mudarVarios([primeiro.id, segundo.id], { ativo: true })
+    const usuario = await abrir()
+    await usuario.click(linha(primeiro.nome).getByRole("checkbox"))
+    await usuario.click(linha(segundo.nome).getByRole("checkbox"))
+    const acoes = within(screen.getByRole("toolbar", { name: "2 bairros selecionados" }))
+    // Os dois já estão ativos: não há o que ativar, mas há o que desativar.
+    expect(acoes.getByRole("button", { name: "Ativar" })).toBeDisabled()
+    expect(acoes.getByRole("button", { name: "Desativar" })).toBeEnabled()
+  })
+
+  test("o bairro marcado que o filtro escondeu sai do lote", async () => {
+    await api().bairros.salvar({ cidade: "Lorena", nome: "Vila Nunes", taxa: 9, ativo: true })
+    const [existente] = (await api().bairros.listar()).filter((item) => item.cidade !== "Lorena")
+    const usuario = await abrir()
+    await usuario.click(linha(existente.nome).getByRole("checkbox"))
+    expect(screen.getByRole("toolbar", { name: "1 bairro selecionado" })).toBeInTheDocument()
+
+    await usuario.click(screen.getByRole("combobox", { name: "Cidade" }))
+    await usuario.click(await screen.findByRole("option", { name: "Lorena" }))
+    expect(screen.queryByRole("toolbar")).not.toBeInTheDocument()
+  })
+
+  test("salvar um bairro mostra o botão ocupado até o servidor responder", async () => {
+    let terminar: () => void = () => {}
+    const salvar = vi.spyOn(api().bairros, "salvar").mockImplementation(
+      () =>
+        new Promise((resolver) => {
+          terminar = () =>
+            resolver({ id: "novo", cidade: "Lorena", nome: "Vila Nunes", taxa: 9, ativo: true })
+        }),
+    )
+    const usuario = await abrir()
+    await usuario.click(screen.getByRole("button", { name: "Novo bairro" }))
+    const janela = within(screen.getByRole("dialog", { name: "Novo bairro" }))
+    await usuario.type(janela.getByRole("textbox", { name: "Cidade" }), "Lorena")
+    await usuario.type(janela.getByRole("textbox", { name: "Bairro" }), "Vila Nunes")
+    await usuario.click(janela.getByRole("button", { name: "Salvar" }))
+
+    expect(await janela.findByRole("status", { name: "Salvando o bairro" })).toBeInTheDocument()
+    expect(janela.getByRole("button", { name: /Salvar/ })).toHaveAttribute("aria-busy", "true")
+    terminar()
+    salvar.mockRestore()
+  })
+})

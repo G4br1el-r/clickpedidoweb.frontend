@@ -2,11 +2,11 @@
 
 import { AlertTriangleIcon, ClockIcon } from "lucide-react"
 import { motion, useReducedMotion } from "motion/react"
-import { Button } from "@/components/ui/button"
 import type { ItemPedido, Pedido } from "@/lib/admin/dados/tipos"
 import { itensDaCozinha, minutosNaCozinha, urgenciaNaCozinha } from "@/lib/admin/regras/cozinha"
 import type { Urgencia } from "@/lib/admin/regras/fila"
 import { cn } from "@/lib/utils"
+import { BotaoCarregando } from "../movimento/botao-carregando"
 import { Traco } from "../traco"
 
 /** O atraso aparece no tempo (pílula colorida) e num anel fino no ticket, nunca numa borda grossa. */
@@ -149,15 +149,16 @@ export function TicketCozinha({
             {DEPOIS_DE_PRONTO[pedido.tipo]}
           </span>
         ) : (
-          <Button
+          <BotaoCarregando
             type="button"
             size="lg"
             className="h-11 w-full text-[15px]"
-            disabled={ocupado}
+            carregando={ocupado}
+            rotuloCarregando="Avançando o pedido"
             onClick={aoAvancar}
           >
             {pedido.status === "recebido" ? "Iniciar preparo" : "Marcar pronto"}
-          </Button>
+          </BotaoCarregando>
         )}
       </footer>
     </motion.article>

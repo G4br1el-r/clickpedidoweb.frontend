@@ -9,6 +9,7 @@ import {
   Undo2Icon,
   XIcon,
 } from "lucide-react"
+import { AnimatePresence } from "motion/react"
 import { useState } from "react"
 import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
@@ -36,8 +37,21 @@ import {
   saidasDaReceita,
   situacaoDaReceita,
 } from "@/lib/admin/regras/farmacia"
+import {
+  notaDasReceitas,
+  planoDeAprovacao,
+  retidaNaAprovacao,
+  textoDaDecisao,
+  textoDasReceitas,
+} from "@/lib/admin/regras/lote-farmacia"
+import { alternarMarca } from "@/lib/admin/regras/selecao"
+import { plural } from "@/lib/formato"
 import { farmaceuticaResponsavel, receitasDemo } from "@/lib/mock/admin/farmacia"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { BarraEmLote } from "../estoque/barra-em-lote"
+import { FioDeAtualizacao } from "../estoque/fio-de-atualizacao"
+import { FaixaRolavel } from "../faixa-rolavel"
+import { BlocoEntrando, ItemEntrando } from "../movimento/entrada-admin"
 import { Traco } from "../traco"
 import { SeloReceita, SeloTarja } from "./selos"
 
@@ -74,40 +88,66 @@ function Validade({ receita, agora }: { receita: Receita; agora: Date }) {
   return <span>Válida até {data(situacao.validaAte)}</span>
 }
 
-function JanelaRecusar({ receita, aoFechar }: { receita: Receita; aoFechar: () => void }) {
+/** Recusa uma receita ou várias de uma vez, com o mesmo motivo para todas. */
+function JanelaRecusar({
+  receitas,
+  aoFechar,
+  aoRecusar,
+}: {
+  receitas: Receita[]
+  aoFechar: () => void
+  /** Chamada depois de recusar, para limpar a seleção de quem usa em lote. */
+  aoRecusar?: () => void
+}) {
   const recusar = useFarmacia((estado) => estado.recusar)
   const [motivo, setMotivo] = useState<string>(MOTIVOS[0])
+  const unica = receitas.length === 1 ? receitas[0] : null
   return (
     <Dialog open onOpenChange={(aberta) => !aberta && aoFechar()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Recusar a receita de {receita.paciente.nome}?</DialogTitle>
+          <DialogTitle>
+            {unica
+              ? `Recusar a receita de ${unica.paciente.nome}?`
+              : `Recusar ${plural(receitas.length, "receita", "receitas")}?`}
+          </DialogTitle>
           <DialogDescription>
-            O cliente recebe o motivo e pode enviar outra receita pelo mesmo pedido.
+            {unica
+              ? "O cliente recebe o motivo e pode enviar outra receita pelo mesmo pedido."
+              : "Cada cliente recebe o motivo e pode enviar outra receita pelo mesmo pedido."}
           </DialogDescription>
         </DialogHeader>
         <RadioGroup value={motivo} onValueChange={setMotivo} aria-label="Motivo">
           {MOTIVOS.map((opcao) => (
-            <Label key={opcao} className="flex cursor-pointer items-center gap-2.5 font-normal">
+            <Label
+              key={opcao}
+              className="flex min-h-11 cursor-pointer items-center gap-2.5 font-normal md:min-h-0"
+            >
               <RadioGroupItem value={opcao} />
               {opcao}
             </Label>
           ))}
         </RadioGroup>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={aoFechar}>
+          <Button type="button" variant="outline" className="max-md:h-11" onClick={aoFechar}>
             Cancelar
           </Button>
           <Button
             type="button"
             variant="destructive"
+            className="max-md:h-11"
             onClick={() => {
-              recusar(receita.id, motivo)
-              toast(`Receita de ${receita.paciente.nome} recusada`)
+              for (const receita of receitas) recusar(receita.id, motivo)
+              toast(
+                unica
+                  ? `Receita de ${unica.paciente.nome} recusada`
+                  : textoDaDecisao("recusada", receitas.length),
+              )
+              aoRecusar?.()
               aoFechar()
             }}
           >
-            Recusar receita
+            {unica ? "Recusar receita" : "Recusar receitas"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -120,11 +160,18 @@ function CartaoReceita({
   produtos,
   agora,
   decisao,
+  indice,
+  marcada,
+  aoMarcar,
 }: {
   receita: Receita
   produtos: Produto[]
   agora: Date
   decisao?: DecisaoReceita
+  indice: number
+  /** Só a receita que aguarda conferência pode ser marcada para a ação em lote. */
+  marcada?: boolean
+  aoMarcar?: () => void
 }) {
   const aprovar = useFarmacia((estado) => estado.aprovar)
   const desfazer = useFarmacia((estado) => estado.desfazer)
@@ -140,13 +187,24 @@ function CartaoReceita({
   const idTitulo = `receita-${receita.id}`
 
   return (
-    <article
+    <ItemEntrando
+      como="article"
+      indice={indice}
       aria-label={`Receita de ${receita.paciente.nome}`}
       aria-describedby={idTitulo}
       className="flex flex-col gap-4 rounded-xl bg-card p-4 shadow-[0_1px_2px_rgb(0_0_0/0.04)] ring-1 ring-border/80"
     >
       <header className="flex flex-col gap-2">
-        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          {aoMarcar && (
+            <span className="flex size-11 shrink-0 items-center justify-center max-md:-my-2.5 max-md:-ml-2.5 md:size-6">
+              <Checkbox
+                aria-label={`Selecionar a receita de ${receita.paciente.nome}`}
+                checked={marcada}
+                onCheckedChange={aoMarcar}
+              />
+            </span>
+          )}
           <h3 id={idTitulo} className="text-[15px] font-semibold tracking-[-0.01em]">
             {receita.paciente.nome}
           </h3>
@@ -299,8 +357,50 @@ function CartaoReceita({
           </div>
         </div>
       )}
-      {recusando && <JanelaRecusar receita={receita} aoFechar={() => setRecusando(false)} />}
-    </article>
+      {recusando && <JanelaRecusar receitas={[receita]} aoFechar={() => setRecusando(false)} />}
+    </ItemEntrando>
+  )
+}
+
+/** O formato do cartão de receita: nome, selo, prescritor, itens e os botões. */
+function EsqueletoReceitas() {
+  return (
+    <div
+      role="status"
+      aria-label="Carregando as receitas"
+      aria-busy="true"
+      className="flex flex-col gap-4"
+    >
+      <Skeleton className="h-8 w-80 max-w-full" />
+      <div className="grid gap-3 xl:grid-cols-2">
+        {[0, 1].map((indice) => (
+          <div
+            key={indice}
+            data-testid="esqueleto-cartao-receita"
+            className="esqueleto-entra flex flex-col gap-4 rounded-xl border border-border/70 p-4"
+            style={{ animationDelay: `${indice * 0.06}s` }}
+          >
+            <div className="flex items-center justify-between gap-3">
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-20" />
+            </div>
+            <Skeleton className="h-4 w-48" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Skeleton className="h-9" />
+              <Skeleton className="h-9" />
+            </div>
+            <div className="flex flex-col gap-2 border-y border-border/70 py-3">
+              <Skeleton className="h-4 w-3/5" />
+              <Skeleton className="h-3.5 w-2/5" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Skeleton className="h-9 w-24 rounded-lg" />
+              <Skeleton className="h-9 w-24 rounded-lg" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -318,9 +418,13 @@ const RESUMO =
 /** Farmácia: o farmacêutico confere cada receita que chega antes de o pedido ser separado. */
 export function PaginaReceitas() {
   const agora = useAgora()
-  const { data: produtos } = useProdutos()
+  const { data: produtos, isFetching } = useProdutos()
   const decisoes = useFarmacia((estado) => estado.decisoes)
+  const aprovar = useFarmacia((estado) => estado.aprovar)
   const [aba, setAba] = useState<Aba>("aguardando")
+  const [selecionadas, setSelecionadas] = useState<ReadonlySet<string>>(new Set())
+  const [confirmouVia, setConfirmouVia] = useState(false)
+  const [recusandoLote, setRecusandoLote] = useState(false)
 
   const receitas = agora ? receitasDemo(agora) : []
   const grupos: Record<Aba, Receita[]> = {
@@ -333,6 +437,35 @@ export function PaginaReceitas() {
       ? grupos.aguardando.filter((receita) => conferirReceita(receita, produtos, agora).length > 0)
           .length
       : 0
+
+  // Só vale quem ainda aguarda: a receita decidida some da fila e da seleção.
+  const marcadas = grupos.aguardando.filter((receita) => selecionadas.has(receita.id))
+  const plano =
+    agora && produtos
+      ? planoDeAprovacao(marcadas, produtos, agora)
+      : { aprovaveis: [], comPendencia: [], comRetencao: 0 }
+
+  function limparSelecao() {
+    setSelecionadas(new Set())
+    setConfirmouVia(false)
+  }
+
+  function aprovarLote() {
+    if (!produtos) return
+    const quando = new Date().toISOString()
+    let comSaida = 0
+    for (const receita of plano.aprovaveis) {
+      aprovar(receita.id, { retida: retidaNaAprovacao(receita, confirmouVia) })
+      if (saidasDaReceita(receita, produtos, quando).length > 0) comSaida += 1
+    }
+    toast.success(textoDaDecisao("aprovada", plano.aprovaveis.length), {
+      description:
+        comSaida > 0
+          ? "Saídas lançadas na escrituração dos controlados."
+          : "Pode separar os pedidos.",
+    })
+    limparSelecao()
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-4 md:p-6 lg:px-8">
@@ -348,32 +481,27 @@ export function PaginaReceitas() {
       />
 
       {!agora || !produtos ? (
-        <div role="status" aria-label="Carregando as receitas" className="flex flex-col gap-4">
-          <Skeleton className="h-8 w-80 max-w-full" />
-          <div className="grid gap-3 xl:grid-cols-2">
-            {["a", "b"].map((chave) => (
-              <Skeleton key={chave} className="h-72 rounded-xl" />
-            ))}
-          </div>
-        </div>
+        <EsqueletoReceitas />
       ) : (
         <Tabs value={aba} onValueChange={(valor) => setAba(valor as Aba)} className="gap-4">
           <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
-            <TabsList>
-              {ABAS.map(({ id, rotulo }) => (
-                // O cinza do shadcn não alcança 4,5:1 sobre o fundo das cores do segmento.
-                <TabsTrigger
-                  key={id}
-                  value={id}
-                  className="px-2.5 text-muted-foreground! data-active:text-foreground!"
-                >
-                  {rotulo}{" "}
-                  <span className="text-xs text-muted-foreground tabular-nums">
-                    {grupos[id].length}
-                  </span>
-                </TabsTrigger>
-              ))}
-            </TabsList>
+            <FaixaRolavel className="-mx-4 max-w-[calc(100%+2rem)] px-4 md:mx-0 md:max-w-full md:px-0">
+              <TabsList className="max-md:h-11!">
+                {ABAS.map(({ id, rotulo }) => (
+                  // O cinza do shadcn não alcança 4,5:1 sobre o fundo das cores do segmento.
+                  <TabsTrigger
+                    key={id}
+                    value={id}
+                    className="px-2.5 text-muted-foreground! data-active:text-foreground!"
+                  >
+                    {rotulo}{" "}
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {grupos[id].length}
+                    </span>
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </FaixaRolavel>
             {comPendencia > 0 && (
               <p className="flex items-center gap-2 text-[13px] font-medium">
                 <Traco tom="cancelado" />
@@ -384,38 +512,98 @@ export function PaginaReceitas() {
             )}
           </div>
 
+          <FioDeAtualizacao ativo={isFetching} rotulo="Atualizando as receitas" />
+
           {ABAS.map(({ id }) => (
             <TabsContent key={id} value={id}>
               {grupos[id].length === 0 ? (
-                <Empty className="rounded-2xl border border-dashed border-border">
-                  <EmptyHeader>
-                    <EmptyMedia variant="icon">
-                      <FileHeartIcon />
-                    </EmptyMedia>
-                    <EmptyTitle>Nenhuma receita aqui</EmptyTitle>
-                    <EmptyDescription>
-                      {id === "aguardando"
-                        ? "Tudo conferido. As novas receitas do site e do WhatsApp aparecem aqui."
-                        : "As receitas que você decidir aparecem aqui."}
-                    </EmptyDescription>
-                  </EmptyHeader>
-                </Empty>
+                <BlocoEntrando>
+                  <Empty className="rounded-2xl border border-dashed border-border">
+                    <EmptyHeader>
+                      <EmptyMedia variant="icon">
+                        <FileHeartIcon />
+                      </EmptyMedia>
+                      <EmptyTitle>Nenhuma receita aqui</EmptyTitle>
+                      <EmptyDescription>
+                        {id === "aguardando"
+                          ? "Tudo conferido. As novas receitas do site e do WhatsApp aparecem aqui."
+                          : "As receitas que você decidir aparecem aqui."}
+                      </EmptyDescription>
+                    </EmptyHeader>
+                  </Empty>
+                </BlocoEntrando>
               ) : (
                 <div className="grid gap-3 xl:grid-cols-2">
-                  {grupos[id].map((receita) => (
-                    <CartaoReceita
-                      key={receita.id}
-                      receita={receita}
-                      produtos={produtos}
-                      agora={agora}
-                      decisao={decisoes[receita.id]}
-                    />
-                  ))}
+                  <AnimatePresence>
+                    {grupos[id].map((receita, indice) => (
+                      <CartaoReceita
+                        key={receita.id}
+                        indice={indice}
+                        receita={receita}
+                        produtos={produtos}
+                        agora={agora}
+                        decisao={decisoes[receita.id]}
+                        marcada={id === "aguardando" ? selecionadas.has(receita.id) : undefined}
+                        aoMarcar={
+                          id === "aguardando"
+                            ? () => setSelecionadas((atual) => alternarMarca(atual, receita.id))
+                            : undefined
+                        }
+                      />
+                    ))}
+                  </AnimatePresence>
                 </div>
               )}
             </TabsContent>
           ))}
         </Tabs>
+      )}
+
+      <BarraEmLote
+        aberta={aba === "aguardando" && marcadas.length > 0}
+        texto={textoDasReceitas(marcadas.length)}
+        nota={notaDasReceitas(plano.comPendencia.length)}
+        aoLimpar={limparSelecao}
+      >
+        {plano.comRetencao > 0 && (
+          <Label className="flex min-h-11 w-full items-center gap-2 text-[13px] font-normal md:min-h-0">
+            <Checkbox
+              checked={confirmouVia}
+              onCheckedChange={(marcado) => setConfirmouVia(marcado === true)}
+            />
+            {plano.comRetencao === 1
+              ? "Retive a via da receita que exige"
+              : `Retive a via das ${plano.comRetencao} receitas que exigem`}
+          </Label>
+        )}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="max-md:h-11"
+          onClick={() => setRecusandoLote(true)}
+        >
+          <XIcon data-icon="inline-start" />
+          Recusar {plural(marcadas.length, "receita", "receitas")}
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          className="max-md:h-11"
+          disabled={plano.aprovaveis.length === 0 || (plano.comRetencao > 0 && !confirmouVia)}
+          onClick={aprovarLote}
+        >
+          <ShieldCheckIcon data-icon="inline-start" />
+          Aprovar {plural(plano.aprovaveis.length, "receita", "receitas")}
+        </Button>
+      </BarraEmLote>
+
+      {recusandoLote && (
+        <JanelaRecusar
+          receitas={marcadas}
+          aoFechar={() => setRecusandoLote(false)}
+          aoRecusar={limparSelecao}
+        />
       )}
     </div>
   )

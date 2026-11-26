@@ -18,7 +18,7 @@ import {
   SearchXIcon,
   Trash2Icon,
 } from "lucide-react"
-import { AnimatePresence, motion, useIsPresent, useReducedMotion } from "motion/react"
+import { AnimatePresence } from "motion/react"
 import { useDeferredValue, useMemo, useState } from "react"
 import { NumericFormat } from "react-number-format"
 import { toast } from "sonner"
@@ -84,20 +84,20 @@ import {
 } from "@/lib/admin/dados/consultas-entrega"
 import type { Bairro } from "@/lib/admin/dados/tipos"
 import { normalizar } from "@/lib/admin/regras/filtro-pedidos"
+import { efeitoDoLoteBairros, idsDoLote } from "@/lib/admin/regras/lote-bairros"
 import { plural } from "@/lib/formato"
 import { cn } from "@/lib/utils"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { EsqueletoLista } from "../esqueletos"
+import { BotaoCarregando } from "../movimento/botao-carregando"
+import { BlocoEntrando } from "../movimento/entrada-admin"
 import { Traco } from "../traco"
+import { BarraAtualizando } from "./atualizando"
 import { AvisoSemEntrega } from "./aviso-sem-entrega"
-import {
-  ALVO_DE_TOQUE,
-  EsqueletoLinhas,
-  LinhaAnimada,
-  semRelogioDoNavegador,
-} from "./linha-animada"
+import { BarraDeLoteBairros } from "./barra-de-lote-bairros"
+import { ALVO_DA_CAIXA, ALVO_DA_CHAVE, ALVO_DE_TOQUE, LinhaAnimada } from "./linha-animada"
 
 const recursos = tableFeatures({ rowSelectionFeature })
-const CURVA = [0.23, 1, 0.32, 1] as const
 
 const dinheiro = {
   customInput: Input,
@@ -130,7 +130,7 @@ function TaxaNaLinha({ bairro }: { bairro: Bairro }) {
       {...dinheiro}
       aria-label={`Taxa de ${bairro.nome}`}
       className={cn(
-        "ml-auto h-8 w-[5.5rem] border-transparent bg-transparent text-right font-medium tabular-nums shadow-none sm:w-24 dark:bg-transparent",
+        "ml-auto h-8 w-[5.5rem] border-transparent max-sm:h-11 bg-transparent text-right font-medium tabular-nums shadow-none sm:w-24 dark:bg-transparent",
         "hover:border-border focus-visible:border-ring",
         !bairro.ativo && "text-muted-foreground",
       )}
@@ -304,9 +304,13 @@ function JanelaBairro({ bairro, aoFechar }: { bairro: Bairro | null; aoFechar: (
             <Button type="button" variant="ghost" onClick={aoFechar}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={salvar.isPending}>
+            <BotaoCarregando
+              type="submit"
+              carregando={salvar.isPending}
+              rotuloCarregando="Salvando o bairro"
+            >
               Salvar
-            </Button>
+            </BotaoCarregando>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -355,9 +359,13 @@ function MudarTaxa({ ids, aoFechar }: { ids: string[]; aoFechar: (aplicou: boole
             <Button type="button" variant="ghost" onClick={() => aoFechar(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={mudar.isPending}>
+            <BotaoCarregando
+              type="submit"
+              carregando={mudar.isPending}
+              rotuloCarregando="Aplicando a taxa"
+            >
               Aplicar
-            </Button>
+            </BotaoCarregando>
           </DialogFooter>
         </form>
       </DialogContent>
@@ -365,58 +373,9 @@ function MudarTaxa({ ids, aoFechar }: { ids: string[]; aoFechar: (aplicou: boole
   )
 }
 
-/**
- * Barra das ações em lote: flutua no pé da tela enquanto houver seleção. Ao sair, some
- * para o leitor de tela na hora, mesmo enquanto ainda esmaece.
- */
-function BarraSelecao({
-  quantos,
-  aoMudarTaxa,
-  aoAtivar,
-  aoLimpar,
-}: {
-  quantos: number
-  aoMudarTaxa: () => void
-  aoAtivar: (ativo: boolean) => void
-  aoLimpar: () => void
-}) {
-  const presente = useIsPresent()
-  const semMovimento = useReducedMotion()
-  const rotulo = plural(quantos, "bairro selecionado", "bairros selecionados")
-  return (
-    <motion.div
-      role={presente ? "toolbar" : undefined}
-      aria-label={presente ? rotulo : undefined}
-      aria-hidden={presente ? undefined : true}
-      inert={!presente}
-      // Com `onUpdate`, o Motion anima no próprio relógio em vez do WAAPI: a saída termina
-      // no tempo certo mesmo com o relógio da página parado (testes com `page.clock`).
-      onUpdate={semRelogioDoNavegador}
-      initial={{ opacity: 0, y: semMovimento ? 0 : 12 }}
-      animate={{ opacity: 1, y: 0, transition: { duration: 0.22, ease: CURVA } }}
-      exit={{ opacity: 0, y: semMovimento ? 0 : 8, transition: { duration: 0.15, ease: CURVA } }}
-      className="sticky bottom-4 z-20 mx-auto flex w-full max-w-2xl flex-wrap items-center gap-x-2 gap-y-1.5 rounded-2xl bg-popover p-2 pl-4 text-sm shadow-[0_18px_40px_-20px_rgb(0_0_0/0.45)] ring-1 ring-border/80"
-    >
-      <span className="mr-auto font-medium tabular-nums">{rotulo}</span>
-      <Button type="button" size="sm" variant="outline" onClick={aoMudarTaxa}>
-        Mudar taxa
-      </Button>
-      <Button type="button" size="sm" variant="outline" onClick={() => aoAtivar(true)}>
-        Ativar
-      </Button>
-      <Button type="button" size="sm" variant="outline" onClick={() => aoAtivar(false)}>
-        Desativar
-      </Button>
-      <Button type="button" size="sm" variant="ghost" onClick={aoLimpar}>
-        Limpar seleção
-      </Button>
-    </motion.div>
-  )
-}
-
 /** Bairros e taxas: busca, cidade, taxa na linha e mudanças em lote. */
 export function PaginaBairros() {
-  const { data: bairros } = useBairros()
+  const { data: bairros, isFetching } = useBairros()
   const mudar = useMudarBairros()
   const [busca, setBusca] = useState("")
   const [cidade, setCidade] = useState("todas")
@@ -445,6 +404,7 @@ export function PaginaBairros() {
         header: ({ table }) => (
           <Checkbox
             aria-label="Selecionar todos"
+            className={ALVO_DA_CAIXA}
             checked={
               table.getIsAllRowsSelected()
                 ? true
@@ -458,6 +418,7 @@ export function PaginaBairros() {
         cell: ({ row }) => (
           <Checkbox
             aria-label={`Selecionar ${row.original.nome}, ${row.original.cidade}`}
+            className={ALVO_DA_CAIXA}
             checked={row.getIsSelected()}
             onCheckedChange={(marcado) => row.toggleSelected(marcado === true)}
           />
@@ -502,6 +463,7 @@ export function PaginaBairros() {
         cell: ({ row }) => (
           <Switch
             aria-label={`${row.original.nome} ativo`}
+            className={ALVO_DA_CHAVE}
             checked={row.original.ativo}
             onCheckedChange={(ativo) =>
               mudar.mutate({ ids: [row.original.id], mudanca: { ativo } }, { onError: aoErrar })
@@ -529,7 +491,30 @@ export function PaginaBairros() {
     onRowSelectionChange: (atualizar: Updater<RowSelectionState>) =>
       setSelecao((atual) => (typeof atualizar === "function" ? atualizar(atual) : atualizar)),
   })
-  const selecionados = Object.keys(selecao).filter((id) => selecao[id])
+  // Só vale o que está na lista visível: o filtro esconde, e o lote não mexe no escondido.
+  const selecionados = idsDoLote(selecao, visiveis)
+  const efeito = efeitoDoLoteBairros(bairros ?? [], selecionados)
+  const ocupada =
+    mudar.isPending && mudar.variables?.mudanca.ativo !== undefined
+      ? mudar.variables.mudanca.ativo
+        ? ("ativar" as const)
+        : ("desativar" as const)
+      : null
+  const mudarAtivos = (ativo: boolean) => {
+    const ids = ativo ? efeito.aAtivar : efeito.aDesativar
+    mudar.mutate(
+      { ids, mudanca: { ativo } },
+      {
+        onSuccess: () => {
+          toast.success(
+            `${plural(ids.length, ativo ? "bairro ativado" : "bairro desativado", ativo ? "bairros ativados" : "bairros desativados")}.`,
+          )
+          setSelecao({})
+        },
+        onError: aoErrar,
+      },
+    )
+  }
   const ativos = bairros?.filter((bairro) => bairro.ativo).length ?? 0
   const filtrando = busca.trim() !== "" || cidade !== "todas"
   const classeDaColuna = (id: string) =>
@@ -565,7 +550,7 @@ export function PaginaBairros() {
       <AvisoSemEntrega />
 
       {!bairros ? (
-        <EsqueletoLinhas rotulo="Carregando os bairros" linhas={8} />
+        <EsqueletoLista rotulo="Carregando os bairros" linhas={8} />
       ) : bairros.length === 0 ? (
         <Empty className="border border-border/70">
           <EmptyHeader>
@@ -622,42 +607,49 @@ export function PaginaBairros() {
             )}
           </div>
 
-          <Table aria-label="Bairros">
-            <TableHeader>
-              {tabela.getHeaderGroups().map((grupo) => (
-                <TableRow key={grupo.id} className="hover:bg-transparent">
-                  {grupo.headers.map((cabecalho) => (
-                    <TableHead key={cabecalho.id} className={classeDaColuna(cabecalho.column.id)}>
-                      <FlexRender header={cabecalho} />
-                    </TableHead>
-                  ))}
-                </TableRow>
-              ))}
-            </TableHeader>
-            {/* Trocar o filtro troca a lista de uma vez; só cadastrar e excluir animam. */}
-            <TableBody key={`${cidade}|${buscaAdiada}`}>
-              <AnimatePresence initial={false}>
-                {tabela.getRowModel().rows.map((linha) => (
-                  <LinhaAnimada
-                    key={linha.id}
-                    data-state={linha.getIsSelected() ? "selected" : undefined}
-                  >
-                    {linha.getAllCells().map((celula) => (
-                      <TableCell
-                        key={celula.id}
-                        className={cn(
-                          classeDaColuna(celula.column.id),
-                          celula.column.id === "nome" && "py-2.5",
-                        )}
-                      >
-                        <FlexRender cell={celula} />
-                      </TableCell>
+          <BlocoEntrando className="flex flex-col">
+            <BarraAtualizando
+              ativa={isFetching || mudar.isPending}
+              rotulo="Atualizando os bairros"
+              className="mb-1"
+            />
+            <Table aria-label="Bairros">
+              <TableHeader>
+                {tabela.getHeaderGroups().map((grupo) => (
+                  <TableRow key={grupo.id} className="hover:bg-transparent">
+                    {grupo.headers.map((cabecalho) => (
+                      <TableHead key={cabecalho.id} className={classeDaColuna(cabecalho.column.id)}>
+                        <FlexRender header={cabecalho} />
+                      </TableHead>
                     ))}
-                  </LinhaAnimada>
+                  </TableRow>
                 ))}
-              </AnimatePresence>
-            </TableBody>
-          </Table>
+              </TableHeader>
+              {/* Trocar o filtro troca a lista de uma vez; só cadastrar e excluir animam. */}
+              <TableBody key={`${cidade}|${buscaAdiada}`}>
+                <AnimatePresence initial={false}>
+                  {tabela.getRowModel().rows.map((linha) => (
+                    <LinhaAnimada
+                      key={linha.id}
+                      data-state={linha.getIsSelected() ? "selected" : undefined}
+                    >
+                      {linha.getAllCells().map((celula) => (
+                        <TableCell
+                          key={celula.id}
+                          className={cn(
+                            classeDaColuna(celula.column.id),
+                            celula.column.id === "nome" && "py-2.5",
+                          )}
+                        >
+                          <FlexRender cell={celula} />
+                        </TableCell>
+                      ))}
+                    </LinhaAnimada>
+                  ))}
+                </AnimatePresence>
+              </TableBody>
+            </Table>
+          </BlocoEntrando>
           {visiveis.length === 0 && (
             <Empty className="py-10">
               <EmptyHeader>
@@ -688,16 +680,15 @@ export function PaginaBairros() {
 
       <AnimatePresence>
         {selecionados.length > 0 && (
-          <BarraSelecao
+          <BarraDeLoteBairros
             key="selecao"
-            quantos={selecionados.length}
+            selecionados={selecionados.length}
+            aAtivar={efeito.aAtivar.length}
+            aDesativar={efeito.aDesativar.length}
+            ocupada={ocupada}
             aoMudarTaxa={() => setMudandoTaxa(true)}
-            aoAtivar={(ativo) =>
-              mudar.mutate(
-                { ids: selecionados, mudanca: { ativo } },
-                { onSuccess: () => setSelecao({}), onError: aoErrar },
-              )
-            }
+            aoAtivar={() => mudarAtivos(true)}
+            aoDesativar={() => mudarAtivos(false)}
             aoLimpar={() => setSelecao({})}
           />
         )}

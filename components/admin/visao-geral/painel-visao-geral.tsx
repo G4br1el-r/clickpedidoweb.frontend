@@ -6,7 +6,6 @@ import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useState } from "react"
 import { Progress } from "@/components/ui/progress"
-import { Skeleton } from "@/components/ui/skeleton"
 import {
   Table,
   TableBody,
@@ -30,9 +29,12 @@ import { diasNoPeriodo, type Periodo } from "@/lib/admin/regras/periodo"
 import type { SegmentoPainelId } from "@/lib/admin/segmentos-painel"
 import { emReais, plural } from "@/lib/formato"
 import { BlocoSecao } from "../bloco-secao"
+import { ItemEntrando } from "../movimento/entrada-admin"
 import { SeloStatus } from "../pedidos/selos"
-import { AoVivo, Indicador, Regua } from "../regua"
+import { Indicador, Regua } from "../regua"
+import { AoVivoRadar } from "./ao-vivo"
 import { BlocoMeta } from "./bloco-meta"
+import { EsqueletoGrafico } from "./esqueletos-visao-geral"
 import { FaixaAtencao } from "./faixa-atencao"
 import type { MedidaDoGrafico } from "./grafico-por-dia"
 import { inteiro, Numero } from "./numero"
@@ -41,7 +43,7 @@ import { Secao, Variacao } from "./partes"
 // Recharts pesa: o gráfico chega depois, só no navegador, com o esqueleto no lugar.
 const GraficoPorDia = dynamic(() => import("./grafico-por-dia"), {
   ssr: false,
-  loading: () => <Skeleton className="h-64 w-full rounded-lg" />,
+  loading: () => <EsqueletoGrafico />,
 })
 
 function ListaMaisVendidos({ produtos }: { produtos: Resumo["maisVendidos"]["periodo"] }) {
@@ -51,7 +53,12 @@ function ListaMaisVendidos({ produtos }: { produtos: Resumo["maisVendidos"]["per
   return (
     <ul className="barras-do-grafico flex flex-col gap-3">
       {produtos.map((produto, posicao) => (
-        <li key={produto.nome} className="flex items-center gap-3 text-sm">
+        <ItemEntrando
+          como="li"
+          indice={posicao}
+          key={produto.nome}
+          className="flex items-center gap-3 text-sm"
+        >
           <span className="w-4 text-right text-muted-foreground tabular-nums">{posicao + 1}</span>
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex items-baseline gap-2">
@@ -67,7 +74,7 @@ function ListaMaisVendidos({ produtos }: { produtos: Resumo["maisVendidos"]["per
               className="h-1"
             />
           </div>
-        </li>
+        </ItemEntrando>
       ))}
     </ul>
   )
@@ -82,6 +89,7 @@ export function AbaResumo({
   alertas = [],
   meta = null,
   destaques = [],
+  sincronizando = false,
 }: {
   resumo: Resumo
   periodo: Periodo
@@ -94,6 +102,8 @@ export function AbaResumo({
   meta?: SituacaoMeta | null
   /** Os números próprios do segmento: agenda, receitas, pesagem, mesas. */
   destaques?: Destaque[]
+  /** Os pedidos estão sendo conferidos de novo: o selo "Ao vivo" vira radar. */
+  sincronizando?: boolean
 }) {
   const [medida, setMedida] = useState<MedidaDoGrafico>("faturamento")
   const n = nomesDo(segmento)
@@ -113,7 +123,12 @@ export function AbaResumo({
   return (
     <div className="flex flex-col gap-10">
       <FaixaAtencao alertas={alertas} />
-      <Secao titulo="Hoje" descricao={<AoVivo>Ao vivo, desde a abertura</AoVivo>}>
+      <Secao
+        titulo="Hoje"
+        descricao={
+          <AoVivoRadar sincronizando={sincronizando}>Ao vivo, desde a abertura</AoVivoRadar>
+        }
+      >
         <Regua>
           <Indicador
             rotulo={`${n.Pedidos} hoje`}
@@ -133,7 +148,10 @@ export function AbaResumo({
           <Indicador
             rotulo="Em andamento"
             detalhe={
-              <Link href="/admin/fila" className="underline-offset-4 hover:underline">
+              <Link
+                href="/admin/fila"
+                className="alvo-toque relative underline-offset-4 hover:underline"
+              >
                 Ver na fila
               </Link>
             }
@@ -162,7 +180,10 @@ export function AbaResumo({
                 key={destaque.id}
                 rotulo={destaque.rotulo}
                 detalhe={
-                  <Link href={destaque.href} className="underline-offset-4 hover:underline">
+                  <Link
+                    href={destaque.href}
+                    className="alvo-toque relative underline-offset-4 hover:underline"
+                  >
                     {destaque.detalhe ?? "Ver"}
                   </Link>
                 }
@@ -225,10 +246,10 @@ export function AbaResumo({
               value={medida}
               onValueChange={(valor) => valor && setMedida(valor as MedidaDoGrafico)}
             >
-              <ToggleGroupItem value="faturamento" className="cursor-pointer">
+              <ToggleGroupItem value="faturamento" className="cursor-pointer max-md:min-h-11">
                 R$
               </ToggleGroupItem>
-              <ToggleGroupItem value="pedidos" className="cursor-pointer">
+              <ToggleGroupItem value="pedidos" className="cursor-pointer max-md:min-h-11">
                 Qtd.
               </ToggleGroupItem>
             </ToggleGroup>
@@ -244,8 +265,12 @@ export function AbaResumo({
             titulo="Mais vendidos"
             acao={
               <TabsList>
-                <TabsTrigger value="periodo">No período</TabsTrigger>
-                <TabsTrigger value="hoje">Hoje</TabsTrigger>
+                <TabsTrigger value="periodo" className="max-md:min-h-11">
+                  No período
+                </TabsTrigger>
+                <TabsTrigger value="hoje" className="max-md:min-h-11">
+                  Hoje
+                </TabsTrigger>
               </TabsList>
             }
           >
@@ -261,39 +286,47 @@ export function AbaResumo({
         <BlocoSecao
           titulo={`${n.Pedidos} recentes`}
           acao={
-            <Link href="/admin/pedidos" className="text-sm underline-offset-4 hover:underline">
+            <Link
+              href="/admin/pedidos"
+              className="alvo-toque relative text-sm underline-offset-4 hover:underline"
+            >
               Ver todos
             </Link>
           }
         >
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nº</TableHead>
-                <TableHead className="hidden sm:table-cell">Hora</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead className="hidden sm:table-cell">Situação</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {resumo.recentes.map((pedido) => (
-                <TableRow key={pedido.id}>
-                  <TableCell className="font-medium tabular-nums">#{pedido.numero}</TableCell>
-                  <TableCell className="hidden tabular-nums sm:table-cell">
-                    {format(new Date(pedido.criadoEm), "dd/MM HH:mm")}
-                  </TableCell>
-                  <TableCell className="max-w-28 truncate sm:max-w-40">
-                    {pedido.cliente.nome}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums">{emReais(pedido.total)}</TableCell>
-                  <TableCell className="hidden sm:table-cell">
-                    <SeloStatus pedido={pedido} />
-                  </TableCell>
+          {/* As colunas de hora e situação só aparecem quando o bloco tem largura para elas: a coluna ao lado do gráfico é estreita num notebook. */}
+          <div className="@container">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nº</TableHead>
+                  <TableHead className="hidden @[34rem]:table-cell">Hora</TableHead>
+                  <TableHead>Cliente</TableHead>
+                  <TableHead className="text-right">Total</TableHead>
+                  <TableHead className="hidden @[34rem]:table-cell">Situação</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {resumo.recentes.map((pedido) => (
+                  <TableRow key={pedido.id}>
+                    <TableCell className="font-medium tabular-nums">#{pedido.numero}</TableCell>
+                    <TableCell className="hidden tabular-nums @[34rem]:table-cell">
+                      {format(new Date(pedido.criadoEm), "dd/MM HH:mm")}
+                    </TableCell>
+                    <TableCell className="max-w-28 truncate @[34rem]:max-w-40">
+                      {pedido.cliente.nome}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {emReais(pedido.total)}
+                    </TableCell>
+                    <TableCell className="hidden @[34rem]:table-cell">
+                      <SeloStatus pedido={pedido} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </BlocoSecao>
       </div>
     </div>

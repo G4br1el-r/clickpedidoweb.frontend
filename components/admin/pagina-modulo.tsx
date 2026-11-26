@@ -12,7 +12,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@/components/ui/empty"
-import { Skeleton } from "@/components/ui/skeleton"
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import {
   buscarModulo,
@@ -26,6 +25,7 @@ import { PaginaCategorias } from "./cardapio/pagina-categorias"
 import { PaginaCozinha } from "./cozinha/pagina-cozinha"
 import { PaginaBairros } from "./entrega/pagina-bairros"
 import { PaginaMotoboys } from "./entrega/pagina-motoboys"
+import { EsqueletoPagina } from "./esqueletos"
 import { PaginaEstoque } from "./estoque/pagina-estoque"
 import { PaginaControlados } from "./farmacia/pagina-controlados"
 import { PaginaReceitas } from "./farmacia/pagina-receitas"
@@ -61,7 +61,7 @@ const PAGINAS: Partial<Record<ModuloId, ComponentType>> = {
 
 /** Enquanto a página do módulo não chega (ou lê a URL no navegador). */
 export function CarregandoModulo() {
-  return <Skeleton className="m-4 h-48 rounded-xl md:m-6" />
+  return <EsqueletoPagina />
 }
 
 /**

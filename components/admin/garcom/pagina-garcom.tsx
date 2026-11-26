@@ -46,7 +46,10 @@ import {
 import { useSegmentoAtual } from "@/lib/admin/segmento-atual"
 import { emReais, formatoMoeda, plural } from "@/lib/formato"
 import { CabecalhoPagina } from "../cabecalho-pagina"
+import { RadarAoVivo } from "../entrega/atualizando"
 import { ComandaMesa } from "../mesas/comanda-mesa"
+import { BotaoCarregando } from "../movimento/botao-carregando"
+import { ItemEntrando } from "../movimento/entrada-admin"
 import { type AvisoCaixa, linhaQueMudou } from "../pdv/caixa-pdv"
 import { CatalogoBalcao } from "../pdv/catalogo-balcao"
 import { JanelaOpcoes } from "../pdv/janela-opcoes"
@@ -66,15 +69,16 @@ function Bandeja({
 }: {
   itens: (ItemBandeja & { chave: string })[]
   mesa: Mesa | null
-  enviando: boolean
+  /** Qual lançamento espera o servidor; `null` se nenhum. */
+  enviando: "cozinha" | "mesa" | null
   aviso: AvisoCaixa | null
   mudarQuantidade: (chave: string, quantidade: number) => void
   remover: (chave: string) => void
   aoLancar: (enviarParaCozinha: boolean) => void
 }) {
-  const semMovimento = useReducedMotion()
+  const semMovimento = useReducedMotion() ?? false
   const { quantidade, total } = totaisDaVenda(itens, { modo: "reais", valor: 0 })
-  const bloqueado = !mesa || itens.length === 0 || enviando
+  const bloqueado = !mesa || itens.length === 0 || enviando !== null
   return (
     <section aria-label="Bandeja" className="flex flex-col gap-4">
       <h2 className="flex flex-wrap items-baseline gap-x-2 text-[15px] font-semibold">
@@ -103,14 +107,13 @@ function Bandeja({
         >
           <AnimatePresence initial={false}>
             {itens.map((item) => (
-              <motion.li
+              // Toque repetido: o item novo entra sem esperar fila (posição 0) e sai só com o fade.
+              <ItemEntrando
                 key={item.chave}
+                como="li"
+                indice={0}
                 aria-label={item.nome}
                 layout={semMovimento ? false : "position"}
-                initial={semMovimento ? { opacity: 0 } : { opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, transition: { duration: 0.12 } }}
-                transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
                 className="relative flex items-start gap-2 py-2.5"
               >
                 {/* Realce do toque: a linha que acabou de mudar acende e apaga sozinha. */}
@@ -139,7 +142,7 @@ function Bandeja({
                     type="button"
                     size="icon-sm"
                     variant="outline"
-                    className="max-md:size-10"
+                    className="max-md:size-11"
                     aria-label="Menos um"
                     onClick={() =>
                       item.quantidade <= 1
@@ -156,14 +159,14 @@ function Bandeja({
                     type="button"
                     size="icon-sm"
                     variant="outline"
-                    className="max-md:size-10"
+                    className="max-md:size-11"
                     aria-label="Mais um"
                     onClick={() => mudarQuantidade(item.chave, item.quantidade + 1)}
                   >
                     <PlusIcon />
                   </Button>
                 </div>
-              </motion.li>
+              </ItemEntrando>
             ))}
           </AnimatePresence>
         </ul>
@@ -181,27 +184,31 @@ function Bandeja({
       {!mesa && <p className="-mt-2 text-sm text-muted-foreground">Escolha a mesa.</p>}
       {/* A ação mais comum por cima, inteira; a de bebida pronta logo abaixo. */}
       <div className="flex flex-col gap-2">
-        <Button
+        <BotaoCarregando
           type="button"
           size="lg"
           className="h-11 text-[15px]"
+          carregando={enviando === "cozinha"}
+          rotuloCarregando="Enviando a rodada"
           disabled={bloqueado}
           onClick={() => aoLancar(true)}
         >
           <ChefHatIcon data-icon="inline-start" />
           Enviar para a cozinha
-        </Button>
-        <Button
+        </BotaoCarregando>
+        <BotaoCarregando
           type="button"
           variant="outline"
           size="lg"
           className="h-11"
+          carregando={enviando === "mesa"}
+          rotuloCarregando="Lançando na mesa"
           disabled={bloqueado}
           onClick={() => aoLancar(false)}
         >
           <SendIcon data-icon="inline-start" />
           Lançar na mesa
-        </Button>
+        </BotaoCarregando>
       </div>
       <p className="text-xs text-muted-foreground">
         “Lançar na mesa” é para o que sai pronto, como bebidas; o preço é conferido pelo sistema.
@@ -230,7 +237,7 @@ function ResumoDaComanda({
       <span className="min-w-0 flex-1 truncate">
         {comanda.cliente.nome} · {plural(itens, "item", "itens")} · {emReais(comanda.total)}
       </span>
-      <Button type="button" variant="outline" size="sm" onClick={aoVer}>
+      <Button type="button" variant="outline" size="sm" className="max-md:h-11" onClick={aoVer}>
         Ver comanda
       </Button>
     </div>
@@ -247,7 +254,8 @@ export function PaginaGarcom() {
   const telaGrande = useTelaGrande()
   const nome = useGarcom((estado) => estado.nome)
   const definirNome = useGarcom((estado) => estado.definirNome)
-  const { data: mesas = [] } = useMesas()
+  const { data: mesasCarregadas, isFetching: sincronizando } = useMesas()
+  const mesas = mesasCarregadas ?? []
   const lancar = useLancarNaMesa()
   const [mesaId, setMesaId] = useState<string | null>(null)
   const [cliente, setCliente] = useState("")
@@ -321,7 +329,9 @@ export function PaginaGarcom() {
     <Bandeja
       itens={itens}
       mesa={mesa}
-      enviando={lancar.isPending}
+      enviando={
+        lancar.isPending ? (lancar.variables?.enviarParaCozinha ? "cozinha" : "mesa") : null
+      }
       aviso={aviso}
       mudarQuantidade={(chave, quantidade) =>
         setItens((atuais) =>
@@ -340,26 +350,26 @@ export function PaginaGarcom() {
       <CabecalhoPagina
         titulo="Garçom"
         resumo="Escolha a mesa, monte a rodada e lance na comanda."
+        acoes={
+          <RadarAoVivo
+            ativo={Boolean(mesasCarregadas) && sincronizando}
+            rotulo="Sincronizando as mesas"
+          />
+        }
       />
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_23rem] lg:gap-0">
         <div className="flex min-w-0 flex-col gap-5 lg:pr-6">
           <div className="flex flex-col gap-3 border-y border-border/70 py-4">
-            <div className="grid gap-3 sm:grid-cols-3">
-              <Field>
-                <FieldLabel htmlFor="garcom-nome">Seu nome</FieldLabel>
-                <Input
-                  id="garcom-nome"
-                  autoComplete="name"
-                  maxLength={40}
-                  value={nome}
-                  onChange={(evento) => definirNome(evento.target.value)}
-                />
-              </Field>
+            <div className="grid gap-3 grid-cols-[repeat(auto-fit,minmax(10rem,1fr))]">
               <Field>
                 <FieldLabel htmlFor="garcom-mesa">Mesa</FieldLabel>
                 <Select value={mesaId ?? ""} onValueChange={setMesaId}>
-                  <SelectTrigger id="garcom-mesa" aria-label="Mesa" className="w-full">
+                  <SelectTrigger
+                    id="garcom-mesa"
+                    aria-label="Mesa"
+                    className="w-full data-[size=default]:max-md:h-11"
+                  >
                     <SelectValue placeholder="Escolha a mesa" />
                   </SelectTrigger>
                   <SelectContent>
@@ -380,6 +390,7 @@ export function PaginaGarcom() {
                   <FieldLabel htmlFor="garcom-cliente">Cliente</FieldLabel>
                   <Input
                     id="garcom-cliente"
+                    className="max-md:h-11"
                     maxLength={60}
                     placeholder="Opcional"
                     value={cliente}
@@ -387,6 +398,17 @@ export function PaginaGarcom() {
                   />
                 </Field>
               )}
+              <Field>
+                <FieldLabel htmlFor="garcom-nome">Seu nome</FieldLabel>
+                <Input
+                  id="garcom-nome"
+                  className="max-md:h-11"
+                  autoComplete="name"
+                  maxLength={40}
+                  value={nome}
+                  onChange={(evento) => definirNome(evento.target.value)}
+                />
+              </Field>
             </div>
             {mesa?.pedidoAtivoId && (
               <ResumoDaComanda

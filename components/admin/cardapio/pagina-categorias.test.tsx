@@ -1,6 +1,6 @@
 import "fake-indexeddb/auto"
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query"
-import { render, screen, within } from "@testing-library/react"
+import { render, screen, waitFor, within } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { clear } from "idb-keyval"
 import { type ReactNode, useState } from "react"
@@ -110,5 +110,48 @@ describe("PaginaCategorias", () => {
     )
     expect(await screen.findByText("Categoria excluída.")).toBeInTheDocument()
     expect(screen.queryByRole("listitem", { name: "Vazia" })).not.toBeInTheDocument()
+  })
+})
+
+describe("PaginaCategorias: carregamento e movimento", () => {
+  test("enquanto busca, mostra o esqueleto das categorias", async () => {
+    render(
+      <Provedores>
+        <PaginaCategorias />
+      </Provedores>,
+    )
+    expect(screen.getByRole("status", { name: "Carregando as categorias" })).toBeInTheDocument()
+    await screen.findByRole("listitem", { name: "Pastéis" }, { timeout: 8000 })
+    expect(
+      screen.queryByRole("status", { name: "Carregando as categorias" }),
+    ).not.toBeInTheDocument()
+  })
+
+  test("Adicionar mostra o carregamento enquanto cria e volta ao normal", async () => {
+    const usuario = userEvent.setup()
+    await abrir()
+    await usuario.type(screen.getByLabelText("Nova categoria"), "Sobremesas")
+    const clique = usuario.click(screen.getByRole("button", { name: "Adicionar" }))
+    // O carregamento dura só o tempo da gravação: basta vê-lo aparecer.
+    await screen.findByRole("status", { name: "Adicionando a categoria" })
+    await clique
+    await screen.findByRole("listitem", { name: "Sobremesas" })
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("status", { name: "Adicionando a categoria" }),
+      ).not.toBeInTheDocument(),
+    )
+  })
+
+  test("a categoria excluída some da tela depois do fade, sem deixar a linha para trás", async () => {
+    const usuario = userEvent.setup()
+    await abrir()
+    await usuario.type(screen.getByLabelText("Nova categoria"), "Vazia{Enter}")
+    const vazia = within(await screen.findByRole("listitem", { name: "Vazia" }))
+    await usuario.click(vazia.getByRole("button", { name: "Excluir" }))
+    await usuario.click(screen.getByRole("button", { name: "Sim, excluir" }))
+    await waitFor(() => expect(document.querySelector('li[aria-label="Vazia"]')).toBeNull(), {
+      timeout: 3000,
+    })
   })
 })

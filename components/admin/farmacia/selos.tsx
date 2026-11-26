@@ -64,7 +64,7 @@ export function SeloReceita({ tipo }: { tipo: TipoReceita }) {
 /** A lista da Portaria 344 (B1, C1…) ou ATM: um código curto, em fonte de máquina. */
 export function SeloLista({ lista }: { lista: ListaControle }) {
   return (
-    <span className="inline-flex h-5 items-center rounded-[5px] bg-foreground/[0.06] px-1.5 font-mono text-[11px] font-medium text-foreground">
+    <span className="inline-flex h-5 items-center rounded-[5px] bg-foreground/[0.06] px-1.5 font-mono text-xs font-medium text-foreground">
       {lista === "antimicrobiano" ? "ATM" : lista}
     </span>
   )

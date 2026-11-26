@@ -29,14 +29,11 @@ function Provedores({ children }: { children: ReactNode }) {
   )
 }
 
-/** Tela de computador: o quadro mostra as colunas lado a lado. */
+/** Conteúdo largo (1200 px, o que sobra num computador): o quadro mostra as colunas lado a lado. */
 function telaGrande() {
-  vi.stubGlobal("matchMedia", (consulta: string) => ({
-    matches: consulta.includes("min-width"),
-    media: consulta,
-    addEventListener: () => {},
-    removeEventListener: () => {},
-  }))
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+    width: 1200,
+  } as DOMRect)
 }
 
 function renderizar(intervaloSimulacao = 60_000) {
@@ -63,9 +60,18 @@ beforeEach(async () => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
+  vi.restoreAllMocks()
 })
 
 describe("PaginaFila", () => {
+  test("os ajustes da fila ficam atrás de um botão que resume o estado", async () => {
+    renderizar()
+    const botao = await screen.findByRole("button", { name: /Ajustes da fila/ })
+    expect(botao).toHaveAttribute("aria-expanded", "false")
+    expect(botao).toHaveTextContent(/Som (ligado|desligado)/)
+    expect(screen.getByRole("switch", { name: "Alerta sonoro" })).toBeInTheDocument()
+  })
+
   test("no computador, mostra as quatro colunas com a contagem", async () => {
     telaGrande()
     renderizar()
@@ -76,6 +82,15 @@ describe("PaginaFila", () => {
     for (const nome of ["Em preparo", "Prontos", "A caminho"]) {
       expect(await coluna(nome)).toBeTruthy()
     }
+  })
+
+  test("com pouca largura de conteúdo (tablet com a lateral aberta), vira abas em vez de colunas espremidas", async () => {
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+      width: 480,
+    } as DOMRect)
+    renderizar()
+    expect(await screen.findByRole("tab", { name: /Novos/ })).toBeInTheDocument()
+    expect(screen.getAllByRole("tab")).toHaveLength(4)
   })
 
   test("avançar leva o cartão para a próxima coluna", async () => {
