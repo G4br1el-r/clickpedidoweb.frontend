@@ -5,6 +5,7 @@ import {
   avancar,
   caixa,
   esperarAnimacoes,
+  esperarParado,
   verificarAcessibilidade,
   verificarAreasDeToque,
   verificarSemRolagemHorizontal,
@@ -255,6 +256,8 @@ test.describe("mais opções", () => {
     await page.evaluate(() => window.scrollTo(0, 1100))
     const botao = page.getByRole("button", { name: "Mais opções" })
     await expect(botao).toBeVisible()
+    // O botão ainda entra na barra grudada: sem esperar, o Playwright rola a página para alcançá-lo.
+    await esperarParado(botao)
     await botao.hover()
     await botao.click()
     const item = page.getByRole("menuitem", { name: "Compartilhar" })
